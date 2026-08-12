@@ -71,15 +71,15 @@ def render_wacc_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     tax = wacc_b.tax_rate if (wacc_b and wacc_b.tax_rate is not None) else get_assumption_value(spec, "tax_rate", "FY27")
 
     wacc_rows = [
-        ("Risk-Free Rate (Rf) %", rfr / 100.0, FMT_PERCENT_PRECISION, True, "India 10-Year Government Securities Yield"),
-        ("Equity Beta (β)", beta, "0.00", True, "Infosys 2Y weekly beta vs NSE Nifty IT"),
-        ("Equity Risk Premium (ERP) %", erp / 100.0, FMT_PERCENT_PRECISION, True, "Damodaran published India ERP (Mature 4.5% + CRP 2.0%)"),
+        ("Risk-Free Rate (Rf) %", rfr / 100.0, FMT_PERCENT_PRECISION, True, f"{spec.metadata.market.upper()} sovereign 10-Year government bond yield"),
+        ("Equity Beta (β)", beta, "0.00", True, f"{spec.metadata.ticker} 2Y weekly beta vs primary index"),
+        ("Equity Risk Premium (ERP) %", erp / 100.0, FMT_PERCENT_PRECISION, True, "Damodaran published ERP (Mature 4.5% + country risk premium)"),
         ("Cost of Equity (r_e) %", "=C6+(C7*C8)", FMT_PERCENT_PRECISION, False, "CAPM formula: r_e = Rf + Beta * ERP"),
-        ("Pre-Tax Cost of Debt %", debt_pre / 100.0, FMT_PERCENT_PRECISION, True, "Infosys carries zero debt borrowings"),
+        ("Pre-Tax Cost of Debt %", debt_pre / 100.0, FMT_PERCENT_PRECISION, True, f"{spec.metadata.ticker} pre-tax cost of borrowings"),
         ("Effective Tax Rate %", tax / 100.0, FMT_PERCENT_PRECISION, True, "Forecast average tax rate"),
         ("After-Tax Cost of Debt (r_d) %", "=C10*(1-C11)", FMT_PERCENT_PRECISION, False, "Pre-tax * (1 - tax_rate)"),
-        ("Equity Market Weight %", 1.0, FMT_PERCENT, False, "Market Cap / Total Capital (100% for zero debt)"),
-        ("Debt Market Weight %", 0.0, FMT_PERCENT, False, "Total Debt / Total Capital (0% for Infosys)"),
+        ("Equity Market Weight %", 1.0, FMT_PERCENT, False, "Market Cap / Total Capital"),
+        ("Debt Market Weight %", 0.0, FMT_PERCENT, False, "Total Debt / Total Capital"),
         ("WEIGHTED AVERAGE COST OF CAPITAL (WACC) %", "=(C12*C9)+(C13*C12)", FMT_PERCENT_PRECISION, False, "Total WACC = Equity Weight * r_e + Debt Weight * r_d"),
     ]
 
@@ -218,14 +218,15 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         cell.border = BORDER_TOTAL
 
     # Right Column DCF Bridge (Column G, rows 6-13)
+    ccy = spec.metadata.currency
     bridge_rows = [
         ("Cumulative PV of FCFF", "=SUM(C14:G14)", FMT_CURRENCY_INT),
         ("PV of Terminal Value", "='32_Terminal_Value'!C12", FMT_CURRENCY_INT),
         ("ENTERPRISE VALUE (EV)", "=G6+G7", FMT_CURRENCY_INT),
         ("Less: Net Debt / (Cash)", "='20_Operating_Model'!C19-'20_Operating_Model'!C16", FMT_CURRENCY_INT),
         ("EQUITY VALUE", "=G8-G9", FMT_CURRENCY_INT),
-        ("Diluted Shares (Cr)", "='27_Share_Count'!E6", FMT_AMOUNT),
-        ("IMPLIED SHARE PRICE (INR)", "=G10/G11", FMT_PRICE),
+        (f"Diluted Shares ({spec.metadata.units.capitalize()[:2]})", "='27_Share_Count'!E6", FMT_AMOUNT),
+        (f"IMPLIED SHARE PRICE ({ccy})", "=G10/G11", FMT_PRICE),
     ]
 
     for idx, (lbl, formula, fmt) in enumerate(bridge_rows):
@@ -252,12 +253,13 @@ def render_terminal_value_tab(wb: Workbook, spec: ModelSpecification) -> Workshe
 
     write_table_header(ws, 5, ["Terminal Value Parameter", "Value", "Methodology / Rule Notes"], start_col=2)
 
+    ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
     tv_rows = [
         ("Terminal Growth Rate %", 0.04, FMT_PERCENT, True, "Perpetuity growth rate (must be < WACC)"),
-        ("FY31 Final Year FCFF (INR Cr)", "='31_DCF'!G12", FMT_AMOUNT, False, "Final forecast year FCFF"),
+        (f"FY31 Final Year FCFF ({ccy})", "='31_DCF'!G12", FMT_AMOUNT, False, "Final forecast year FCFF"),
         ("Gordon Growth Undiscounted TV", "=(C7*(1+C6))/('30_WACC'!C14-C6)", FMT_CURRENCY_INT, False, "TV = FCFF_n * (1+g) / (WACC - g)"),
         ("Exit Multiple (EV/EBITDA)", 20.0, FMT_MULTIPLE, True, "Exit EV/EBITDA multiple"),
-        ("FY31 Final Year EBITDA (INR Cr)", "='20_Operating_Model'!G9", FMT_AMOUNT, False, "Final forecast year EBITDA"),
+        (f"FY31 Final Year EBITDA ({ccy})", "='20_Operating_Model'!G9", FMT_AMOUNT, False, "Final forecast year EBITDA"),
         ("Exit Multiple Undiscounted TV", "=C9*C10", FMT_CURRENCY_INT, False, "TV = EBITDA_n * Exit Multiple"),
         ("Discount Factor (t=5)", "='31_DCF'!G13", "0.000000", False, "Discount factor for FY31"),
         ("DISCOUNTED TERMINAL VALUE (PV)", "=C8*C11", FMT_CURRENCY_INT, False, "Gordon Growth PV of Terminal Value"),
@@ -349,11 +351,12 @@ def render_reverse_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     mkt_price = rev_dcf.market_price if (rev_dcf and rev_dcf.market_price) else 0.0
     implied_g = (rev_dcf.implied_terminal_growth / 100.0) if (rev_dcf and rev_dcf.implied_terminal_growth) else 0.0
 
+    ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
     rows = [
-        ("Current Market Benchmark Price (INR)", mkt_price, FMT_PRICE, True, "Market price input"),
-        ("Market Implied Equity Value (INR Cr)", "=C6*'27_Share_Count'!E6", FMT_CURRENCY_INT, False, "Market Price * Diluted Shares"),
-        ("Market Implied EV (INR Cr)", "=C7+('20_Operating_Model'!C19-'20_Operating_Model'!C16)", FMT_CURRENCY_INT, False, "Implied Equity Value + Net Debt"),
-        ("Market Implied PV of TV (INR Cr)", "=C8-'31_DCF'!G6", FMT_CURRENCY_INT, False, "Implied EV - Cumulative PV(FCFF)"),
+        (f"Current Market Benchmark Price ({spec.metadata.currency})", mkt_price, FMT_PRICE, True, "Market price input"),
+        (f"Market Implied Equity Value ({ccy})", "=C6*'27_Share_Count'!E6", FMT_CURRENCY_INT, False, "Market Price * Diluted Shares"),
+        (f"Market Implied EV ({ccy})", "=C7+('20_Operating_Model'!C19-'20_Operating_Model'!C16)", FMT_CURRENCY_INT, False, "Implied Equity Value + Net Debt"),
+        (f"Market Implied PV of TV ({ccy})", "=C8-'31_DCF'!G6", FMT_CURRENCY_INT, False, "Implied EV - Cumulative PV(FCFF)"),
         ("MARKET IMPLIED TERMINAL GROWTH %", implied_g, FMT_PERCENT_PRECISION, False, "Exact solved implied perpetuity growth rate"),
     ]
 
@@ -404,15 +407,17 @@ def render_scenario_analysis_tab(wb: Workbook, spec: ModelSpecification) -> Work
     rev_bull = (ebitda_bull / r_bull_pct) if r_bull_pct > 0 else 0.0
     rev_bear = (ebitda_bear / r_bear_pct) if r_bear_pct > 0 else 0.0
 
+    ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
+    curr = spec.metadata.currency
     rows = [
-        ("Implied Share Price (INR)", base_v.dcf_bridge.implied_share_price, bull_v.dcf_bridge.implied_share_price, bear_v.dcf_bridge.implied_share_price, FMT_PRICE),
-        ("Enterprise Value (INR Cr)", base_v.dcf_bridge.enterprise_value, bull_v.dcf_bridge.enterprise_value, bear_v.dcf_bridge.enterprise_value, FMT_CURRENCY_INT),
-        ("Net Cash / (Debt) (INR Cr)", -base_v.dcf_bridge.less_net_debt, -bull_v.dcf_bridge.less_net_debt, -bear_v.dcf_bridge.less_net_debt, FMT_CURRENCY_INT),
-        ("Equity Value (INR Cr)", base_v.dcf_bridge.equity_value, bull_v.dcf_bridge.equity_value, bear_v.dcf_bridge.equity_value, FMT_CURRENCY_INT),
-        ("Diluted Shares (Cr)", base_v.dcf_bridge.shares_outstanding, bull_v.dcf_bridge.shares_outstanding, bear_v.dcf_bridge.shares_outstanding, FMT_AMOUNT),
+        (f"Implied Share Price ({curr})", base_v.dcf_bridge.implied_share_price, bull_v.dcf_bridge.implied_share_price, bear_v.dcf_bridge.implied_share_price, FMT_PRICE),
+        (f"Enterprise Value ({ccy})", base_v.dcf_bridge.enterprise_value, bull_v.dcf_bridge.enterprise_value, bear_v.dcf_bridge.enterprise_value, FMT_CURRENCY_INT),
+        (f"Net Cash / (Debt) ({ccy})", -base_v.dcf_bridge.less_net_debt, -bull_v.dcf_bridge.less_net_debt, -bear_v.dcf_bridge.less_net_debt, FMT_CURRENCY_INT),
+        (f"Equity Value ({ccy})", base_v.dcf_bridge.equity_value, bull_v.dcf_bridge.equity_value, bear_v.dcf_bridge.equity_value, FMT_CURRENCY_INT),
+        ("Diluted Shares", base_v.dcf_bridge.shares_outstanding, bull_v.dcf_bridge.shares_outstanding, bear_v.dcf_bridge.shares_outstanding, FMT_AMOUNT),
         ("Discount Rate (WACC %)", base_v.wacc.wacc / 100.0, bull_v.wacc.wacc / 100.0, bear_v.wacc.wacc / 100.0, FMT_PERCENT),
         ("Terminal Growth Rate %", base_v.terminal_value.terminal_growth_rate / 100.0, bull_v.terminal_value.terminal_growth_rate / 100.0, bear_v.terminal_value.terminal_growth_rate / 100.0, FMT_PERCENT),
-        ("FY31 Revenue (INR Cr)", rev_base, rev_bull, rev_bear, FMT_CURRENCY_INT),
+        (f"FY31 Revenue ({ccy})", rev_base, rev_bull, rev_bear, FMT_CURRENCY_INT),
         ("FY31 EBITDA Margin %", r_base_pct, r_bull_pct, r_bear_pct, FMT_PERCENT),
     ]
 
