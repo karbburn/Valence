@@ -7,3 +7,5 @@ scratch_metrics.json
 Cwd/
 .system_generated/
 .pytest_cache/
+*.xlsx
+backend/export/output/
