@@ -1,0 +1,84 @@
+from __future__ import annotations
+
+from typing import Dict, List, Optional
+from pydantic import BaseModel
+
+from backend.data.store import RawDatapoint
+from backend.models.statements.balance_sheet import BalanceSheet, assemble_balance_sheet
+from backend.models.statements.cash_flow import CashFlowStatement, assemble_cash_flow
+from backend.models.statements.income_statement import IncomeStatement, assemble_income_statement
+from backend.models.statements.ratios import HistoricalRatios, compute_historical_ratios
+from backend.normalization.taxonomy.models import CanonicalDatapoint
+
+
+class HistoricalModel(BaseModel):
+    company_id: str
+    periods: List[str]
+    income_statement: IncomeStatement
+    balance_sheet: BalanceSheet
+    cash_flow_statement: CashFlowStatement
+    ratios: HistoricalRatios
+
+    def get_period_summary(self, period: str) -> dict:
+        """Returns key financial summary for a given period."""
+        return {
+            "period": period,
+            "revenue": self.income_statement.get_value("canonical.is.revenue", period),
+            "ebitda": self.income_statement.get_value("canonical.is.ebitda", period),
+            "net_profit": self.income_statement.get_value("canonical.is.net_profit", period),
+            "total_assets": self.balance_sheet.get_value("canonical.bs.total_assets", period),
+            "total_equity": self.balance_sheet.get_value("canonical.bs.total_equity", period),
+            "ebitda_margin_pct": self.ratios.get_value("ebitda_margin_pct", period),
+            "net_margin_pct": self.ratios.get_value("net_margin_pct", period),
+            "is_bs_balanced": self.balance_sheet.is_balanced_by_period.get(period, True),
+        }
+
+
+def build_historical_model(
+    canonical_datapoints: list[CanonicalDatapoint],
+    target_periods: list[str] | None = None,
+    raw_datapoints: list[RawDatapoint] | None = None,
+) -> HistoricalModel:
+    """Builds unified HistoricalModel from canonical datapoints."""
+    if not canonical_datapoints:
+        raise ValueError("No canonical datapoints provided to build_historical_model.")
+
+    company_id = canonical_datapoints[0].company_id
+    raw_map: Dict[str, RawDatapoint] = {d.id: d for d in raw_datapoints} if raw_datapoints else {}
+
+    # 1. Assemble Income Statement
+    is_model = assemble_income_statement(
+        canonical_datapoints,
+        target_periods=target_periods,
+        raw_datapoints_map=raw_map,
+    )
+
+    # 2. Assemble Balance Sheet
+    bs_model = assemble_balance_sheet(
+        canonical_datapoints,
+        target_periods=target_periods,
+        raw_datapoints_map=raw_map,
+    )
+
+    # 3. Assemble Cash Flow Statement
+    cf_model = assemble_cash_flow(
+        canonical_datapoints,
+        target_periods=target_periods,
+    )
+
+    # Combine common periods
+    common_periods = [p for p in is_model.periods if p in bs_model.periods and p in cf_model.periods]
+    if not common_periods:
+        common_periods = is_model.periods
+
+    # 4. Compute Historical Ratios & Driver Base
+    ratios_model = compute_historical_ratios(is_model, bs_model, cf_model)
+
+    return HistoricalModel(
+        company_id=company_id,
+        periods=common_periods,
+        income_statement=is_model,
+        balance_sheet=bs_model,
+        cash_flow_statement=cf_model,
+        ratios=ratios_model,
+    )

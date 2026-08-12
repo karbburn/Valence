@@ -23,7 +23,7 @@ def run() -> dict:
     if DB_PATH.exists():
         DB_PATH.unlink()
 
-    # Phase 1.2 + 1.4: parse both sources (annual columns only from PDFs).
+    # Parse both sources (annual columns only from PDFs).
     screener_dps = parse_screener_export(SCREENER_XLSX)
 
     fy26 = [
@@ -38,10 +38,10 @@ def run() -> dict:
     ]
     filing_dps = [d for page in (fy26 + fy25) for d in page]
 
-    # Phase 1.1: persist everything (both sources retained).
+    # Persist everything (both sources retained).
     save_datapoints(DB_PATH, screener_dps + filing_dps)
 
-    # Phase 1.6: reconcile, emit discrepancy log, tag superseded rows.
+    # Reconcile, emit discrepancy log, tag superseded rows.
     discrepancies = reconcile(DB_PATH, LOG_PATH)
 
     summary = {

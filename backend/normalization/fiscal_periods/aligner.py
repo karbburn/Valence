@@ -1,0 +1,39 @@
+from __future__ import annotations
+
+from datetime import date
+from backend.normalization.taxonomy.models import CanonicalDatapoint
+
+
+def align_fiscal_periods(datapoints: list[CanonicalDatapoint]) -> dict:
+    """Verifies that all period_end_dates correctly align with April-March fiscal calendar.
+
+    For Indian entities like Infosys, FY26 ends on March 31, 2026 (2026-03-31).
+    Returns alignment summary and flags any misaligned records.
+    """
+    misaligned: list[dict] = []
+
+    for dp in datapoints:
+        # Check if period_label is e.g. FY26, FY25, FY24
+        label = dp.period_label.upper()
+        if label.startswith("FY") and len(label) in (4, 6):
+            try:
+                yr_str = label[2:]
+                year = 2000 + int(yr_str) if len(yr_str) == 2 else int(yr_str)
+                expected_end = date(year, 3, 31)
+                if dp.period_end_date != expected_end:
+                    misaligned.append({
+                        "id": dp.id,
+                        "canonical_key": dp.canonical_key,
+                        "period_label": dp.period_label,
+                        "period_end_date": dp.period_end_date.isoformat(),
+                        "expected_end_date": expected_end.isoformat(),
+                    })
+            except ValueError:
+                pass
+
+    return {
+        "total_checked": len(datapoints),
+        "misaligned_count": len(misaligned),
+        "misaligned_datapoints": misaligned,
+        "is_aligned": len(misaligned) == 0,
+    }

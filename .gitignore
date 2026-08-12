@@ -1,1 +1,9 @@
 assets/
+__pycache__/
+*.pyc
+.venv/
+venv/
+scratch_metrics.json
+Cwd/
+.system_generated/
+.pytest_cache/
