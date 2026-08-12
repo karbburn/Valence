@@ -107,7 +107,7 @@ class SensitivityTable(BaseModel):
 class ValuationOutput(BaseModel):
     """Complete valuation output for one scenario.
 
-    Stores the full intermediate chain so Stage 9's Excel renderer can
+    Stores the full intermediate chain so the Excel renderer can
     reconstruct live formulas — not just paste EV and share price.
     """
     scenario: ScenarioLabel
