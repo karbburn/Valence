@@ -258,3 +258,94 @@ function getForecastVal(ckey, period, scen) {
     const item = currentSpec.forecast.line_items.find(i => i.canonical_key === ckey && i.period_label === period && i.scenario === scen);
     return item ? item.value : 0;
 }
+
+// ------------------------------------------------------------------ //
+// Stage 11 Model Persistence Functions
+// ------------------------------------------------------------------ //
+
+async function saveCurrentModel() {
+    if (!currentSpec) return;
+    const name = prompt("Enter a name for this model scenario set:", `${currentSpec.metadata.name} Valuation`);
+    if (!name) return;
+
+    try {
+        const res = await fetch("/api/models/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: name, company_id: "infy_infy" })
+        });
+        const data = await res.json();
+        alert(`Model "${data.header.name}" saved successfully!`);
+    } catch (err) {
+        console.error("Failed to save model:", err);
+        alert("Error saving model.");
+    }
+}
+
+async function openSavedModelsModal() {
+    document.getElementById("saved-models-modal").classList.remove("hidden");
+    await loadSavedModelsList();
+}
+
+function closeSavedModelsModal() {
+    document.getElementById("saved-models-modal").classList.add("hidden");
+}
+
+async function loadSavedModelsList() {
+    const listDiv = document.getElementById("saved-models-list");
+    listDiv.innerHTML = `<div class="text-xs text-slate-400">Loading saved models...</div>`;
+
+    try {
+        const res = await fetch("/api/models");
+        const models = await res.json();
+
+        if (!models || models.length === 0) {
+            listDiv.innerHTML = `<div class="text-xs text-slate-500 py-4 text-center">No saved models found. Click "Save Model" to persist your edits.</div>`;
+            return;
+        }
+
+        listDiv.innerHTML = "";
+        models.forEach(m => {
+            const item = document.createElement("div");
+            item.className = "bg-slate-950 p-3.5 rounded-lg border border-slate-800 flex items-center justify-between";
+            item.innerHTML = `
+                <div>
+                    <div class="text-sm font-semibold text-slate-200">${m.name}</div>
+                    <div class="text-xs text-slate-500">Version ${m.model_version} • Saved ${new Date(m.updated_at).toLocaleString()}</div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="loadSavedModel('${m.model_id}')" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded">Load</button>
+                    <button onclick="deleteSavedModel('${m.model_id}')" class="px-2.5 py-1 bg-rose-950/60 hover:bg-rose-900 text-rose-300 text-xs font-semibold rounded border border-rose-800">Delete</button>
+                </div>
+            `;
+            listDiv.appendChild(item);
+        });
+    } catch (err) {
+        console.error("Failed to list saved models:", err);
+        listDiv.innerHTML = `<div class="text-xs text-rose-400">Failed to load saved models list.</div>`;
+    }
+}
+
+async function loadSavedModel(modelId) {
+    try {
+        const res = await fetch(`/api/models/${modelId}`);
+        currentSpec = await res.json();
+        renderDashboard();
+        closeSavedModelsModal();
+    } catch (err) {
+        console.error("Failed to load model:", err);
+        alert("Error loading model.");
+    }
+}
+
+async function deleteSavedModel(modelId) {
+    if (!confirm("Are you sure you want to delete this saved model?")) return;
+    try {
+        await fetch(`/api/models/${modelId}`, { method: "DELETE" });
+        await loadSavedModelsList();
+    } catch (err) {
+        console.error("Failed to delete model:", err);
+        alert("Error deleting model.");
+    }
+}
+

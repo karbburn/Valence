@@ -9,3 +9,4 @@ Cwd/
 .pytest_cache/
 *.xlsx
 backend/export/output/
+backend/data/user_models/
