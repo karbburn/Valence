@@ -27,13 +27,18 @@ WORKSPACE_ROOT = HERE.parent.parent
 DB_PATH = WORKSPACE_ROOT / "backend" / "data" / "valence.db"
 
 
+from backend.models.spec.metadata import get_metadata_for_company, ModelMetadata
+
 def run(
     historical_model: HistoricalModel | None = None,
-    metadata: ModelMetadata = INFOSYS_METADATA,
+    metadata: ModelMetadata | None = None,
 ) -> ModelSpecification:
     """Build a fully populated ModelSpecification including forecast for all scenarios."""
     if historical_model is None:
         historical_model = run_historical(target_periods=["FY24", "FY25", "FY26"])
+
+    if metadata is None:
+        metadata = get_metadata_for_company(historical_model.company_id)
 
     # Compute historical ratios used for assumption suggestions
     ratios = compute_historical_ratios(
@@ -73,11 +78,20 @@ def run(
     spec.valuation = valuation_scaffolds
     spec.qa = QAResults.empty()
 
-    # Build debt schedules for each scenario (zero-debt company computes correctly to zero)
+    # Determine opening debt balance from last historical balance sheet
+    last_period = historical_model.periods[-1] if historical_model.periods else "FY26"
+    borrowings_item = next(
+        (i for i in historical_model.balance_sheet.line_items if i.canonical_key == "canonical.bs.borrowings"),
+        None,
+    )
+    opening_debt = borrowings_item.values_by_period.get(last_period, 0.0) if borrowings_item else 0.0
+    interest_rate = 7.5 if opening_debt > 0 else 0.0
+
+    # Build debt schedules for each scenario
     debt_schedules = [
         build_debt_schedule(
-            opening_balance=0.0,
-            interest_rate=0.0,
+            opening_balance=opening_debt,
+            interest_rate=interest_rate,
             draws_by_period={},
             scheduled_repayments_by_period={},
             optional_repayments_by_period={},

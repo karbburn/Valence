@@ -35,7 +35,7 @@ def _period_label(d: date) -> str:
     return f"FY{str(d.year)[2:]}"
 
 
-def parse_screener_export(path: str | Path) -> list[RawDatapoint]:
+def parse_screener_export(path: str | Path, company_id: str = "infy_infy") -> list[RawDatapoint]:
     wb = openpyxl.load_workbook(path, data_only=True)
     ws = wb["Data Sheet"]
     rows = list(ws.iter_rows(values_only=True))
@@ -63,8 +63,8 @@ def parse_screener_export(path: str | Path) -> list[RawDatapoint]:
                     col = openpyxl.utils.get_column_letter(offset + 1)
                     datapoints.append(
                         RawDatapoint(
-                            id=_datapoint_id(COMPANY_ID, label, _period_label(period), "screener", section, j + 1),
-                            company_id=COMPANY_ID,
+                            id=_datapoint_id(company_id, label, _period_label(period), "screener", section, j + 1),
+                            company_id=company_id,
                             metric_raw=label,
                             period_label=_period_label(period),
                             period_end_date=period,

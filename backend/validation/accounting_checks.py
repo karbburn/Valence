@@ -136,8 +136,8 @@ def check_share_count_consistent(spec: ModelSpecification) -> ModelCheckResult:
 
         # Check valuation outputs use the same share count
         for val in spec.valuation:
-            bridge_shares = val.dcf_bridge.shares_outstanding
-            if bridge_shares is None or abs(bridge_shares - fy26_shares) > 0.01:
+            bridge_shares = val.dcf_bridge.shares_outstanding if val.dcf_bridge else None
+            if fy26_shares is None or bridge_shares is None or abs(bridge_shares - fy26_shares) > 0.01:
                 errors.append(
                     f"Valuation scenario '{val.scenario}' share count ({bridge_shares}) "
                     f"mismatches share schedule ({fy26_shares})"

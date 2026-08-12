@@ -18,13 +18,13 @@ DB_PATH = WORKSPACE_ROOT / "backend" / "data" / "valence.db"
 COMPANY_ID = "infy_infy"
 
 
-def run() -> dict:
-    """Run Taxonomy Normalization pipeline for Infosys."""
+def run(company_id: str = "infy_infy") -> dict:
+    """Run Taxonomy Normalization pipeline for a target company."""
     if not DB_PATH.exists():
         raise FileNotFoundError(f"Database not found at {DB_PATH}. Run data ingestion pipeline first.")
 
     # Fetch all non-superseded winning raw datapoints
-    raw_dps = query_datapoints(DB_PATH, COMPANY_ID)
+    raw_dps = query_datapoints(DB_PATH, company_id)
     winning_raw_dps = [d for d in raw_dps if d.superseded_by_id is None]
 
     # Map raw labels to canonical taxonomy

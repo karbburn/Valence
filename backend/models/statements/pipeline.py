@@ -11,16 +11,16 @@ DB_PATH = WORKSPACE_ROOT / "backend" / "data" / "valence.db"
 COMPANY_ID = "infy_infy"
 
 
-def run(target_periods: list[str] | None = None) -> HistoricalModel:
-    """Run Historical Model Assembly for Infosys."""
+def run(target_periods: list[str] | None = None, company_id: str = "infy_infy") -> HistoricalModel:
+    """Run Historical Model Assembly for a target company."""
     if not DB_PATH.exists():
         raise FileNotFoundError(f"Database not found at {DB_PATH}. Run taxonomy normalization pipeline first.")
 
-    canonical_dps = query_canonical_datapoints(DB_PATH, COMPANY_ID)
+    canonical_dps = query_canonical_datapoints(DB_PATH, company_id)
     if not canonical_dps:
-        raise ValueError(f"No canonical datapoints found in database for company '{COMPANY_ID}'.")
+        raise ValueError(f"No canonical datapoints found in database for company '{company_id}'.")
 
-    raw_dps = query_datapoints(DB_PATH, COMPANY_ID)
+    raw_dps = query_datapoints(DB_PATH, company_id)
 
     model = build_historical_model(canonical_dps, target_periods=target_periods, raw_datapoints=raw_dps)
 

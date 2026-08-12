@@ -60,6 +60,10 @@ def build_share_count(
     anchor_diluted: Optional[float] = None
     anchor_basic: Optional[float] = None
 
+    from backend.models.spec.metadata import get_metadata_for_company
+    meta = get_metadata_for_company(historical_model.company_id)
+    fallback_shares = meta.shares_outstanding
+
     for p in historical_periods:
         net_profit = is_.get_value("canonical.is.net_profit", p)
         eps_diluted = is_.get_value("canonical.is.eps_diluted", p)
@@ -70,8 +74,13 @@ def build_share_count(
 
         if net_profit is not None and eps_diluted and eps_diluted != 0:
             diluted_cr = round(net_profit / eps_diluted, 4)
+        elif fallback_shares:
+            diluted_cr = fallback_shares
+
         if net_profit is not None and eps_basic and eps_basic != 0:
             basic_cr = round(net_profit / eps_basic, 4)
+        elif fallback_shares:
+            basic_cr = fallback_shares
 
         schedule.append(ShareCountPeriod(
             period=p,
