@@ -8,8 +8,11 @@ a fully populated ModelSpecification with forecast, assumptions, and scenarios.
 from pathlib import Path
 
 from backend.forecast.assumptions import suggest_base_assumptions
+from backend.forecast.debt import build_debt_schedule
 from backend.forecast.engine import run_forecast
 from backend.forecast.scenarios import build_scenario_assumptions
+from backend.forecast.share_count import build_share_count
+from backend.models.spec.forecast import FORECAST_PERIODS
 from backend.models.spec.metadata import INFOSYS_METADATA, ModelMetadata
 from backend.models.spec.model_specification import ModelSpecification
 from backend.models.spec.qa import QAResults
@@ -70,14 +73,34 @@ def run(
     spec.valuation = valuation_scaffolds
     spec.qa = QAResults.empty()
 
+    # Build debt schedules for each scenario (zero-debt company computes correctly to zero)
+    debt_schedules = [
+        build_debt_schedule(
+            opening_balance=0.0,
+            interest_rate=0.0,
+            draws_by_period={},
+            scheduled_repayments_by_period={},
+            optional_repayments_by_period={},
+            periods=FORECAST_PERIODS,
+            scenario=s,
+        )
+        for s in ["base", "bull", "bear"]
+    ]
+    spec.debt_schedule = debt_schedules
+
+    # Build share count schedule (historical derived + forecast held flat)
+    spec.share_count = build_share_count(historical_model, FORECAST_PERIODS)
+
     print(
         f"Forecast Pipeline Complete:\n"
         f"  - Assumptions generated : {len(all_assumptions)} "
         f"({len(base_assumptions)} base + {len(bull_assumptions)} bull + {len(bear_assumptions)} bear)\n"
         f"  - Forecast line items   : {len(merged_forecast.line_items)} "
-        f"({len(base_forecast.line_items)} base × 3 scenarios)\n"
+        f"({len(base_forecast.line_items)} base x 3 scenarios)\n"
         f"  - Forecast periods      : {merged_forecast.periods}\n"
-        f"  - Scenarios             : base, bull, bear"
+        f"  - Scenarios             : base, bull, bear\n"
+        f"  - Debt schedules        : {len(debt_schedules)} scenarios (all zero-debt)\n"
+        f"  - Share count periods   : {len(spec.share_count.periods)} (hist + forecast)"
     )
 
     return spec

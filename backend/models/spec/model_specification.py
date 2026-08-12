@@ -6,6 +6,8 @@ from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from backend.forecast.debt import DebtSchedule
+from backend.forecast.share_count import ShareCountSchedule
 from backend.models.spec.assumptions import AssumptionObject
 from backend.models.spec.drivers import DriverDefinition, V1_DRIVERS
 from backend.models.spec.forecast import Forecast
@@ -37,6 +39,8 @@ class ModelSpecification(BaseModel):
     assumptions: List[AssumptionObject] = Field(default_factory=list)
     scenarios: List[ScenarioDefinition] = Field(default_factory=lambda: list(V1_SCENARIOS))
     valuation: List[ValuationOutput] = Field(default_factory=list)
+    debt_schedule: List[DebtSchedule] = Field(default_factory=list)
+    share_count: Optional[ShareCountSchedule] = None
     qa: QAResults = Field(default_factory=QAResults.empty)
 
     # ------------------------------------------------------------------ #
