@@ -108,9 +108,11 @@ def render_revenue_build(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     headers = ["Segment / Driver"] + FORECAST_PERIODS
     write_table_header(ws, 5, headers, start_col=2)
 
+    ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
+
     rev_rows = [
         ("Assumed Revenue Growth Rate %", FMT_PERCENT, True, [get_assumption_value(spec, "revenue_growth", p) / 100.0 for p in FORECAST_PERIODS]),
-        ("Consolidated Revenue (INR Cr)", FMT_AMOUNT, False, ["='20_Operating_Model'!C6", "='20_Operating_Model'!D6", "='20_Operating_Model'!E6", "='20_Operating_Model'!F6", "='20_Operating_Model'!G6"]),
+        (f"Consolidated Revenue ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C6", "='20_Operating_Model'!D6", "='20_Operating_Model'!E6", "='20_Operating_Model'!F6", "='20_Operating_Model'!G6"]),
     ]
 
     for idx, (label, fmt, is_inp, vals) in enumerate(rev_rows):
@@ -138,11 +140,13 @@ def render_cost_build(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     headers = ["Cost Component"] + FORECAST_PERIODS
     write_table_header(ws, 5, headers, start_col=2)
 
+    ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
+
     cost_rows = [
         ("EBITDA Margin %", FMT_PERCENT, True, [get_assumption_value(spec, "ebitda_margin", p) / 100.0 for p in FORECAST_PERIODS]),
-        ("EBITDA (INR Cr)", FMT_AMOUNT, False, ["='20_Operating_Model'!C9", "='20_Operating_Model'!D9", "='20_Operating_Model'!E9", "='20_Operating_Model'!F9", "='20_Operating_Model'!G9"]),
+        (f"EBITDA ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C9", "='20_Operating_Model'!D9", "='20_Operating_Model'!E9", "='20_Operating_Model'!F9", "='20_Operating_Model'!G9"]),
         ("Operating Profit Margin %", FMT_PERCENT, True, [get_assumption_value(spec, "ebit_margin", p) / 100.0 for p in FORECAST_PERIODS]),
-        ("Operating Profit (INR Cr)", FMT_AMOUNT, False, ["='20_Operating_Model'!C11", "='20_Operating_Model'!D11", "='20_Operating_Model'!E11", "='20_Operating_Model'!F11", "='20_Operating_Model'!G11"]),
+        (f"Operating Profit ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C11", "='20_Operating_Model'!D11", "='20_Operating_Model'!E11", "='20_Operating_Model'!F11", "='20_Operating_Model'!G11"]),
     ]
 
     for idx, (label, fmt, is_inp, vals) in enumerate(cost_rows):
@@ -170,11 +174,13 @@ def render_working_capital(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     headers = ["Working Capital Driver"] + FORECAST_PERIODS
     write_table_header(ws, 5, headers, start_col=2)
 
+    ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
+
     wc_rows = [
         ("Days Sales Outstanding (DSO)", FMT_DAYS, True, [get_assumption_value(spec, "dso_days", p) for p in FORECAST_PERIODS]),
-        ("Trade Receivables (INR Cr)", FMT_AMOUNT, False, ["='20_Operating_Model'!C17", "='20_Operating_Model'!D17", "='20_Operating_Model'!E17", "='20_Operating_Model'!F17", "='20_Operating_Model'!G17"]),
+        (f"Trade Receivables ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C17", "='20_Operating_Model'!D17", "='20_Operating_Model'!E17", "='20_Operating_Model'!F17", "='20_Operating_Model'!G17"]),
         ("Days Payables Outstanding (DPO)", FMT_DAYS, True, [get_assumption_value(spec, "dpo_days", p) for p in FORECAST_PERIODS]),
-        ("Trade Payables (INR Cr)", FMT_AMOUNT, False, ["='20_Operating_Model'!C18", "='20_Operating_Model'!D18", "='20_Operating_Model'!E18", "='20_Operating_Model'!F18", "='20_Operating_Model'!G18"]),
+        (f"Trade Payables ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C18", "='20_Operating_Model'!D18", "='20_Operating_Model'!E18", "='20_Operating_Model'!F18", "='20_Operating_Model'!G18"]),
     ]
 
     for idx, (label, fmt, is_inp, vals) in enumerate(wc_rows):
@@ -202,11 +208,13 @@ def render_capex_da(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     headers = ["Capex & D&A Component"] + FORECAST_PERIODS
     write_table_header(ws, 5, headers, start_col=2)
 
+    ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
+
     rows = [
         ("Capex % Revenue", FMT_PERCENT, True, [get_assumption_value(spec, "capex_pct_revenue", p) / 100.0 for p in FORECAST_PERIODS]),
-        ("Capex Outflow (INR Cr)", FMT_AMOUNT, False, ["='20_Operating_Model'!C24", "='20_Operating_Model'!D24", "='20_Operating_Model'!E24", "='20_Operating_Model'!F24", "='20_Operating_Model'!G24"]),
+        (f"Capex Outflow ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C24", "='20_Operating_Model'!D24", "='20_Operating_Model'!E24", "='20_Operating_Model'!F24", "='20_Operating_Model'!G24"]),
         ("D&A % Revenue", FMT_PERCENT, True, [get_assumption_value(spec, "da_pct_revenue", p) / 100.0 for p in FORECAST_PERIODS]),
-        ("D&A Expense (INR Cr)", FMT_AMOUNT, False, ["='20_Operating_Model'!C10", "='20_Operating_Model'!D10", "='20_Operating_Model'!E10", "='20_Operating_Model'!F10", "='20_Operating_Model'!G10"]),
+        (f"D&A Expense ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C10", "='20_Operating_Model'!D10", "='20_Operating_Model'!E10", "='20_Operating_Model'!F10", "='20_Operating_Model'!G10"]),
     ]
 
     for idx, (label, fmt, is_inp, vals) in enumerate(rows):
@@ -230,18 +238,19 @@ def render_debt_schedule(wb: Workbook, spec: ModelSpecification) -> Worksheet:
 
     ws["B2"] = "DEBT & BORROWINGS SCHEDULE (GENERIC)"
     ws["B2"].font = FONT_TITLE
-    ws["B3"] = "Note: Infosys carries zero long-term/short-term borrowings (thin zero-debt schedule)"
+    ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
+    ws["B3"] = f"{spec.metadata.name} — generic debt schedule (zero balance if debt-free)"
     ws["B3"].font = FONT_SECTION
 
     headers = ["Debt Component"] + FORECAST_PERIODS
     write_table_header(ws, 5, headers, start_col=2)
 
     debt_rows = [
-        ("Opening Debt Balance (INR Cr)", FMT_AMOUNT, ["=0.0"] * len(FORECAST_PERIODS)),
-        ("Debt Drawdowns (INR Cr)", FMT_AMOUNT, ["=0.0"] * len(FORECAST_PERIODS)),
-        ("Scheduled Repayments (INR Cr)", FMT_AMOUNT, ["=0.0"] * len(FORECAST_PERIODS)),
-        ("Closing Debt Balance (INR Cr)", FMT_AMOUNT, ["=0.0"] * len(FORECAST_PERIODS)),
-        ("Interest Expense (INR Cr)", FMT_AMOUNT, ["=0.0"] * len(FORECAST_PERIODS)),
+        (f"Opening Debt Balance ({ccy})", FMT_AMOUNT, ["=0.0"] * len(FORECAST_PERIODS)),
+        (f"Debt Drawdowns ({ccy})", FMT_AMOUNT, ["=0.0"] * len(FORECAST_PERIODS)),
+        (f"Scheduled Repayments ({ccy})", FMT_AMOUNT, ["=0.0"] * len(FORECAST_PERIODS)),
+        (f"Closing Debt Balance ({ccy})", FMT_AMOUNT, ["=0.0"] * len(FORECAST_PERIODS)),
+        (f"Interest Expense ({ccy})", FMT_AMOUNT, ["=0.0"] * len(FORECAST_PERIODS)),
     ]
 
     for idx, (label, fmt, vals) in enumerate(debt_rows):
@@ -269,10 +278,12 @@ def render_tax_schedule(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     headers = ["Tax Parameter"] + FORECAST_PERIODS
     write_table_header(ws, 5, headers, start_col=2)
 
+    ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
+
     tax_rows = [
         ("Effective Tax Rate %", FMT_PERCENT, True, [get_assumption_value(spec, "tax_rate", p) / 100.0 for p in FORECAST_PERIODS]),
-        ("PBT (INR Cr)", FMT_AMOUNT, False, ["='20_Operating_Model'!C14", "='20_Operating_Model'!D14", "='20_Operating_Model'!E14", "='20_Operating_Model'!F14", "='20_Operating_Model'!G14"]),
-        ("Tax Expense (INR Cr)", FMT_AMOUNT, False, ["='20_Operating_Model'!C15", "='20_Operating_Model'!D15", "='20_Operating_Model'!E15", "='20_Operating_Model'!F15", "='20_Operating_Model'!G15"]),
+        (f"PBT ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C14", "='20_Operating_Model'!D14", "='20_Operating_Model'!E14", "='20_Operating_Model'!F14", "='20_Operating_Model'!G14"]),
+        (f"Tax Expense ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C15", "='20_Operating_Model'!D15", "='20_Operating_Model'!E15", "='20_Operating_Model'!F15", "='20_Operating_Model'!G15"]),
     ]
 
     for idx, (label, fmt, is_inp, vals) in enumerate(tax_rows):

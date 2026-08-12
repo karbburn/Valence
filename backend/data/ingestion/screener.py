@@ -36,6 +36,23 @@ def _period_label(d: date) -> str:
 
 
 def parse_screener_export(path: str | Path, company_id: str = "infy_infy") -> list[RawDatapoint]:
+    """Parse a Screener.in structured XLSX export into RawDatapoint records.
+
+    The export format is a "Data Sheet" workbook tab with section headers
+    ("PROFIT & LOSS", "BALANCE SHEET", "CASH FLOW:") followed by a
+    "Report Date" row giving fiscal period end dates, then row-per-metric
+    data in INR Crores.
+
+    Args:
+        path: Absolute or relative path to the Screener XLSX export file.
+        company_id: Dynamic company identifier supplied by the caller at
+            ingestion time (e.g. "infy_infy", "tcs_tcs"). Not a static
+            constant — must be provided explicitly for each company ingested.
+
+    Returns:
+        List of RawDatapoint records tagged with source="screener",
+        currency="INR", units="crores".
+    """
     wb = openpyxl.load_workbook(path, data_only=True)
     ws = wb["Data Sheet"]
     rows = list(ws.iter_rows(values_only=True))

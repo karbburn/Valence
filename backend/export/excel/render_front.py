@@ -210,15 +210,17 @@ def render_executive_summary(wb: Workbook, spec: ModelSpecification) -> Workshee
     # Valuation Comparison Table
     write_table_header(ws, 9, ["Valuation Metric", "Base Scenario", "Bull Scenario", "Bear Scenario"], start_col=2)
 
+    ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
+    curr = spec.metadata.currency
     val_rows = [
-        ("Implied Share Price (INR)", "='31_DCF'!G13", "='35_Scenario_Analysis'!C6", "='35_Scenario_Analysis'!D6", FMT_PRICE),
-        ("Enterprise Value (INR Cr)", "='31_DCF'!G9", "='35_Scenario_Analysis'!C7", "='35_Scenario_Analysis'!D7", FMT_CURRENCY_INT),
-        ("Net Cash / (Debt) (INR Cr)", "='31_DCF'!G10", "='35_Scenario_Analysis'!C8", "='35_Scenario_Analysis'!D8", FMT_CURRENCY_INT),
-        ("Equity Value (INR Cr)", "='31_DCF'!G11", "='35_Scenario_Analysis'!C9", "='35_Scenario_Analysis'!D9", FMT_CURRENCY_INT),
-        ("Diluted Shares (Cr)", "='31_DCF'!G12", "='35_Scenario_Analysis'!C10", "='35_Scenario_Analysis'!D10", FMT_AMOUNT),
+        (f"Implied Share Price ({curr})", "='31_DCF'!G13", "='35_Scenario_Analysis'!C6", "='35_Scenario_Analysis'!D6", FMT_PRICE),
+        (f"Enterprise Value ({ccy})", "='31_DCF'!G9", "='35_Scenario_Analysis'!C7", "='35_Scenario_Analysis'!D7", FMT_CURRENCY_INT),
+        (f"Net Cash / (Debt) ({ccy})", "='31_DCF'!G10", "='35_Scenario_Analysis'!C8", "='35_Scenario_Analysis'!D8", FMT_CURRENCY_INT),
+        (f"Equity Value ({ccy})", "='31_DCF'!G11", "='35_Scenario_Analysis'!C9", "='35_Scenario_Analysis'!D9", FMT_CURRENCY_INT),
+        ("Diluted Shares", "='31_DCF'!G12", "='35_Scenario_Analysis'!C10", "='35_Scenario_Analysis'!D10", FMT_AMOUNT),
         ("Discount Rate (WACC %)", "='30_WACC'!C14", "='35_Scenario_Analysis'!C11", "='35_Scenario_Analysis'!D11", FMT_PERCENT),
         ("Terminal Growth Rate %", "='32_Terminal_Value'!C6", "='35_Scenario_Analysis'!C12", "='35_Scenario_Analysis'!D12", FMT_PERCENT),
-        ("FY31 Revenue (INR Cr)", "='20_Operating_Model'!F6", "='35_Scenario_Analysis'!C13", "='35_Scenario_Analysis'!D13", FMT_CURRENCY_INT),
+        (f"FY31 Revenue ({ccy})", "='20_Operating_Model'!F6", "='35_Scenario_Analysis'!C13", "='35_Scenario_Analysis'!D13", FMT_CURRENCY_INT),
         ("FY31 EBITDA Margin %", "='20_Operating_Model'!F8", "='35_Scenario_Analysis'!C14", "='35_Scenario_Analysis'!D14", FMT_PERCENT),
     ]
 
@@ -253,10 +255,10 @@ def render_model_control(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     controls = [
         ("Active Scenario", "base", "Primary scenario driving live model sheets (base / bull / bear)"),
         ("Model Mode", "Analyst Mode", "Full financial modeling mode with 23 detail tabs"),
-        ("Taxonomy Mapping", "Infosys Hand-Tuned v1.0", "Normalized financial taxonomy registry"),
+        ("Taxonomy Mapping", f"{spec.metadata.market.upper()} Normalized Taxonomy v1.0", "Normalized financial taxonomy registry"),
         ("Model Schema Version", spec.metadata.model_version, "Pydantic contract schema version"),
         ("Reporting Currency", spec.metadata.currency, "Company financial statement currency"),
-        ("Display Unit Basis", spec.metadata.units, "Monetary figures in INR Crores"),
+        ("Display Unit Basis", spec.metadata.units, f"Monetary figures in {spec.metadata.currency} {spec.metadata.units.capitalize()}"),
     ]
 
     for idx, (lbl, val, desc) in enumerate(controls):
