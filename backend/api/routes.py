@@ -10,6 +10,7 @@ Provides API endpoints for:
 - GET /api/export/excel: Trigger openpyxl exporter and download 27-tab .xlsx workbook
 """
 
+import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -23,6 +24,7 @@ from backend.forecast.pipeline import run as run_forecast_pipeline
 from backend.models.spec.forecast import Forecast
 from backend.models.statements.historical_model import HistoricalModel
 from backend.models.statements.pipeline import run as run_historical
+from backend.models.spec.model_specification import ModelSpecification
 from backend.validation.pipeline import run_qa
 from backend.valuation.pipeline import run_valuation
 
@@ -42,11 +44,25 @@ def _get_hist_model() -> HistoricalModel:
 
 def _get_or_build_spec(company_id: str = "infy_infy") -> ModelSpecification:
     if company_id not in _MODEL_CACHE:
-        hist_m = _get_hist_model()
-        f_spec = run_forecast_pipeline(hist_m)
-        v_spec = run_valuation(f_spec)
-        q_spec = run_qa(v_spec)
-        _MODEL_CACHE[company_id] = q_spec
+        cache_path = Path("backend/data/cache") / f"{company_id}.json"
+        if cache_path.exists():
+            try:
+                with open(cache_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                _MODEL_CACHE[company_id] = ModelSpecification.deserialize(data)
+                print(f"Loaded {company_id} ModelSpecification from precomputed cache.")
+            except Exception as e:
+                print(f"Failed to load cache for {company_id}, compiling live: {e}")
+                hist_m = _get_hist_model()
+                f_spec = run_forecast_pipeline(hist_m)
+                v_spec = run_valuation(f_spec)
+                _MODEL_CACHE[company_id] = run_qa(v_spec)
+        else:
+            hist_m = _get_hist_model()
+            f_spec = run_forecast_pipeline(hist_m)
+            v_spec = run_valuation(f_spec)
+            q_spec = run_qa(v_spec)
+            _MODEL_CACHE[company_id] = q_spec
     return _MODEL_CACHE[company_id]
 
 
