@@ -37,10 +37,16 @@ def run(company_id: str = "infy_infy") -> dict:
     derived_dps = derive_canonical_metrics(canonical_dps)
     all_canonical_dps = canonical_dps + derived_dps
 
-    # Validate currencies and units
-    currency_val = validate_currencies_and_units(all_canonical_dps)
+    # Validate currencies and units based on company metadata
+    from backend.models.spec.metadata import get_metadata_for_company
+    meta = get_metadata_for_company(company_id)
+    currency_val = validate_currencies_and_units(
+        all_canonical_dps,
+        expected_currency=meta.currency,
+        expected_units=meta.units,
+    )
     if not currency_val["is_valid"]:
-        raise ValueError(f"Currency/Units validation failed: {currency_val['inconsistent_datapoints']}")
+        raise ValueError(f"Currency/Units validation failed for {company_id}: {currency_val['inconsistent_datapoints']}")
 
     # Validate fiscal period alignment
     period_val = align_fiscal_periods(all_canonical_dps)

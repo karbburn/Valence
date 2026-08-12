@@ -19,13 +19,16 @@ const DRIVER_CONFIGS = [
     { key: "exit_ev_multiple", label: "Exit EV/EBITDA Multiple", unit: "x", min: 5, max: 40, step: 0.5 },
 ];
 
+let currentCompanyId = 'infy_infy';
+
 document.addEventListener("DOMContentLoaded", () => {
-    fetchModelSpec();
+    fetchModelSpec('infy_infy');
 });
 
-async function fetchModelSpec() {
+async function fetchModelSpec(companyId = currentCompanyId) {
     try {
-        const res = await fetch("/api/model/infy_infy");
+        currentCompanyId = companyId;
+        const res = await fetch(`/api/model/${companyId}`);
         currentSpec = await res.json();
         renderDashboard();
     } catch (err) {
@@ -33,12 +36,16 @@ async function fetchModelSpec() {
     }
 }
 
+async function handleCompanyChange(companyId) {
+    await fetchModelSpec(companyId);
+}
+
 function renderDashboard() {
     if (!currentSpec) return;
 
     // 1. Render Header & Metadata
     document.getElementById("company-name").innerText = currentSpec.metadata.name.toUpperCase();
-    document.getElementById("ticker-badge").innerText = `${currentSpec.metadata.market.toUpperCase()}: ${currentSpec.metadata.ticker}`;
+    document.getElementById("ticker-badge").innerText = `${currentSpec.metadata.market.toUpperCase()}: ${currentSpec.metadata.ticker} (${currentSpec.metadata.currency})`;
 
     // 2. Render Top KPI Bar
     renderKPIs();

@@ -22,6 +22,15 @@
             <div class="h-5 w-px bg-slate-800"></div>
 
             <div class="flex items-center gap-3">
+                <select id="company-select" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs font-semibold rounded-lg px-2.5 py-1 focus:outline-none focus:border-indigo-500 cursor-pointer" onchange="handleCompanyChange(this.value)">
+                    <option value="infy_infy">INFY — Infosys Ltd (India)</option>
+                    <option value="tcs_tcs">TCS — Tata Consultancy (India)</option>
+                    <option value="tatamotors_tatamotors">TATAMOTORS — Tata Motors (India)</option>
+                    <option value="tatasteel_tatasteel">TATASTEEL — Tata Steel (India)</option>
+                    <option value="aapl_us">AAPL — Apple Inc. (US)</option>
+                    <option value="msft_us">MSFT — Microsoft Corp (US)</option>
+                    <option value="infy_us">INFY — Infosys ADR (US)</option>
+                </select>
                 <span id="company-name" class="font-semibold text-slate-200">INFOSYS LIMITED</span>
                 <span id="ticker-badge" class="px-2 py-0.5 text-xs font-mono bg-slate-800 text-slate-300 rounded border border-slate-700">NSE: INFY</span>
             </div>

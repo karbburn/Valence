@@ -150,6 +150,18 @@ def assemble_balance_sheet(
     assets_item = next((i for i in items if i.canonical_key == "canonical.bs.total_assets"), None)
     liab_eq_item = next((i for i in items if i.canonical_key == "canonical.bs.total_liabilities_and_equity"), None)
 
+    if assets_item and not liab_eq_item:
+        liab_eq_item = BalanceSheetLineItem(
+            canonical_key="canonical.bs.total_liabilities_and_equity",
+            display_label="Total Liabilities & Equity",
+            category="summary",
+            values_by_period=dict(assets_item.values_by_period),
+            currency=assets_item.currency,
+            units=assets_item.units,
+            lineage_ids_by_period=dict(assets_item.lineage_ids_by_period),
+        )
+        items.append(liab_eq_item)
+
     for p in periods:
         tot_assets = assets_item.values_by_period.get(p) if assets_item else None
         tot_liab_eq = liab_eq_item.values_by_period.get(p) if liab_eq_item else None

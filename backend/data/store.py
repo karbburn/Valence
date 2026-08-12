@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 if TYPE_CHECKING:
     from backend.normalization.taxonomy.models import CanonicalDatapoint, TaxonomyMapping
 
-Source = Literal["screener", "bse_filing", "nse_filing"]
+Source = Literal["screener", "bse_filing", "nse_filing", "sec_edgar"]
 Status = Literal["reported", "reported_adjusted", "derived"]
 
 
@@ -93,6 +93,9 @@ def _connect(db_path: str | Path) -> sqlite3.Connection:
 
 def save_datapoints(db_path: str | Path, datapoints: list[RawDatapoint]) -> None:
     conn = _connect(db_path)
+    company_ids = set(d.company_id for d in datapoints)
+    for cid in company_ids:
+        conn.execute("DELETE FROM raw_datapoints WHERE company_id = ?", (cid,))
     rows = [
         (
             d.id, d.company_id, d.metric_raw, d.period_label,
@@ -118,28 +121,35 @@ def query_datapoints(
 ) -> list[RawDatapoint]:
     conn = _connect(db_path)
     sql = "SELECT * FROM raw_datapoints WHERE company_id = ?"
-    params: list = [company_id]
-    if period_label is not None:
+    params: list[Any] = [company_id]
+    if period_label:
         sql += " AND period_label = ?"
         params.append(period_label)
-    if source is not None:
+    if source:
         sql += " AND source = ?"
         params.append(source)
     rows = conn.execute(sql, params).fetchall()
     conn.close()
-    cols = ("id", "company_id", "metric_raw", "period_label", "period_end_date", "value", "currency", "units", "source", "source_location", "status", "update_date", "superseded_by_id")
-    return [_row_to_datapoint(dict(zip(cols, r))) for r in rows]
-
-
-def _row_to_datapoint(row: dict) -> RawDatapoint:
-    row = dict(row)
-    row["period_end_date"] = date.fromisoformat(row["period_end_date"])
-    row["update_date"] = datetime.fromisoformat(row["update_date"])
-    return RawDatapoint(**row)
+    cols = (
+        "id", "company_id", "metric_raw", "period_label",
+        "period_end_date", "value", "currency", "units",
+        "source", "source_location", "status",
+        "update_date", "superseded_by_id",
+    )
+    result = []
+    for r in rows:
+        d = dict(zip(cols, r))
+        d["period_end_date"] = date.fromisoformat(d["period_end_date"])
+        d["update_date"] = datetime.fromisoformat(d["update_date"])
+        result.append(RawDatapoint(**d))
+    return result
 
 
 def save_canonical_datapoints(db_path: str | Path, datapoints: list[CanonicalDatapoint]) -> None:
     conn = _connect(db_path)
+    company_ids = set(d.company_id for d in datapoints)
+    for cid in company_ids:
+        conn.execute("DELETE FROM canonical_datapoints WHERE company_id = ?", (cid,))
     rows = [
         (
             d.id, d.company_id, d.canonical_key, d.metric_raw, d.period_label,

@@ -71,6 +71,36 @@ COMPANY_METADATA_REGISTRY: dict[str, ModelMetadata] = {
         fiscal_year_end="March 31",
         shares_outstanding=1248.0,
     ),
+    "aapl_us": ModelMetadata(
+        company_id="aapl_us",
+        ticker="AAPL",
+        name="Apple Inc.",
+        market="us",
+        currency="USD",
+        units="millions",
+        fiscal_year_end="September 30",
+        shares_outstanding=15300.0,
+    ),
+    "msft_us": ModelMetadata(
+        company_id="msft_us",
+        ticker="MSFT",
+        name="Microsoft Corporation",
+        market="us",
+        currency="USD",
+        units="millions",
+        fiscal_year_end="June 30",
+        shares_outstanding=7430.0,
+    ),
+    "infy_us": ModelMetadata(
+        company_id="infy_us",
+        ticker="INFY",
+        name="Infosys Limited (NYSE ADR)",
+        market="us",
+        currency="USD",
+        units="millions",
+        fiscal_year_end="March 31",
+        shares_outstanding=4124.0,
+    ),
 }
 
 

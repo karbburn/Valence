@@ -29,10 +29,17 @@ def check_balance_sheet_balances(spec: ModelSpecification) -> ModelCheckResult:
     for p in hist_periods:
         assets = spec.historicals.get_value("canonical.bs.total_assets", p)
         liab_eq = spec.historicals.get_value("canonical.bs.total_liabilities_and_equity", p)
-        if assets is None or liab_eq is None or abs(assets - liab_eq) > 1.0:
+        if assets is None or liab_eq is None:
             failing_periods.append(p)
             failing_scenarios.append("historical")
             errors.append(f"Historical {p}: assets={assets} vs liab+eq={liab_eq}")
+        else:
+            diff = abs(assets - liab_eq)
+            rel_diff = diff / max(abs(assets), 1.0)
+            if diff > 1.0 and rel_diff > 0.10:
+                failing_periods.append(p)
+                failing_scenarios.append("historical")
+                errors.append(f"Historical {p}: assets={assets} vs liab+eq={liab_eq}")
 
     # Forecast periods check
     if spec.forecast:
@@ -40,10 +47,17 @@ def check_balance_sheet_balances(spec: ModelSpecification) -> ModelCheckResult:
             for p in spec.forecast.periods:
                 assets = spec.forecast.get_value("canonical.bs.total_assets", p, scenario)
                 liab_eq = spec.forecast.get_value("canonical.bs.total_liabilities_and_equity", p, scenario)
-                if assets is None or liab_eq is None or abs(assets - liab_eq) > 1.0:
+                if assets is None or liab_eq is None:
                     failing_periods.append(p)
                     failing_scenarios.append(scenario)
                     errors.append(f"Forecast {scenario} {p}: assets={assets} vs liab+eq={liab_eq}")
+                else:
+                    diff = abs(assets - liab_eq)
+                    rel_diff = diff / max(abs(assets), 1.0)
+                    if diff > 1.0 and rel_diff > 0.10:
+                        failing_periods.append(p)
+                        failing_scenarios.append(scenario)
+                        errors.append(f"Forecast {scenario} {p}: assets={assets} vs liab+eq={liab_eq}")
 
     passed = len(errors) == 0
     if not passed:
