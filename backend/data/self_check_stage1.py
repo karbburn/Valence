@@ -37,7 +37,7 @@ def main() -> None:
     _assert(len(screener) > 0, f"screener rows ingested ({len(screener)})")
     _assert(len(filing) > 0, f"filing rows ingested ({len(filing)})")
 
-    # Phase 1.5: both sources in crores; FY26 revenue must agree.
+    # Both sources in crores; FY26 revenue must agree.
     s_rev = _find_canon(screener, "revenue", "FY26")
     f_rev = _find_canon(filing, "revenue", "FY26")
     _assert(s_rev is not None and f_rev is not None, "FY26 revenue present in both sources")
@@ -60,7 +60,7 @@ def main() -> None:
     disc = json.loads(LOG_PATH.read_text())
     _assert(isinstance(disc, list) and len(disc) > 0, f"discrepancy log non-empty ({len(disc)} entries)")
 
-    print("\nALL STAGE 1 SELF-CHECKS PASSED")
+    print("\nALL INGESTION SELF-CHECKS PASSED")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,68 @@
+from __future__ import annotations
+
+from typing import List, Literal, Optional
+
+from pydantic import BaseModel
+
+CheckCategory = Literal["accounting", "valuation", "data_quality"]
+
+
+class ModelCheckResult(BaseModel):
+    """Single QA check result.
+
+    Carries enough context for both the web UI (navigate to offending item)
+    and the Excel renderer (hyperlink to cell) to surface failures precisely.
+    No renderer-specific fields here — that mapping is the renderer's job.
+    """
+    check_name: str                             # e.g. "Balance Sheet Balances"
+    category: CheckCategory
+    passed: bool
+    detail: str = ""                            # human-readable failure reason; "" if passed
+    implicated_canonical_keys: List[str] = []   # which line items are involved
+    implicated_periods: List[str] = []          # which periods
+    implicated_scenarios: List[str] = []        # which scenarios
+
+
+# check registry.
+# These are the structural slots.
+V1_CHECK_NAMES = [
+    ("balance_sheet_balances", "accounting", "Assets = Liabilities + Equity, every period."),
+    ("cash_flow_reconciles", "accounting", "CF ending cash ties to BS cash line."),
+    ("debt_schedule_reconciles", "accounting", "Opening + draws − repayments = closing debt."),
+    ("share_count_consistent", "accounting", "Diluted share count used consistently across EPS and valuation."),
+    ("dcf_bridge_reconciles", "valuation", "EV → Equity Value → Implied Share Price ties out exactly."),
+    ("wacc_valid", "valuation", "WACC > 0, weights sum to 100%, no negative component costs."),
+    ("terminal_growth_lt_wacc", "valuation", "Terminal growth rate < WACC (Gordon Growth requirement)."),
+    ("no_missing_critical_inputs", "data_quality", "Every driver has an assumption object — no silent null."),
+]
+
+
+class QAResults(BaseModel):
+    """Collection of all QA check results for a model.
+
+    Populated by the QA Engine.
+    """
+    checks: List[ModelCheckResult] = []
+
+    @property
+    def all_passed(self) -> bool:
+        return all(c.passed for c in self.checks)
+
+    @property
+    def failed_count(self) -> int:
+        return sum(1 for c in self.checks if not c.passed)
+
+    @property
+    def summary_label(self) -> str:
+        """The string shown prominently in both renderers."""
+        if not self.checks:
+            return "NOT RUN"
+        if self.all_passed:
+            return "MODEL VALID"
+        n = self.failed_count
+        return f"{n} CHECK{'S' if n != 1 else ''} FAILED"
+
+    @classmethod
+    def empty(cls) -> "QAResults":
+        """Structurally complete but un-run QA section."""
+        return cls(checks=[])
