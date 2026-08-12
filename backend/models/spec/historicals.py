@@ -70,9 +70,7 @@ class Historicals(BaseModel):
                         HistoricalLineItem(
                             canonical_key=li.canonical_key,
                             period_label=period,
-                            period_end_date=li.lineage_ids_by_period.get(period, [None])[0]
-                            if False  # period_end_date sourced below
-                            else date(int("20" + period[2:]) if len(period) == 4 else int(period[2:]), 3, 31),
+                            period_end_date=date(int("20" + period[2:]) if len(period) == 4 else int(period[2:]), 3, 31),
                             value=value,
                             currency=li.currency,
                             units=li.units,

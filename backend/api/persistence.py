@@ -18,7 +18,9 @@ from pydantic import BaseModel, Field
 from backend.models.spec.model_specification import ModelSpecification, MODEL_SPEC_VERSION
 
 # Storage Directory
-STORAGE_DIR = Path("backend/data/user_models")
+PERSISTENCE_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = PERSISTENCE_DIR.parent.parent
+STORAGE_DIR = PROJECT_ROOT / "backend" / "data" / "user_models"
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -83,7 +85,7 @@ class SavedModelStore:
         now_str = datetime.now().isoformat()
 
         model_name = name or f"{spec.metadata.name} Valuation ({spec.metadata.ticker})"
-        spec_dict = spec.serialize()
+        spec_dict = json.loads(spec.serialize())
 
         header = SavedModelHeader(
             model_id=m_id,
@@ -117,7 +119,7 @@ class SavedModelStore:
 
         spec_dict = data.get("spec_dict", {})
         migrated_dict = migrate_model_spec(spec_dict)
-        return ModelSpecification.deserialize(migrated_dict)
+        return ModelSpecification.deserialize(json.dumps(migrated_dict))
 
     @staticmethod
     def list_for_user(user_id: str) -> List[SavedModelHeader]:
@@ -132,7 +134,8 @@ class SavedModelStore:
                     data = json.load(f)
                     h_dict = data.get("header", {})
                     headers.append(SavedModelHeader(**h_dict))
-            except Exception:
+            except Exception as e:
+                print(f"Warning: Failed to load saved model from {file_path}: {e}")
                 continue
 
         headers.sort(key=lambda h: h.updated_at, reverse=True)

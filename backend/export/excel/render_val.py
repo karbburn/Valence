@@ -42,6 +42,13 @@ from backend.models.spec.forecast import FORECAST_PERIODS
 from backend.models.spec.model_specification import ModelSpecification
 
 
+def get_assumption_value(spec: ModelSpecification, driver_key: str, period: str, scenario: str = "base") -> float:
+    for a in spec.assumptions:
+        if a.driver_key == driver_key and a.scenario == scenario and (a.period == period or a.period == "all"):
+            return a.value
+    return 0.0
+
+
 def render_wacc_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ws = wb.create_sheet(title="30_WACC")
     apply_tab_defaults(ws, freeze_cell="A5")
@@ -57,11 +64,11 @@ def render_wacc_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     base_val = spec.get_valuation("base")
     wacc_b = base_val.wacc if base_val else None
 
-    rfr = wacc_b.risk_free_rate if wacc_b else 7.10
-    beta = wacc_b.beta if wacc_b else 0.90
-    erp = wacc_b.equity_risk_premium if wacc_b else 6.50
-    debt_pre = wacc_b.pre_tax_cost_of_debt if wacc_b else 0.0
-    tax = wacc_b.tax_rate if wacc_b else 27.0
+    rfr = wacc_b.risk_free_rate if (wacc_b and wacc_b.risk_free_rate) else get_assumption_value(spec, "wacc.risk_free_rate", "all")
+    beta = wacc_b.beta if (wacc_b and wacc_b.beta is not None) else get_assumption_value(spec, "wacc.beta", "all")
+    erp = wacc_b.equity_risk_premium if (wacc_b and wacc_b.equity_risk_premium) else get_assumption_value(spec, "wacc.equity_risk_premium", "all")
+    debt_pre = wacc_b.pre_tax_cost_of_debt if (wacc_b and wacc_b.pre_tax_cost_of_debt is not None) else get_assumption_value(spec, "wacc.cost_of_debt", "all")
+    tax = wacc_b.tax_rate if (wacc_b and wacc_b.tax_rate is not None) else get_assumption_value(spec, "tax_rate", "FY27")
 
     wacc_rows = [
         ("Risk-Free Rate (Rf) %", rfr / 100.0, FMT_PERCENT_PRECISION, True, "India 10-Year Government Securities Yield"),
@@ -290,25 +297,27 @@ def render_sensitivity_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ws["B5"].font = FONT_HEADER
     ws["B5"].fill = FILL_HEADER
 
-    g_cols = [0.03, 0.035, 0.04, 0.045, 0.05]
-    for idx, g in enumerate(g_cols):
-        c = 3 + idx
-        cell = ws.cell(row=5, column=c, value=g)
-        cell.font = FONT_HEADER
-        cell.fill = FILL_HEADER
-        cell.number_format = FMT_PERCENT
-        cell.alignment = ALIGN_CENTER
-
-    wacc_rows = [0.11, 0.12, 0.1295, 0.14, 0.15]
     base_val = spec.get_valuation("base")
     sens_tables = base_val.sensitivity_tables if base_val else []
-    grid1 = sens_tables[0].results_grid if sens_tables else []
+    t1 = sens_tables[0] if sens_tables else None
+
+    g_cols = [g / 100.0 for g in t1.col_values] if t1 else [0.03, 0.035, 0.04, 0.045, 0.05]
+    wacc_rows = [w / 100.0 for w in t1.row_values] if t1 else [0.11, 0.12, 0.1295, 0.14, 0.15]
+    grid1 = t1.results_grid if t1 else []
 
     for r_idx, w in enumerate(wacc_rows):
         r = 6 + r_idx
         ws.cell(row=r, column=2, value=w).font = FONT_SUBHEADER
         ws.cell(row=r, column=2).number_format = FMT_PERCENT_PRECISION
         ws.cell(row=r, column=2).border = BORDER_BOX
+
+        # Set up header row labels
+        for idx, g in enumerate(g_cols):
+            cell_g = ws.cell(row=5, column=3 + idx, value=g)
+            cell_g.font = FONT_HEADER
+            cell_g.fill = FILL_HEADER
+            cell_g.number_format = FMT_PERCENT
+            cell_g.alignment = ALIGN_CENTER
 
         for c_idx, g in enumerate(g_cols):
             c = 3 + c_idx
@@ -337,8 +346,8 @@ def render_reverse_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     base_val = spec.get_valuation("base")
     rev_dcf = base_val.reverse_dcf if base_val else None
 
-    mkt_price = rev_dcf.market_price if rev_dcf else 1650.0
-    implied_g = (rev_dcf.implied_terminal_growth / 100.0) if (rev_dcf and rev_dcf.implied_terminal_growth) else 0.0904
+    mkt_price = rev_dcf.market_price if (rev_dcf and rev_dcf.market_price) else 0.0
+    implied_g = (rev_dcf.implied_terminal_growth / 100.0) if (rev_dcf and rev_dcf.implied_terminal_growth) else 0.0
 
     rows = [
         ("Current Market Benchmark Price (INR)", mkt_price, FMT_PRICE, True, "Market price input"),
@@ -383,6 +392,18 @@ def render_scenario_analysis_tab(wb: Workbook, spec: ModelSpecification) -> Work
     bull_v = spec.get_valuation("bull")
     bear_v = spec.get_valuation("bear")
 
+    r_base_pct = get_assumption_value(spec, "ebitda_margin", "FY31", "base") / 100.0
+    r_bull_pct = get_assumption_value(spec, "ebitda_margin", "FY31", "bull") / 100.0
+    r_bear_pct = get_assumption_value(spec, "ebitda_margin", "FY31", "bear") / 100.0
+
+    ebitda_base = base_v.terminal_value.final_year_ebitda if base_v else 0.0
+    ebitda_bull = bull_v.terminal_value.final_year_ebitda if bull_v else 0.0
+    ebitda_bear = bear_v.terminal_value.final_year_ebitda if bear_v else 0.0
+
+    rev_base = (ebitda_base / r_base_pct) if r_base_pct > 0 else 0.0
+    rev_bull = (ebitda_bull / r_bull_pct) if r_bull_pct > 0 else 0.0
+    rev_bear = (ebitda_bear / r_bear_pct) if r_bear_pct > 0 else 0.0
+
     rows = [
         ("Implied Share Price (INR)", base_v.dcf_bridge.implied_share_price, bull_v.dcf_bridge.implied_share_price, bear_v.dcf_bridge.implied_share_price, FMT_PRICE),
         ("Enterprise Value (INR Cr)", base_v.dcf_bridge.enterprise_value, bull_v.dcf_bridge.enterprise_value, bear_v.dcf_bridge.enterprise_value, FMT_CURRENCY_INT),
@@ -391,8 +412,8 @@ def render_scenario_analysis_tab(wb: Workbook, spec: ModelSpecification) -> Work
         ("Diluted Shares (Cr)", base_v.dcf_bridge.shares_outstanding, bull_v.dcf_bridge.shares_outstanding, bear_v.dcf_bridge.shares_outstanding, FMT_AMOUNT),
         ("Discount Rate (WACC %)", base_v.wacc.wacc / 100.0, bull_v.wacc.wacc / 100.0, bear_v.wacc.wacc / 100.0, FMT_PERCENT),
         ("Terminal Growth Rate %", base_v.terminal_value.terminal_growth_rate / 100.0, bull_v.terminal_value.terminal_growth_rate / 100.0, bear_v.terminal_value.terminal_growth_rate / 100.0, FMT_PERCENT),
-        ("FY31 Revenue (INR Cr)", 260338.22, 285396.11, 237072.44, FMT_CURRENCY_INT),
-        ("FY31 EBITDA Margin %", 0.2432, 0.2532, 0.2332, FMT_PERCENT),
+        ("FY31 Revenue (INR Cr)", rev_base, rev_bull, rev_bear, FMT_CURRENCY_INT),
+        ("FY31 EBITDA Margin %", r_base_pct, r_bull_pct, r_bear_pct, FMT_PERCENT),
     ]
 
     for idx, (lbl, v1, v2, v3, fmt) in enumerate(rows):

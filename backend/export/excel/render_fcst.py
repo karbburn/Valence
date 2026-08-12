@@ -39,6 +39,13 @@ from backend.models.spec.forecast import FORECAST_PERIODS
 from backend.models.spec.model_specification import ModelSpecification
 
 
+def get_assumption_value(spec: ModelSpecification, driver_key: str, period: str, scenario: str = "base") -> float:
+    for a in spec.assumptions:
+        if a.driver_key == driver_key and a.scenario == scenario and (a.period == period or a.period == "all"):
+            return a.value
+    return 0.0
+
+
 def render_operating_model(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ws = wb.create_sheet(title="20_Operating_Model")
     apply_tab_defaults(ws, freeze_cell="C6")
@@ -102,7 +109,7 @@ def render_revenue_build(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     write_table_header(ws, 5, headers, start_col=2)
 
     rev_rows = [
-        ("Assumed Revenue Growth Rate %", FMT_PERCENT, True, ["7.82%", "7.82%", "7.82%", "7.82%", "7.82%"]),
+        ("Assumed Revenue Growth Rate %", FMT_PERCENT, True, [get_assumption_value(spec, "revenue_growth", p) / 100.0 for p in FORECAST_PERIODS]),
         ("Consolidated Revenue (INR Cr)", FMT_AMOUNT, False, ["='20_Operating_Model'!C6", "='20_Operating_Model'!D6", "='20_Operating_Model'!E6", "='20_Operating_Model'!F6", "='20_Operating_Model'!G6"]),
     ]
 
@@ -132,9 +139,9 @@ def render_cost_build(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     write_table_header(ws, 5, headers, start_col=2)
 
     cost_rows = [
-        ("EBITDA Margin %", FMT_PERCENT, True, ["24.32%", "24.32%", "24.32%", "24.32%", "24.32%"]),
+        ("EBITDA Margin %", FMT_PERCENT, True, [get_assumption_value(spec, "ebitda_margin", p) / 100.0 for p in FORECAST_PERIODS]),
         ("EBITDA (INR Cr)", FMT_AMOUNT, False, ["='20_Operating_Model'!C9", "='20_Operating_Model'!D9", "='20_Operating_Model'!E9", "='20_Operating_Model'!F9", "='20_Operating_Model'!G9"]),
-        ("Operating Profit Margin %", FMT_PERCENT, True, ["20.59%", "20.59%", "20.59%", "20.59%", "20.59%"]),
+        ("Operating Profit Margin %", FMT_PERCENT, True, [get_assumption_value(spec, "ebit_margin", p) / 100.0 for p in FORECAST_PERIODS]),
         ("Operating Profit (INR Cr)", FMT_AMOUNT, False, ["='20_Operating_Model'!C11", "='20_Operating_Model'!D11", "='20_Operating_Model'!E11", "='20_Operating_Model'!F11", "='20_Operating_Model'!G11"]),
     ]
 
@@ -164,9 +171,9 @@ def render_working_capital(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     write_table_header(ws, 5, headers, start_col=2)
 
     wc_rows = [
-        ("Days Sales Outstanding (DSO)", FMT_DAYS, True, ["105.1 days", "105.1 days", "105.1 days", "105.1 days", "105.1 days"]),
+        ("Days Sales Outstanding (DSO)", FMT_DAYS, True, [get_assumption_value(spec, "dso_days", p) for p in FORECAST_PERIODS]),
         ("Trade Receivables (INR Cr)", FMT_AMOUNT, False, ["='20_Operating_Model'!C17", "='20_Operating_Model'!D17", "='20_Operating_Model'!E17", "='20_Operating_Model'!F17", "='20_Operating_Model'!G17"]),
-        ("Days Payables Outstanding (DPO)", FMT_DAYS, True, ["13.9 days", "13.9 days", "13.9 days", "13.9 days", "13.9 days"]),
+        ("Days Payables Outstanding (DPO)", FMT_DAYS, True, [get_assumption_value(spec, "dpo_days", p) for p in FORECAST_PERIODS]),
         ("Trade Payables (INR Cr)", FMT_AMOUNT, False, ["='20_Operating_Model'!C18", "='20_Operating_Model'!D18", "='20_Operating_Model'!E18", "='20_Operating_Model'!F18", "='20_Operating_Model'!G18"]),
     ]
 
@@ -196,9 +203,9 @@ def render_capex_da(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     write_table_header(ws, 5, headers, start_col=2)
 
     rows = [
-        ("Capex % Revenue", FMT_PERCENT, True, ["2.01%", "2.01%", "2.01%", "2.01%", "2.01%"]),
+        ("Capex % Revenue", FMT_PERCENT, True, [get_assumption_value(spec, "capex_pct_revenue", p) / 100.0 for p in FORECAST_PERIODS]),
         ("Capex Outflow (INR Cr)", FMT_AMOUNT, False, ["='20_Operating_Model'!C24", "='20_Operating_Model'!D24", "='20_Operating_Model'!E24", "='20_Operating_Model'!F24", "='20_Operating_Model'!G24"]),
-        ("D&A % Revenue", FMT_PERCENT, True, ["2.96%", "2.96%", "2.96%", "2.96%", "2.96%"]),
+        ("D&A % Revenue", FMT_PERCENT, True, [get_assumption_value(spec, "da_pct_revenue", p) / 100.0 for p in FORECAST_PERIODS]),
         ("D&A Expense (INR Cr)", FMT_AMOUNT, False, ["='20_Operating_Model'!C10", "='20_Operating_Model'!D10", "='20_Operating_Model'!E10", "='20_Operating_Model'!F10", "='20_Operating_Model'!G10"]),
     ]
 
@@ -230,11 +237,11 @@ def render_debt_schedule(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     write_table_header(ws, 5, headers, start_col=2)
 
     debt_rows = [
-        ("Opening Debt Balance (INR Cr)", FMT_AMOUNT, [0.0, 0.0, 0.0, 0.0, 0.0]),
-        ("Debt Drawdowns (INR Cr)", FMT_AMOUNT, [0.0, 0.0, 0.0, 0.0, 0.0]),
-        ("Scheduled Repayments (INR Cr)", FMT_AMOUNT, [0.0, 0.0, 0.0, 0.0, 0.0]),
-        ("Closing Debt Balance (INR Cr)", FMT_AMOUNT, [0.0, 0.0, 0.0, 0.0, 0.0]),
-        ("Interest Expense (INR Cr)", FMT_AMOUNT, [0.0, 0.0, 0.0, 0.0, 0.0]),
+        ("Opening Debt Balance (INR Cr)", FMT_AMOUNT, ["=0.0"] * len(FORECAST_PERIODS)),
+        ("Debt Drawdowns (INR Cr)", FMT_AMOUNT, ["=0.0"] * len(FORECAST_PERIODS)),
+        ("Scheduled Repayments (INR Cr)", FMT_AMOUNT, ["=0.0"] * len(FORECAST_PERIODS)),
+        ("Closing Debt Balance (INR Cr)", FMT_AMOUNT, ["=0.0"] * len(FORECAST_PERIODS)),
+        ("Interest Expense (INR Cr)", FMT_AMOUNT, ["=0.0"] * len(FORECAST_PERIODS)),
     ]
 
     for idx, (label, fmt, vals) in enumerate(debt_rows):
@@ -263,7 +270,7 @@ def render_tax_schedule(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     write_table_header(ws, 5, headers, start_col=2)
 
     tax_rows = [
-        ("Effective Tax Rate %", FMT_PERCENT, True, ["27.69%", "27.69%", "27.69%", "27.69%", "27.69%"]),
+        ("Effective Tax Rate %", FMT_PERCENT, True, [get_assumption_value(spec, "tax_rate", p) / 100.0 for p in FORECAST_PERIODS]),
         ("PBT (INR Cr)", FMT_AMOUNT, False, ["='20_Operating_Model'!C14", "='20_Operating_Model'!D14", "='20_Operating_Model'!E14", "='20_Operating_Model'!F14", "='20_Operating_Model'!G14"]),
         ("Tax Expense (INR Cr)", FMT_AMOUNT, False, ["='20_Operating_Model'!C15", "='20_Operating_Model'!D15", "='20_Operating_Model'!E15", "='20_Operating_Model'!F15", "='20_Operating_Model'!G15"]),
     ]

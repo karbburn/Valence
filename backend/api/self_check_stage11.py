@@ -12,6 +12,8 @@ Acceptance criteria:
   6. DELETE /api/models/{id} removes saved model.
 """
 
+import os
+os.environ["VALENCE_ENV"] = "test"
 from pathlib import Path
 from fastapi.testclient import TestClient
 

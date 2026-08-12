@@ -138,18 +138,21 @@ def check_terminal_growth_lt_wacc(spec: ModelSpecification) -> ModelCheckResult:
 
 
 def check_no_missing_critical_inputs(spec: ModelSpecification) -> ModelCheckResult:
-    """Verify every V1 driver has non-null assumption objects for active scenarios."""
+    """Verify every V1 driver has non-null assumption objects for all active scenarios."""
     errors: List[str] = []
     failing_keys: List[str] = []
+    failing_scenarios: List[str] = []
 
     required_keys = {d.driver_key for d in V1_DRIVERS}
-    base_assumptions = [a for a in spec.assumptions if a.scenario == "base"]
-    found_keys = {a.driver_key for a in base_assumptions if a.value is not None}
-
-    missing_keys = required_keys - found_keys
-    if missing_keys:
-        failing_keys = sorted(list(missing_keys))
-        errors.append(f"Missing driver assumptions for Base scenario: {', '.join(failing_keys)}")
+    for scenario in ["base", "bull", "bear"]:
+        scen_assumptions = [a for a in spec.assumptions if a.scenario == scenario]
+        found_keys = {a.driver_key for a in scen_assumptions if a.value is not None}
+        missing_keys = required_keys - found_keys
+        if missing_keys:
+            failing_scenarios.append(scenario)
+            sorted_missing = sorted(list(missing_keys))
+            failing_keys.extend(sorted_missing)
+            errors.append(f"Missing driver assumptions for {scenario} scenario: {', '.join(sorted_missing)}")
 
     passed = len(errors) == 0
     detail = "" if passed else "; ".join(errors)
@@ -159,10 +162,11 @@ def check_no_missing_critical_inputs(spec: ModelSpecification) -> ModelCheckResu
         category="data_quality",
         passed=passed,
         detail=detail,
-        implicated_canonical_keys=failing_keys,
+        implicated_canonical_keys=sorted(list(set(failing_keys))),
         implicated_periods=[],
-        implicated_scenarios=["base"],
+        implicated_scenarios=failing_scenarios if failing_scenarios else ["base", "bull", "bear"],
     )
+
 
 
 def run_model_checks(spec: ModelSpecification) -> List[ModelCheckResult]:

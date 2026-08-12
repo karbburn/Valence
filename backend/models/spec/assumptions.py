@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Literal, Optional
+import uuid
 
 from pydantic import BaseModel, Field
 
@@ -17,7 +18,7 @@ class AssumptionObject(BaseModel):
     - Reverting an override restores the original model_generated value.
     - Each instance is immutable by default; overrides create a new instance via `with_override()`.
     """
-    assumption_id: str = Field(default_factory=lambda: __import__("uuid").uuid4().hex)
+    assumption_id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     driver_key: str                          # e.g. "revenue_growth", "wacc.cost_of_equity"
     value: float
     period: str                              # e.g. "FY27", or "all" for period-invariant
@@ -25,7 +26,7 @@ class AssumptionObject(BaseModel):
     type: AssumptionType = "model_generated"
     source: str = ""                         # derivation method if model_gen; analyst note if override
     previous_model_value: Optional[float] = None   # set at override time; never cleared
-    last_updated: datetime = Field(default_factory=datetime.now)
+    last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     def with_override(self, new_value: float, source: str = "Analyst") -> "AssumptionObject":
         """Return a new AssumptionObject reflecting a user override.

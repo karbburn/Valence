@@ -9,6 +9,8 @@ Acceptance criteria:
   3. Live recomputation (POST /api/model/recompute) continues to work on top of the cached spec.
 """
 
+import os
+os.environ["VALENCE_ENV"] = "test"
 from pathlib import Path
 from fastapi.testclient import TestClient
 
