@@ -66,6 +66,22 @@ def build_historical_model(
         target_periods=target_periods,
     )
 
+    # Reconcile Cash Flow Statement to Balance Sheet cash change
+    reconciles_dict = {}
+    for idx, p in enumerate(cf_model.periods):
+        if idx == 0:
+            reconciles_dict[p] = True
+        else:
+            prev_p = cf_model.periods[idx - 1]
+            cash_curr = bs_model.get_value("canonical.bs.cash_and_bank", p)
+            cash_prev = bs_model.get_value("canonical.bs.cash_and_bank", prev_p)
+            net_change = cf_model.get_value("canonical.cf.net_change_in_cash", p)
+            if cash_curr is not None and cash_prev is not None and net_change is not None:
+                reconciles_dict[p] = abs((cash_curr - cash_prev) - net_change) < 1.0
+            else:
+                reconciles_dict[p] = True
+    cf_model.reconciles_to_bs_by_period = reconciles_dict
+
     # Combine common periods
     common_periods = [p for p in is_model.periods if p in bs_model.periods and p in cf_model.periods]
     if not common_periods:

@@ -157,7 +157,9 @@ def assemble_balance_sheet(
         if tot_assets is not None and tot_liab_eq is not None:
             diff = abs(tot_assets - tot_liab_eq)
             imbalance[p] = round(diff, 4)
-            is_balanced[p] = diff <= 1.0  # 1 Crore tolerance
+            denom = max(abs(tot_assets), abs(tot_liab_eq))
+            rel_diff = (diff / denom) if denom > 0 else 0.0
+            is_balanced[p] = rel_diff <= 1e-4 or diff <= 1.0
         else:
             is_balanced[p] = True
             imbalance[p] = 0.0

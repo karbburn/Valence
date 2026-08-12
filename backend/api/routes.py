@@ -28,7 +28,12 @@ from backend.models.spec.model_specification import ModelSpecification
 from backend.validation.pipeline import run_qa
 from backend.valuation.pipeline import run_valuation
 
+import re
+
 router = APIRouter()
+
+API_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = API_DIR.parent.parent
 
 # In-memory session model cache for fast live recomputation
 _MODEL_CACHE: Dict[str, ModelSpecification] = {}
@@ -44,7 +49,7 @@ def _get_hist_model() -> HistoricalModel:
 
 def _get_or_build_spec(company_id: str = "infy_infy") -> ModelSpecification:
     if company_id not in _MODEL_CACHE:
-        cache_path = Path("backend/data/cache") / f"{company_id}.json"
+        cache_path = PROJECT_ROOT / "backend" / "data" / "cache" / f"{company_id}.json"
         if cache_path.exists():
             try:
                 with open(cache_path, "r", encoding="utf-8") as f:
@@ -83,7 +88,7 @@ class RevertRequest(BaseModel):
 def get_model_spec(company_id: str = "infy_infy") -> Dict[str, Any]:
     """Fetch complete ModelSpecification JSON for company."""
     spec = _get_or_build_spec(company_id)
-    return spec.serialize()
+    return spec.model_dump(mode="json")
 
 
 @router.post("/model/recompute")
@@ -95,7 +100,7 @@ def recompute_model(req: OverrideRequest, company_id: str = "infy_infy") -> Dict
     new_assumptions = []
     found = False
     for a in spec.assumptions:
-        if a.driver_key == req.driver_key and a.scenario == req.scenario and (a.period == req.period or a.period == "all" or req.period == "all"):
+        if a.driver_key == req.driver_key and a.scenario == req.scenario and (a.period in (req.period, "all") or req.period == "all"):
             new_assumptions.append(a.with_override(req.value))
             found = True
         else:
@@ -133,7 +138,7 @@ def recompute_model(req: OverrideRequest, company_id: str = "infy_infy") -> Dict
     spec = run_qa(spec)
 
     _MODEL_CACHE[company_id] = spec
-    return spec.serialize()
+    return spec.model_dump(mode="json")
 
 
 @router.post("/model/revert")
@@ -143,7 +148,7 @@ def revert_driver_override(req: RevertRequest, company_id: str = "infy_infy") ->
 
     new_assumptions = []
     for a in spec.assumptions:
-        if a.driver_key == req.driver_key and a.scenario == req.scenario and (a.period == req.period or a.period == "all" or req.period == "all"):
+        if a.driver_key == req.driver_key and a.scenario == req.scenario and (a.period in (req.period, "all") or req.period == "all"):
             new_assumptions.append(a.reverted())
         else:
             new_assumptions.append(a)
@@ -162,16 +167,17 @@ def revert_driver_override(req: RevertRequest, company_id: str = "infy_infy") ->
     spec = run_qa(spec)
 
     _MODEL_CACHE[company_id] = spec
-    return spec.serialize()
+    return spec.model_dump(mode="json")
 
 
 @router.get("/export/excel")
 def export_excel(company_id: str = "infy_infy") -> FileResponse:
     """Trigger 27-tab openpyxl export and return .xlsx file download."""
     spec = _get_or_build_spec(company_id)
-    out_dir = Path("backend/export/output")
+    out_dir = PROJECT_ROOT / "backend" / "export" / "output"
     out_dir.mkdir(parents=True, exist_ok=True)
-    file_path = out_dir / f"{spec.metadata.ticker.lower()}_valuation_model.xlsx"
+    safe_ticker = re.sub(r'[^a-zA-Z0-9_-]', '', spec.metadata.ticker.lower())
+    file_path = out_dir / f"{safe_ticker}_valuation_model.xlsx"
 
     export_model_to_excel(spec, file_path)
 
@@ -236,7 +242,7 @@ def load_user_model(
         raise HTTPException(status_code=404, detail="Saved model not found")
 
     _MODEL_CACHE[spec.metadata.company_id] = spec
-    return spec.serialize()
+    return spec.model_dump(mode="json")
 
 
 @router.delete("/models/{model_id}")

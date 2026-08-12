@@ -158,7 +158,7 @@ def render_executive_summary(wb: Workbook, spec: ModelSpecification) -> Workshee
     bull_val = spec.get_valuation("bull")
     bear_val = spec.get_valuation("bear")
 
-    mkt_price = base_val.reverse_dcf.market_price if (base_val and base_val.reverse_dcf) else 1650.0
+    mkt_price = base_val.reverse_dcf.market_price if (base_val and base_val.reverse_dcf and base_val.reverse_dcf.market_price) else 0.0
     base_price = base_val.dcf_bridge.implied_share_price if (base_val and base_val.dcf_bridge) else 0.0
     bull_price = bull_val.dcf_bridge.implied_share_price if (bull_val and bull_val.dcf_bridge) else 0.0
     bear_price = bear_val.dcf_bridge.implied_share_price if (bear_val and bear_val.dcf_bridge) else 0.0

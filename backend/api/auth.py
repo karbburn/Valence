@@ -8,6 +8,7 @@ Provides:
 - Header-based session extractor supporting Supabase Auth JWTs & dev test tokens
 """
 
+import os
 from typing import Optional
 from fastapi import Header, HTTPException
 from pydantic import BaseModel
@@ -23,36 +24,37 @@ class UserSession(BaseModel):
 def get_current_user(
     authorization: Optional[str] = Header(None),
     x_user_id: Optional[str] = Header(None),
-    x_user_email: Optional[str] = Header(None),
 ) -> UserSession:
     """Extract authenticated UserSession from request headers.
 
-    Supports:
-    - Authorization: Bearer <supabase_jwt>
-    - X-User-Id / X-User-Email (Dev/Test fallback)
+    Gates development override headers behind VALENCE_ENV check, parses Bearer tokens,
+    and falls back to a guest session for local use.
     """
-    # 1. Dev / Test fallback header
-    if x_user_id:
+    # 1. Dev/Test fallback (gated behind environment check)
+    is_dev = os.getenv("VALENCE_ENV") in ("development", "test")
+    if is_dev and x_user_id:
         return UserSession(
             user_id=x_user_id,
-            email=x_user_email or f"{x_user_id}@valence.internal",
-            display_name="Analyst User",
+            email=f"{x_user_id}@valence.internal",
+            display_name="Dev Analyst",
             auth_provider="dev",
         )
 
-    # 2. Supabase Auth Bearer token header
+    # 2. Bearer token
     if authorization and authorization.startswith("Bearer "):
         token = authorization.split(" ")[1]
-        # Parse token claims (simulated/decoded)
-        user_id = f"usr_{token[:12]}"
-        return UserSession(
-            user_id=user_id,
-            email=f"{user_id}@google.com",
-            display_name="Authenticated Analyst",
-            auth_provider="google",
-        )
+        if len(token) > 10:
+            user_id = f"usr_{token[:12].replace('.', '_')}"
+            return UserSession(
+                user_id=user_id,
+                email=f"{user_id}@google.com",
+                display_name="Authenticated Analyst",
+                auth_provider="google",
+            )
+        else:
+            raise HTTPException(status_code=401, detail="Invalid auth token format")
 
-    # 3. Default demo guest session (for single-tenant local desktop mode)
+    # 3. Default demo guest session for local desktop use
     return UserSession(
         user_id="usr_demo_analyst",
         email="analyst@valence.internal",

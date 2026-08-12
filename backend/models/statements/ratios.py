@@ -127,14 +127,15 @@ def compute_historical_ratios(
 
         # 3. Working Capital & Capital Ratios
         total_rec = receivables + unbilled
-        if total_rec > 0:
+        if total_rec is not None:
             val_dso = ratio_days(total_rec, rev)
             if val_dso is not None:
                 ratios_dict["dso_days"][p] = val_dso
 
-        val_dpo = ratio_days(payables, cos or rev)
-        if val_dpo is not None:
-            ratios_dict["dpo_days"][p] = val_dpo
+        if payables is not None:
+            val_dpo = ratio_days(payables, cos)
+            if val_dpo is not None:
+                ratios_dict["dpo_days"][p] = val_dpo
 
         val_da_rev = pct(da, rev)
         if val_da_rev is not None:
