@@ -1,0 +1,15 @@
+[project]
+name = "valence"
+version = "0.1.0"
+description = "Financial modelling and valuation platform"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.7",
+    "pandas>=2.2",
+    "numpy>=1.26",
+    "openpyxl>=3.1",
+    "pdfplumber>=0.11",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]

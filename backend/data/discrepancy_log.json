@@ -1,0 +1,15 @@
+[
+  {
+    "company_id": "infy_infy",
+    "metric_raw": "Other Income",
+    "canonical_metric": "other_income",
+    "period_label": "FY26",
+    "screener_value": 3033.0,
+    "filing_value": 4157.0,
+    "abs_diff": 1124.0,
+    "rel_diff": 0.27038729853259563,
+    "winner": "nse_filing",
+    "screener_id": "4ee6a39ee8b629849c0e0a1f27957ff6bf9ccf3f",
+    "filing_id": "ff24b1e8e4ffdc6c33043e7e7166e5b9714596dd"
+  }
+]
