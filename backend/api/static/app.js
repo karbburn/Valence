@@ -28,6 +28,10 @@ document.addEventListener("DOMContentLoaded", () => {
 async function fetchModelSpec(companyId = currentCompanyId) {
     try {
         currentCompanyId = companyId;
+        const exportBtn = document.getElementById("excel-export-btn");
+        if (exportBtn) {
+            exportBtn.href = `/api/export/excel?company_id=${companyId}`;
+        }
         const res = await fetch(`/api/model/${companyId}`);
         currentSpec = await res.json();
         renderDashboard();
