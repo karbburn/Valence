@@ -191,8 +191,26 @@ def export_excel(company_id: str = "infy_infy") -> FileResponse:
     )
 
 
+@router.get("/companies")
+def list_available_companies() -> List[Dict[str, Any]]:
+    """List all available companies across India and US markets."""
+    from backend.models.spec.metadata import COMPANY_METADATA_REGISTRY
+    return [
+        {
+            "company_id": meta.company_id,
+            "ticker": meta.ticker,
+            "name": meta.name,
+            "market": meta.market,
+            "currency": meta.currency,
+            "units": meta.units,
+            "fiscal_year_end": meta.fiscal_year_end,
+        }
+        for meta in COMPANY_METADATA_REGISTRY.values()
+    ]
+
+
 # ------------------------------------------------------------------ #
-# Persistence Endpoints (Stage 11)
+# Persistence Endpoints
 # ------------------------------------------------------------------ #
 
 from fastapi import Depends

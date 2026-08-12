@@ -23,6 +23,7 @@ from backend.export.excel.styles import (
     FILL_CARD,
     FILL_HEADER,
     FILL_PASS,
+    FILL_FAIL,
     FILL_SUBHEADER,
     FMT_AMOUNT,
     FMT_CURRENCY_INT,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-Self-check for Stage 13 / Phase 2: Multi-Company Generalization (India Pilot Expansion).
+Self-check for Multi-Company Generalization (India Pilot Expansion).
 
 Acceptance criteria:
   1. Multi-Company Ingestion & Normalization:
@@ -23,7 +23,7 @@ Acceptance criteria:
   4. Excel Workbook Exporter:
      Generates valid 27-tab .xlsx workbooks for all 4 companies in backend/export/output/.
 
-  5. Infosys Non-Regression:
+  5. Inflow Non-Regression:
      Confirms Infosys pilot metrics and QA status remain unaffected by multi-company extensions.
 """
 
@@ -48,12 +48,12 @@ OUTPUT_DIR = PROJECT_ROOT / "backend" / "export" / "output"
 
 def _assert(cond: bool, msg: str) -> None:
     if not cond:
-        raise AssertionError(f"Stage 13 self-check FAILED: {msg}")
+        raise AssertionError(f"Multi-company validation self-check FAILED: {msg}")
     print(f"ok: {msg}")
 
 
 def main() -> None:
-    print("Running Stage 13 Phase 2 Multi-Company Generalization self-check...")
+    print("Running Multi-Company Generalization validation self-check...")
 
     companies = {
         "infy_infy": "Infosys.xlsx",
@@ -128,13 +128,13 @@ def main() -> None:
     _assert(compiled_specs["infy_infy"].qa.summary_label == "MODEL VALID", "Infosys QA status remains MODEL VALID")
 
     print("\n" + "=" * 65)
-    print("  Stage 13 Phase 2 Multi-Company Generalization Summary:")
+    print("  Multi-Company Generalization Summary:")
     print(f"    Companies Processed : {len(companies)} (INFY, TCS, Tata Motors, Tata Steel)")
     print(f"    QA Engine Rollup    : ALL 4 COMPANIES MODEL VALID")
     print(f"    Real Debt WACC Test : Tata Motors ({tm_val.wacc.debt_weight*100:.2f}%), Tata Steel ({ts_val.wacc.debt_weight*100:.2f}%)")
     print(f"    Excel Export        : 4 Workbooks Generated (27 Tabs each)")
     print("=" * 65)
-    print("\nALL STAGE 13 SELF-CHECKS PASSED SUCCESSFULLY!")
+    print("\nALL MULTI-COMPANY SELF-CHECKS PASSED SUCCESSFULLY!")
 
 
 if __name__ == "__main__":
