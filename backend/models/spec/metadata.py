@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -22,6 +22,7 @@ class ModelMetadata(BaseModel):
     currency: str                            # ISO code, e.g. "INR"
     units: str = "crores"                    # reporting units for financial values
     fiscal_year_end: str                     # e.g. "March 31" — human-readable
+    shares_outstanding: Optional[float] = None # in Crores
     model_version: str = MODEL_SPEC_VERSION  # schema version, semver — NOT data refresh
     generation_date: datetime = Field(default_factory=datetime.now)
 
@@ -35,4 +36,56 @@ INFOSYS_METADATA = ModelMetadata(
     currency="INR",
     units="crores",
     fiscal_year_end="March 31",
+    shares_outstanding=412.4545,
 )
+
+COMPANY_METADATA_REGISTRY: dict[str, ModelMetadata] = {
+    "infy_infy": INFOSYS_METADATA,
+    "tcs_tcs": ModelMetadata(
+        company_id="tcs_tcs",
+        ticker="TCS",
+        name="Tata Consultancy Services Limited",
+        market="india",
+        currency="INR",
+        units="crores",
+        fiscal_year_end="March 31",
+        shares_outstanding=361.8,
+    ),
+    "tatamotors_tatamotors": ModelMetadata(
+        company_id="tatamotors_tatamotors",
+        ticker="TATAMOTORS",
+        name="Tata Motors Limited",
+        market="india",
+        currency="INR",
+        units="crores",
+        fiscal_year_end="March 31",
+        shares_outstanding=367.0,
+    ),
+    "tatasteel_tatasteel": ModelMetadata(
+        company_id="tatasteel_tatasteel",
+        ticker="TATASTEEL",
+        name="Tata Steel Limited",
+        market="india",
+        currency="INR",
+        units="crores",
+        fiscal_year_end="March 31",
+        shares_outstanding=1248.0,
+    ),
+}
+
+
+def get_metadata_for_company(company_id: str) -> ModelMetadata:
+    """Return ModelMetadata for company_id, defaulting to Infosys if unknown."""
+    if company_id in COMPANY_METADATA_REGISTRY:
+        return COMPANY_METADATA_REGISTRY[company_id]
+    parts = company_id.split("_")
+    ticker = parts[0].upper()
+    return ModelMetadata(
+        company_id=company_id,
+        ticker=ticker,
+        name=f"{ticker} Limited",
+        market="india",
+        currency="INR",
+        units="crores",
+        fiscal_year_end="March 31",
+    )

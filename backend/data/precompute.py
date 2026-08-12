@@ -32,7 +32,7 @@ def run_precompute(company_id: str | None = None) -> Path:
 
     try:
         # 1. Run Historical 3-Statement Model
-        hist_model = run_historical(target_periods=["FY24", "FY25", "FY26"])
+        hist_model = run_historical(target_periods=["FY24", "FY25", "FY26"], company_id=target_id)
 
         # 2. Run Forecast Engine
         forecast_spec = run_forecast_pipeline(hist_model)
