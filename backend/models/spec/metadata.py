@@ -36,7 +36,7 @@ INFOSYS_METADATA = ModelMetadata(
     currency="INR",
     units="crores",
     fiscal_year_end="March 31",
-    shares_outstanding=412.4545,
+    shares_outstanding=405.76,
 )
 
 COMPANY_METADATA_REGISTRY: dict[str, ModelMetadata] = {

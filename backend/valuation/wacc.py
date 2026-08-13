@@ -18,10 +18,10 @@ from backend.forecast.share_count import ShareCountSchedule
 from backend.models.spec.assumptions import AssumptionObject
 from backend.models.spec.valuation import WACCBreakdown
 
-DEFAULT_RFR = 7.10       # India 10-Year G-Sec yield (%)
-DEFAULT_BETA = 0.90      # Infosys 2Y weekly beta vs NSE Nifty IT
-DEFAULT_ERP = 6.50       # Damodaran published India Equity Risk Premium (%)
-DEFAULT_CURRENT_PRICE = 1650.0  # INR per share benchmark market price for Infosys
+DEFAULT_RFR = 6.78       # India 10-Year G-Sec yield (%) — Trading Economics Aug 7 2026
+DEFAULT_BETA = 0.79      # Infosys 1Y weekly beta vs NSE Nifty IT — TradingView/TipRanks Aug 2026
+DEFAULT_ERP = 7.31       # Damodaran India Equity Risk Premium (%) — Jul 2026 update
+DEFAULT_CURRENT_PRICE = 1080.0  # INR per share — FT.com/TwelveData Aug 2026
 
 
 def _get_assumption_val(
@@ -59,11 +59,11 @@ def compute_wacc(
 
     # 2. Cost of Debt
     pre_tax_cost_of_debt = _get_assumption_val(assumptions, "wacc.cost_of_debt", scenario, 0.0)
-    tax_rate = _get_assumption_val(assumptions, "tax_rate", scenario, 27.0)
+    tax_rate = _get_assumption_val(assumptions, "tax_rate", scenario, 25.17)
     cost_of_debt_after_tax = pre_tax_cost_of_debt * (1.0 - tax_rate / 100.0)
 
     # 3. Capital Weighting
-    shares_cr = 412.4545  # default fallback if schedule not passed
+    shares_cr = 405.76  # default fallback — Infosys official Jun 30 2026 (4,057,578,830 shares)
     if share_count_schedule:
         # Use latest available historical or forecast share count
         val = share_count_schedule.get_diluted("FY26") or share_count_schedule.get_diluted("FY27")

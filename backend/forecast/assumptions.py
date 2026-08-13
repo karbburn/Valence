@@ -98,7 +98,7 @@ def suggest_base_assumptions(
     # 5. Effective Tax Rate — 3yr average
     # ------------------------------------------------------------------ #
     tax_rates = [ratios.get_value("effective_tax_rate_pct", p) for p in periods]
-    tax_rate = _avg(tax_rates) or 27.0
+    tax_rate = _avg(tax_rates) or 25.17
     source_tax = "3yr average effective tax rate (FY24-FY26)"
     for p in FORECAST_PERIODS:
         result.append(_make("tax_rate", tax_rate, p, "base", source_tax))

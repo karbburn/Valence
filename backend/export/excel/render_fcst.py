@@ -312,7 +312,7 @@ def render_share_count_schedule(wb: Workbook, spec: ModelSpecification) -> Works
     headers = ["Share Count Basis"] + periods
     write_table_header(ws, 5, headers, start_col=2)
 
-    shares_val = spec.share_count.get_diluted("FY26") if spec.share_count else 412.4545
+    shares_val = spec.share_count.get_diluted("FY26") if spec.share_count else 405.76
 
     ws.cell(row=6, column=2, value="Diluted Shares Outstanding (Cr)").font = FONT_SUBHEADER
     for idx, p in enumerate(periods):
