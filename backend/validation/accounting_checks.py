@@ -36,7 +36,7 @@ def check_balance_sheet_balances(spec: ModelSpecification) -> ModelCheckResult:
         else:
             diff = abs(assets - liab_eq)
             rel_diff = diff / max(abs(assets), 1.0)
-            if diff > 1.0 and rel_diff > 0.10:
+            if diff > 0.01 and rel_diff > 0.0001:
                 failing_periods.append(p)
                 failing_scenarios.append("historical")
                 errors.append(f"Historical {p}: assets={assets} vs liab+eq={liab_eq}")
@@ -54,7 +54,7 @@ def check_balance_sheet_balances(spec: ModelSpecification) -> ModelCheckResult:
                 else:
                     diff = abs(assets - liab_eq)
                     rel_diff = diff / max(abs(assets), 1.0)
-                    if diff > 1.0 and rel_diff > 0.10:
+                    if diff > 0.01 and rel_diff > 0.0001:
                         failing_periods.append(p)
                         failing_scenarios.append(scenario)
                         errors.append(f"Forecast {scenario} {p}: assets={assets} vs liab+eq={liab_eq}")

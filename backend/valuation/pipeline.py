@@ -24,8 +24,15 @@ from backend.valuation.wacc import DEFAULT_CURRENT_PRICE, compute_wacc
 def run_valuation(
     spec: ModelSpecification,
     current_share_price: float = DEFAULT_CURRENT_PRICE,
+    historical_model=None,
 ) -> ModelSpecification:
-    """Run full valuation engine across all scenarios and populate spec.valuation."""
+    """Run full valuation engine across all scenarios and populate spec.valuation.
+
+    Args:
+        spec: ModelSpecification with forecast, assumptions, and debt schedules populated.
+        current_share_price: Current market share price for reverse DCF.
+        historical_model: HistoricalModel for reverse DCF revenue CAGR solver.
+    """
     valuation_outputs: List[ValuationOutput] = []
 
     # Sourced cash from latest historicals (FY26)
@@ -43,13 +50,26 @@ def run_valuation(
         ds = next((d for d in spec.debt_schedule if d.scenario == scenario), None)
         debt_cr = ds.closing("FY26") if ds else 0.0
 
-        # 1. Compute WACC Breakdown
+        # 1. Compute WACC Breakdown — source inputs from assumptions
+        def _wacc_input(driver_key: str, default: float) -> float:
+            for a in spec.assumptions:
+                if a.driver_key == driver_key and a.scenario == scenario:
+                    return a.value
+            for a in spec.assumptions:
+                if a.driver_key == driver_key and a.scenario == "base":
+                    return a.value
+            return default
+
         wacc_breakdown = compute_wacc(
             assumptions=spec.assumptions,
             debt_schedule=ds,
             share_count_schedule=spec.share_count,
             scenario=scenario,
             current_share_price=current_share_price,
+            risk_free_rate=_wacc_input("wacc.risk_free_rate", 7.10),
+            beta=_wacc_input("wacc.beta", 0.90),
+            equity_risk_premium=_wacc_input("wacc.equity_risk_premium", 6.50),
+            debt_cr=debt_cr,
         )
         wacc_pct = wacc_breakdown.wacc or 12.95
 
@@ -95,6 +115,11 @@ def run_valuation(
             cash_cr=cash_cr,
             debt_cr=debt_cr,
             shares_cr=shares_cr,
+            forecast=spec.forecast,
+            assumptions=spec.assumptions,
+            historical_model=historical_model,
+            terminal_growth_rate=term_g,
+            exit_multiple=exit_mult,
         )
 
         # 6. Sensitivity Analysis Grids
