@@ -48,6 +48,7 @@ def compute_wacc(
     risk_free_rate: float = DEFAULT_RFR,
     beta: float = DEFAULT_BETA,
     equity_risk_premium: float = DEFAULT_ERP,
+    debt_cr: float = 0.0,
 ) -> WACCBreakdown:
     """Compute WACC breakdown generically for a given scenario.
 
@@ -70,10 +71,6 @@ def compute_wacc(
             shares_cr = val
 
     market_cap_cr = shares_cr * current_share_price / 1.0  # Shares (Cr) * Price (INR) = Market Cap (Cr)
-
-    debt_cr = 0.0
-    if debt_schedule and debt_schedule.periods:
-        debt_cr = debt_schedule.periods[0].opening_balance
 
     total_capital_cr = market_cap_cr + debt_cr
     if total_capital_cr > 0:
