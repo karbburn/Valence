@@ -105,7 +105,7 @@ def render_wacc_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
 def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ws = wb.create_sheet(title="31_DCF")
     apply_tab_defaults(ws, freeze_cell="C6")
-    set_col_widths(ws, {"A": 5, "B": 36, "C": 18, "D": 18, "E": 18, "F": 18, "G": 22})
+    set_col_widths(ws, {"A": 5, "B": 36, "C": 18, "D": 18, "E": 18, "F": 18, "G": 18, "H": 22})
 
     ws["B2"] = f"{spec.metadata.name.upper()} — DISCOUNTED CASH FLOW (DCF) MODEL"
     ws["B2"].font = FONT_TITLE
@@ -217,23 +217,27 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         cell.alignment = ALIGN_RIGHT
         cell.border = BORDER_TOTAL
 
-    # Right Column DCF Bridge (Column G, rows 6-13)
+    # DCF Bridge Block (rows 17-23, Column B = labels, Column H = values)
+    ws["B16"] = "DCF BRIDGE — EV TO EQUITY VALUE"
+    ws["B16"].font = FONT_SECTION
+
     ccy = spec.metadata.currency
     bridge_rows = [
         ("Cumulative PV of FCFF", "=SUM(C14:G14)", FMT_CURRENCY_INT),
         ("PV of Terminal Value", "='32_Terminal_Value'!C13", FMT_CURRENCY_INT),
-        ("ENTERPRISE VALUE (EV)", "=G7+G8", FMT_CURRENCY_INT),
+        ("ENTERPRISE VALUE (EV)", "=H17+H18", FMT_CURRENCY_INT),
         ("Less: Net Debt / (Cash)", "='20_Operating_Model'!C19-'20_Operating_Model'!C16", FMT_CURRENCY_INT),
-        ("EQUITY VALUE", "=G9-G10", FMT_CURRENCY_INT),
+        ("EQUITY VALUE", "=H19-H20", FMT_CURRENCY_INT),
         (f"Diluted Shares ({spec.metadata.units.capitalize()[:2]})", "='27_Share_Count'!E6", FMT_AMOUNT),
-        (f"IMPLIED SHARE PRICE ({ccy})", "=G11/G12", FMT_PRICE),
+        (f"IMPLIED SHARE PRICE ({ccy})", "=H21/H22", FMT_PRICE),
     ]
 
     for idx, (lbl, formula, fmt) in enumerate(bridge_rows):
-        r = 7 + idx
+        r = 17 + idx
         is_price = idx == len(bridge_rows) - 1
-        ws.cell(row=r, column=7, value=formula).number_format = fmt
-        cell = ws.cell(row=r, column=7)
+        ws.cell(row=r, column=2, value=lbl).font = FONT_TOTAL if is_price else FONT_SUBHEADER
+        ws.cell(row=r, column=8, value=formula).number_format = fmt
+        cell = ws.cell(row=r, column=8)
         cell.font = FONT_TITLE if is_price else FONT_TOTAL
         cell.alignment = ALIGN_RIGHT
         cell.border = BORDER_TOTAL
@@ -262,7 +266,7 @@ def render_terminal_value_tab(wb: Workbook, spec: ModelSpecification) -> Workshe
         (f"FY31 Final Year EBITDA ({ccy})", "='20_Operating_Model'!G9", FMT_AMOUNT, False, "Final forecast year EBITDA"),
         ("Exit Multiple Undiscounted TV", "=C9*C10", FMT_CURRENCY_INT, False, "TV = EBITDA_n * Exit Multiple"),
         ("Discount Factor (t=5)", "='31_DCF'!G13", "0.000000", False, "Discount factor for FY31"),
-        ("DISCOUNTED TERMINAL VALUE (PV)", "=C8*C11", FMT_CURRENCY_INT, False, "Gordon Growth PV of Terminal Value"),
+        ("DISCOUNTED TERMINAL VALUE (PV)", "=C8*C12", FMT_CURRENCY_INT, False, "Gordon Growth PV of Terminal Value"),
     ]
 
     for idx, (lbl, val, fmt, is_inp, note) in enumerate(tv_rows):
@@ -330,6 +334,39 @@ def render_sensitivity_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
             cell.alignment = ALIGN_RIGHT
             cell.border = BORDER_BOX
 
+    # Table 2: WACC vs Exit Multiple (rows 13-19)
+    ws["B13"] = "WACC % \\ Exit Multiple"
+    ws["B13"].font = FONT_HEADER
+    ws["B13"].fill = FILL_HEADER
+
+    t2 = sens_tables[1] if len(sens_tables) > 1 else None
+    m_cols = [m for m in t2.col_values] if t2 else [16.0, 18.0, 20.0, 22.0, 24.0]
+    wacc_rows2 = [w / 100.0 for w in t2.row_values] if t2 else wacc_rows
+    grid2 = t2.results_grid if t2 else []
+
+    for r_idx, w in enumerate(wacc_rows2):
+        r = 14 + r_idx
+        ws.cell(row=r, column=2, value=w).font = FONT_SUBHEADER
+        ws.cell(row=r, column=2).number_format = FMT_PERCENT_PRECISION
+        ws.cell(row=r, column=2).border = BORDER_BOX
+
+        # Set up header row labels
+        for idx, m in enumerate(m_cols):
+            cell_m = ws.cell(row=13, column=3 + idx, value=m)
+            cell_m.font = FONT_HEADER
+            cell_m.fill = FILL_HEADER
+            cell_m.number_format = FMT_MULTIPLE
+            cell_m.alignment = ALIGN_CENTER
+
+        for c_idx, m in enumerate(m_cols):
+            c = 3 + c_idx
+            p_val = grid2[r_idx][c_idx] if (r_idx < len(grid2) and c_idx < len(grid2[r_idx])) else None
+            cell = ws.cell(row=r, column=c, value=round(p_val, 2) if p_val else "-")
+            cell.font = FONT_FORMULA
+            cell.number_format = FMT_PRICE
+            cell.alignment = ALIGN_RIGHT
+            cell.border = BORDER_BOX
+
     return ws
 
 
@@ -356,7 +393,7 @@ def render_reverse_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         (f"Current Market Benchmark Price ({spec.metadata.currency})", mkt_price, FMT_PRICE, True, "Market price input"),
         (f"Market Implied Equity Value ({ccy})", "=C6*'27_Share_Count'!E6", FMT_CURRENCY_INT, False, "Market Price * Diluted Shares"),
         (f"Market Implied EV ({ccy})", "=C7+('20_Operating_Model'!C19-'20_Operating_Model'!C16)", FMT_CURRENCY_INT, False, "Implied Equity Value + Net Debt"),
-        (f"Market Implied PV of TV ({ccy})", "=C8-'31_DCF'!G7", FMT_CURRENCY_INT, False, "Implied EV - Cumulative PV(FCFF)"),
+        (f"Market Implied PV of TV ({ccy})", "=C8-'31_DCF'!H17", FMT_CURRENCY_INT, False, "Implied EV - Cumulative PV(FCFF)"),
         ("MARKET IMPLIED TERMINAL GROWTH %", implied_g, FMT_PERCENT_PRECISION, False, "Exact solved implied perpetuity growth rate"),
     ]
 

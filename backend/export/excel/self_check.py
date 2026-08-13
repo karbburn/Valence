@@ -86,7 +86,7 @@ def main() -> None:
     _assert("=" in wacc_formula and "C6" in wacc_formula, f"30_WACC live CAPM formula present ({wacc_formula})")
 
     ws_dcf = wb["31_DCF"]
-    dcf_fcff_sum_formula = str(ws_dcf["G7"].value)
+    dcf_fcff_sum_formula = str(ws_dcf["H17"].value)
     _assert("=" in dcf_fcff_sum_formula and "SUM" in dcf_fcff_sum_formula, f"31_DCF live FCFF sum formula present ({dcf_fcff_sum_formula})")
 
     ws_exec = wb["02_Executive_Summary"]
