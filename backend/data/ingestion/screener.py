@@ -9,8 +9,6 @@ import openpyxl
 
 from backend.data.store import RawDatapoint, Source, Status
 
-COMPANY_ID = "infy_infy"
-
 
 def _datapoint_id(company_id: str, metric: str, period: str, source: str, section: str, row: int) -> str:
     return hashlib.sha1(f"{company_id}|{section}|{metric}|{period}|{source}|{row}".encode()).hexdigest()

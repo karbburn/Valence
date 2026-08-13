@@ -15,7 +15,6 @@ from backend.normalization.fiscal_periods.aligner import align_fiscal_periods
 HERE = Path(__file__).resolve().parent
 WORKSPACE_ROOT = HERE.parent.parent
 DB_PATH = WORKSPACE_ROOT / "backend" / "data" / "valence.db"
-COMPANY_ID = "infy_infy"
 
 
 def run(company_id: str = "infy_infy") -> dict:
