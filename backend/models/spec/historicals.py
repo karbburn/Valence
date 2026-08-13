@@ -66,6 +66,13 @@ class Historicals(BaseModel):
             for li in stmt_items:
                 for period, value in li.values_by_period.items():
                     all_periods.add(period)
+                    # Infer derived status from canonical key patterns
+                    status: HistoricalStatus = "reported"
+                    derivation_rule: Optional[str] = None
+                    if li.canonical_key == "canonical.is.ebitda":
+                        status = "derived"
+                        derivation_rule = "ebitda = canonical.is.operating_profit + canonical.is.depreciation_amortization"
+
                     items.append(
                         HistoricalLineItem(
                             canonical_key=li.canonical_key,
@@ -74,9 +81,9 @@ class Historicals(BaseModel):
                             value=value,
                             currency=li.currency,
                             units=li.units,
-                            status="reported",       # set properly below
+                            status=status,
                             source_datapoint_ids=li.lineage_ids_by_period.get(period, []),
-                            derivation_rule=None,
+                            derivation_rule=derivation_rule,
                         )
                     )
 
