@@ -73,6 +73,14 @@ V1_DRIVERS: List[DriverDefinition] = [
         description="(Trade receivables + unbilled revenue) / Revenue × 365.",
     ),
     DriverDefinition(
+        driver_key="dio_days",
+        display_name="Days Inventory Outstanding (DIO)",
+        feeds_canonical_keys=["canonical.bs.inventory"],
+        applicable_periods=FORECAST_PERIODS,
+        unit="days",
+        description="Inventory / Cost of Sales × 365. Zero for services companies; material for manufacturing.",
+    ),
+    DriverDefinition(
         driver_key="dpo_days",
         display_name="Days Payables Outstanding (DPO)",
         feeds_canonical_keys=["canonical.bs.trade_payables"],

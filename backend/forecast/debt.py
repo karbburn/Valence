@@ -69,7 +69,8 @@ def build_debt_schedule(
         opt_repay = optional_repayments_by_period.get(p, 0.0)
         closing = current_balance + draws - sched_repay - opt_repay
         closing = max(0.0, closing)  # debt cannot go negative
-        interest = closing * interest_rate
+        avg_balance = (current_balance + closing) / 2.0
+        interest = avg_balance * interest_rate
 
         debt_periods.append(DebtPeriod(
             period=p,

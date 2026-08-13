@@ -120,6 +120,14 @@ def suggest_base_assumptions(
         result.append(_make("dpo_days", dpo, p, "base", source_dpo))
 
     # ------------------------------------------------------------------ #
+    # 7b. DIO — zero for services companies (Infosys)
+    # ------------------------------------------------------------------ #
+    dio = 0.0  # Infosys is services; no material inventory
+    source_dio = "zero — services company with no material inventory"
+    for p in FORECAST_PERIODS:
+        result.append(_make("dio_days", dio, p, "base", source_dio))
+
+    # ------------------------------------------------------------------ #
     # 8. Capex % Revenue — 3yr average using investing_activities / revenue
     # ------------------------------------------------------------------ #
     capex_pcts = []
