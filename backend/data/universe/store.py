@@ -37,6 +37,13 @@ CREATE TABLE IF NOT EXISTS taxonomy_review_queue (
     update_date TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_review_status ON taxonomy_review_queue(status);
+
+CREATE TABLE IF NOT EXISTS taxonomy_learned_mappings (
+    metric_raw TEXT PRIMARY KEY,
+    canonical_key TEXT NOT NULL,
+    statement TEXT NOT NULL,
+    update_date TEXT NOT NULL
+);
 """
 
 

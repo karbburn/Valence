@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
+import logging
+import sqlite3
 from pathlib import Path
 from typing import Any, Dict
 from pydantic import BaseModel
 
 from backend.data.pipeline import DB_PATH
-from backend.data.universe.store import list_all_universe_companies
+from backend.data.universe.store import list_all_universe_companies, _UNIVERSE_SCHEMA
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -63,10 +67,25 @@ def generate_universe_quality_report(db_path: str | Path = DB_PATH) -> UniverseQ
                         if not check.get("passed", True):
                             code = check.get("check_name", "UNKNOWN")
                             failed_checks[code] = failed_checks.get(code, 0) + 1
-            except Exception:
-                pass
+            except Exception as e:  # noqa: BLE001 - monitoring must not fail on one bad cache
+                logger.warning("Failed to read cache file %s: %s", cache_file.name, e)
 
     qa_valid_rate = round(valid_models / total_cached, 4) if total_cached > 0 else 1.0
+
+    # Auto-accept rate: share of review-queue items resolved without manual intervention.
+    # Falls back to the prior baseline when the queue has never been used.
+    conn = sqlite3.connect(str(db_path))
+    try:
+        conn.executescript(_UNIVERSE_SCHEMA)
+        rows = conn.execute(
+            "SELECT status, COUNT(*) FROM taxonomy_review_queue GROUP BY status",
+        ).fetchall()
+    finally:
+        conn.close()
+    by_status = {status: count for status, count in rows}
+    total_queued = sum(by_status.values())
+    resolved = by_status.get("resolved", 0)
+    auto_accept_rate = round(resolved / total_queued, 4) if total_queued > 0 else 0.98
 
     return UniverseQualityReport(
         total_companies=total,
@@ -76,7 +95,7 @@ def generate_universe_quality_report(db_path: str | Path = DB_PATH) -> UniverseQ
         not_attempted_count=not_attempted,
         onboarding_success_rate=success_rate,
         qa_model_valid_rate=qa_valid_rate,
-        auto_accept_taxonomy_rate=0.98,  # High auto-accept rate achieved by registry + confidence engine
+        auto_accept_taxonomy_rate=auto_accept_rate,
         market_breakdown=market_counts,
         failed_check_frequencies=failed_checks,
     )
