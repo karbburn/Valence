@@ -10,7 +10,7 @@ Build order per period (each column is independent given prior-period actuals):
   4. PBT = EBIT + other_income − finance_cost
   5. Tax = PBT × tax_rate
   6. Net Profit = PBT − Tax
-  7. Working capital: trade_receivables (DSO), trade_payables (DPO)
+    7. Working capital: trade_receivables (DSO), inventory (DIO), trade_payables (DPO)
   8. Capex
   9. Operating CF = Net Profit + D&A − ΔWWC
  10. Balance sheet: non-cash assets grown by capex−D&A; equity grown by retained profit;
@@ -84,6 +84,18 @@ def run_forecast(
     # Carry forward quasi-stable items from FY26
     other_income = hist_is.get_value("canonical.is.other_income", "FY26") or 4000.0
     finance_cost = hist_is.get_value("canonical.is.finance_cost", "FY26") or 416.0
+    other_income_pct_rev = (other_income / prior_rev * 100.0) if prior_rev > 0 else 4.0
+    finance_cost_pct_rev = (finance_cost / prior_rev * 100.0) if prior_rev > 0 else 0.4
+
+    # Compute historical gross margin from FY26 (or default to 30% for services)
+    hist_gp = hist_is.get_value("canonical.is.gross_profit", "FY26")
+    hist_rev = hist_is.get_value("canonical.is.revenue", "FY26")
+    gross_margin_hist = (hist_gp / hist_rev * 100.0) if (hist_gp and hist_rev and hist_rev > 0) else 30.0
+
+    # Compute historical dividend payout ratio from FY26
+    hist_div = hist_cf.get_value("canonical.cf.dividends_paid", "FY26") if hasattr(hist_cf, 'get_value') else None
+    hist_np = hist_is.get_value("canonical.is.net_profit", "FY26")
+    dividend_payout_pct = abs(hist_div / hist_np) if (hist_div and hist_np and hist_np > 0) else 0.65
 
     for period in FORECAST_PERIODS:
         # --- Driver lookups ---
@@ -93,6 +105,7 @@ def run_forecast(
         da_pct_rev = _get(assumptions, "da_pct_revenue", period, scenario) or 2.9
         tax_rate = _get(assumptions, "tax_rate", period, scenario) or 27.0
         dso = _get(assumptions, "dso_days", period, scenario) or 100.0
+        dio = _get(assumptions, "dio_days", period, scenario) or 0.0
         dpo = _get(assumptions, "dpo_days", period, scenario) or 14.0
         capex_pct = _get(assumptions, "capex_pct_revenue", period, scenario) or 2.5
 
@@ -103,15 +116,17 @@ def run_forecast(
         ebit = revenue * ebit_margin / 100.0       # operating_profit
 
         # PBT = EBIT + other_income − finance_cost (Infosys structure)
-        pbt = ebit + other_income - finance_cost
+        # Grow other_income and finance_cost as % of revenue (not held flat)
+        period_other_income = revenue * other_income_pct_rev / 100.0
+        period_finance_cost = revenue * finance_cost_pct_rev / 100.0
+        pbt = ebit + period_other_income - period_finance_cost
         tax = pbt * tax_rate / 100.0
         net_profit = pbt - tax
 
         # Cost of sales implied from EBIT margin (cost_of_sales ≈ revenue − gross_profit)
         # Use: cost_of_sales = revenue − ebitda (simplified; holds when opex ≈ small)
         # More accurate: cost_of_sales = revenue − gross_profit.
-        # Gross profit not directly driven; estimate from historical gross margin average ~30%
-        gross_margin_hist = 30.0  # FY26 gross margin ≈ 30.2%
+        # Gross profit not directly driven; estimate from historical gross margin
         cost_of_sales = revenue * (1.0 - gross_margin_hist / 100.0)
         gross_profit = revenue - cost_of_sales
 
@@ -121,14 +136,15 @@ def run_forecast(
         items.append(_item("canonical.is.depreciation_amortization", period, da, scenario, "da_pct_revenue"))
         items.append(_item("canonical.is.cost_of_sales", period, cost_of_sales, scenario, None))
         items.append(_item("canonical.is.gross_profit", period, gross_profit, scenario, None))
-        items.append(_item("canonical.is.other_income", period, other_income, scenario, None))
-        items.append(_item("canonical.is.finance_cost", period, finance_cost, scenario, None))
+        items.append(_item("canonical.is.other_income", period, period_other_income, scenario, None))
+        items.append(_item("canonical.is.finance_cost", period, period_finance_cost, scenario, None))
         items.append(_item("canonical.is.pbt", period, pbt, scenario, None))
         items.append(_item("canonical.is.tax", period, tax, scenario, "tax_rate"))
         items.append(_item("canonical.is.net_profit", period, net_profit, scenario, None))
 
         # --- Working Capital (Balance Sheet) ---
         trade_receivables = revenue * dso / 365.0
+        inventory = cost_of_sales * dio / 365.0 if dio > 0 else 0.0
         trade_payables = cost_of_sales * dpo / 365.0
 
         # PPE: prior PPE + capex − D&A
@@ -136,11 +152,17 @@ def run_forecast(
         ppe = max(0.0, prior_ppe + capex - da)
 
         items.append(_item("canonical.bs.trade_receivables", period, trade_receivables, scenario, "dso_days"))
+        items.append(_item("canonical.bs.inventory", period, inventory, scenario, "dio_days"))
         items.append(_item("canonical.bs.trade_payables", period, trade_payables, scenario, "dpo_days"))
         items.append(_item("canonical.bs.ppe", period, ppe, scenario, None))
 
         # --- Cash Flow ---
-        delta_wc = (trade_receivables - prior_trade_rec) - (trade_payables - prior_trade_pay)
+        prior_inventory = 0.0  # FY26 inventory not tracked in prior anchors; use 0 for services companies
+        delta_wc = (
+            (trade_receivables - prior_trade_rec)
+            + (inventory - prior_inventory)
+            - (trade_payables - prior_trade_pay)
+        )
         operating_cf = net_profit + da - delta_wc
         investing_cf = -capex  # capex outflow
 
@@ -148,8 +170,7 @@ def run_forecast(
         items.append(_item("canonical.cf.investing_activities", period, investing_cf, scenario, "capex_pct_revenue"))
 
         # --- Balance Sheet Closure ---
-        # Equity grows by retained profit (net_profit − estimated dividends ≈ 65% payout historically)
-        dividend_payout_pct = 0.65
+        # Equity grows by retained profit (net_profit − estimated dividends)
         dividends_est = net_profit * dividend_payout_pct
         total_equity = prior_total_equity + net_profit - dividends_est
 
