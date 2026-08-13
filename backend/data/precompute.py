@@ -31,6 +31,9 @@ def run_precompute(company_id: str | None = None) -> Path:
     print(f"Precompiling ModelSpecification for '{target_id}'...")
 
     try:
+        from backend.data.batch import ensure_company_ingested
+        ensure_company_ingested(target_id)
+
         # 1. Run Historical 3-Statement Model
         hist_model = run_historical(target_periods=["FY24", "FY25", "FY26"], company_id=target_id)
 
@@ -50,7 +53,7 @@ def run_precompute(company_id: str | None = None) -> Path:
     cache_file = CACHE_DIR / f"{target_id}.json"
     try:
         with open(cache_file, "w", encoding="utf-8") as f:
-            json.dump(final_spec.serialize(), f, indent=2)
+            f.write(final_spec.serialize())
     except Exception as e:
         print(f"Error: Failed to write cache file to {cache_file}: {e}")
         raise

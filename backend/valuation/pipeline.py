@@ -46,9 +46,9 @@ def run_valuation(
             shares_cr = val
 
     for scenario in ["base", "bull", "bear"]:
-        # Find debt schedule for scenario
+        # Find debt schedule for scenario, falling back to historical borrowings
         ds = next((d for d in spec.debt_schedule if d.scenario == scenario), None)
-        debt_cr = ds.closing("FY26") if ds else 0.0
+        debt_cr = (ds.closing("FY26") if ds else 0.0) or (spec.historicals.get_value("canonical.bs.borrowings", "FY26") or 0.0)
 
         # 1. Compute WACC Breakdown — source inputs from assumptions
         def _wacc_input(driver_key: str, default: float) -> float:

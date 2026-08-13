@@ -53,8 +53,8 @@ def _get_or_build_spec(company_id: str = "infy_infy") -> ModelSpecification:
         if cache_path.exists():
             try:
                 with open(cache_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                _MODEL_CACHE[company_id] = ModelSpecification.deserialize(data)
+                    raw_str = f.read()
+                _MODEL_CACHE[company_id] = ModelSpecification.deserialize(raw_str)
                 print(f"Loaded {company_id} ModelSpecification from precomputed cache.")
             except Exception as e:
                 print(f"Failed to load cache for {company_id}, compiling live: {e}")
@@ -193,20 +193,61 @@ def export_excel(company_id: str = "infy_infy") -> FileResponse:
 
 @router.get("/companies")
 def list_available_companies() -> List[Dict[str, Any]]:
-    """List all available companies across India and US markets."""
-    from backend.models.spec.metadata import COMPANY_METADATA_REGISTRY
-    return [
-        {
-            "company_id": meta.company_id,
-            "ticker": meta.ticker,
-            "name": meta.name,
-            "market": meta.market,
+    """List all available onboarded companies across India and US markets."""
+    from backend.data.universe.master_list import seed_master_universe
+    from backend.data.universe.store import search_universe_companies
+    from backend.models.spec.metadata import get_metadata_for_company
+
+    seed_master_universe()
+    onboarded = search_universe_companies(query="", status="onboarded", limit=1000)
+    result = []
+    for c in onboarded:
+        meta = get_metadata_for_company(c.company_id)
+        result.append({
+            "company_id": c.company_id,
+            "ticker": c.ticker,
+            "name": c.name,
+            "market": c.market,
+            "exchange": c.exchange,
             "currency": meta.currency,
             "units": meta.units,
             "fiscal_year_end": meta.fiscal_year_end,
-        }
-        for meta in COMPANY_METADATA_REGISTRY.values()
-    ]
+            "onboarding_status": c.onboarding_status,
+        })
+    return result
+
+
+@router.get("/companies/search")
+def search_companies(
+    q: str = Query("", description="Ticker or company name query"),
+    market: Optional[str] = Query(None, description="Filter by market ('india' or 'us')"),
+    limit: int = Query(20, ge=1, le=100, description="Max search results"),
+) -> List[Dict[str, Any]]:
+    """Real-time autocomplete search across ticker and company name for onboarded/partial companies."""
+    from backend.data.universe.master_list import seed_master_universe
+    from backend.data.universe.store import search_universe_companies
+    from backend.models.spec.metadata import get_metadata_for_company
+
+    seed_master_universe()
+    m_filter = market if market in ("india", "us") else None
+    matches = search_universe_companies(query=q, market=m_filter, limit=limit)
+
+    results = []
+    for c in matches:
+        meta = get_metadata_for_company(c.company_id)
+        results.append({
+            "company_id": c.company_id,
+            "ticker": c.ticker,
+            "name": c.name,
+            "market": c.market,
+            "exchange": c.exchange,
+            "sector": c.sector,
+            "currency": meta.currency,
+            "units": meta.units,
+            "onboarding_status": c.onboarding_status,
+        })
+    return results
+
 
 
 # ------------------------------------------------------------------ #

@@ -56,7 +56,7 @@ def reconcile(db_path: str | Path, log_path: str | Path) -> list[dict]:
         superseded.append(s)
 
     if superseded:
-        save_datapoints(db_path, superseded)
+        save_datapoints(db_path, superseded, clear_existing=False)
 
     Path(log_path).write_text(json.dumps(discrepancies, indent=2, default=str))
     return discrepancies
