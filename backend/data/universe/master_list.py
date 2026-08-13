@@ -56,7 +56,7 @@ SEED_COMPANIES: list[dict] = [
     },
     # --- Additional Target India Non-Financials ---
     {
-        "company_id": "wipro_infy",
+        "company_id": "wipro_wipro",
         "ticker": "WIPRO",
         "name": "Wipro Limited",
         "market": "india",
@@ -66,7 +66,7 @@ SEED_COMPANIES: list[dict] = [
         "onboarding_status": "not_yet_attempted",
     },
     {
-        "company_id": "hcltech_infy",
+        "company_id": "hcltech_hcltech",
         "ticker": "HCLTECH",
         "name": "HCL Technologies Limited",
         "market": "india",
@@ -76,7 +76,7 @@ SEED_COMPANIES: list[dict] = [
         "onboarding_status": "not_yet_attempted",
     },
     {
-        "company_id": "lt_infy",
+        "company_id": "lt_lt",
         "ticker": "LT",
         "name": "Larsen & Toubro Limited",
         "market": "india",
@@ -86,7 +86,7 @@ SEED_COMPANIES: list[dict] = [
         "onboarding_status": "not_yet_attempted",
     },
     {
-        "company_id": "sunpharma_infy",
+        "company_id": "sunpharma_sunpharma",
         "ticker": "SUNPHARMA",
         "name": "Sun Pharmaceutical Industries Limited",
         "market": "india",

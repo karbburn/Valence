@@ -48,34 +48,38 @@ def _connect(db_path: str | Path = DB_PATH) -> sqlite3.Connection:
 
 def save_universe_companies(companies: list[UniverseCompany], db_path: str | Path = DB_PATH) -> None:
     conn = _connect(db_path)
-    rows = [
-        (
-            c.company_id,
-            c.ticker,
-            c.name,
-            c.market,
-            c.exchange,
-            c.sector,
-            c.industry,
-            1 if c.is_financial else 0,
-            c.onboarding_status,
-            c.onboarding_notes,
-            c.last_updated.isoformat(),
+    try:
+        rows = [
+            (
+                c.company_id,
+                c.ticker,
+                c.name,
+                c.market,
+                c.exchange,
+                c.sector,
+                c.industry,
+                1 if c.is_financial else 0,
+                c.onboarding_status,
+                c.onboarding_notes,
+                c.last_updated.isoformat(),
+            )
+            for c in companies
+        ]
+        conn.executemany(
+            "INSERT OR REPLACE INTO company_universe VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            rows,
         )
-        for c in companies
-    ]
-    conn.executemany(
-        "INSERT OR REPLACE INTO company_universe VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        rows,
-    )
-    conn.commit()
-    conn.close()
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def get_universe_company(company_id: str, db_path: str | Path = DB_PATH) -> Optional[UniverseCompany]:
     conn = _connect(db_path)
-    row = conn.execute("SELECT * FROM company_universe WHERE company_id = ?", (company_id,)).fetchone()
-    conn.close()
+    try:
+        row = conn.execute("SELECT * FROM company_universe WHERE company_id = ?", (company_id,)).fetchone()
+    finally:
+        conn.close()
     if not row:
         return None
     cols = (
@@ -98,30 +102,32 @@ def search_universe_companies(
     db_path: str | Path = DB_PATH,
 ) -> list[UniverseCompany]:
     conn = _connect(db_path)
-    sql = "SELECT * FROM company_universe WHERE 1=1"
-    params: list[Any] = []
+    try:
+        sql = "SELECT * FROM company_universe WHERE 1=1"
+        params: list[Any] = []
 
-    if query.strip():
-        sql += " AND (ticker LIKE ? OR name LIKE ?)"
-        q_str = f"%{query.strip()}%"
-        params.extend([q_str, q_str])
+        if query.strip():
+            sql += " AND (ticker LIKE ? OR name LIKE ?)"
+            q_str = f"%{query.strip()}%"
+            params.extend([q_str, q_str])
 
-    if market:
-        sql += " AND market = ?"
-        params.append(market)
+        if market:
+            sql += " AND market = ?"
+            params.append(market)
 
-    if status:
-        sql += " AND onboarding_status = ?"
-        params.append(status)
+        if status:
+            sql += " AND onboarding_status = ?"
+            params.append(status)
 
-    if non_financial_only:
-        sql += " AND is_financial = 0"
+        if non_financial_only:
+            sql += " AND is_financial = 0"
 
-    sql += " ORDER BY ticker ASC LIMIT ?"
-    params.append(limit)
+        sql += " ORDER BY ticker ASC LIMIT ?"
+        params.append(limit)
 
-    rows = conn.execute(sql, params).fetchall()
-    conn.close()
+        rows = conn.execute(sql, params).fetchall()
+    finally:
+        conn.close()
 
     cols = (
         "company_id", "ticker", "name", "market", "exchange",
@@ -144,13 +150,15 @@ def update_onboarding_status(
     db_path: str | Path = DB_PATH,
 ) -> None:
     conn = _connect(db_path)
-    now_iso = datetime.now().isoformat()
-    conn.execute(
-        "UPDATE company_universe SET onboarding_status = ?, onboarding_notes = ?, last_updated = ? WHERE company_id = ?",
-        (status, notes, now_iso, company_id),
-    )
-    conn.commit()
-    conn.close()
+    try:
+        now_iso = datetime.now().isoformat()
+        conn.execute(
+            "UPDATE company_universe SET onboarding_status = ?, onboarding_notes = ?, last_updated = ? WHERE company_id = ?",
+            (status, notes, now_iso, company_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def list_all_universe_companies(db_path: str | Path = DB_PATH) -> list[UniverseCompany]:

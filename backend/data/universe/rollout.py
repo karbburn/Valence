@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from backend.data.batch import BatchTaskResult, run_batch_tier
 from backend.data.pipeline import DB_PATH
@@ -19,10 +19,10 @@ TIER_1_IDS = [
 ]
 
 TIER_2_IDS = [
-    "wipro_infy",
-    "hcltech_infy",
-    "lt_infy",
-    "sunpharma_infy",
+    "wipro_wipro",
+    "hcltech_hcltech",
+    "lt_lt",
+    "sunpharma_sunpharma",
     "nvda_us",
     "googl_us",
     "amzn_us",

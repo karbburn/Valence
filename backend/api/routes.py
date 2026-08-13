@@ -37,14 +37,28 @@ PROJECT_ROOT = API_DIR.parent.parent
 
 # In-memory session model cache for fast live recomputation
 _MODEL_CACHE: Dict[str, ModelSpecification] = {}
-_HIST_MODEL_CACHE: Optional[HistoricalModel] = None
+_HIST_MODEL_CACHE: Dict[str, HistoricalModel] = {}
+_UNIVERSE_SEEDED: bool = False
 
 
-def _get_hist_model() -> HistoricalModel:
+def _ensure_universe_seeded() -> None:
+    """Seed the master universe once per process instead of per request."""
+    global _UNIVERSE_SEEDED
+    if not _UNIVERSE_SEEDED:
+        from backend.data.universe.master_list import seed_master_universe
+        seed_master_universe()
+        _UNIVERSE_SEEDED = True
+
+
+def _get_hist_model(company_id: str = "infy_infy") -> HistoricalModel:
+    """Return cached HistoricalModel for the given company_id."""
     global _HIST_MODEL_CACHE
-    if _HIST_MODEL_CACHE is None:
-        _HIST_MODEL_CACHE = run_historical(target_periods=["FY24", "FY25", "FY26"])
-    return _HIST_MODEL_CACHE
+    if company_id not in _HIST_MODEL_CACHE:
+        _HIST_MODEL_CACHE[company_id] = run_historical(
+            target_periods=["FY24", "FY25", "FY26"],
+            company_id=company_id,
+        )
+    return _HIST_MODEL_CACHE[company_id]
 
 
 def _get_or_build_spec(company_id: str = "infy_infy") -> ModelSpecification:
@@ -58,12 +72,12 @@ def _get_or_build_spec(company_id: str = "infy_infy") -> ModelSpecification:
                 print(f"Loaded {company_id} ModelSpecification from precomputed cache.")
             except Exception as e:
                 print(f"Failed to load cache for {company_id}, compiling live: {e}")
-                hist_m = _get_hist_model()
+                hist_m = _get_hist_model(company_id)
                 f_spec = run_forecast_pipeline(hist_m)
                 v_spec = run_valuation(f_spec)
                 _MODEL_CACHE[company_id] = run_qa(v_spec)
         else:
-            hist_m = _get_hist_model()
+            hist_m = _get_hist_model(company_id)
             f_spec = run_forecast_pipeline(hist_m)
             v_spec = run_valuation(f_spec)
             q_spec = run_qa(v_spec)
@@ -120,7 +134,7 @@ def recompute_model(req: OverrideRequest, company_id: str = "infy_infy") -> Dict
         new_assumptions.append(new_ass)
 
     # 2. Re-run forecast engine for all scenarios
-    hist_m = _get_hist_model()
+    hist_m = _get_hist_model(company_id)
     scenarios = ["base", "bull", "bear"]
     merged_items = []
     for s in scenarios:
@@ -153,7 +167,7 @@ def revert_driver_override(req: RevertRequest, company_id: str = "infy_infy") ->
         else:
             new_assumptions.append(a)
 
-    hist_m = _get_hist_model()
+    hist_m = _get_hist_model(company_id)
     scenarios = ["base", "bull", "bear"]
     merged_items = []
     for s in scenarios:
@@ -194,11 +208,10 @@ def export_excel(company_id: str = "infy_infy") -> FileResponse:
 @router.get("/companies")
 def list_available_companies() -> List[Dict[str, Any]]:
     """List all available onboarded companies across India and US markets."""
-    from backend.data.universe.master_list import seed_master_universe
     from backend.data.universe.store import search_universe_companies
     from backend.models.spec.metadata import get_metadata_for_company
 
-    seed_master_universe()
+    _ensure_universe_seeded()
     onboarded = search_universe_companies(query="", status="onboarded", limit=1000)
     result = []
     for c in onboarded:
@@ -224,18 +237,20 @@ def search_companies(
     limit: int = Query(20, ge=1, le=100, description="Max search results"),
 ) -> List[Dict[str, Any]]:
     """Real-time autocomplete search across ticker and company name for onboarded/partial companies."""
-    from backend.data.universe.master_list import seed_master_universe
     from backend.data.universe.store import search_universe_companies
     from backend.models.spec.metadata import get_metadata_for_company
 
-    seed_master_universe()
+    _ensure_universe_seeded()
     m_filter = market if market in ("india", "us") else None
     matches = search_universe_companies(query=q, market=m_filter, limit=limit)
+    results = [
+        c for c in matches if c.onboarding_status in ("onboarded", "partial")
+    ]
 
-    results = []
-    for c in matches:
+    payload = []
+    for c in results:
         meta = get_metadata_for_company(c.company_id)
-        results.append({
+        payload.append({
             "company_id": c.company_id,
             "ticker": c.ticker,
             "name": c.name,
@@ -246,7 +261,7 @@ def search_companies(
             "units": meta.units,
             "onboarding_status": c.onboarding_status,
         })
-    return results
+    return payload
 
 
 
