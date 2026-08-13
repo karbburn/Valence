@@ -91,11 +91,12 @@ def _connect(db_path: str | Path) -> sqlite3.Connection:
     return conn
 
 
-def save_datapoints(db_path: str | Path, datapoints: list[RawDatapoint]) -> None:
+def save_datapoints(db_path: str | Path, datapoints: list[RawDatapoint], clear_existing: bool = True) -> None:
     conn = _connect(db_path)
-    company_ids = set(d.company_id for d in datapoints)
-    for cid in company_ids:
-        conn.execute("DELETE FROM raw_datapoints WHERE company_id = ?", (cid,))
+    if clear_existing:
+        company_ids = set(d.company_id for d in datapoints)
+        for cid in company_ids:
+            conn.execute("DELETE FROM raw_datapoints WHERE company_id = ?", (cid,))
     rows = [
         (
             d.id, d.company_id, d.metric_raw, d.period_label,
@@ -145,11 +146,12 @@ def query_datapoints(
     return result
 
 
-def save_canonical_datapoints(db_path: str | Path, datapoints: list[CanonicalDatapoint]) -> None:
+def save_canonical_datapoints(db_path: str | Path, datapoints: list[CanonicalDatapoint], clear_existing: bool = True) -> None:
     conn = _connect(db_path)
-    company_ids = set(d.company_id for d in datapoints)
-    for cid in company_ids:
-        conn.execute("DELETE FROM canonical_datapoints WHERE company_id = ?", (cid,))
+    if clear_existing:
+        company_ids = set(d.company_id for d in datapoints)
+        for cid in company_ids:
+            conn.execute("DELETE FROM canonical_datapoints WHERE company_id = ?", (cid,))
     rows = [
         (
             d.id, d.company_id, d.canonical_key, d.metric_raw, d.period_label,

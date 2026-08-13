@@ -22,8 +22,25 @@ const DRIVER_CONFIGS = [
 let currentCompanyId = 'infy_infy';
 
 document.addEventListener("DOMContentLoaded", () => {
+    loadCompanySelector();
     fetchModelSpec('infy_infy');
 });
+
+async function loadCompanySelector() {
+    try {
+        const res = await fetch('/api/companies');
+        const list = await res.json();
+        const select = document.getElementById("company-select");
+        if (select && list.length > 0) {
+            select.innerHTML = list.map(c => 
+                `<option value="${c.company_id}">${c.ticker} — ${c.name} (${c.market === 'us' ? 'US' : 'India'})</option>`
+            ).join('');
+            select.value = currentCompanyId;
+        }
+    } catch (err) {
+        console.error("Failed to load universe companies:", err);
+    }
+}
 
 async function fetchModelSpec(companyId = currentCompanyId) {
     try {

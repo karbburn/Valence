@@ -182,15 +182,20 @@ def run_forecast(
         )
 
         # Liabilities: trade_payables + other liabilities (keep other liabilities constant for now)
-        prior_other_liab = prior_total_assets - prior_total_equity - prior_trade_pay
-        total_liabilities = trade_payables + prior_other_liab
+        prior_other_liab = max(0.0, prior_total_assets - prior_total_equity - prior_trade_pay)
+        base_liabilities = trade_payables + prior_other_liab
 
         # Cash is the plug: assets = equity + liabilities
-        total_equity_and_liab = total_equity + total_liabilities
-        # non_cash_assets + cash = total_equity_and_liab
-        cash = total_equity_and_liab - non_cash_assets
-        cash = max(0.0, cash)  # floor at zero
+        cash_unfloored = (total_equity + base_liabilities) - non_cash_assets
+        if cash_unfloored < 0:
+            short_term_borrowing_plug = -cash_unfloored
+            cash = 0.0
+            total_liabilities = base_liabilities + short_term_borrowing_plug
+        else:
+            cash = cash_unfloored
+            total_liabilities = base_liabilities
 
+        total_equity_and_liab = total_equity + total_liabilities
         total_assets = non_cash_assets + cash
 
         items.append(_item("canonical.bs.cash_and_bank", period, cash, scenario, None))
