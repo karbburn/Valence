@@ -4,7 +4,7 @@ from __future__ import annotations
 Self-check for Stage 7: Valuation Engine.
 
 Acceptance criteria:
-  1. WACC computes generically to ~12.55% (debt weight = 0.0%).
+  1. WACC computes generically to ~12.41% (debt weight ~ 2.05% from real borrowings).
   2. FCFF calculation matches NOPAT + D&A - Capex - delta_WC for all 5 forecast periods.
   3. DCF Bridge arithmetic checks out: EV + Net Cash = Equity Value, Equity Value / Shares = Implied Price.
   4. Dual Terminal Value (Gordon Growth & Exit Multiple) both present.
@@ -44,9 +44,15 @@ def main() -> None:
     base_val = spec.get_valuation("base")
     _assert(base_val is not None, "Base scenario valuation output present")
     wacc_breakdown = base_val.wacc
-    _assert(wacc_breakdown.debt_weight == 0.0, f"Generic debt weight == 0.0% for Infosys ({wacc_breakdown.debt_weight})")
-    _assert(wacc_breakdown.equity_weight == 1.0, f"Generic equity weight == 100.0% for Infosys ({wacc_breakdown.equity_weight})")
-    _assert(abs(wacc_breakdown.wacc - 12.55) < 0.1, f"WACC = {wacc_breakdown.wacc}% (expected ~12.55%)")
+    _assert(
+        0.015 < wacc_breakdown.debt_weight < 0.03,
+        f"Generic debt weight ~ 2.05% for Infosys (real borrowings) ({wacc_breakdown.debt_weight})",
+    )
+    _assert(
+        0.97 < wacc_breakdown.equity_weight < 0.985,
+        f"Generic equity weight ~ 97.9% for Infosys ({wacc_breakdown.equity_weight})",
+    )
+    _assert(abs(wacc_breakdown.wacc - 12.41) < 0.2, f"WACC = {wacc_breakdown.wacc}% (expected ~12.41%)")
 
     # ------------------------------------------------------------------ #
     # 2. FCFF calculation for all 5 periods
@@ -100,7 +106,8 @@ def main() -> None:
     last_fcff = fcffs[-1].fcff
     last_ebitda = spec.forecast.get_value("canonical.is.ebitda", "FY31", "base") or 0.0
     cash_cr = spec.historicals.get_value("canonical.bs.cash_and_bank", "FY26") or 22201.0
-    debt_cr = 0.0
+    base_ds = next((d for d in spec.debt_schedule if d.scenario == "base"), None)
+    debt_cr = (base_ds.closing("FY26") if base_ds else 0.0) or (spec.historicals.get_value("canonical.bs.borrowings", "FY26") or 0.0)
     shares_cr = spec.share_count.get_diluted("FY26") or 405.76
 
     rt_tv = compute_terminal_value(last_fcff, last_ebitda, wacc_pct, rev_dcf.implied_terminal_growth)

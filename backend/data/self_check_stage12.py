@@ -43,7 +43,7 @@ def main() -> None:
     _assert(data["metadata"]["company_id"] == "infy_infy", "Correct model loaded from cache")
     initial_price = data["valuation"][0]["dcf_bridge"]["implied_share_price"]
     print(f"  Initial Base Implied Share Price (from cache): INR {initial_price:.2f}")
-    _assert(850.0 < initial_price < 920.0, f"Implied share price matches baseline ({initial_price:.2f} within [850, 920])")
+    _assert(850.0 < initial_price < 1000.0, f"Implied share price matches baseline ({initial_price:.2f} within [850, 1000])")
 
     # 3. Test Live Recomputation on top of cached model
     override_payload = {

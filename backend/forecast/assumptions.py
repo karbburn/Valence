@@ -143,9 +143,9 @@ def suggest_base_assumptions(
         result.append(_make("capex_pct_revenue", capex_pct, p, "base", source_capex))
 
     # ------------------------------------------------------------------ #
-    # 9. Debt Repayment — zero (Infosys has no debt)
+    # 9. Debt Repayment — zero (borrowings carried flat across forecast)
     # ------------------------------------------------------------------ #
-    source_debt = "zero — no debt outstanding"
+    source_debt = "zero — opening debt carried flat, no draws or repayments"
     for p in FORECAST_PERIODS:
         result.append(_make("debt_repayment", 0.0, p, "base", source_debt))
 
@@ -154,7 +154,7 @@ def suggest_base_assumptions(
     # ------------------------------------------------------------------ #
     source_wacc_placeholder = "structural placeholder — populated in valuation engine"
     result.append(_make("wacc.cost_of_equity", 13.0, "all", "base", source_wacc_placeholder))
-    result.append(_make("wacc.cost_of_debt", 0.0, "all", "base", "zero — no debt outstanding"))
+    result.append(_make("wacc.cost_of_debt", 0.0, "all", "base", "placeholder — valuation uses debt schedule interest rate"))
 
     # ------------------------------------------------------------------ #
     # 11. Terminal Value inputs — structural placeholders

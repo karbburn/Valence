@@ -18,7 +18,7 @@ class WACCBreakdown(BaseModel):
     beta: Optional[float] = None
     equity_risk_premium: Optional[float] = None     # country + market ERP, e.g. Damodaran
     cost_of_equity: Optional[float] = None          # CAPM = rfr + beta * erp
-    pre_tax_cost_of_debt: Optional[float] = None    # % — ~0 for Infosys
+    pre_tax_cost_of_debt: Optional[float] = None    # % — debt schedule rate (after-tax applied)
     tax_rate: Optional[float] = None                # % — for after-tax cost of debt
     cost_of_debt: Optional[float] = None            # pre_tax * (1 - tax_rate)
     equity_weight: Optional[float] = None           # mkt_cap / (mkt_cap + debt)

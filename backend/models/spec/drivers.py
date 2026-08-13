@@ -102,7 +102,7 @@ V1_DRIVERS: List[DriverDefinition] = [
         feeds_canonical_keys=["canonical.bs.borrowings"],
         applicable_periods=FORECAST_PERIODS,
         unit="INR",
-        description="Net change in borrowings. Trivially ~0 for Infosys (no debt); present for generality.",
+        description="Net change in borrowings. ~0 when the company carries no forecast debt; present for generality.",
     ),
     DriverDefinition(
         driver_key="wacc.cost_of_equity",
@@ -118,7 +118,7 @@ V1_DRIVERS: List[DriverDefinition] = [
         feeds_canonical_keys=[],
         applicable_periods=["all"],
         unit="%",
-        description="Pre-tax cost of debt. ~0 effective weight for Infosys; present for generality.",
+        description="Pre-tax cost of debt. Falls back to the debt schedule interest rate when unset.",
     ),
     DriverDefinition(
         driver_key="terminal_growth_rate",
