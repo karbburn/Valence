@@ -7,8 +7,10 @@ Calculates cost of equity via CAPM (rfr + beta * erp), cost of debt after-tax,
 market value capital weighting, and total WACC. Every intermediate step is recorded
 in WACCBreakdown for live formula reconstruction in Excel.
 
-Computes generically: for a zero-debt company (Infosys), debt weight calculates to 0.0,
-resulting in WACC = Cost of Equity. No hardcoded shortcuts.
+Computes generically: capital weights derive from the company's actual debt schedule,
+so a zero-debt company gets debt weight 0.0 and WACC = Cost of Equity, while a levered
+company (Tata Motors, Tata Steel) gets its real debt weight and after-tax debt cost.
+No hardcoded shortcuts.
 """
 
 from typing import List, Optional
@@ -57,8 +59,11 @@ def compute_wacc(
     # 1. Cost of Equity (CAPM)
     cost_of_equity = risk_free_rate + (beta * equity_risk_premium)
 
-    # 2. Cost of Debt
+    # 2. Cost of Debt — assumption wins unless unset (0.0); fall back to the
+    #    debt schedule's actual interest rate so debt is never priced as free.
     pre_tax_cost_of_debt = _get_assumption_val(assumptions, "wacc.cost_of_debt", scenario, 0.0)
+    if pre_tax_cost_of_debt == 0.0 and debt_schedule is not None:
+        pre_tax_cost_of_debt = debt_schedule.interest_rate
     tax_rate = _get_assumption_val(assumptions, "tax_rate", scenario, 25.17)
     cost_of_debt_after_tax = pre_tax_cost_of_debt * (1.0 - tax_rate / 100.0)
 
@@ -86,6 +91,7 @@ def compute_wacc(
     source_notes = (
         f"CAPM: Rfr={risk_free_rate:.2f}% (India 10Y G-Sec), Beta={beta:.2f} (NSE Nifty IT), "
         f"ERP={equity_risk_premium:.2f}% (Damodaran India ERP). "
+        f"Pre-tax Cost of Debt={pre_tax_cost_of_debt:.2f}% (debt schedule rate, after-tax {cost_of_debt_after_tax:.2f}%). "
         f"Capital Weights: Equity={equity_weight*100:.1f}%, Debt={debt_weight*100:.1f}%."
     )
 

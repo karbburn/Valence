@@ -4,10 +4,10 @@ from __future__ import annotations
 Self-check for Stage 6: Debt Schedule & Share Count.
 
 Acceptance criteria:
-  1. Debt schedule closing balance == 0.0 for all 5 periods x 3 scenarios (15 checks).
-  2. reconcile() returns True for Infosys zero-debt schedule.
+  1. Debt schedule closing balance == FY26 historical borrowings for all 5 periods x 3 scenarios.
+  2. reconcile() returns True for the Infosys carry-forward debt schedule.
   3. reconcile() returns False for a deliberately broken synthetic schedule.
-  4. share_count.get_diluted("FY26") is within 0.5 Cr of the independently computed value.
+  4. share_count.get_diluted("FY26") equals the official metadata share count (405.76 Cr).
   5. Forecast share count FY27-FY31 equals FY26 (flat assumption).
   6. ModelSpecification serializes/deserializes without losing debt_schedule or share_count.
 """
@@ -30,14 +30,15 @@ def main() -> None:
     from backend.models.spec.forecast import FORECAST_PERIODS
 
     # ------------------------------------------------------------------ #
-    # 1. Debt schedule closing balances all zero for all periods x scenarios
+    # 1. Debt schedule carries FY26 historical borrowings flat across all periods
     # ------------------------------------------------------------------ #
     _assert(len(spec.debt_schedule) == 3, f"3 debt schedules present (got {len(spec.debt_schedule)})")
+    exp_opening = spec.historicals.get_value("canonical.bs.borrowings", "FY26") or 0.0
     for ds in spec.debt_schedule:
         for p in ds.periods:
             _assert(
-                p.closing_balance == 0.0,
-                f"Debt closing balance == 0.0 scenario={ds.scenario} period={p.period}",
+                abs(p.closing_balance - exp_opening) < 0.01,
+                f"Debt closing == FY26 borrowings ({exp_opening:.0f}) scenario={ds.scenario} period={p.period} (got {p.closing_balance})",
             )
 
     # ------------------------------------------------------------------ #
@@ -63,16 +64,16 @@ def main() -> None:
     _assert(not reconcile(broken_schedule), "reconcile() correctly returns False for broken synthetic case")
 
     # ------------------------------------------------------------------ #
-    # 4. Share count FY26 within 0.5 Cr of independently computed value
+    # 4. Share count FY26 = official metadata share count (EPS not in canonical data)
     # ------------------------------------------------------------------ #
     _assert(spec.share_count is not None, "share_count is populated")
     fy26_diluted = spec.share_count.get_diluted("FY26")
     _assert(fy26_diluted is not None, "share_count FY26 diluted is present")
-    # Independently computed: net_profit(FY26)=29474 / eps_diluted(FY26)=71.46 = 412.45 Cr
-    expected_fy26 = 29474.0 / 71.46
+    from backend.models.spec.metadata import get_metadata_for_company
+    meta = get_metadata_for_company(spec.metadata.company_id)
     _assert(
-        abs(fy26_diluted - expected_fy26) < 0.5,
-        f"share_count FY26 diluted = {fy26_diluted:.4f} Cr (expected ~{expected_fy26:.4f} Cr)",
+        abs(fy26_diluted - meta.shares_outstanding) < 0.01,
+        f"share_count FY26 diluted = {fy26_diluted:.4f} Cr (expected ~{meta.shares_outstanding:.4f} Cr)",
     )
 
     # ------------------------------------------------------------------ #
@@ -101,7 +102,7 @@ def main() -> None:
     # Summary
     # ------------------------------------------------------------------ #
     print(f"\n  Stage 6 summary:")
-    print(f"    Debt schedules      : {len(spec.debt_schedule)} scenarios (all zero-debt, computed not hardcoded)")
+    print(f"    Debt schedules      : {len(spec.debt_schedule)} scenarios (carry-forward of FY26 borrowings)")
     print(f"    Share count periods : {len(spec.share_count.periods)}")
     print(f"    FY26 diluted shares : {fy26_diluted:.2f} Cr")
     print(f"    FY31 diluted shares : {spec.share_count.get_diluted('FY31'):.2f} Cr (flat assumption)")

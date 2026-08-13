@@ -4,7 +4,7 @@ from __future__ import annotations
 Generic debt schedule module.
 
 Computes: opening_balance + draws - repayments = closing_balance, per period.
-For Infosys (no debt), all inputs are 0.0 and the schedule correctly produces zeros
+For a zero-debt company, all inputs are 0.0 and the schedule correctly produces zeros
 via computation — not via a skip or hardcoded shortcut.
 
 The reconcile() function is independently callable so the QA engine can invoke it
@@ -23,8 +23,8 @@ class DebtPeriod(BaseModel):
     scheduled_repayment: float
     optional_repayment: float
     closing_balance: float          # computed: opening + draws - scheduled_repayment - optional_repayment
-    interest_expense: float         # closing_balance * interest_rate
-    interest_rate: float            # pre-tax rate (e.g. 0.07 for 7%)
+    interest_expense: float         # avg_balance * (interest_rate / 100)
+    interest_rate: float            # pre-tax rate in percent (e.g. 7.5 = 7.5%)
 
 
 class DebtSchedule(BaseModel):
@@ -56,7 +56,7 @@ def build_debt_schedule(
 ) -> DebtSchedule:
     """Build a generic debt schedule for a single scenario.
 
-    All monetary values in INR Crores. interest_rate is fractional (e.g. 0.07 = 7%).
+    All monetary values in INR Crores. interest_rate is in percent (e.g. 7.5 = 7.5%).
     For a zero-debt company: pass opening_balance=0.0 and all period dicts as empty/zero —
     the schedule computes to zero correctly without any shortcut.
     """
@@ -70,7 +70,7 @@ def build_debt_schedule(
         closing = current_balance + draws - sched_repay - opt_repay
         closing = max(0.0, closing)  # debt cannot go negative
         avg_balance = (current_balance + closing) / 2.0
-        interest = avg_balance * interest_rate
+        interest = avg_balance * (interest_rate / 100.0)
 
         debt_periods.append(DebtPeriod(
             period=p,
