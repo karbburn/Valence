@@ -24,13 +24,6 @@ class UniverseCompany(BaseModel):
     last_updated: datetime = Field(default_factory=datetime.now)
 
 
-class SectorFilterRule(BaseModel):
-    """Explicit exclusion rule for sector classification."""
-    market: MarketType
-    excluded_codes: list[str]
-    description: str
-
-
 class MappingConfidenceResult(BaseModel):
     """Result of confidence-scored taxonomy mapping suggestion."""
     metric_raw: str

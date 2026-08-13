@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 from backend.data.pipeline import DB_PATH
-from backend.data.universe.models import MappingConfidenceLevel, MappingConfidenceResult
+from backend.data.universe.models import MappingConfidenceResult
 from backend.data.universe.store import _UNIVERSE_SCHEMA
 from backend.normalization.taxonomy.registry import RAW_METRIC_MAP, get_canonical_mapping
 
