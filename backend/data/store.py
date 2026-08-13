@@ -5,7 +5,7 @@ import sqlite3
 import uuid
 from datetime import date, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
