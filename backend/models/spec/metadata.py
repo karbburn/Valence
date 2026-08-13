@@ -105,11 +105,26 @@ COMPANY_METADATA_REGISTRY: dict[str, ModelMetadata] = {
 
 
 def get_metadata_for_company(company_id: str) -> ModelMetadata:
-    """Return ModelMetadata for company_id, defaulting to Infosys if unknown."""
+    """Return ModelMetadata for company_id.
+
+    Registered companies return their canonical metadata. Unregistered companies
+    are derived from the company_id slug: the first token becomes the ticker and
+    a ``_us`` suffix selects USD/millions US-market defaults (India otherwise).
+    """
     if company_id in COMPANY_METADATA_REGISTRY:
         return COMPANY_METADATA_REGISTRY[company_id]
     parts = company_id.split("_")
     ticker = parts[0].upper()
+    if parts[-1] == "us":
+        return ModelMetadata(
+            company_id=company_id,
+            ticker=ticker,
+            name=f"{ticker} Inc.",
+            market="us",
+            currency="USD",
+            units="millions",
+            fiscal_year_end="December 31",
+        )
     return ModelMetadata(
         company_id=company_id,
         ticker=ticker,
