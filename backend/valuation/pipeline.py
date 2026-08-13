@@ -38,8 +38,8 @@ def run_valuation(
     # Sourced cash from latest historicals (FY26)
     cash_cr = spec.historicals.get_value("canonical.bs.cash_and_bank", "FY26") or 22201.0
 
-    # Sourced diluted share count
-    shares_cr = 412.4545
+    # Sourced diluted share count — Infosys official Jun 30 2026
+    shares_cr = 405.76
     if spec.share_count:
         val = spec.share_count.get_diluted("FY26") or spec.share_count.get_diluted("FY27")
         if val:
@@ -66,9 +66,9 @@ def run_valuation(
             share_count_schedule=spec.share_count,
             scenario=scenario,
             current_share_price=current_share_price,
-            risk_free_rate=_wacc_input("wacc.risk_free_rate", 7.10),
-            beta=_wacc_input("wacc.beta", 0.90),
-            equity_risk_premium=_wacc_input("wacc.equity_risk_premium", 6.50),
+            risk_free_rate=_wacc_input("wacc.risk_free_rate", 6.78),
+            beta=_wacc_input("wacc.beta", 0.79),
+            equity_risk_premium=_wacc_input("wacc.equity_risk_premium", 7.31),
             debt_cr=debt_cr,
         )
         wacc_pct = wacc_breakdown.wacc or 12.95

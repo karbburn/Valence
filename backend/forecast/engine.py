@@ -103,7 +103,7 @@ def run_forecast(
         ebitda_margin = _get(assumptions, "ebitda_margin", period, scenario) or 23.0
         ebit_margin = _get(assumptions, "ebit_margin", period, scenario) or 20.0
         da_pct_rev = _get(assumptions, "da_pct_revenue", period, scenario) or 2.9
-        tax_rate = _get(assumptions, "tax_rate", period, scenario) or 27.0
+        tax_rate = _get(assumptions, "tax_rate", period, scenario) or 25.17
         dso = _get(assumptions, "dso_days", period, scenario) or 100.0
         dio = _get(assumptions, "dio_days", period, scenario) or 0.0
         dpo = _get(assumptions, "dpo_days", period, scenario) or 14.0

@@ -35,7 +35,7 @@ def compute_fcff_periods(
         ebit = forecast.get_value("canonical.is.operating_profit", p, scenario) or 0.0
         pbt = forecast.get_value("canonical.is.pbt", p, scenario) or ebit
         tax = forecast.get_value("canonical.is.tax", p, scenario) or 0.0
-        tax_rate = round((tax / pbt * 100.0), 4) if pbt and pbt > 0 else (0.0 if pbt and pbt < 0 else 27.0)
+        tax_rate = round((tax / pbt * 100.0), 4) if pbt and pbt > 0 else (0.0 if pbt and pbt < 0 else 25.17)
         nopat = ebit * (1.0 - tax_rate / 100.0)
         da = forecast.get_value("canonical.is.depreciation_amortization", p, scenario) or 0.0
 
