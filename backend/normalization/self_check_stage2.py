@@ -4,7 +4,9 @@ from backend.data.store import (
     get_taxonomy_mappings,
     query_canonical_datapoints,
 )
-from backend.normalization.pipeline import DB_PATH, COMPANY_ID, run
+from backend.normalization.pipeline import DB_PATH, run
+
+COMPANY_ID = "infy_infy"
 
 
 def _assert(cond: bool, msg: str) -> None:
@@ -22,7 +24,7 @@ def _find_canon(rows, canonical_key, period):
 
 def main() -> None:
     print("Running Normalization Pipeline...")
-    summary = run()
+    summary = run(COMPANY_ID)
 
     _assert(summary["unmapped_labels_count"] == 0, "Zero unmapped raw labels")
     _assert(summary["total_canonical_count"] > 0, f"Canonical datapoints generated ({summary['total_canonical_count']})")

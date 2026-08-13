@@ -6,13 +6,42 @@ from backend.normalization.taxonomy.models import CanonicalDatapoint
 
 DERIVATION_RULES: Dict[str, str] = {
     "canonical.is.ebitda": "ebitda = canonical.is.operating_profit + canonical.is.depreciation_amortization",
+    "canonical.is.ebitda_fallback": (
+        "ebitda = canonical.is.pbt + canonical.is.finance_cost + canonical.is.depreciation_amortization"
+    ),
 }
+
+
+def _build_derived(
+    company_id: str,
+    period: str,
+    metric_raw: str,
+    value: float,
+    anchor: CanonicalDatapoint,
+    source_ids: list[str],
+    formula: str,
+) -> CanonicalDatapoint:
+    return CanonicalDatapoint(
+        company_id=company_id,
+        canonical_key="canonical.is.ebitda",
+        metric_raw=metric_raw,
+        period_label=period,
+        period_end_date=anchor.period_end_date,
+        value=value,
+        currency=anchor.currency,
+        units=anchor.units,
+        status="derived",
+        source_datapoint_ids=sorted(set(source_ids)),
+        derivation_rule=formula,
+    )
 
 
 def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[CanonicalDatapoint]:
     """Derive non-reported canonical metrics (such as EBITDA) using explicit formulas.
 
     Attaches status = 'derived', references source datapoint IDs, and records derivation formula.
+    Falls back to a bottom-up EBITDA (PBT + finance cost + D&A) when a company's
+    income statement lacks a standalone operating-profit line.
     """
     # Index datapoints by (company_id, period_label, canonical_key)
     lookup: Dict[Tuple[str, str, str], CanonicalDatapoint] = {}
@@ -33,24 +62,41 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
 
             op_profit_key = (company_id, period, "canonical.is.operating_profit")
             da_key = (company_id, period, "canonical.is.depreciation_amortization")
+            pbt_key = (company_id, period, "canonical.is.pbt")
+            finance_cost_key = (company_id, period, "canonical.is.finance_cost")
 
             op_profit = lookup.get(op_profit_key)
             da = lookup.get(da_key)
 
+            # Preferred: EBITDA = Operating Profit + Depreciation & Amortization
             if op_profit is not None and da is not None:
                 formula = DERIVATION_RULES["canonical.is.ebitda"]
-                ebitda_dp = CanonicalDatapoint(
+                ebitda_dp = _build_derived(
                     company_id=company_id,
-                    canonical_key="canonical.is.ebitda",
+                    period=period,
                     metric_raw="EBITDA (Derived)",
-                    period_label=period,
-                    period_end_date=op_profit.period_end_date,
                     value=op_profit.value + da.value,
-                    currency=op_profit.currency,
-                    units=op_profit.units,
-                    status="derived",
-                    source_datapoint_ids=sorted(set(op_profit.source_datapoint_ids + da.source_datapoint_ids)),
-                    derivation_rule=formula,
+                    anchor=op_profit,
+                    source_ids=op_profit.source_datapoint_ids + da.source_datapoint_ids,
+                    formula=formula,
+                )
+                new_derived.append(ebitda_dp)
+                lookup[ebitda_key] = ebitda_dp
+                continue
+
+            # Fallback: EBITDA = PBT + Finance Cost + Depreciation & Amortization
+            pbt = lookup.get(pbt_key)
+            finance_cost = lookup.get(finance_cost_key)
+            if pbt is not None and da is not None and finance_cost is not None:
+                formula = DERIVATION_RULES["canonical.is.ebitda_fallback"]
+                ebitda_dp = _build_derived(
+                    company_id=company_id,
+                    period=period,
+                    metric_raw="EBITDA (Derived)",
+                    value=pbt.value + finance_cost.value + da.value,
+                    anchor=pbt,
+                    source_ids=pbt.source_datapoint_ids + finance_cost.source_datapoint_ids + da.source_datapoint_ids,
+                    formula=formula,
                 )
                 new_derived.append(ebitda_dp)
                 lookup[ebitda_key] = ebitda_dp

@@ -3,13 +3,24 @@ from __future__ import annotations
 from backend.data.store import RawDatapoint
 from backend.normalization.taxonomy.models import CanonicalDatapoint, TaxonomyMapping
 from backend.normalization.taxonomy.registry import get_canonical_mapping
+from backend.normalization.taxonomy.mapping_engine import (
+    suggest_canonical_mapping,
+    route_to_review_queue,
+)
 
 
 def map_raw_datapoints(
     raw_datapoints: list[RawDatapoint],
     include_superseded: bool = False,
+    use_confidence_engine: bool = True,
 ) -> tuple[list[CanonicalDatapoint], list[TaxonomyMapping], list[str]]:
     """Map raw datapoints to canonical datapoints and taxonomy mapping records.
+
+    Exact registry matches are always applied. When ``use_confidence_engine`` is
+    enabled, unmapped labels fall back to the confidence-scored mapping engine:
+    high-confidence suggestions are auto-accepted, medium-confidence ones are
+    accepted but flagged ``human_confirmed=False`` for review, and low-confidence
+    labels are routed to the review queue and returned as unmapped.
 
     Returns:
         (canonical_datapoints, taxonomy_mappings, unmapped_raw_labels)
@@ -17,12 +28,26 @@ def map_raw_datapoints(
     canonical_datapoints: list[CanonicalDatapoint] = []
     taxonomy_mappings_dict: dict[tuple[str, str], TaxonomyMapping] = {}
     unmapped_labels: set[str] = set()
+    queued_for_review: set[tuple[str, str]] = set()
 
     for d in raw_datapoints:
         if not include_superseded and d.superseded_by_id is not None:
             continue
 
         mapping = get_canonical_mapping(d.metric_raw)
+        human_confirmed = True
+        if mapping is None and use_confidence_engine:
+            suggestion = suggest_canonical_mapping(d.metric_raw)
+            if suggestion.level in ("high", "medium") and suggestion.canonical_key is not None:
+                mapping = (suggestion.canonical_key, suggestion.statement)
+                human_confirmed = suggestion.level == "high"
+            elif suggestion.level == "low":
+                key = (d.company_id, d.metric_raw)
+                if key not in queued_for_review:
+                    route_to_review_queue(d.company_id, d.metric_raw, suggestion)
+                    queued_for_review.add(key)
+                unmapped_labels.add(d.metric_raw)
+
         if mapping is None:
             unmapped_labels.add(d.metric_raw)
             continue
@@ -55,7 +80,7 @@ def map_raw_datapoints(
                 metric_raw=d.metric_raw,
                 statement=statement,
                 source=d.source,
-                human_confirmed=True,
+                human_confirmed=human_confirmed,
             )
             taxonomy_mappings_dict[map_key] = tax_map
 
