@@ -80,7 +80,7 @@ def render_wacc_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         ("After-Tax Cost of Debt (r_d) %", "=C10*(1-C11)", FMT_PERCENT_PRECISION, False, "Pre-tax * (1 - tax_rate)"),
         ("Equity Market Weight %", 1.0, FMT_PERCENT, False, "Market Cap / Total Capital"),
         ("Debt Market Weight %", 0.0, FMT_PERCENT, False, "Total Debt / Total Capital"),
-        ("WEIGHTED AVERAGE COST OF CAPITAL (WACC) %", "=(C12*C9)+(C13*C12)", FMT_PERCENT_PRECISION, False, "Total WACC = Equity Weight * r_e + Debt Weight * r_d"),
+        ("WEIGHTED AVERAGE COST OF CAPITAL (WACC) %", "=(C13*C9)+(C14*C12)", FMT_PERCENT_PRECISION, False, "Total WACC = Equity Weight * r_e + Debt Weight * r_d"),
     ]
 
     for idx, (label, val, fmt, is_inp, note) in enumerate(wacc_rows):
@@ -200,7 +200,7 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     for idx, p in enumerate(FORECAST_PERIODS):
         c = 3 + idx
         t = idx + 1
-        cell = ws.cell(row=13, column=c, value=f"=1/((1+'30_WACC'!C14)^{t})")
+        cell = ws.cell(row=13, column=c, value=f"=1/((1+'30_WACC'!C15)^{t})")
         cell.font = FONT_FORMULA
         cell.number_format = "0.000000"
         cell.alignment = ALIGN_RIGHT
@@ -221,12 +221,12 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ccy = spec.metadata.currency
     bridge_rows = [
         ("Cumulative PV of FCFF", "=SUM(C14:G14)", FMT_CURRENCY_INT),
-        ("PV of Terminal Value", "='32_Terminal_Value'!C12", FMT_CURRENCY_INT),
-        ("ENTERPRISE VALUE (EV)", "=G6+G7", FMT_CURRENCY_INT),
+        ("PV of Terminal Value", "='32_Terminal_Value'!C13", FMT_CURRENCY_INT),
+        ("ENTERPRISE VALUE (EV)", "=G7+G8", FMT_CURRENCY_INT),
         ("Less: Net Debt / (Cash)", "='20_Operating_Model'!C19-'20_Operating_Model'!C16", FMT_CURRENCY_INT),
-        ("EQUITY VALUE", "=G8-G9", FMT_CURRENCY_INT),
+        ("EQUITY VALUE", "=G9-G10", FMT_CURRENCY_INT),
         (f"Diluted Shares ({spec.metadata.units.capitalize()[:2]})", "='27_Share_Count'!E6", FMT_AMOUNT),
-        (f"IMPLIED SHARE PRICE ({ccy})", "=G10/G11", FMT_PRICE),
+        (f"IMPLIED SHARE PRICE ({ccy})", "=G11/G12", FMT_PRICE),
     ]
 
     for idx, (lbl, formula, fmt) in enumerate(bridge_rows):
@@ -257,7 +257,7 @@ def render_terminal_value_tab(wb: Workbook, spec: ModelSpecification) -> Workshe
     tv_rows = [
         ("Terminal Growth Rate %", 0.04, FMT_PERCENT, True, "Perpetuity growth rate (must be < WACC)"),
         (f"FY31 Final Year FCFF ({ccy})", "='31_DCF'!G12", FMT_AMOUNT, False, "Final forecast year FCFF"),
-        ("Gordon Growth Undiscounted TV", "=(C7*(1+C6))/('30_WACC'!C14-C6)", FMT_CURRENCY_INT, False, "TV = FCFF_n * (1+g) / (WACC - g)"),
+        ("Gordon Growth Undiscounted TV", "=(C7*(1+C6)/('30_WACC'!C15-C6))", FMT_CURRENCY_INT, False, "TV = FCFF_n * (1+g) / (WACC - g)"),
         ("Exit Multiple (EV/EBITDA)", 20.0, FMT_MULTIPLE, True, "Exit EV/EBITDA multiple"),
         (f"FY31 Final Year EBITDA ({ccy})", "='20_Operating_Model'!G9", FMT_AMOUNT, False, "Final forecast year EBITDA"),
         ("Exit Multiple Undiscounted TV", "=C9*C10", FMT_CURRENCY_INT, False, "TV = EBITDA_n * Exit Multiple"),
@@ -356,7 +356,7 @@ def render_reverse_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         (f"Current Market Benchmark Price ({spec.metadata.currency})", mkt_price, FMT_PRICE, True, "Market price input"),
         (f"Market Implied Equity Value ({ccy})", "=C6*'27_Share_Count'!E6", FMT_CURRENCY_INT, False, "Market Price * Diluted Shares"),
         (f"Market Implied EV ({ccy})", "=C7+('20_Operating_Model'!C19-'20_Operating_Model'!C16)", FMT_CURRENCY_INT, False, "Implied Equity Value + Net Debt"),
-        (f"Market Implied PV of TV ({ccy})", "=C8-'31_DCF'!G6", FMT_CURRENCY_INT, False, "Implied EV - Cumulative PV(FCFF)"),
+        (f"Market Implied PV of TV ({ccy})", "=C8-'31_DCF'!G7", FMT_CURRENCY_INT, False, "Implied EV - Cumulative PV(FCFF)"),
         ("MARKET IMPLIED TERMINAL GROWTH %", implied_g, FMT_PERCENT_PRECISION, False, "Exact solved implied perpetuity growth rate"),
     ]
 
