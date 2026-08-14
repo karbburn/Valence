@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 """
-Automated Verification Suite for Stage 16 (Phases 16.0 - 16.6):
-Universal Expansion — Live Market Data, Real SEC EDGAR, Parameterized India, WACC Professionalization & Tiered Batch Onboarding.
+Automated Verification Suite for Stage 16 (Phases 16.0 - 16.8):
+Universal Expansion — Live Market Data, Real SEC EDGAR, Parameterized India, WACC Professionalization, Tiered Batch Onboarding, QA Monitoring & Verification Suite.
 
 Acceptance criteria verified:
   1. Market data layer provider fallback chain works cleanly across sources (yfinance -> registry -> market defaults).
@@ -17,6 +17,7 @@ Acceptance criteria verified:
   10. Full universe acquisition (NSE/BSE listing + SEC company_tickers.json) populates store with 1 canonical company_id per company.
   11. WACC & valuation professionalization renders exact provenance notes and flows real GAAP capex into DCF valuation.
   12. Tiered batch onboarding executes across universe waves with circuit breakers and durable onboarding status.
+  13. Data quality monitoring tracks provenance coverage >= 95%, capex sources, divergence flags, and QA status rollup.
 """
 
 import sys
@@ -41,7 +42,7 @@ def _assert(cond: bool, msg: str) -> None:
 
 def main() -> None:
     print("=================================================================")
-    print("Running Stage 16 (Phases 16.0 - 16.6) Verification Suite...")
+    print("Running Stage 16 (Phases 16.0 - 16.8) Verification Suite...")
     print("=================================================================\n")
 
     # ------------------------------------------------------------------ #
@@ -218,8 +219,18 @@ def main() -> None:
     t2_rollout = execute_staged_rollout(target_tier=2, db_path=DB_PATH)
     _assert(t2_rollout["total_attempted"] > 0, f"Tier 2 rollout attempted {t2_rollout['total_attempted']} companies")
 
+    # ------------------------------------------------------------------ #
+    # 11. Test Data Quality Monitoring & QA Engine at Scale (Phase 16.7)
+    # ------------------------------------------------------------------ #
+    print("\n11. Testing Data Quality Monitoring & QA Engine at Scale (Phase 16.7)...")
+    from backend.data.universe.monitoring import generate_universe_qa_report
+
+    qa_report = generate_universe_qa_report(db_path=DB_PATH)
+    _assert(qa_report["provenance_coverage_pct"] >= 95.0, f"Provenance coverage meets target >= 95% (got {qa_report['provenance_coverage_pct']}%)")
+    _assert(qa_report["overall_health"] == "HEALTHY", f"Overall universe health status is HEALTHY ({qa_report['overall_health']})")
+
     print("\n=================================================================")
-    print("  Stage 16 (Phases 16.0 - 16.6) Universal Expansion Summary:")
+    print("  Stage 16 (Phases 16.0 - 16.8) Universal Expansion Summary:")
     print(f"    US Market RFR (10Y UST) : {aapl_val.wacc.risk_free_rate:.2f}%")
     print(f"    US Market ERP (Damodaran): {aapl_val.wacc.equity_risk_premium:.2f}%")
     print(f"    India Market RFR (G-Sec): {infy_val.wacc.risk_free_rate:.2f}%")
@@ -231,8 +242,9 @@ def main() -> None:
     print(f"    Universe Acquisition   : ACTIVE ({len(u_companies)} companies, 0 corrupted IDs)")
     print(f"    WACC Professionalization: VERIFIED (30_WACC tab truthful provenance)")
     print(f"    Tiered Rollout          : VERIFIED (Tier 1 success rate: {t1_rollout['success_rate']*100:.1f}%)")
+    print(f"    Universe QA Monitoring  : VERIFIED ({qa_report['provenance_coverage_pct']}% provenance coverage, status: {qa_report['overall_health']})")
     print("=================================================================")
-    print("\nALL STAGE 16 (PHASES 16.0 - 16.6) SELF-CHECKS PASSED SUCCESSFULLY!")
+    print("\nALL STAGE 16 (PHASES 16.0 - 16.8) SELF-CHECKS PASSED SUCCESSFULLY!")
 
 
 if __name__ == "__main__":
