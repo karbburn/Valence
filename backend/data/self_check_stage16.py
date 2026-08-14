@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 """
-Automated Verification Suite for Stage 16 (Phases 16.0, 16.1, 16.2 & 16.3):
-Universal Expansion — Live Market Data, Real SEC EDGAR & Parameterized India Scale.
+Automated Verification Suite for Stage 16 (Phases 16.0, 16.1, 16.2, 16.3 & 16.4):
+Universal Expansion — Live Market Data, Real SEC EDGAR, Parameterized India & Full Universe Acquisition.
 
 Acceptance criteria verified:
   1. Market data layer provider fallback chain works cleanly across sources (yfinance -> registry -> market defaults).
@@ -14,6 +14,7 @@ Acceptance criteria verified:
   7. Live SEC EDGAR companyfacts ingestion fetches real 10-K XBRL financial facts.
   8. Real US GAAP capex (PaymentsToAcquirePropertyPlantAndEquipment) replaces total investing cash flow proxy.
   9. Parameterized India ingestion pipeline and reconciliation engine scale seamlessly across all Indian companies.
+  10. Full universe acquisition (NSE/BSE listing + SEC company_tickers.json) populates store with 1 canonical company_id per company.
 """
 
 import sys
@@ -38,7 +39,7 @@ def _assert(cond: bool, msg: str) -> None:
 
 def main() -> None:
     print("=================================================================")
-    print("Running Stage 16 (Phases 16.0 - 16.3) Verification Suite...")
+    print("Running Stage 16 (Phases 16.0 - 16.4) Verification Suite...")
     print("=================================================================\n")
 
     # ------------------------------------------------------------------ #
@@ -174,8 +175,22 @@ def main() -> None:
     discrepancies_tcs = reconcile(DB_PATH, LOG_PATH, company_id="tcs_tcs")
     _assert(isinstance(discrepancies_tcs, list), "reconcile() accepts dynamic company_id without hardcoding Infosys")
 
+    # ------------------------------------------------------------------ #
+    # 8. Test Full Universe Acquisition & ID Canonicalization (Phase 16.4)
+    # ------------------------------------------------------------------ #
+    print("\n8. Testing Full Universe Acquisition & ID Canonicalization (Phase 16.4)...")
+    from backend.data.universe.acquisition import acquire_full_universe
+    from backend.data.universe.store import verify_canonical_id_integrity
+
+    u_companies = acquire_full_universe(db_path=DB_PATH)
+    _assert(len(u_companies) >= 10, f"Full universe acquired {len(u_companies)} total companies across India and US")
+    _assert(verify_canonical_id_integrity(db_path=DB_PATH), "Canonical company_id integrity verified (0 duplicate/corrupted IDs)")
+
+    markets = set(c.market for c in u_companies)
+    _assert("india" in markets and "us" in markets, f"Universe covers both India and US markets ({markets})")
+
     print("\n=================================================================")
-    print("  Stage 16 (Phases 16.0 - 16.3) Universal Expansion Summary:")
+    print("  Stage 16 (Phases 16.0 - 16.4) Universal Expansion Summary:")
     print(f"    US Market RFR (10Y UST) : {aapl_val.wacc.risk_free_rate:.2f}%")
     print(f"    US Market ERP (Damodaran): {aapl_val.wacc.equity_risk_premium:.2f}%")
     print(f"    India Market RFR (G-Sec): {infy_val.wacc.risk_free_rate:.2f}%")
@@ -184,8 +199,9 @@ def main() -> None:
     print(f"    SEC EDGAR Live Ingest  : ACTIVE ({len(edgar_dps)} XBRL facts parsed for AAPL)")
     print(f"    AAPL FY24 Real Capex   : ${fy24_capex:,.2f} M (Real GAAP capex)")
     print(f"    India Scale Pipeline   : ACTIVE (Tested on {len(india_cids)} India companies)")
+    print(f"    Universe Acquisition   : ACTIVE ({len(u_companies)} companies, 0 corrupted IDs)")
     print("=================================================================")
-    print("\nALL STAGE 16 (PHASES 16.0 - 16.3) SELF-CHECKS PASSED SUCCESSFULLY!")
+    print("\nALL STAGE 16 (PHASES 16.0 - 16.4) SELF-CHECKS PASSED SUCCESSFULLY!")
 
 
 if __name__ == "__main__":

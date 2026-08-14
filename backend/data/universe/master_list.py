@@ -97,7 +97,7 @@ SEED_COMPANIES: list[dict] = [
     },
     # --- Financial Excluded India Samples (to verify filter) ---
     {
-        "company_id": "hdfcbank_infy",
+        "company_id": "hdfcbank_hdfcbank",
         "ticker": "HDFCBANK",
         "name": "HDFC Bank Limited",
         "market": "india",
@@ -107,7 +107,7 @@ SEED_COMPANIES: list[dict] = [
         "onboarding_status": "not_yet_attempted",
     },
     {
-        "company_id": "icicibank_infy",
+        "company_id": "icicibank_icicibank",
         "ticker": "ICICIBANK",
         "name": "ICICI Bank Limited",
         "market": "india",

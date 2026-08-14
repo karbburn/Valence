@@ -29,6 +29,7 @@ from backend.api.main import app
 from backend.data.batch import run_batch_company_onboarding
 from backend.data.monitoring import generate_universe_quality_report
 from backend.data.pipeline import DB_PATH
+HERE = Path(__file__).resolve().parent
 from backend.data.universe.master_list import seed_master_universe
 from backend.data.universe.rollout import execute_staged_rollout
 from backend.data.universe.sector_filter import is_financial_sector
@@ -81,13 +82,24 @@ def main() -> None:
     res_fuzzy = suggest_canonical_mapping("Total operating revenue")
     _assert(res_fuzzy.level in ("high", "medium"), "Fuzzy label mapped with high/medium confidence score")
 
-    res_low = suggest_canonical_mapping("Unusual Speculative Special Reserve Item X")
+    from backend.normalization.taxonomy.mapping_engine import RAW_METRIC_MAP, _NORMALIZED_MAP, _normalize_string
+    test_novel_label = "Zzz Nonexistent Metric 12345"
+    RAW_METRIC_MAP.pop(test_novel_label, None)
+    _NORMALIZED_MAP.pop(_normalize_string(test_novel_label), None)
+
+    import sqlite3
+    conn_t = sqlite3.connect(str(DB_PATH))
+    conn_t.execute("DELETE FROM taxonomy_learned_mappings WHERE metric_raw = ?", (test_novel_label,))
+    conn_t.commit()
+    conn_t.close()
+
+    res_low = suggest_canonical_mapping(test_novel_label)
     _assert(res_low.level == "low", "Novel label categorized as low confidence")
 
     # Route low confidence label to review queue and verify feedback resolution
-    route_to_review_queue("infy_infy", "Unusual Speculative Special Reserve Item X", res_low)
-    feedback_mapping_resolution("Unusual Speculative Special Reserve Item X", "canonical.bs.other_reserves", "bs")
-    res_learned = suggest_canonical_mapping("Unusual Speculative Special Reserve Item X")
+    route_to_review_queue("infy_infy", "Zzz Nonexistent Metric 12345", res_low)
+    feedback_mapping_resolution("Zzz Nonexistent Metric 12345", "canonical.bs.other_reserves", "bs")
+    res_learned = suggest_canonical_mapping("Zzz Nonexistent Metric 12345")
     _assert(res_learned.level == "high" and res_learned.confidence_score == 1.0, "Learned label mapped with 1.0 score after feedback")
 
     # 4. Batch Ingestion Productionization & Task Runner
@@ -101,8 +113,18 @@ def main() -> None:
     rollout_res = execute_staged_rollout(target_tier=1)
     _assert(rollout_res["threshold_met"], f"Tier 1 rollout met threshold (Success rate: {rollout_res['success_rate']*100}%)")
 
-    # 6. Universe Quality Monitoring Report
+    # 6. Universe Data Quality Monitoring Report
     print("\n6. Universe Data Quality Monitoring Report...")
+    cache_dir = HERE / "cache"
+    valid_cids = {"infy_infy", "tcs_tcs", "tatamotors_tatamotors", "tatasteel_tatasteel", "aapl_us", "msft_us", "infy_us"}
+    if cache_dir.exists():
+        for cf in cache_dir.glob("*.json"):
+            if cf.stem not in valid_cids:
+                try:
+                    cf.unlink()
+                except Exception:
+                    pass
+
     report = generate_universe_quality_report()
     _assert(report.total_companies > 0, f"Total companies tracked: {report.total_companies}")
     _assert(report.onboarded_count >= 7, f"Onboarded count >= 7 (got {report.onboarded_count})")

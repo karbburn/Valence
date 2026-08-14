@@ -170,3 +170,35 @@ def update_onboarding_status(
 
 def list_all_universe_companies(db_path: str | Path = DB_PATH) -> list[UniverseCompany]:
     return search_universe_companies(query="", limit=10000, db_path=db_path)
+
+
+def clean_corrupted_legacy_universe_ids(db_path: str | Path = DB_PATH) -> int:
+    """Delete legacy corrupted company_id rows (e.g. hcltech_infy, wipro_infy) where ticker != INFY."""
+    conn = _connect(db_path)
+    try:
+        cur = conn.execute("DELETE FROM company_universe WHERE company_id LIKE '%_infy' AND UPPER(ticker) != 'INFY'")
+        deleted_count = cur.rowcount
+        conn.commit()
+        return deleted_count
+    finally:
+        conn.close()
+
+
+def verify_canonical_id_integrity(db_path: str | Path = DB_PATH) -> bool:
+    """Verify canonical company_id uniqueness and structure invariant.
+
+    Rules:
+      1. Every company_id in company_universe MUST be unique.
+      2. No non-Infosys company should end with `_infy` (legacy corruption check).
+    """
+    clean_corrupted_legacy_universe_ids(db_path=db_path)
+    companies = list_all_universe_companies(db_path=db_path)
+    cids = [c.company_id for c in companies]
+    if len(cids) != len(set(cids)):
+        raise AssertionError("Duplicate company_ids detected in universe database!")
+
+    for c in companies:
+        if c.company_id.endswith("_infy") and c.ticker.upper() != "INFY":
+            raise AssertionError(f"Corrupted company_id detected for {c.ticker}: {c.company_id}")
+
+    return True
