@@ -11,3 +11,4 @@ Cwd/
 backend/export/output/
 backend/data/user_models/
 backend/data/cache/
+.env
