@@ -76,6 +76,30 @@ def render_wacc_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     beta_note = f"{spec.metadata.ticker} 2Y weekly beta vs primary index"
     erp_note = f"Damodaran {spec.metadata.market.upper()} published Equity Risk Premium"
 
+    if wacc_b and wacc_b.source_notes:
+        sn = wacc_b.source_notes
+        if "Rfr=" in sn:
+            try:
+                rfr_part = sn.split("Rfr=")[1].split("),")[0]
+                if "(" in rfr_part:
+                    rfr_note = rfr_part.split("(")[1].strip()
+            except Exception:
+                pass
+        if "Beta=" in sn:
+            try:
+                beta_part = sn.split("Beta=")[1].split("),")[0]
+                if "(" in beta_part:
+                    beta_note = beta_part.split("(")[1].strip()
+            except Exception:
+                pass
+        if "ERP=" in sn:
+            try:
+                erp_part = sn.split("ERP=")[1].split(").")[0]
+                if "(" in erp_part:
+                    erp_note = erp_part.split("(")[1].strip()
+            except Exception:
+                pass
+
     wacc_rows = [
         ("Risk-Free Rate (Rf) %", rfr / 100.0, FMT_PERCENT_PRECISION, True, rfr_note),
         ("Equity Beta (β)", beta, "0.00", True, beta_note),
