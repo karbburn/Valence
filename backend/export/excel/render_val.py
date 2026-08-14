@@ -69,6 +69,8 @@ def render_wacc_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     erp = wacc_b.equity_risk_premium if (wacc_b and wacc_b.equity_risk_premium) else get_assumption_value(spec, "wacc.equity_risk_premium", "all")
     debt_pre = wacc_b.pre_tax_cost_of_debt if (wacc_b and wacc_b.pre_tax_cost_of_debt is not None) else get_assumption_value(spec, "wacc.cost_of_debt", "all")
     tax = wacc_b.tax_rate if (wacc_b and wacc_b.tax_rate is not None) else get_assumption_value(spec, "tax_rate", "FY27")
+    eq_weight = wacc_b.equity_weight if (wacc_b and wacc_b.equity_weight is not None) else 1.0
+    debt_weight = wacc_b.debt_weight if (wacc_b and wacc_b.debt_weight is not None) else 0.0
 
     wacc_rows = [
         ("Risk-Free Rate (Rf) %", rfr / 100.0, FMT_PERCENT_PRECISION, True, f"{spec.metadata.market.upper()} sovereign 10-Year government bond yield"),
@@ -78,8 +80,8 @@ def render_wacc_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         ("Pre-Tax Cost of Debt %", debt_pre / 100.0, FMT_PERCENT_PRECISION, True, f"{spec.metadata.ticker} pre-tax cost of borrowings"),
         ("Effective Tax Rate %", tax / 100.0, FMT_PERCENT_PRECISION, True, "Forecast average tax rate"),
         ("After-Tax Cost of Debt (r_d) %", "=C10*(1-C11)", FMT_PERCENT_PRECISION, False, "Pre-tax * (1 - tax_rate)"),
-        ("Equity Market Weight %", 1.0, FMT_PERCENT, False, "Market Cap / Total Capital"),
-        ("Debt Market Weight %", 0.0, FMT_PERCENT, False, "Total Debt / Total Capital"),
+        ("Equity Market Weight %", eq_weight, FMT_PERCENT, False, "Market Cap / Total Capital"),
+        ("Debt Market Weight %", debt_weight, FMT_PERCENT, False, "Total Debt / Total Capital"),
         ("WEIGHTED AVERAGE COST OF CAPITAL (WACC) %", "=(C13*C9)+(C14*C12)", FMT_PERCENT_PRECISION, False, "Total WACC = Equity Weight * r_e + Debt Weight * r_d"),
     ]
 
