@@ -426,7 +426,7 @@ def render_reverse_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         (f"Market Implied Equity Value ({ccy})", "=C6*'27_Share_Count'!E6", FMT_CURRENCY_INT, False, "Market Price * Diluted Shares"),
         (f"Market Implied EV ({ccy})", f"=C7{net_debt:+.2f}", FMT_CURRENCY_INT, False, "Implied Equity Value + Net Debt"),
         (f"Market Implied PV of TV ({ccy})", "=C8-'31_DCF'!H17", FMT_CURRENCY_INT, False, "Implied EV - Cumulative PV(FCFF)"),
-        ("MARKET IMPLIED TERMINAL GROWTH %", implied_g, FMT_PERCENT_PRECISION, False, "Exact solved implied perpetuity growth rate"),
+        ("MARKET IMPLIED TERMINAL GROWTH %", implied_g, FMT_PERCENT_PRECISION, False, rev_dcf.method_note if rev_dcf and rev_dcf.method_note else "Exact solved implied perpetuity growth rate"),
     ]
 
     for idx, (lbl, val, fmt, is_inp, note) in enumerate(rows):
