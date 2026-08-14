@@ -177,8 +177,8 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ws.cell(row=11, column=2, value="Less: Change in Working Capital").font = FONT_SUBHEADER
     for idx, p in enumerate(FORECAST_PERIODS):
         c = 3 + idx
-        val = fcffs[idx].delta_working_capital if idx < len(fcffs) else 0.0
-        cell = ws.cell(row=11, column=c, value=val)
+        col_let = chr(67 + idx)
+        cell = ws.cell(row=11, column=c, value=f"='20_Operating_Model'!{col_let}16+'20_Operating_Model'!{col_let}10-'20_Operating_Model'!{col_let}23")
         cell.font = FONT_FORMULA
         cell.number_format = FMT_AMOUNT
         cell.alignment = ALIGN_RIGHT
