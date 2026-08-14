@@ -222,11 +222,12 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ws["B16"].font = FONT_SECTION
 
     ccy = spec.metadata.currency
+    net_debt = (base_val.dcf_bridge.less_net_debt if base_val and base_val.dcf_bridge.less_net_debt is not None else 0.0)
     bridge_rows = [
         ("Cumulative PV of FCFF", "=SUM(C14:G14)", FMT_CURRENCY_INT),
         ("PV of Terminal Value", "='32_Terminal_Value'!C13", FMT_CURRENCY_INT),
         ("ENTERPRISE VALUE (EV)", "=H17+H18", FMT_CURRENCY_INT),
-        ("Less: Net Debt / (Cash)", "='20_Operating_Model'!C19-'20_Operating_Model'!C16", FMT_CURRENCY_INT),
+        ("Less: Net Debt / (Cash)", net_debt, FMT_CURRENCY_INT),
         ("EQUITY VALUE", "=H19-H20", FMT_CURRENCY_INT),
         (f"Diluted Shares ({spec.metadata.units.capitalize()[:2]})", "='27_Share_Count'!E6", FMT_AMOUNT),
         (f"IMPLIED SHARE PRICE ({ccy})", "=H21/H22", FMT_PRICE),
@@ -389,10 +390,11 @@ def render_reverse_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     implied_g = (rev_dcf.implied_terminal_growth / 100.0) if (rev_dcf and rev_dcf.implied_terminal_growth) else 0.0
 
     ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
+    net_debt = (base_val.dcf_bridge.less_net_debt if base_val and base_val.dcf_bridge.less_net_debt is not None else 0.0)
     rows = [
         (f"Current Market Benchmark Price ({spec.metadata.currency})", mkt_price, FMT_PRICE, True, "Market price input"),
         (f"Market Implied Equity Value ({ccy})", "=C6*'27_Share_Count'!E6", FMT_CURRENCY_INT, False, "Market Price * Diluted Shares"),
-        (f"Market Implied EV ({ccy})", "=C7+('20_Operating_Model'!C19-'20_Operating_Model'!C16)", FMT_CURRENCY_INT, False, "Implied Equity Value + Net Debt"),
+        (f"Market Implied EV ({ccy})", f"=C7{net_debt:+.2f}", FMT_CURRENCY_INT, False, "Implied Equity Value + Net Debt"),
         (f"Market Implied PV of TV ({ccy})", "=C8-'31_DCF'!H17", FMT_CURRENCY_INT, False, "Implied EV - Cumulative PV(FCFF)"),
         ("MARKET IMPLIED TERMINAL GROWTH %", implied_g, FMT_PERCENT_PRECISION, False, "Exact solved implied perpetuity growth rate"),
     ]
