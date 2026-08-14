@@ -33,6 +33,7 @@ from backend.export.excel.styles import (
     FONT_FORMULA,
     FONT_HEADER,
     FONT_INPUT,
+    FONT_HYPERLINK,
     FONT_PASS,
     FONT_SECTION,
     FONT_SUBHEADER,
@@ -136,7 +137,9 @@ def render_model_guide(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     for idx, (group, tab, desc) in enumerate(guide_items):
         row = 6 + idx
         ws.cell(row=row, column=2, value=group).font = FONT_SUBHEADER
-        ws.cell(row=row, column=3, value=tab).font = FONT_INPUT
+        cell_tab = ws.cell(row=row, column=3, value=tab)
+        cell_tab.font = FONT_HYPERLINK
+        cell_tab.hyperlink = f"#'{tab}'!A1"
         ws.cell(row=row, column=4, value=desc).font = FONT_FORMULA
         for c in range(2, 5):
             ws.cell(row=row, column=c).border = BORDER_BOX
