@@ -142,7 +142,7 @@ def run_valuation(
             exit_multiple=exit_mult,
         )
 
-        # Divergence Gate (Phase 16.0 sanity check on implied terminal growth band [-2%, 5%])
+        # Divergence Gate (sanity check on implied terminal growth band [-2%, 5%])
         if reverse_dcf.implied_terminal_growth is not None:
             g_impl = reverse_dcf.implied_terminal_growth
             if g_impl < -2.0 or g_impl > 5.0:

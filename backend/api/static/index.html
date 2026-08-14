@@ -7,22 +7,31 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
-<body class="bg-slate-950 text-slate-100 font-sans antialiased">
+<body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen">
     <!-- Main Top Navigation -->
-    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50 px-6 py-3 flex items-center justify-between">
+    <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-40 px-6 py-3 flex items-center justify-between">
         <div class="flex items-center gap-6">
-            <div class="flex items-center gap-2">
-                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">V</div>
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20 text-lg">V</div>
                 <span class="font-outfit font-bold text-xl tracking-wide bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">VALENCE</span>
             </div>
 
             <div class="h-5 w-px bg-slate-800"></div>
 
-            <div class="flex items-center gap-3">
-                <select id="company-select" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs font-semibold rounded-lg px-2.5 py-1 focus:outline-none focus:border-indigo-500 cursor-pointer" onchange="handleCompanyChange(this.value)">
+            <!-- Company Search / Selection -->
+            <div class="relative flex items-center gap-3">
+                <div class="relative w-64">
+                    <input type="text" id="company-search-input" placeholder="Search ticker or name..." 
+                           class="w-full bg-slate-950 border border-slate-700 text-slate-200 text-xs font-medium rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-500 placeholder-slate-500"
+                           oninput="handleSearchInput(this.value)" onfocus="handleSearchFocus()">
+                    <div id="search-dropdown" class="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 hidden max-h-64 overflow-y-auto">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+                <select id="company-select" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs font-semibold rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 cursor-pointer" onchange="handleCompanyChange(this.value)">
                     <option value="infy_infy">INFY — Infosys Ltd (India)</option>
                     <option value="tcs_tcs">TCS — Tata Consultancy (India)</option>
                     <option value="tatamotors_tatamotors">TATAMOTORS — Tata Motors (India)</option>
@@ -31,8 +40,10 @@
                     <option value="msft_us">MSFT — Microsoft Corp (US)</option>
                     <option value="infy_us">INFY — Infosys ADR (US)</option>
                 </select>
-                <span id="company-name" class="font-semibold text-slate-200">INFOSYS LIMITED</span>
-                <span id="ticker-badge" class="px-2 py-0.5 text-xs font-mono bg-slate-800 text-slate-300 rounded border border-slate-700">NSE: INFY</span>
+                <div class="flex flex-col">
+                    <span id="company-name" class="font-semibold text-xs text-slate-200 uppercase tracking-wide">INFOSYS LIMITED</span>
+                    <span id="ticker-badge" class="text-[10px] font-mono text-indigo-400">INDIA: INFY (INR)</span>
+                </div>
             </div>
         </div>
 
@@ -40,11 +51,11 @@
         <div class="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs font-medium">
             <button id="mode-analyst" class="mode-btn px-4 py-1.5 rounded-md transition-all bg-indigo-600 text-white shadow" onclick="switchMode('analyst')">Analyst Mode</button>
             <button id="mode-quick" class="mode-btn px-4 py-1.5 rounded-md text-slate-400 hover:text-white transition-all" onclick="switchMode('quick')">Quick DCF</button>
-            <button id="mode-full" class="mode-btn px-4 py-1.5 rounded-md text-slate-400 hover:text-white transition-all" onclick="switchMode('full')">Full Model Mode</button>
+            <button id="mode-full" class="mode-btn px-4 py-1.5 rounded-md text-slate-400 hover:text-white transition-all" onclick="switchMode('full')">Full 3-Statement Schedule</button>
         </div>
 
         <!-- Right Controls: Scenario, QA Status & Excel Export -->
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-3">
             <!-- Scenario Switcher -->
             <div class="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
                 <button id="scen-base" class="scen-btn px-3 py-1 rounded text-slate-300 bg-slate-800 font-semibold" onclick="switchScenario('base')">Base</button>
@@ -53,35 +64,48 @@
             </div>
 
             <!-- Persistent QA Banner -->
-            <div id="qa-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 cursor-pointer" onclick="openQAModal()">
+            <div id="qa-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 cursor-pointer hover:bg-emerald-500/20 transition-all" onclick="openQAModal()">
                 <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                 <span id="qa-label">MODEL VALID</span>
             </div>
 
             <!-- Save Model & Models Drawer -->
-            <button onclick="saveCurrentModel()" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all shadow-lg shadow-indigo-600/20">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
-                Save Model
+            <button onclick="saveCurrentModel()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all shadow-lg shadow-indigo-600/20">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+                Save
             </button>
 
-            <button onclick="openSavedModelsModal()" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 border border-slate-700 transition-all">
-                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-                Saved Models
+            <button onclick="openSavedModelsModal()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 border border-slate-700 transition-all">
+                <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                Saved
             </button>
 
             <!-- Excel Export Download -->
-            <a id="excel-export-btn" href="/api/export/excel?company_id=infy_infy" download class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-emerald-600/20">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                Export Excel (.xlsx)
+            <a id="excel-export-btn" href="/api/export/excel?company_id=infy_infy" download class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all shadow-lg shadow-emerald-600/20">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                Export Excel
             </a>
-
-            <!-- User Auth Badge -->
-            <div class="flex items-center gap-2 pl-2 border-l border-slate-800 text-xs">
-                <div class="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-indigo-400">A</div>
-                <span id="user-display-name" class="font-medium text-slate-300">Senior Analyst</span>
-            </div>
         </div>
     </header>
+
+    <!-- QA Checks Modal -->
+    <div id="qa-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-2">
+                    <div class="w-3 h-3 rounded-full bg-emerald-400"></div>
+                    <h3 class="font-outfit font-bold text-lg text-slate-100">QA Engine Diagnostics & Audit Log</h3>
+                </div>
+                <button onclick="closeQAModal()" class="text-slate-400 hover:text-white font-bold text-lg">&times;</button>
+            </div>
+            <div id="qa-checks-list" class="space-y-2.5 max-h-96 overflow-y-auto pr-1 text-xs">
+                <!-- Populated dynamically by app.js -->
+            </div>
+            <div class="flex justify-end pt-2 border-t border-slate-800">
+                <button onclick="closeQAModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-lg text-slate-300">Close</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Saved Models Modal -->
     <div id="saved-models-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
@@ -105,7 +129,7 @@
             <div class="kpi-card bg-slate-900 border border-slate-800 rounded-xl p-4">
                 <div class="text-xs font-medium text-slate-400 mb-1">Market Benchmark Price</div>
                 <div id="kpi-market-price" class="text-xl font-bold font-mono text-slate-100">₹1,650.00</div>
-                <div class="text-xs text-slate-500 mt-1">NSE Current Price</div>
+                <div class="text-xs text-slate-500 mt-1">Live / Benchmark</div>
             </div>
 
             <div class="kpi-card bg-slate-900 border border-indigo-500/40 rounded-xl p-4 shadow-lg shadow-indigo-500/10">
@@ -129,13 +153,13 @@
             <div class="kpi-card bg-slate-900 border border-slate-800 rounded-xl p-4">
                 <div class="text-xs font-medium text-slate-400 mb-1">Discount Rate (WACC)</div>
                 <div id="kpi-wacc" class="text-xl font-bold font-mono text-slate-100">12.95%</div>
-                <div class="text-xs text-slate-500 mt-1">CAPM Cost of Equity</div>
+                <div id="wacc-source-sub" class="text-[11px] text-slate-500 mt-1 truncate">CAPM Cost of Equity</div>
             </div>
 
             <div class="kpi-card bg-slate-900 border border-slate-800 rounded-xl p-4">
                 <div class="text-xs font-medium text-slate-400 mb-1">Terminal Growth Rate</div>
                 <div id="kpi-term-growth" class="text-xl font-bold font-mono text-slate-100">4.00%</div>
-                <div class="text-xs text-slate-500 mt-1">Gordon Growth (g < WACC)</div>
+                <div class="text-xs text-slate-500 mt-1">Gordon Growth (g &lt; WACC)</div>
             </div>
         </div>
     </section>
@@ -150,11 +174,11 @@
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl">
                         <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
                             <h2 class="font-outfit font-bold text-lg text-slate-100">Driver & Assumption Controls</h2>
-                            <span class="text-xs text-indigo-400 font-medium">Edits update model live</span>
+                            <span class="text-xs text-indigo-400 font-medium">Recomputes live</span>
                         </div>
 
                         <!-- Drivers Form Container -->
-                        <div id="drivers-container" class="space-y-5 max-h-[600px] overflow-y-auto pr-2">
+                        <div id="drivers-container" class="space-y-4 max-h-[600px] overflow-y-auto pr-2">
                             <!-- Populated dynamically by app.js -->
                         </div>
                     </div>
@@ -175,7 +199,7 @@
                                 <div id="bridge-pv-tv" class="font-mono font-bold text-sm text-slate-200">₹228,967 Cr</div>
                             </div>
                             <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
-                                <div class="text-xs text-slate-400 mb-1">Net Cash</div>
+                                <div class="text-xs text-slate-400 mb-1">Net Cash / Debt</div>
                                 <div id="bridge-net-cash" class="font-mono font-bold text-sm text-emerald-400">+₹22,201 Cr</div>
                             </div>
                             <div class="bg-indigo-950/40 p-3 rounded-lg border border-indigo-500/30">
@@ -188,8 +212,8 @@
                     <!-- Live Statement Preview Table -->
                     <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl">
                         <div class="flex items-center justify-between mb-4">
-                            <h2 class="font-outfit font-bold text-lg text-slate-100">Forecast 3-Statement Preview</h2>
-                            <span class="text-xs text-slate-400 font-mono">FY27 – FY31 (INR Cr)</span>
+                            <h2 class="font-outfit font-bold text-lg text-slate-100">Forecast Financial Summary</h2>
+                            <span id="forecast-unit-label" class="text-xs text-slate-400 font-mono">FY27 – FY31 (INR Cr)</span>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="w-full text-xs text-left text-slate-300">
@@ -216,16 +240,31 @@
         <!-- QUICK DCF VIEW -->
         <div id="view-quick" class="hidden max-w-4xl mx-auto space-y-6">
             <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl text-center space-y-6">
-                <h2 class="text-2xl font-outfit font-bold text-slate-100">Infosys Limited — Quick DCF Summary</h2>
-                <div class="inline-flex items-center gap-3 bg-indigo-950/60 border border-indigo-500/40 px-6 py-4 rounded-2xl">
+                <h2 id="quick-company-title" class="text-2xl font-outfit font-bold text-slate-100">Quick DCF Summary</h2>
+                <div class="inline-flex items-center gap-6 bg-indigo-950/60 border border-indigo-500/40 px-8 py-5 rounded-2xl">
                     <div class="text-left">
-                        <div class="text-xs text-indigo-300">Intrinsic Value / Share</div>
+                        <div class="text-xs text-indigo-300 mb-1">Intrinsic Value / Share</div>
                         <div id="quick-price" class="text-3xl font-extrabold font-mono text-indigo-300">₹871.76</div>
                     </div>
                     <div class="h-10 w-px bg-indigo-500/30"></div>
                     <div class="text-left">
-                        <div class="text-xs text-slate-400">Current Market Price</div>
-                        <div class="text-2xl font-bold font-mono text-slate-200">₹1,650.00</div>
+                        <div class="text-xs text-slate-400 mb-1">Current Market Benchmark</div>
+                        <div id="quick-mkt-price" class="text-2xl font-bold font-mono text-slate-200">₹1,650.00</div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-4 text-left pt-4 border-t border-slate-800 max-w-2xl mx-auto">
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                        <div class="text-xs text-slate-400">Target WACC</div>
+                        <div id="quick-wacc" class="text-lg font-bold font-mono text-slate-200">12.95%</div>
+                    </div>
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                        <div class="text-xs text-slate-400">Terminal Growth (g)</div>
+                        <div id="quick-g" class="text-lg font-bold font-mono text-slate-200">4.00%</div>
+                    </div>
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                        <div class="text-xs text-slate-400">Reverse DCF Implied Growth</div>
+                        <div id="quick-implied-g" class="text-lg font-bold font-mono text-indigo-400">6.18%</div>
                     </div>
                 </div>
             </div>
@@ -234,13 +273,28 @@
         <!-- FULL MODEL MODE VIEW -->
         <div id="view-full" class="hidden space-y-6">
             <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl">
-                <h2 class="font-outfit font-bold text-xl text-slate-100 mb-4">Full 3-Statement Schedule Visibility</h2>
-                <div id="full-schedules-container" class="space-y-6">
+                <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+                    <h2 class="font-outfit font-bold text-xl text-slate-100">Full 3-Statement Schedule Visibility</h2>
+                    <!-- Schedule Tabs -->
+                    <div class="flex items-center gap-2 text-xs">
+                        <button id="tab-is" class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-semibold" onclick="switchFullTab('is')">Income Statement</button>
+                        <button id="tab-bs" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-200" onclick="switchFullTab('bs')">Balance Sheet</button>
+                        <button id="tab-cf" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-200" onclick="switchFullTab('cf')">Cash Flow</button>
+                    </div>
+                </div>
+
+                <div id="full-schedules-container" class="overflow-x-auto">
                     <!-- Populated dynamically -->
                 </div>
             </div>
         </div>
     </main>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 bg-slate-900 border border-indigo-500/40 text-slate-200 text-xs font-semibold px-4 py-3 rounded-xl shadow-2xl hidden z-50 flex items-center gap-2">
+        <span id="toast-icon">✓</span>
+        <span id="toast-message">Action completed</span>
+    </div>
 
     <script src="app.js"></script>
 </body>

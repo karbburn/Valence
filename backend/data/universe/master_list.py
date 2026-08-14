@@ -19,7 +19,7 @@ SEED_COMPANIES: list[dict] = [
         "sector": "Information Technology",
         "industry": "IT Services & Consulting",
         "onboarding_status": "onboarded",
-        "onboarding_notes": "Phase 1 Pilot company - Fully validated",
+        "onboarding_notes": "Core Pilot company - Fully validated",
     },
     {
         "company_id": "tcs_tcs",
@@ -30,7 +30,7 @@ SEED_COMPANIES: list[dict] = [
         "sector": "Information Technology",
         "industry": "IT Services & Consulting",
         "onboarding_status": "onboarded",
-        "onboarding_notes": "Phase 2 Generalization - Fully validated",
+        "onboarding_notes": "Target company - Fully validated",
     },
     {
         "company_id": "tatamotors_tatamotors",
@@ -41,7 +41,7 @@ SEED_COMPANIES: list[dict] = [
         "sector": "Automotive",
         "industry": "Automobiles",
         "onboarding_status": "onboarded",
-        "onboarding_notes": "Phase 2 Generalization - Fully validated",
+        "onboarding_notes": "Target company - Fully validated",
     },
     {
         "company_id": "tatasteel_tatasteel",
@@ -52,7 +52,7 @@ SEED_COMPANIES: list[dict] = [
         "sector": "Metals & Mining",
         "industry": "Steel & Iron Products",
         "onboarding_status": "onboarded",
-        "onboarding_notes": "Phase 2 Generalization - Fully validated",
+        "onboarding_notes": "Target company - Fully validated",
     },
     # --- Additional Target India Non-Financials ---
     {

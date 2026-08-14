@@ -10,6 +10,10 @@ body {
     font-family: 'Outfit', sans-serif;
 }
 
+.font-mono {
+    font-family: 'JetBrains Mono', monospace;
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
     width: 6px;
@@ -48,11 +52,11 @@ input[type=range]::-webkit-slider-thumb {
     background-color: #020617;
     border: 1px solid #334155;
     color: #818cf8;
-    font-family: monospace;
-    font-size: 0.875rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8125rem;
     padding: 0.25rem 0.5rem;
     border-radius: 0.375rem;
-    width: 5rem;
+    width: 4.5rem;
     text-align: right;
     transition: all 0.2s;
 }

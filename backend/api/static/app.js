@@ -3,6 +3,8 @@
 let currentSpec = null;
 let currentMode = 'analyst';
 let currentScenario = 'base';
+let currentCompanyId = 'infy_infy';
+let currentFullTab = 'is';
 
 // V1 Driver Controls Config
 const DRIVER_CONFIGS = [
@@ -19,12 +21,29 @@ const DRIVER_CONFIGS = [
     { key: "exit_ev_multiple", label: "Exit EV/EBITDA Multiple", unit: "x", min: 5, max: 40, step: 0.5 },
 ];
 
-let currentCompanyId = 'infy_infy';
-
 document.addEventListener("DOMContentLoaded", () => {
     loadCompanySelector();
     fetchModelSpec('infy_infy');
+
+    // Close search dropdown on click outside
+    document.addEventListener("click", (e) => {
+        const searchBox = document.getElementById("company-search-input");
+        const drop = document.getElementById("search-dropdown");
+        if (searchBox && drop && !searchBox.contains(e.target) && !drop.contains(e.target)) {
+            drop.classList.add("hidden");
+        }
+    });
 });
+
+function getCurrencySymbol() {
+    if (!currentSpec || !currentSpec.metadata) return "₹";
+    return currentSpec.metadata.currency === "USD" ? "$" : "₹";
+}
+
+function getCurrencyUnit() {
+    if (!currentSpec || !currentSpec.metadata) return "INR Cr";
+    return currentSpec.metadata.currency === "USD" ? "USD M" : "INR Cr";
+}
 
 async function loadCompanySelector() {
     try {
@@ -42,9 +61,54 @@ async function loadCompanySelector() {
     }
 }
 
+async function handleSearchInput(query) {
+    const drop = document.getElementById("search-dropdown");
+    if (!query || query.trim().length === 0) {
+        drop.classList.add("hidden");
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/companies/search?q=${encodeURIComponent(query)}&limit=10`);
+        const results = await res.json();
+        if (!results || results.length === 0) {
+            drop.innerHTML = `<div class="p-3 text-xs text-slate-500">No matching companies found</div>`;
+        } else {
+            drop.innerHTML = results.map(c => `
+                <div onclick="selectCompanyFromSearch('${c.company_id}')" class="px-3.5 py-2 hover:bg-slate-800 cursor-pointer flex items-center justify-between text-xs border-b border-slate-800/50 last:border-0">
+                    <div>
+                        <span class="font-bold text-slate-200">${c.ticker}</span>
+                        <span class="text-slate-400 font-medium ml-1.5">${c.name}</span>
+                    </div>
+                    <span class="px-1.5 py-0.5 rounded text-[10px] font-mono ${c.market === 'us' ? 'bg-blue-950 text-blue-300 border border-blue-800' : 'bg-orange-950 text-orange-300 border border-orange-800'}">${c.market.toUpperCase()}</span>
+                </div>
+            `).join('');
+        }
+        drop.classList.remove("hidden");
+    } catch (err) {
+        console.error("Search failed:", err);
+    }
+}
+
+function handleSearchFocus() {
+    const input = document.getElementById("company-search-input");
+    if (input && input.value.trim().length > 0) {
+        handleSearchInput(input.value);
+    }
+}
+
+function selectCompanyFromSearch(companyId) {
+    document.getElementById("search-dropdown").classList.add("hidden");
+    document.getElementById("company-search-input").value = "";
+    fetchModelSpec(companyId);
+}
+
 async function fetchModelSpec(companyId = currentCompanyId) {
     try {
         currentCompanyId = companyId;
+        const select = document.getElementById("company-select");
+        if (select) select.value = companyId;
+
         const exportBtn = document.getElementById("excel-export-btn");
         if (exportBtn) {
             exportBtn.href = `/api/export/excel?company_id=${companyId}`;
@@ -64,9 +128,16 @@ async function handleCompanyChange(companyId) {
 function renderDashboard() {
     if (!currentSpec) return;
 
+    const sym = getCurrencySymbol();
+    const unit = getCurrencyUnit();
+
     // 1. Render Header & Metadata
     document.getElementById("company-name").innerText = currentSpec.metadata.name.toUpperCase();
     document.getElementById("ticker-badge").innerText = `${currentSpec.metadata.market.toUpperCase()}: ${currentSpec.metadata.ticker} (${currentSpec.metadata.currency})`;
+
+    // Forecast Unit Label
+    const fUnitLabel = document.getElementById("forecast-unit-label");
+    if (fUnitLabel) fUnitLabel.innerText = `FY27 – FY31 (${unit})`;
 
     // 2. Render Top KPI Bar
     renderKPIs();
@@ -88,6 +159,7 @@ function renderKPIs() {
     const val = getValuationForScenario(currentScenario);
     if (!val) return;
 
+    const sym = getCurrencySymbol();
     const bridge = val.dcf_bridge || {};
     const wacc = val.wacc || {};
     const tv = val.terminal_value || {};
@@ -97,23 +169,28 @@ function renderKPIs() {
     const price = bridge.implied_share_price || 0.0;
     const upside = mktPrice > 0 ? ((price - mktPrice) / mktPrice * 100.0) : 0.0;
 
-    document.getElementById("kpi-market-price").innerText = `₹${mktPrice.toFixed(2)}`;
-    document.getElementById("kpi-implied-price").innerText = `₹${price.toFixed(2)}`;
+    document.getElementById("kpi-market-price").innerText = `${sym}${mktPrice.toFixed(2)}`;
+    document.getElementById("kpi-implied-price").innerText = `${sym}${price.toFixed(2)}`;
 
     const upsideBadge = document.getElementById("kpi-upside-badge");
     upsideBadge.innerText = `${upside >= 0 ? '+' : ''}${upside.toFixed(1)}% Upside`;
     upsideBadge.className = `text-xs font-semibold mt-1 ${upside >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
 
-    document.getElementById("kpi-ev").innerText = `₹${(bridge.enterprise_value || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr`;
-    document.getElementById("kpi-equity-value").innerText = `₹${(bridge.equity_value || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr`;
+    document.getElementById("kpi-ev").innerText = `${sym}${(bridge.enterprise_value || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+    document.getElementById("kpi-equity-value").innerText = `${sym}${(bridge.equity_value || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
     document.getElementById("kpi-wacc").innerText = `${(wacc.wacc || 12.95).toFixed(2)}%`;
     document.getElementById("kpi-term-growth").innerText = `${(tv.terminal_growth_rate || 4.0).toFixed(2)}%`;
 
+    const waccSub = document.getElementById("wacc-source-sub");
+    if (waccSub && wacc.source_notes) {
+        waccSub.innerText = wacc.source_notes.split('(')[0] || "CAPM Cost of Equity";
+    }
+
     // DCF Bridge Cards
-    document.getElementById("bridge-pv-fcff").innerText = `₹${(bridge.sum_pv_fcff || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr`;
-    document.getElementById("bridge-pv-tv").innerText = `₹${(bridge.pv_terminal_value || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr`;
-    document.getElementById("bridge-net-cash").innerText = `${(bridge.less_net_debt || 0) < 0 ? '+' : ''}₹${Math.abs(bridge.less_net_debt || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr`;
-    document.getElementById("bridge-price").innerText = `₹${price.toFixed(2)}`;
+    document.getElementById("bridge-pv-fcff").innerText = `${sym}${(bridge.sum_pv_fcff || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+    document.getElementById("bridge-pv-tv").innerText = `${sym}${(bridge.pv_terminal_value || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+    document.getElementById("bridge-net-cash").innerText = `${(bridge.less_net_debt || 0) < 0 ? '+' : ''}${sym}${Math.abs(bridge.less_net_debt || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+    document.getElementById("bridge-price").innerText = `${sym}${price.toFixed(2)}`;
 }
 
 function renderQABadge() {
@@ -126,10 +203,41 @@ function renderQABadge() {
 
     labelSpan.innerText = label;
     if (passed) {
-        badge.className = "px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 cursor-pointer";
+        badge.className = "px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 cursor-pointer hover:bg-emerald-500/20 transition-all";
     } else {
-        badge.className = "px-3 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1.5 cursor-pointer animate-pulse";
+        badge.className = "px-3 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1.5 cursor-pointer animate-pulse hover:bg-rose-500/20 transition-all";
     }
+}
+
+function openQAModal() {
+    const modal = document.getElementById("qa-modal");
+    const listDiv = document.getElementById("qa-checks-list");
+    modal.classList.remove("hidden");
+
+    const qa = currentSpec.qa || {};
+    const checks = qa.checks || [];
+
+    if (checks.length === 0) {
+        listDiv.innerHTML = `<div class="p-3 text-slate-400">No QA check records available.</div>`;
+        return;
+    }
+
+    listDiv.innerHTML = checks.map(c => `
+        <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 flex items-start justify-between">
+            <div class="space-y-1">
+                <div class="font-semibold text-slate-200">${c.name}</div>
+                <div class="text-[11px] text-slate-400">${c.description}</div>
+                ${c.implicated_keys && c.implicated_keys.length > 0 ? `<div class="text-[10px] text-slate-500 font-mono">Implicated: ${c.implicated_keys.join(', ')}</div>` : ''}
+            </div>
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${c.passed ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-rose-950 text-rose-300 border border-rose-800'}">
+                ${c.passed ? 'PASS' : 'FAIL'}
+            </span>
+        </div>
+    `).join('');
+}
+
+function closeQAModal() {
+    document.getElementById("qa-modal").classList.add("hidden");
 }
 
 function renderAnalystView() {
@@ -172,6 +280,7 @@ function renderForecastTable() {
     const tbody = document.getElementById("forecast-table-body");
     tbody.innerHTML = "";
 
+    const sym = getCurrencySymbol();
     const periods = ["FY27", "FY28", "FY29", "FY30", "FY31"];
     const rows = [
         { key: "canonical.is.revenue", label: "Revenue from Operations" },
@@ -187,7 +296,7 @@ function renderForecastTable() {
 
         periods.forEach(p => {
             const val = getForecastVal(r.key, p, currentScenario);
-            html += `<td class="px-3 py-2 text-right font-mono text-slate-200">₹${val.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>`;
+            html += `<td class="px-3 py-2 text-right font-mono text-slate-200">${sym}${val.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>`;
         });
 
         tr.innerHTML = html;
@@ -198,22 +307,97 @@ function renderForecastTable() {
 function renderQuickView() {
     const val = getValuationForScenario(currentScenario);
     if (!val) return;
+    const sym = getCurrencySymbol();
     const price = (val.dcf_bridge || {}).implied_share_price || 0.0;
-    document.getElementById("quick-price").innerText = `₹${price.toFixed(2)}`;
+    const revDcf = val.reverse_dcf || {};
+
+    document.getElementById("quick-company-title").innerText = `${currentSpec.metadata.name} — Quick DCF Summary`;
+    document.getElementById("quick-price").innerText = `${sym}${price.toFixed(2)}`;
+    document.getElementById("quick-mkt-price").innerText = `${sym}${(revDcf.market_price || 1650.0).toFixed(2)}`;
+    document.getElementById("quick-wacc").innerText = `${(val.wacc.wacc || 12.95).toFixed(2)}%`;
+    document.getElementById("quick-g").innerText = `${(val.terminal_value.terminal_growth_rate || 4.0).toFixed(2)}%`;
+    document.getElementById("quick-implied-g").innerText = revDcf.implied_terminal_growth ? `${revDcf.implied_terminal_growth.toFixed(2)}%` : "N/A";
+}
+
+function switchFullTab(tab) {
+    currentFullTab = tab;
+    ['is', 'bs', 'cf'].forEach(t => {
+        const btn = document.getElementById(`tab-${t}`);
+        if (btn) {
+            btn.className = t === tab 
+                ? "px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-semibold"
+                : "px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-200";
+        }
+    });
+    renderFullView();
 }
 
 function renderFullView() {
     const container = document.getElementById("full-schedules-container");
-    container.innerHTML = `
-        <div class="p-4 bg-slate-950 rounded-lg border border-slate-800 text-sm text-slate-300">
-            Full Schedule Mode active: Comprehensive visibility over Income Statement, Balance Sheet, Cash Flow, Working Capital, Tax, Debt, and Share Count schedules. All 23 sheets accessible in Excel export.
-        </div>
+    const sym = getCurrencySymbol();
+    const periods = ["FY27", "FY28", "FY29", "FY30", "FY31"];
+
+    let rows = [];
+    if (currentFullTab === 'is') {
+        rows = [
+            { key: "canonical.is.revenue", label: "Revenue from Operations" },
+            { key: "canonical.is.cost_of_sales", label: "Cost of Goods & Services Sold" },
+            { key: "canonical.is.gross_profit", label: "Gross Profit" },
+            { key: "canonical.is.operating_expenses", label: "Operating Expenses" },
+            { key: "canonical.is.ebitda", label: "EBITDA" },
+            { key: "canonical.is.depreciation_amortization", label: "Depreciation & Amortization" },
+            { key: "canonical.is.operating_profit", label: "Operating Profit (EBIT)" },
+            { key: "canonical.is.pbt", label: "Profit Before Tax (PBT)" },
+            { key: "canonical.is.tax", label: "Provision for Taxes" },
+            { key: "canonical.is.net_profit", label: "Net Profit After Tax (PAT)" },
+        ];
+    } else if (currentFullTab === 'bs') {
+        rows = [
+            { key: "canonical.bs.share_capital", label: "Share Capital" },
+            { key: "canonical.bs.reserves", label: "Reserves & Surplus" },
+            { key: "canonical.bs.total_equity", label: "Total Shareholders' Equity" },
+            { key: "canonical.bs.borrowings", label: "Total Borrowings (Debt)" },
+            { key: "canonical.bs.net_fixed_assets", label: "Net Property, Plant & Equipment" },
+            { key: "canonical.bs.working_capital", label: "Net Working Capital" },
+            { key: "canonical.bs.cash_and_equivalents", label: "Cash & Cash Equivalents" },
+        ];
+    } else if (currentFullTab === 'cf') {
+        rows = [
+            { key: "canonical.cf.operating_activities", label: "Cash Flow from Operating Activities (CFO)" },
+            { key: "canonical.cf.capex", label: "Capital Expenditures (Capex)" },
+            { key: "canonical.cf.investing_activities", label: "Cash Flow from Investing Activities (CFI)" },
+            { key: "canonical.cf.financing_activities", label: "Cash Flow from Financing Activities (CFF)" },
+            { key: "canonical.cf.net_cash_flow", label: "Net Increase / (Decrease) in Cash" },
+        ];
+    }
+
+    let html = `
+        <table class="w-full text-xs text-left text-slate-300">
+            <thead class="text-xs uppercase bg-slate-950 text-slate-400 border-b border-slate-800">
+                <tr>
+                    <th class="px-4 py-3">Line Item</th>
+                    ${periods.map(p => `<th class="px-4 py-3 text-right">${p}</th>`).join('')}
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/50">
     `;
+
+    rows.forEach(r => {
+        html += `<tr class="hover:bg-slate-950/50"><td class="px-4 py-2.5 font-medium text-slate-200">${r.label}</td>`;
+        periods.forEach(p => {
+            const val = getForecastVal(r.key, p, currentScenario);
+            html += `<td class="px-4 py-2.5 text-right font-mono text-slate-200">${sym}${val.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>`;
+        });
+        html += `</tr>`;
+    });
+
+    html += `</tbody></table>`;
+    container.innerHTML = html;
 }
 
 async function handleDriverInput(driverKey, newValue) {
     try {
-        const res = await fetch("/api/model/recompute", {
+        const res = await fetch(`/api/model/recompute?company_id=${currentCompanyId}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -226,6 +410,7 @@ async function handleDriverInput(driverKey, newValue) {
 
         currentSpec = await res.json();
         renderDashboard();
+        showToast(`Driver ${driverKey} updated`);
     } catch (err) {
         console.error("Recomputation failed:", err);
     }
@@ -233,7 +418,7 @@ async function handleDriverInput(driverKey, newValue) {
 
 async function handleRevert(driverKey) {
     try {
-        const res = await fetch("/api/model/revert", {
+        const res = await fetch(`/api/model/revert?company_id=${currentCompanyId}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -245,6 +430,7 @@ async function handleRevert(driverKey) {
 
         currentSpec = await res.json();
         renderDashboard();
+        showToast(`Driver ${driverKey} reverted`);
     } catch (err) {
         console.error("Revert failed:", err);
     }
@@ -287,9 +473,21 @@ function getForecastVal(ckey, period, scen) {
     return item ? item.value : 0;
 }
 
-// ------------------------------------------------------------------ //
-// Stage 11 Model Persistence Functions
-// ------------------------------------------------------------------ //
+function showToast(message) {
+    const toast = document.getElementById("toast");
+    const msgSpan = document.getElementById("toast-message");
+    if (!toast || !msgSpan) return;
+
+    msgSpan.innerText = message;
+    toast.classList.remove("hidden");
+    setTimeout(() => {
+        toast.classList.add("hidden");
+    }, 2500);
+}
+
+// ------------------------------------------------------------------ #
+// Model Persistence Functions
+// ------------------------------------------------------------------ #
 
 async function saveCurrentModel() {
     if (!currentSpec) return;
@@ -300,10 +498,10 @@ async function saveCurrentModel() {
         const res = await fetch("/api/models/save", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: name, company_id: "infy_infy" })
+            body: JSON.stringify({ name: name, company_id: currentCompanyId })
         });
         const data = await res.json();
-        alert(`Model "${data.header.name}" saved successfully!`);
+        showToast(`Model "${data.header.name}" saved!`);
     } catch (err) {
         console.error("Failed to save model:", err);
         alert("Error saving model.");
@@ -328,7 +526,7 @@ async function loadSavedModelsList() {
         const models = await res.json();
 
         if (!models || models.length === 0) {
-            listDiv.innerHTML = `<div class="text-xs text-slate-500 py-4 text-center">No saved models found. Click "Save Model" to persist your edits.</div>`;
+            listDiv.innerHTML = `<div class="text-xs text-slate-500 py-4 text-center">No saved models found. Click "Save" to persist your edits.</div>`;
             return;
         }
 
@@ -358,8 +556,10 @@ async function loadSavedModel(modelId) {
     try {
         const res = await fetch(`/api/models/${modelId}`);
         currentSpec = await res.json();
+        currentCompanyId = currentSpec.metadata.company_id || currentCompanyId;
         renderDashboard();
         closeSavedModelsModal();
+        showToast("Model loaded");
     } catch (err) {
         console.error("Failed to load model:", err);
         alert("Error loading model.");
@@ -371,9 +571,9 @@ async function deleteSavedModel(modelId) {
     try {
         await fetch(`/api/models/${modelId}`, { method: "DELETE" });
         await loadSavedModelsList();
+        showToast("Model deleted");
     } catch (err) {
         console.error("Failed to delete model:", err);
         alert("Error deleting model.");
     }
 }
-
