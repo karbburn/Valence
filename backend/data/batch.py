@@ -72,11 +72,16 @@ def ensure_company_ingested(company_id: str, db_path: str | Path = DB_PATH) -> N
     if len(existing) > 0:
         return
 
-    src_file = _source_file_for(company_id)
-
     if company_id.endswith("_us"):
-        dps = parse_sec_edgar_export(src_file, company_id=company_id)
+        try:
+            from backend.data.ingestion.sec_edgar import fetch_and_parse_sec_edgar
+            dps = fetch_and_parse_sec_edgar(company_id=company_id)
+        except Exception as e:
+            logger.info("Live SEC EDGAR fetch for %s unavailable, falling back to local source file fixture: %s", company_id, e)
+            src_file = _source_file_for(company_id)
+            dps = parse_sec_edgar_export(src_file, company_id=company_id)
     else:
+        src_file = _source_file_for(company_id)
         dps = parse_screener_export(src_file, company_id=company_id)
 
     save_datapoints(db_path, dps, clear_existing=True)

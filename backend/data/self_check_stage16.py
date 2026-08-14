@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 """
-Automated Verification Suite for Stage 16 (Phase 16.0 & 16.1):
-Universal Expansion — Live Market Data Layer & Per-Market Defaults.
+Automated Verification Suite for Stage 16 (Phase 16.0, 16.1 & 16.2):
+Universal Expansion — Live Market Data Layer & Real SEC EDGAR Ingestion.
 
 Acceptance criteria verified:
   1. Market data layer provider fallback chain works cleanly across sources (yfinance -> registry -> market defaults).
@@ -11,6 +11,8 @@ Acceptance criteria verified:
   4. Infosys hardcoded fallbacks (405.76 shares, 22201.0 cash) are deleted — US models use USD native share units and cash.
   5. 30_WACC tab provenance notes accurately reflect the target market's provenance.
   6. Divergence gate flags out-of-bounds market-implied growth (< -2.0% or > 5.0%).
+  7. Live SEC EDGAR companyfacts ingestion fetches real 10-K XBRL financial facts.
+  8. Real US GAAP capex (PaymentsToAcquirePropertyPlantAndEquipment) replaces total investing cash flow proxy ($9,447 M vs $30,000+ M proxy for AAPL FY24).
 """
 
 import sys
@@ -35,7 +37,7 @@ def _assert(cond: bool, msg: str) -> None:
 
 def main() -> None:
     print("=================================================================")
-    print("Running Stage 16 (Phase 16.0 & 16.1) Verification Suite...")
+    print("Running Stage 16 (Phase 16.0, 16.1 & 16.2) Verification Suite...")
     print("=================================================================\n")
 
     # ------------------------------------------------------------------ #
@@ -138,16 +140,34 @@ def main() -> None:
         "AAPL serialized WACC RFR intact after round-trip JSON",
     )
 
+    # ------------------------------------------------------------------ #
+    # 6. Test Live SEC EDGAR Ingestion & Real Capex Mapping (Phase 16.2)
+    # ------------------------------------------------------------------ #
+    print("\n6. Testing Live SEC EDGAR Ingestion & Real Capex Mapping (Phase 16.2)...")
+    from backend.data.ingestion.sec_edgar import fetch_and_parse_sec_edgar
+    edgar_dps = fetch_and_parse_sec_edgar("aapl_us")
+    _assert(len(edgar_dps) > 0, f"Live EDGAR fetched {len(edgar_dps)} RawDatapoints for AAPL")
+
+    capex_dps = [d for d in edgar_dps if d.metric_raw == "PaymentsToAcquirePropertyPlantAndEquipment"]
+    _assert(len(capex_dps) > 0, "Live EDGAR includes PaymentsToAcquirePropertyPlantAndEquipment (real GAAP capex)")
+
+    fy24_capex = next((d.value for d in capex_dps if d.period_label == "FY24"), None)
+    _assert(
+        fy24_capex is not None and 5000.0 < fy24_capex < 15000.0,
+        f"AAPL FY24 real GAAP capex is ${fy24_capex:,.2f} M (expected ~$9,447 M, not $30,000+ M proxy)",
+    )
+
     print("\n=================================================================")
-    print("  Stage 16 (Phase 16.0 & 16.1) Universal Expansion Summary:")
+    print("  Stage 16 (Phase 16.0, 16.1 & 16.2) Universal Expansion Summary:")
     print(f"    US Market RFR (10Y UST) : {aapl_val.wacc.risk_free_rate:.2f}%")
     print(f"    US Market ERP (Damodaran): {aapl_val.wacc.equity_risk_premium:.2f}%")
     print(f"    India Market RFR (G-Sec): {infy_val.wacc.risk_free_rate:.2f}%")
     print(f"    India Market ERP       : {infy_val.wacc.equity_risk_premium:.2f}%")
     print(f"    Infosys Shortcuts      : DELETED (No 405.76 / 22201.0 leak)")
-    print(f"    Market Data Provider   : ACTIVE (yfinance -> registry -> default)")
+    print(f"    SEC EDGAR Live Ingest  : ACTIVE ({len(edgar_dps)} XBRL facts parsed for AAPL)")
+    print(f"    AAPL FY24 Real Capex   : ${fy24_capex:,.2f} M (Real GAAP capex)")
     print("=================================================================")
-    print("\nALL STAGE 16 (PHASE 16.0 & 16.1) SELF-CHECKS PASSED SUCCESSFULLY!")
+    print("\nALL STAGE 16 (PHASE 16.0, 16.1 & 16.2) SELF-CHECKS PASSED SUCCESSFULLY!")
 
 
 if __name__ == "__main__":
