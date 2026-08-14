@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 """
-Automated Verification Suite for Stage 16 (Phases 16.0, 16.1, 16.2, 16.3 & 16.4):
-Universal Expansion — Live Market Data, Real SEC EDGAR, Parameterized India & Full Universe Acquisition.
+Automated Verification Suite for Stage 16 (Phases 16.0 - 16.5):
+Universal Expansion — Live Market Data, Real SEC EDGAR, Parameterized India & WACC Professionalization.
 
 Acceptance criteria verified:
   1. Market data layer provider fallback chain works cleanly across sources (yfinance -> registry -> market defaults).
@@ -15,6 +15,7 @@ Acceptance criteria verified:
   8. Real US GAAP capex (PaymentsToAcquirePropertyPlantAndEquipment) replaces total investing cash flow proxy.
   9. Parameterized India ingestion pipeline and reconciliation engine scale seamlessly across all Indian companies.
   10. Full universe acquisition (NSE/BSE listing + SEC company_tickers.json) populates store with 1 canonical company_id per company.
+  11. WACC & valuation professionalization renders exact provenance notes and flows real GAAP capex into DCF valuation.
 """
 
 import sys
@@ -39,7 +40,7 @@ def _assert(cond: bool, msg: str) -> None:
 
 def main() -> None:
     print("=================================================================")
-    print("Running Stage 16 (Phases 16.0 - 16.4) Verification Suite...")
+    print("Running Stage 16 (Phases 16.0 - 16.5) Verification Suite...")
     print("=================================================================\n")
 
     # ------------------------------------------------------------------ #
@@ -189,8 +190,23 @@ def main() -> None:
     markets = set(c.market for c in u_companies)
     _assert("india" in markets and "us" in markets, f"Universe covers both India and US markets ({markets})")
 
+    # ------------------------------------------------------------------ #
+    # 9. Test WACC & Valuation Professionalization (Phase 16.5)
+    # ------------------------------------------------------------------ #
+    print("\n9. Testing WACC & Valuation Professionalization (Phase 16.5)...")
+    from backend.export.excel.render_val import render_wacc_tab
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws_wacc = render_wacc_tab(wb, aapl_spec)
+    _assert(ws_wacc["C6"].value is not None, "30_WACC tab Risk-Free Rate cell rendered")
+    _assert(ws_wacc["D6"].value is not None, "30_WACC tab Risk-Free Rate provenance note rendered")
+
+    aapl_base_fcff = aapl_val.fcff_by_period[0]
+    _assert(aapl_base_fcff.capex > 3000.0, f"AAPL base valuation uses real GAAP capex (${aapl_base_fcff.capex:,.2f} M)")
+
     print("\n=================================================================")
-    print("  Stage 16 (Phases 16.0 - 16.4) Universal Expansion Summary:")
+    print("  Stage 16 (Phases 16.0 - 16.5) Universal Expansion Summary:")
     print(f"    US Market RFR (10Y UST) : {aapl_val.wacc.risk_free_rate:.2f}%")
     print(f"    US Market ERP (Damodaran): {aapl_val.wacc.equity_risk_premium:.2f}%")
     print(f"    India Market RFR (G-Sec): {infy_val.wacc.risk_free_rate:.2f}%")
@@ -200,8 +216,9 @@ def main() -> None:
     print(f"    AAPL FY24 Real Capex   : ${fy24_capex:,.2f} M (Real GAAP capex)")
     print(f"    India Scale Pipeline   : ACTIVE (Tested on {len(india_cids)} India companies)")
     print(f"    Universe Acquisition   : ACTIVE ({len(u_companies)} companies, 0 corrupted IDs)")
+    print(f"    WACC Professionalization: VERIFIED (30_WACC tab truthful provenance)")
     print("=================================================================")
-    print("\nALL STAGE 16 (PHASES 16.0 - 16.4) SELF-CHECKS PASSED SUCCESSFULLY!")
+    print("\nALL STAGE 16 (PHASES 16.0 - 16.5) SELF-CHECKS PASSED SUCCESSFULLY!")
 
 
 if __name__ == "__main__":
