@@ -25,6 +25,18 @@ DEFAULT_BETA = 0.79      # Infosys 1Y weekly beta vs NSE Nifty IT — TradingVie
 DEFAULT_ERP = 7.31       # Damodaran India Equity Risk Premium (%) — Jul 2026 update
 DEFAULT_CURRENT_PRICE = 1080.0  # INR per share — FT.com/TwelveData Aug 2026
 
+# Current market benchmark price per company (native currency, per share), Aug 2026.
+# Fallback default is used when a company is not listed here.
+MARKET_PRICE_BY_COMPANY: dict[str, float] = {
+    "infy_infy": 1080.0,
+    "tcs_tcs": 2370.0,
+    "tatamotors_tatamotors": 480.0,
+    "tatasteel_tatasteel": 184.0,
+    "aapl_us": 305.0,
+    "msft_us": 497.0,
+    "infy_us": 12.4,
+}
+
 
 def _get_assumption_val(
     assumptions: List[AssumptionObject],
