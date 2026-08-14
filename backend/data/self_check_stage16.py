@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 """
-Automated Verification Suite for Stage 16 (Phases 16.0 - 16.5):
-Universal Expansion — Live Market Data, Real SEC EDGAR, Parameterized India & WACC Professionalization.
+Automated Verification Suite for Stage 16 (Phases 16.0 - 16.6):
+Universal Expansion — Live Market Data, Real SEC EDGAR, Parameterized India, WACC Professionalization & Tiered Batch Onboarding.
 
 Acceptance criteria verified:
   1. Market data layer provider fallback chain works cleanly across sources (yfinance -> registry -> market defaults).
@@ -16,6 +16,7 @@ Acceptance criteria verified:
   9. Parameterized India ingestion pipeline and reconciliation engine scale seamlessly across all Indian companies.
   10. Full universe acquisition (NSE/BSE listing + SEC company_tickers.json) populates store with 1 canonical company_id per company.
   11. WACC & valuation professionalization renders exact provenance notes and flows real GAAP capex into DCF valuation.
+  12. Tiered batch onboarding executes across universe waves with circuit breakers and durable onboarding status.
 """
 
 import sys
@@ -40,7 +41,7 @@ def _assert(cond: bool, msg: str) -> None:
 
 def main() -> None:
     print("=================================================================")
-    print("Running Stage 16 (Phases 16.0 - 16.5) Verification Suite...")
+    print("Running Stage 16 (Phases 16.0 - 16.6) Verification Suite...")
     print("=================================================================\n")
 
     # ------------------------------------------------------------------ #
@@ -205,8 +206,20 @@ def main() -> None:
     aapl_base_fcff = aapl_val.fcff_by_period[0]
     _assert(aapl_base_fcff.capex > 3000.0, f"AAPL base valuation uses real GAAP capex (${aapl_base_fcff.capex:,.2f} M)")
 
+    # ------------------------------------------------------------------ #
+    # 10. Test Tiered Batch Onboarding & Staged Rollout (Phase 16.6)
+    # ------------------------------------------------------------------ #
+    print("\n10. Testing Tiered Batch Onboarding & Staged Rollout (Phase 16.6)...")
+    from backend.data.universe.rollout import execute_staged_rollout
+
+    t1_rollout = execute_staged_rollout(target_tier=1, db_path=DB_PATH)
+    _assert(t1_rollout["threshold_met"], f"Tier 1 rollout met 80% success threshold (got {t1_rollout['success_rate']*100:.1f}%)")
+
+    t2_rollout = execute_staged_rollout(target_tier=2, db_path=DB_PATH)
+    _assert(t2_rollout["total_attempted"] > 0, f"Tier 2 rollout attempted {t2_rollout['total_attempted']} companies")
+
     print("\n=================================================================")
-    print("  Stage 16 (Phases 16.0 - 16.5) Universal Expansion Summary:")
+    print("  Stage 16 (Phases 16.0 - 16.6) Universal Expansion Summary:")
     print(f"    US Market RFR (10Y UST) : {aapl_val.wacc.risk_free_rate:.2f}%")
     print(f"    US Market ERP (Damodaran): {aapl_val.wacc.equity_risk_premium:.2f}%")
     print(f"    India Market RFR (G-Sec): {infy_val.wacc.risk_free_rate:.2f}%")
@@ -217,8 +230,9 @@ def main() -> None:
     print(f"    India Scale Pipeline   : ACTIVE (Tested on {len(india_cids)} India companies)")
     print(f"    Universe Acquisition   : ACTIVE ({len(u_companies)} companies, 0 corrupted IDs)")
     print(f"    WACC Professionalization: VERIFIED (30_WACC tab truthful provenance)")
+    print(f"    Tiered Rollout          : VERIFIED (Tier 1 success rate: {t1_rollout['success_rate']*100:.1f}%)")
     print("=================================================================")
-    print("\nALL STAGE 16 (PHASES 16.0 - 16.5) SELF-CHECKS PASSED SUCCESSFULLY!")
+    print("\nALL STAGE 16 (PHASES 16.0 - 16.6) SELF-CHECKS PASSED SUCCESSFULLY!")
 
 
 if __name__ == "__main__":

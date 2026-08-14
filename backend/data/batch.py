@@ -109,13 +109,13 @@ def run_batch_company_onboarding(
             execution_time_seconds=t_elapsed,
         )
 
-    ensure_company_ingested(company_id=company_id, db_path=db_path)
-
     for attempt in range(1, max_retries + 1):
         try:
             # Respect rate constraints between attempts
             if attempt > 1:
                 time.sleep(2 ** attempt * 0.1)
+
+            ensure_company_ingested(company_id=company_id, db_path=db_path)
 
             # Precompute runs historical -> forecast -> valuation -> QA and saves static cache
             cache_path = run_precompute(company_id=company_id)
