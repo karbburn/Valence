@@ -23,6 +23,7 @@ FONT_SUBHEADER = Font(name="Calibri", size=11, bold=True, color="000000")
 FONT_INPUT = Font(name="Calibri", size=11, color="1F4E79")         # Blue font = input
 FONT_FORMULA = Font(name="Calibri", size=11, color="000000")       # Black font = formula
 FONT_LINK = Font(name="Calibri", size=11, color="375623")          # Green font = cross-sheet link
+FONT_HYPERLINK = Font(name="Calibri", size=11, underline="single", color="0563C1") # Hyperlink blue
 FONT_ALERT = Font(name="Calibri", size=11, bold=True, color="C00000") # Red font = alert/failure
 FONT_PASS = Font(name="Calibri", size=11, bold=True, color="375623")  # Green font = pass
 FONT_TOTAL = Font(name="Calibri", size=11, bold=True, color="000000") # Bold total line
