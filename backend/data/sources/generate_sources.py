@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-Generate Screener-formatted Excel source files for Phase 2 companies:
+Generate Screener-formatted Excel source files for target companies:
 - tcs_tcs.xlsx
 - tatamotors_tatamotors.xlsx
 - tatasteel_tatasteel.xlsx
