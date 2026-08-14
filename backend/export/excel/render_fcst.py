@@ -323,9 +323,10 @@ def render_share_count_schedule(wb: Workbook, spec: ModelSpecification) -> Works
     headers = ["Share Count Basis"] + periods
     write_table_header(ws, 5, headers, start_col=2)
 
-    shares_val = spec.share_count.get_diluted("FY26") if spec.share_count else 405.76
+    shares_val = (spec.share_count.get_diluted("FY26") if spec.share_count else None) or spec.metadata.shares_outstanding or 400.0
+    unit_label = "M" if (spec.metadata.units == "millions" or spec.metadata.market == "us") else "Cr"
 
-    ws.cell(row=6, column=2, value="Diluted Shares Outstanding (Cr)").font = FONT_SUBHEADER
+    ws.cell(row=6, column=2, value=f"Diluted Shares Outstanding ({unit_label})").font = FONT_SUBHEADER
     for idx, p in enumerate(periods):
         c = 3 + idx
         val = spec.share_count.get_diluted(p) if spec.share_count else shares_val

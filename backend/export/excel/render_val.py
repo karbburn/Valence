@@ -72,10 +72,14 @@ def render_wacc_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     eq_weight = wacc_b.equity_weight if (wacc_b and wacc_b.equity_weight is not None) else 1.0
     debt_weight = wacc_b.debt_weight if (wacc_b and wacc_b.debt_weight is not None) else 0.0
 
+    rfr_note = f"{spec.metadata.market.upper()} sovereign 10-Year yield"
+    beta_note = f"{spec.metadata.ticker} 2Y weekly beta vs primary index"
+    erp_note = f"Damodaran {spec.metadata.market.upper()} published Equity Risk Premium"
+
     wacc_rows = [
-        ("Risk-Free Rate (Rf) %", rfr / 100.0, FMT_PERCENT_PRECISION, True, f"{spec.metadata.market.upper()} sovereign 10-Year government bond yield"),
-        ("Equity Beta (β)", beta, "0.00", True, f"{spec.metadata.ticker} 2Y weekly beta vs primary index"),
-        ("Equity Risk Premium (ERP) %", erp / 100.0, FMT_PERCENT_PRECISION, True, "Damodaran published ERP (Mature 4.5% + country risk premium)"),
+        ("Risk-Free Rate (Rf) %", rfr / 100.0, FMT_PERCENT_PRECISION, True, rfr_note),
+        ("Equity Beta (β)", beta, "0.00", True, beta_note),
+        ("Equity Risk Premium (ERP) %", erp / 100.0, FMT_PERCENT_PRECISION, True, erp_note),
         ("Cost of Equity (r_e) %", "=C6+(C7*C8)", FMT_PERCENT_PRECISION, False, "CAPM formula: r_e = Rf + Beta * ERP"),
         ("Pre-Tax Cost of Debt %", debt_pre / 100.0, FMT_PERCENT_PRECISION, True, f"{spec.metadata.ticker} pre-tax cost of borrowings"),
         ("Effective Tax Rate %", tax / 100.0, FMT_PERCENT_PRECISION, True, "Forecast average tax rate"),

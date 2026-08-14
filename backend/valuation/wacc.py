@@ -7,32 +7,31 @@ Calculates cost of equity via CAPM (rfr + beta * erp), cost of debt after-tax,
 market value capital weighting, and total WACC. Every intermediate step is recorded
 in WACCBreakdown for live formula reconstruction in Excel.
 
-Computes generically: capital weights derive from the company's actual debt schedule,
-so a zero-debt company gets debt weight 0.0 and WACC = Cost of Equity, while a levered
-company (Tata Motors, Tata Steel) gets its real debt weight and after-tax debt cost.
-No hardcoded shortcuts.
+Computes generically and market-aware: cost of equity inputs (RFR, Beta, ERP) resolve per market
+and per company from live market data (or registry/default fallback chain). Capital weights derive
+from the company's actual debt schedule and market cap. No Infosys-specific share/cash hardcodes.
 """
 
 from typing import List, Optional
 
+from backend.data.providers.market_data import get_company_market_data
 from backend.forecast.debt import DebtSchedule
 from backend.forecast.share_count import ShareCountSchedule
 from backend.models.spec.assumptions import AssumptionObject
 from backend.models.spec.valuation import WACCBreakdown
 
-DEFAULT_RFR = 6.78       # India 10-Year G-Sec yield (%) — Trading Economics Aug 7 2026
-DEFAULT_BETA = 0.79      # Infosys 1Y weekly beta vs NSE Nifty IT — TradingView/TipRanks Aug 2026
-DEFAULT_ERP = 7.31       # Damodaran India Equity Risk Premium (%) — Jul 2026 update
-DEFAULT_CURRENT_PRICE = 1080.0  # INR per share — FT.com/TwelveData Aug 2026
+# Legacy fallback constants retained for backward compatibility where explicit values are omitted.
+DEFAULT_RFR = 6.78       # India 10-Year G-Sec yield (%)
+DEFAULT_BETA = 0.79      # Historical Infosys benchmark beta
+DEFAULT_ERP = 7.31       # India Equity Risk Premium (%)
+DEFAULT_CURRENT_PRICE = 1080.0  # INR per share
 
-# Current market benchmark price per company (native currency, per share), Aug 2026.
-# Fallback default is used when a company is not listed here.
 MARKET_PRICE_BY_COMPANY: dict[str, float] = {
     "infy_infy": 1080.0,
     "tcs_tcs": 2370.0,
     "tatamotors_tatamotors": 480.0,
     "tatasteel_tatasteel": 184.0,
-    "aapl_us": 305.0,
+    "aapl_us": 305.54,
     "msft_us": 497.0,
     "infy_us": 12.4,
 }
@@ -42,8 +41,8 @@ def _get_assumption_val(
     assumptions: List[AssumptionObject],
     driver_key: str,
     scenario: str = "base",
-    default: float = 0.0,
-) -> float:
+    default: Optional[float] = None,
+) -> Optional[float]:
     for a in assumptions:
         if a.driver_key == driver_key and a.scenario == scenario:
             return a.value
@@ -58,36 +57,49 @@ def compute_wacc(
     debt_schedule: Optional[DebtSchedule] = None,
     share_count_schedule: Optional[ShareCountSchedule] = None,
     scenario: str = "base",
-    current_share_price: float = DEFAULT_CURRENT_PRICE,
-    risk_free_rate: float = DEFAULT_RFR,
-    beta: float = DEFAULT_BETA,
-    equity_risk_premium: float = DEFAULT_ERP,
+    current_share_price: Optional[float] = None,
+    risk_free_rate: Optional[float] = None,
+    beta: Optional[float] = None,
+    equity_risk_premium: Optional[float] = None,
     debt_cr: float = 0.0,
+    company_id: str = "infy_infy",
+    market: Optional[str] = None,
 ) -> WACCBreakdown:
-    """Compute WACC breakdown generically for a given scenario.
+    """Compute WACC breakdown generically and market-aware for a given scenario.
 
-    Inputs are stored with full provenance notes.
+    Inputs are resolved via market_data provider (live fetch -> registry -> per-market defaults)
+    and stored with full provenance notes.
     """
-    # 1. Cost of Equity (CAPM)
-    cost_of_equity = risk_free_rate + (beta * equity_risk_premium)
+    # Fetch market data for company
+    mdata = get_company_market_data(company_id, market=market)  # type: ignore
 
-    # 2. Cost of Debt — assumption wins unless unset (0.0); fall back to the
-    #    debt schedule's actual interest rate so debt is never priced as free.
-    pre_tax_cost_of_debt = _get_assumption_val(assumptions, "wacc.cost_of_debt", scenario, 0.0)
-    if pre_tax_cost_of_debt == 0.0 and debt_schedule is not None:
+    # 1. Cost of Equity (CAPM)
+    rfr = risk_free_rate if risk_free_rate is not None else mdata.risk_free_rate.value
+    b = beta if beta is not None else mdata.beta.value
+    erp = equity_risk_premium if equity_risk_premium is not None else mdata.equity_risk_premium.value
+
+    cost_of_equity = rfr + (b * erp)
+
+    # 2. Cost of Debt
+    pre_tax_cost_of_debt = _get_assumption_val(assumptions, "wacc.cost_of_debt", scenario, None)
+    if (pre_tax_cost_of_debt is None or pre_tax_cost_of_debt == 0.0) and debt_schedule is not None:
         pre_tax_cost_of_debt = debt_schedule.interest_rate
-    tax_rate = _get_assumption_val(assumptions, "tax_rate", scenario, 25.17)
+    if pre_tax_cost_of_debt is None:
+        pre_tax_cost_of_debt = 0.0
+
+    tax_rate = _get_assumption_val(assumptions, "tax_rate", scenario, 25.17) or 25.17
     cost_of_debt_after_tax = pre_tax_cost_of_debt * (1.0 - tax_rate / 100.0)
 
     # 3. Capital Weighting
-    shares_cr = 405.76  # default fallback — Infosys official Jun 30 2026 (4,057,578,830 shares)
-    if share_count_schedule:
-        # Use latest available historical or forecast share count
-        val = share_count_schedule.get_diluted("FY26") or share_count_schedule.get_diluted("FY27")
-        if val:
-            shares_cr = val
+    price = current_share_price if (current_share_price is not None and current_share_price > 0) else mdata.price.value
 
-    market_cap_cr = shares_cr * current_share_price / 1.0  # Shares (Cr) * Price (INR) = Market Cap (Cr)
+    shares_val: Optional[float] = None
+    if share_count_schedule:
+        shares_val = share_count_schedule.get_diluted("FY26") or share_count_schedule.get_diluted("FY27")
+    if not shares_val or shares_val <= 0:
+        shares_val = mdata.shares_outstanding.value
+
+    market_cap_cr = shares_val * price  # Shares (Cr/M) * Price (native) = Market Cap (Cr/M)
 
     total_capital_cr = market_cap_cr + debt_cr
     if total_capital_cr > 0:
@@ -101,16 +113,17 @@ def compute_wacc(
     wacc = (equity_weight * cost_of_equity) + (debt_weight * cost_of_debt_after_tax)
 
     source_notes = (
-        f"CAPM: Rfr={risk_free_rate:.2f}% (India 10Y G-Sec), Beta={beta:.2f} (NSE Nifty IT), "
-        f"ERP={equity_risk_premium:.2f}% (Damodaran India ERP). "
-        f"Pre-tax Cost of Debt={pre_tax_cost_of_debt:.2f}% (debt schedule rate, after-tax {cost_of_debt_after_tax:.2f}%). "
+        f"CAPM: Rfr={rfr:.2f}% ({mdata.risk_free_rate.provenance_note}), "
+        f"Beta={b:.2f} ({mdata.beta.provenance_note}), "
+        f"ERP={erp:.2f}% ({mdata.equity_risk_premium.provenance_note}). "
+        f"Pre-tax Cost of Debt={pre_tax_cost_of_debt:.2f}% (after-tax {cost_of_debt_after_tax:.2f}%). "
         f"Capital Weights: Equity={equity_weight*100:.1f}%, Debt={debt_weight*100:.1f}%."
     )
 
     return WACCBreakdown(
-        risk_free_rate=round(risk_free_rate, 4),
-        beta=round(beta, 4),
-        equity_risk_premium=round(equity_risk_premium, 4),
+        risk_free_rate=round(rfr, 4),
+        beta=round(b, 4),
+        equity_risk_premium=round(erp, 4),
         cost_of_equity=round(cost_of_equity, 4),
         pre_tax_cost_of_debt=round(pre_tax_cost_of_debt, 4),
         tax_rate=round(tax_rate, 4),
