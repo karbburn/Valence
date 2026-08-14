@@ -81,8 +81,10 @@ def ensure_company_ingested(company_id: str, db_path: str | Path = DB_PATH) -> N
             src_file = _source_file_for(company_id)
             dps = parse_sec_edgar_export(src_file, company_id=company_id)
     else:
-        src_file = _source_file_for(company_id)
-        dps = parse_screener_export(src_file, company_id=company_id)
+        from backend.data.pipeline import run as run_india_pipeline
+        run_india_pipeline(company_id=company_id, db_path=db_path, clear_db=False)
+        run_norm(company_id=company_id)
+        return
 
     save_datapoints(db_path, dps, clear_existing=True)
     run_norm(company_id=company_id)

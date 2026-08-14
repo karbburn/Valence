@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+"""
+India Ingestion & Reconciliation Pipeline Module.
+
+Orchestrates Screener.in primary ingestion, optional secondary BSE/NSE PDF filing extraction,
+and automated metric reconciliation across all onboarded Indian companies.
+"""
+
+import json
 from pathlib import Path
 
 from backend.data.ingestion.screener import parse_screener_export
 from backend.data.parsers.pdf_tables import parse_predicted_statement_page
 from backend.data.reconciliation import reconcile
-from backend.data.store import save_datapoints
+from backend.data.store import RawDatapoint, save_datapoints
 
 HERE = Path(__file__).resolve().parent
 DB_PATH = HERE / "valence.db"
@@ -13,38 +21,64 @@ SOURCES = HERE / "sources"
 FILINGS = HERE / "filings"
 LOG_PATH = HERE / "discrepancy_log.json"
 
-SCREENER_XLSX = SOURCES / "Infosys.xlsx"
-FY26_PDF = FILINGS / "infosys-fy26-q4-outcome.pdf"
-FY25_PDF = FILINGS / "infosys-fy25-q4-outcome.pdf"
+
+def _get_secondary_filing_datapoints(company_id: str) -> list[RawDatapoint]:
+    """Dynamically scan and parse secondary PDF filings for company_id if present."""
+    filing_dps: list[RawDatapoint] = []
+
+    # Check company-specific filings directory or legacy Infosys files
+    company_filings_dir = FILINGS / company_id
+    if company_filings_dir.exists() and company_filings_dir.is_dir():
+        pdf_files = sorted(company_filings_dir.glob("*.pdf"))
+        for pdf in pdf_files:
+            try:
+                page_dps = parse_predicted_statement_page(pdf, 99, "BALANCE SHEET", "nse_filing", annual_only=False)
+                filing_dps.extend(page_dps)
+            except Exception:
+                pass
+
+    elif company_id == "infy_infy":
+        fy26_pdf = FILINGS / "infosys-fy26-q4-outcome.pdf"
+        fy25_pdf = FILINGS / "infosys-fy25-q4-outcome.pdf"
+        if fy26_pdf.exists() and fy25_pdf.exists():
+            fy26 = [
+                parse_predicted_statement_page(fy26_pdf, 99, "BALANCE SHEET", "nse_filing", annual_only=False),
+                parse_predicted_statement_page(fy26_pdf, 100, "PROFIT & LOSS", "nse_filing", annual_only=True),
+                parse_predicted_statement_page(fy26_pdf, 103, "CASH FLOW", "nse_filing", annual_only=False),
+            ]
+            fy25 = [
+                parse_predicted_statement_page(fy25_pdf, 105, "BALANCE SHEET", "nse_filing", annual_only=False),
+                parse_predicted_statement_page(fy25_pdf, 106, "PROFIT & LOSS", "nse_filing", annual_only=True),
+                parse_predicted_statement_page(fy25_pdf, 109, "CASH FLOW", "nse_filing", annual_only=False),
+            ]
+            filing_dps = [d for page in (fy26 + fy25) for d in page]
+
+    return filing_dps
 
 
-def run() -> dict:
-    # Idempotent: start from a clean store each run.
-    if DB_PATH.exists():
-        DB_PATH.unlink()
+def run(company_id: str = "infy_infy", db_path: str | Path = DB_PATH, clear_db: bool = False) -> dict:
+    """Run India ingestion and reconciliation pipeline for company_id."""
+    from backend.data.batch import _source_file_for
 
-    # Parse both sources (annual columns only from PDFs).
-    screener_dps = parse_screener_export(SCREENER_XLSX)
+    db_p = Path(db_path)
+    if clear_db and db_p.exists():
+        db_p.unlink()
 
-    fy26 = [
-        parse_predicted_statement_page(FY26_PDF, 99, "BALANCE SHEET", "nse_filing", annual_only=False),
-        parse_predicted_statement_page(FY26_PDF, 100, "PROFIT & LOSS", "nse_filing", annual_only=True),
-        parse_predicted_statement_page(FY26_PDF, 103, "CASH FLOW", "nse_filing", annual_only=False),
-    ]
-    fy25 = [
-        parse_predicted_statement_page(FY25_PDF, 105, "BALANCE SHEET", "nse_filing", annual_only=False),
-        parse_predicted_statement_page(FY25_PDF, 106, "PROFIT & LOSS", "nse_filing", annual_only=True),
-        parse_predicted_statement_page(FY25_PDF, 109, "CASH FLOW", "nse_filing", annual_only=False),
-    ]
-    filing_dps = [d for page in (fy26 + fy25) for d in page]
+    # 1. Primary path: Screener export
+    src_file = _source_file_for(company_id)
+    screener_dps = parse_screener_export(src_file, company_id=company_id)
 
-    # Persist everything (both sources retained).
-    save_datapoints(DB_PATH, screener_dps + filing_dps)
+    # 2. Secondary path: BSE/NSE filing PDFs (optional per company)
+    filing_dps = _get_secondary_filing_datapoints(company_id)
 
-    # Reconcile, emit discrepancy log, tag superseded rows.
-    discrepancies = reconcile(DB_PATH, LOG_PATH)
+    # 3. Persist raw datapoints into store
+    save_datapoints(db_p, screener_dps + filing_dps, clear_existing=False)
+
+    # 4. Reconcile primary vs secondary sources for company_id
+    discrepancies = reconcile(db_p, LOG_PATH, company_id=company_id)
 
     summary = {
+        "company_id": company_id,
         "screener_rows": len(screener_dps),
         "filing_rows": len(filing_dps),
         "discrepancies": len(discrepancies),
@@ -55,6 +89,7 @@ def run() -> dict:
 
 def json_summary(s: dict) -> str:
     return (
+        f"company_id    : {s.get('company_id', 'infy_infy')}\n"
         f"screener rows : {s['screener_rows']}\n"
         f"filing rows   : {s['filing_rows']}\n"
         f"discrepancies : {s['discrepancies']}"
