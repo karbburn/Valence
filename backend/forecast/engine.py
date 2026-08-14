@@ -167,6 +167,7 @@ def run_forecast(
         investing_cf = -capex  # capex outflow
 
         items.append(_item("canonical.cf.operating_activities", period, operating_cf, scenario, None))
+        items.append(_item("canonical.cf.capex", period, -capex, scenario, "capex_pct_revenue"))  # Negative = outflow
         items.append(_item("canonical.cf.investing_activities", period, investing_cf, scenario, "capex_pct_revenue"))
 
         # --- Balance Sheet Closure ---

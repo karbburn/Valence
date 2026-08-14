@@ -37,6 +37,30 @@ with warnings.catch_warnings():
 
 logger = logging.getLogger(__name__)
 
+
+# Load local .env file if present
+def _load_env_file() -> None:
+    for search_dir in [Path.cwd(), Path(__file__).resolve().parents[3], Path(__file__).resolve().parents[2]]:
+        env_path = search_dir / ".env"
+        if env_path.exists():
+            try:
+                with open(env_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith("#"):
+                            continue
+                        if "=" in line:
+                            k, v = line.split("=", 1)
+                            k = k.strip()
+                            v = v.strip().strip('"').strip("'")
+                            if k:
+                                os.environ[k] = v
+            except Exception:
+                pass
+            break
+
+_load_env_file()
+
 MarketType = Literal["india", "us"]
 
 # Local cache directory setup
