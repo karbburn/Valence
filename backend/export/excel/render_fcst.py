@@ -17,7 +17,13 @@ Renders:
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
-from backend.export.excel.builder import apply_tab_defaults, set_col_widths, write_table_header
+from backend.export.excel.builder import (
+    apply_tab_defaults,
+    register_formula_value,
+    set_col_widths,
+    write_formula_cell,
+    write_table_header,
+)
 from backend.export.excel.styles import (
     ALIGN_LEFT,
     ALIGN_RIGHT,
@@ -111,20 +117,32 @@ def render_revenue_build(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
 
     rev_rows = [
-        ("Assumed Revenue Growth Rate %", FMT_PERCENT, True, [get_assumption_value(spec, "revenue_growth", p) / 100.0 for p in FORECAST_PERIODS]),
-        (f"Consolidated Revenue ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C6", "='20_Operating_Model'!D6", "='20_Operating_Model'!E6", "='20_Operating_Model'!F6", "='20_Operating_Model'!G6"]),
+        ("Assumed Revenue Growth Rate %", FMT_PERCENT, True, [get_assumption_value(spec, "revenue_growth", p) / 100.0 for p in FORECAST_PERIODS], None),
+        (f"Consolidated Revenue ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C6", "='20_Operating_Model'!D6", "='20_Operating_Model'!E6", "='20_Operating_Model'!F6", "='20_Operating_Model'!G6"], [spec.forecast.get_value("canonical.is.revenue", p, "base") for p in FORECAST_PERIODS]),
     ]
 
-    for idx, (label, fmt, is_inp, vals) in enumerate(rev_rows):
+    for idx, (label, fmt, is_inp, vals, c_vals) in enumerate(rev_rows):
         r = 6 + idx
         ws.cell(row=r, column=2, value=label).font = FONT_SUBHEADER
         for p_idx, val in enumerate(vals):
             c = 3 + p_idx
-            cell = ws.cell(row=r, column=c, value=val)
-            cell.font = FONT_INPUT if is_inp else FONT_FORMULA
-            cell.number_format = fmt
-            cell.alignment = ALIGN_RIGHT
-            cell.border = BORDER_BOX
+            c_val = c_vals[p_idx] if c_vals else None
+            if str(val).startswith("="):
+                write_formula_cell(
+                    ws, r, c,
+                    formula=val,
+                    cached_value=c_val,
+                    num_format=fmt,
+                    font=FONT_INPUT if is_inp else FONT_FORMULA,
+                    border=BORDER_BOX,
+                    alignment=ALIGN_RIGHT,
+                )
+            else:
+                cell = ws.cell(row=r, column=c, value=val)
+                cell.font = FONT_INPUT if is_inp else FONT_FORMULA
+                cell.number_format = fmt
+                cell.alignment = ALIGN_RIGHT
+                cell.border = BORDER_BOX
 
     return ws
 
@@ -143,22 +161,34 @@ def render_cost_build(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
 
     cost_rows = [
-        ("EBITDA Margin %", FMT_PERCENT, True, [get_assumption_value(spec, "ebitda_margin", p) / 100.0 for p in FORECAST_PERIODS]),
-        (f"EBITDA ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C9", "='20_Operating_Model'!D9", "='20_Operating_Model'!E9", "='20_Operating_Model'!F9", "='20_Operating_Model'!G9"]),
-        ("Operating Profit Margin %", FMT_PERCENT, True, [get_assumption_value(spec, "ebit_margin", p) / 100.0 for p in FORECAST_PERIODS]),
-        (f"Operating Profit ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C11", "='20_Operating_Model'!D11", "='20_Operating_Model'!E11", "='20_Operating_Model'!F11", "='20_Operating_Model'!G11"]),
+        ("EBITDA Margin %", FMT_PERCENT, True, [get_assumption_value(spec, "ebitda_margin", p) / 100.0 for p in FORECAST_PERIODS], None),
+        (f"EBITDA ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C9", "='20_Operating_Model'!D9", "='20_Operating_Model'!E9", "='20_Operating_Model'!F9", "='20_Operating_Model'!G9"], [spec.forecast.get_value("canonical.is.ebitda", p, "base") for p in FORECAST_PERIODS]),
+        ("Operating Profit Margin %", FMT_PERCENT, True, [get_assumption_value(spec, "ebit_margin", p) / 100.0 for p in FORECAST_PERIODS], None),
+        (f"Operating Profit ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C11", "='20_Operating_Model'!D11", "='20_Operating_Model'!E11", "='20_Operating_Model'!F11", "='20_Operating_Model'!G11"], [spec.forecast.get_value("canonical.is.operating_profit", p, "base") for p in FORECAST_PERIODS]),
     ]
 
-    for idx, (label, fmt, is_inp, vals) in enumerate(cost_rows):
+    for idx, (label, fmt, is_inp, vals, c_vals) in enumerate(cost_rows):
         r = 6 + idx
         ws.cell(row=r, column=2, value=label).font = FONT_SUBHEADER
         for p_idx, val in enumerate(vals):
             c = 3 + p_idx
-            cell = ws.cell(row=r, column=c, value=val)
-            cell.font = FONT_INPUT if is_inp else FONT_FORMULA
-            cell.number_format = fmt
-            cell.alignment = ALIGN_RIGHT
-            cell.border = BORDER_BOX
+            c_val = c_vals[p_idx] if c_vals else None
+            if str(val).startswith("="):
+                write_formula_cell(
+                    ws, r, c,
+                    formula=val,
+                    cached_value=c_val,
+                    num_format=fmt,
+                    font=FONT_INPUT if is_inp else FONT_FORMULA,
+                    border=BORDER_BOX,
+                    alignment=ALIGN_RIGHT,
+                )
+            else:
+                cell = ws.cell(row=r, column=c, value=val)
+                cell.font = FONT_INPUT if is_inp else FONT_FORMULA
+                cell.number_format = fmt
+                cell.alignment = ALIGN_RIGHT
+                cell.border = BORDER_BOX
 
     return ws
 
@@ -177,22 +207,34 @@ def render_working_capital(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
 
     wc_rows = [
-        ("Days Sales Outstanding (DSO)", FMT_DAYS, True, [get_assumption_value(spec, "dso_days", p) for p in FORECAST_PERIODS]),
-        (f"Trade Receivables ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C17", "='20_Operating_Model'!D17", "='20_Operating_Model'!E17", "='20_Operating_Model'!F17", "='20_Operating_Model'!G17"]),
-        ("Days Payables Outstanding (DPO)", FMT_DAYS, True, [get_assumption_value(spec, "dpo_days", p) for p in FORECAST_PERIODS]),
-        (f"Trade Payables ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C18", "='20_Operating_Model'!D18", "='20_Operating_Model'!E18", "='20_Operating_Model'!F18", "='20_Operating_Model'!G18"]),
+        ("Days Sales Outstanding (DSO)", FMT_DAYS, True, [get_assumption_value(spec, "dso_days", p) for p in FORECAST_PERIODS], None),
+        (f"Trade Receivables ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C17", "='20_Operating_Model'!D17", "='20_Operating_Model'!E17", "='20_Operating_Model'!F17", "='20_Operating_Model'!G17"], [spec.forecast.get_value("canonical.bs.trade_receivables", p, "base") for p in FORECAST_PERIODS]),
+        ("Days Payables Outstanding (DPO)", FMT_DAYS, True, [get_assumption_value(spec, "dpo_days", p) for p in FORECAST_PERIODS], None),
+        (f"Trade Payables ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C18", "='20_Operating_Model'!D18", "='20_Operating_Model'!E18", "='20_Operating_Model'!F18", "='20_Operating_Model'!G18"], [spec.forecast.get_value("canonical.bs.trade_payables", p, "base") for p in FORECAST_PERIODS]),
     ]
 
-    for idx, (label, fmt, is_inp, vals) in enumerate(wc_rows):
+    for idx, (label, fmt, is_inp, vals, c_vals) in enumerate(wc_rows):
         r = 6 + idx
         ws.cell(row=r, column=2, value=label).font = FONT_SUBHEADER
         for p_idx, val in enumerate(vals):
             c = 3 + p_idx
-            cell = ws.cell(row=r, column=c, value=val)
-            cell.font = FONT_INPUT if is_inp else FONT_FORMULA
-            cell.number_format = fmt
-            cell.alignment = ALIGN_RIGHT
-            cell.border = BORDER_BOX
+            c_val = c_vals[p_idx] if c_vals else None
+            if str(val).startswith("="):
+                write_formula_cell(
+                    ws, r, c,
+                    formula=val,
+                    cached_value=c_val,
+                    num_format=fmt,
+                    font=FONT_INPUT if is_inp else FONT_FORMULA,
+                    border=BORDER_BOX,
+                    alignment=ALIGN_RIGHT,
+                )
+            else:
+                cell = ws.cell(row=r, column=c, value=val)
+                cell.font = FONT_INPUT if is_inp else FONT_FORMULA
+                cell.number_format = fmt
+                cell.alignment = ALIGN_RIGHT
+                cell.border = BORDER_BOX
 
     return ws
 
@@ -211,22 +253,34 @@ def render_capex_da(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
 
     rows = [
-        ("Capex % Revenue", FMT_PERCENT, True, [get_assumption_value(spec, "capex_pct_revenue", p) / 100.0 for p in FORECAST_PERIODS]),
-        (f"Capex Outflow ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C24", "='20_Operating_Model'!D24", "='20_Operating_Model'!E24", "='20_Operating_Model'!F24", "='20_Operating_Model'!G24"]),
-        ("D&A % Revenue", FMT_PERCENT, True, [get_assumption_value(spec, "da_pct_revenue", p) / 100.0 for p in FORECAST_PERIODS]),
-        (f"D&A Expense ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C10", "='20_Operating_Model'!D10", "='20_Operating_Model'!E10", "='20_Operating_Model'!F10", "='20_Operating_Model'!G10"]),
+        ("Capex % Revenue", FMT_PERCENT, True, [get_assumption_value(spec, "capex_pct_revenue", p) / 100.0 for p in FORECAST_PERIODS], None),
+        (f"Capex Outflow ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C24", "='20_Operating_Model'!D24", "='20_Operating_Model'!E24", "='20_Operating_Model'!F24", "='20_Operating_Model'!G24"], [spec.forecast.get_value("canonical.cf.investing_activities", p, "base") for p in FORECAST_PERIODS]),
+        ("D&A % Revenue", FMT_PERCENT, True, [get_assumption_value(spec, "da_pct_revenue", p) / 100.0 for p in FORECAST_PERIODS], None),
+        (f"D&A Expense ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C10", "='20_Operating_Model'!D10", "='20_Operating_Model'!E10", "='20_Operating_Model'!F10", "='20_Operating_Model'!G10"], [spec.forecast.get_value("canonical.is.depreciation_amortization", p, "base") for p in FORECAST_PERIODS]),
     ]
 
-    for idx, (label, fmt, is_inp, vals) in enumerate(rows):
+    for idx, (label, fmt, is_inp, vals, c_vals) in enumerate(rows):
         r = 6 + idx
         ws.cell(row=r, column=2, value=label).font = FONT_SUBHEADER
         for p_idx, val in enumerate(vals):
             c = 3 + p_idx
-            cell = ws.cell(row=r, column=c, value=val)
-            cell.font = FONT_INPUT if is_inp else FONT_FORMULA
-            cell.number_format = fmt
-            cell.alignment = ALIGN_RIGHT
-            cell.border = BORDER_BOX
+            c_val = c_vals[p_idx] if c_vals else None
+            if str(val).startswith("="):
+                write_formula_cell(
+                    ws, r, c,
+                    formula=val,
+                    cached_value=c_val,
+                    num_format=fmt,
+                    font=FONT_INPUT if is_inp else FONT_FORMULA,
+                    border=BORDER_BOX,
+                    alignment=ALIGN_RIGHT,
+                )
+            else:
+                cell = ws.cell(row=r, column=c, value=val)
+                cell.font = FONT_INPUT if is_inp else FONT_FORMULA
+                cell.number_format = fmt
+                cell.alignment = ALIGN_RIGHT
+                cell.border = BORDER_BOX
 
     return ws
 
@@ -292,21 +346,33 @@ def render_tax_schedule(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
 
     tax_rows = [
-        ("Effective Tax Rate %", FMT_PERCENT, True, [get_assumption_value(spec, "tax_rate", p) / 100.0 for p in FORECAST_PERIODS]),
-        (f"PBT ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C14", "='20_Operating_Model'!D14", "='20_Operating_Model'!E14", "='20_Operating_Model'!F14", "='20_Operating_Model'!G14"]),
-        (f"Tax Expense ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C15", "='20_Operating_Model'!D15", "='20_Operating_Model'!E15", "='20_Operating_Model'!F15", "='20_Operating_Model'!G15"]),
+        ("Effective Tax Rate %", FMT_PERCENT, True, [get_assumption_value(spec, "tax_rate", p) / 100.0 for p in FORECAST_PERIODS], None),
+        (f"PBT ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C14", "='20_Operating_Model'!D14", "='20_Operating_Model'!E14", "='20_Operating_Model'!F14", "='20_Operating_Model'!G14"], [spec.forecast.get_value("canonical.is.pbt", p, "base") for p in FORECAST_PERIODS]),
+        (f"Tax Expense ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C15", "='20_Operating_Model'!D15", "='20_Operating_Model'!E15", "='20_Operating_Model'!F15", "='20_Operating_Model'!G15"], [spec.forecast.get_value("canonical.is.tax", p, "base") for p in FORECAST_PERIODS]),
     ]
 
-    for idx, (label, fmt, is_inp, vals) in enumerate(tax_rows):
+    for idx, (label, fmt, is_inp, vals, c_vals) in enumerate(tax_rows):
         r = 6 + idx
         ws.cell(row=r, column=2, value=label).font = FONT_SUBHEADER
         for p_idx, val in enumerate(vals):
             c = 3 + p_idx
-            cell = ws.cell(row=r, column=c, value=val)
-            cell.font = FONT_INPUT if is_inp else FONT_FORMULA
-            cell.number_format = fmt
-            cell.alignment = ALIGN_RIGHT
-            cell.border = BORDER_BOX
+            c_val = c_vals[p_idx] if c_vals else None
+            if str(val).startswith("="):
+                write_formula_cell(
+                    ws, r, c,
+                    formula=val,
+                    cached_value=c_val,
+                    num_format=fmt,
+                    font=FONT_INPUT if is_inp else FONT_FORMULA,
+                    border=BORDER_BOX,
+                    alignment=ALIGN_RIGHT,
+                )
+            else:
+                cell = ws.cell(row=r, column=c, value=val)
+                cell.font = FONT_INPUT if is_inp else FONT_FORMULA
+                cell.number_format = fmt
+                cell.alignment = ALIGN_RIGHT
+                cell.border = BORDER_BOX
 
     return ws
 
