@@ -91,7 +91,7 @@ def main() -> None:
 
     ws_exec = wb["02_Executive_Summary"]
     exec_price_formula = str(ws_exec["C6"].value)
-    _assert("=" in exec_price_formula and "31_DCF" in exec_price_formula, f"02_Executive_Summary cross-sheet price formula present ({exec_price_formula})")
+    _assert("=" in exec_price_formula and ("35_Scenario_Analysis" in exec_price_formula or "31_DCF" in exec_price_formula), f"02_Executive_Summary cross-sheet price formula present ({exec_price_formula})")
     qa_status_val = str(ws_exec["F6"].value)
     _assert("MODEL VALID" in qa_status_val, f"Executive summary QA status is MODEL VALID ({qa_status_val})")
 

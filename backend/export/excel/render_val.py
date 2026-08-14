@@ -15,7 +15,13 @@ Renders:
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
-from backend.export.excel.builder import apply_tab_defaults, set_col_widths, write_table_header
+from backend.export.excel.builder import (
+    apply_tab_defaults,
+    register_formula_value,
+    set_col_widths,
+    write_formula_cell,
+    write_table_header,
+)
 from backend.export.excel.styles import (
     ALIGN_CENTER,
     ALIGN_LEFT,
@@ -100,34 +106,50 @@ def render_wacc_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
             except Exception:
                 pass
 
+    ke_val = (wacc_b.cost_of_equity / 100.0) if (wacc_b and wacc_b.cost_of_equity) else ((rfr + beta * erp) / 100.0)
+    kd_val = (debt_pre / 100.0 * (1.0 - tax / 100.0))
+    wacc_val = (wacc_b.wacc / 100.0) if (wacc_b and wacc_b.wacc) else 0.12
+
     wacc_rows = [
-        ("Risk-Free Rate (Rf) %", rfr / 100.0, FMT_PERCENT_PRECISION, True, rfr_note),
-        ("Equity Beta (β)", beta, "0.00", True, beta_note),
-        ("Equity Risk Premium (ERP) %", erp / 100.0, FMT_PERCENT_PRECISION, True, erp_note),
-        ("Cost of Equity (r_e) %", "=C6+(C7*C8)", FMT_PERCENT_PRECISION, False, "CAPM formula: r_e = Rf + Beta * ERP"),
-        ("Pre-Tax Cost of Debt %", debt_pre / 100.0, FMT_PERCENT_PRECISION, True, f"{spec.metadata.ticker} pre-tax cost of borrowings"),
-        ("Effective Tax Rate %", tax / 100.0, FMT_PERCENT_PRECISION, True, "Forecast average tax rate"),
-        ("After-Tax Cost of Debt (r_d) %", "=C10*(1-C11)", FMT_PERCENT_PRECISION, False, "Pre-tax * (1 - tax_rate)"),
-        ("Equity Market Weight %", eq_weight, FMT_PERCENT, False, "Market Cap / Total Capital"),
-        ("Debt Market Weight %", debt_weight, FMT_PERCENT, False, "Total Debt / Total Capital"),
-        ("WEIGHTED AVERAGE COST OF CAPITAL (WACC) %", "=(C13*C9)+(C14*C12)", FMT_PERCENT_PRECISION, False, "Total WACC = Equity Weight * r_e + Debt Weight * r_d"),
+        ("Risk-Free Rate (Rf) %", rfr / 100.0, None, FMT_PERCENT_PRECISION, True, rfr_note),
+        ("Equity Beta (β)", beta, None, "0.00", True, beta_note),
+        ("Equity Risk Premium (ERP) %", erp / 100.0, None, FMT_PERCENT_PRECISION, True, erp_note),
+        ("Cost of Equity (r_e) %", "=C6+(C7*C8)", ke_val, FMT_PERCENT_PRECISION, False, "CAPM formula: r_e = Rf + Beta * ERP"),
+        ("Pre-Tax Cost of Debt %", debt_pre / 100.0, None, FMT_PERCENT_PRECISION, True, f"{spec.metadata.ticker} pre-tax cost of borrowings"),
+        ("Effective Tax Rate %", tax / 100.0, None, FMT_PERCENT_PRECISION, True, "Forecast average tax rate"),
+        ("After-Tax Cost of Debt (r_d) %", "=C10*(1-C11)", kd_val, FMT_PERCENT_PRECISION, False, "Pre-tax * (1 - tax_rate)"),
+        ("Equity Market Weight %", eq_weight, None, FMT_PERCENT, False, "Market Cap / Total Capital"),
+        ("Debt Market Weight %", debt_weight, None, FMT_PERCENT, False, "Total Debt / Total Capital"),
+        ("WEIGHTED AVERAGE COST OF CAPITAL (WACC) %", "=(C13*C9)+(C14*C12)", wacc_val, FMT_PERCENT_PRECISION, False, "Total WACC = Equity Weight * r_e + Debt Weight * r_d"),
     ]
 
-    for idx, (label, val, fmt, is_inp, note) in enumerate(wacc_rows):
+    for idx, (label, val, c_val, fmt, is_inp, note) in enumerate(wacc_rows):
         r = 6 + idx
         is_tot = idx == len(wacc_rows) - 1
         ws.cell(row=r, column=2, value=label).font = FONT_TOTAL if is_tot else FONT_SUBHEADER
-        cell_v = ws.cell(row=r, column=3, value=val)
-        cell_v.font = FONT_INPUT if is_inp else (FONT_TOTAL if is_tot else FONT_FORMULA)
-        cell_v.number_format = fmt
-        cell_v.alignment = ALIGN_RIGHT
+        
+        if str(val).startswith("="):
+            write_formula_cell(
+                ws, r, 3,
+                formula=val,
+                cached_value=c_val,
+                num_format=fmt,
+                font=FONT_TOTAL if is_tot else FONT_FORMULA,
+                border=BORDER_TOTAL if is_tot else BORDER_BOX,
+                alignment=ALIGN_RIGHT,
+            )
+        else:
+            cell_v = ws.cell(row=r, column=3, value=val)
+            cell_v.font = FONT_INPUT if is_inp else (FONT_TOTAL if is_tot else FONT_FORMULA)
+            cell_v.number_format = fmt
+            cell_v.alignment = ALIGN_RIGHT
+            cell_v.border = BORDER_TOTAL if is_tot else BORDER_BOX
 
         cell_n = ws.cell(row=r, column=4, value=note)
         cell_n.font = FONT_SUBTITLE
         cell_n.alignment = ALIGN_LEFT
-
-        for c in range(2, 5):
-            ws.cell(row=r, column=c).border = BORDER_TOTAL if is_tot else BORDER_BOX
+        ws.cell(row=r, column=2).border = BORDER_TOTAL if is_tot else BORDER_BOX
+        ws.cell(row=r, column=4).border = BORDER_TOTAL if is_tot else BORDER_BOX
 
     return ws
 
@@ -148,104 +170,154 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     base_val = spec.get_valuation("base")
     fcffs = base_val.fcff_by_period if base_val else []
 
-    ebit_vals = [f"='20_Operating_Model'!{col}11" for col in ["C", "D", "E", "F", "G"]]
-    tax_vals = ["='26_Tax_Schedule'!C6", "='26_Tax_Schedule'!D6", "='26_Tax_Schedule'!E6", "='26_Tax_Schedule'!F6", "='26_Tax_Schedule'!G6"]
-    nopat_vals = [f"=C{r}*(1-C{r+1})" for r in [6]]  # Formula reference
-
     # Row 6: Operating Profit (EBIT)
     ws.cell(row=6, column=2, value="Operating Profit (EBIT)").font = FONT_SUBHEADER
-    for idx, e_f in enumerate(ebit_vals):
+    for idx, col in enumerate(["C", "D", "E", "F", "G"]):
         c = 3 + idx
-        cell = ws.cell(row=6, column=c, value=e_f)
-        cell.font = FONT_FORMULA
-        cell.number_format = FMT_AMOUNT
-        cell.alignment = ALIGN_RIGHT
-        cell.border = BORDER_BOX
+        p = fcffs[idx] if idx < len(fcffs) else None
+        c_val = p.ebit if p else None
+        write_formula_cell(
+            ws, 6, c,
+            formula=f"='20_Operating_Model'!{col}11",
+            cached_value=c_val,
+            num_format=FMT_AMOUNT,
+            font=FONT_FORMULA,
+            border=BORDER_BOX,
+            alignment=ALIGN_RIGHT,
+        )
 
     # Row 7: Less: Tax Expense
     ws.cell(row=7, column=2, value="Effective Tax Rate %").font = FONT_SUBHEADER
-    for idx, t_f in enumerate(tax_vals):
+    for idx, col in enumerate(["C", "D", "E", "F", "G"]):
         c = 3 + idx
-        cell = ws.cell(row=7, column=c, value=t_f)
-        cell.font = FONT_FORMULA
-        cell.number_format = FMT_PERCENT
-        cell.alignment = ALIGN_RIGHT
-        cell.border = BORDER_BOX
+        p = fcffs[idx] if idx < len(fcffs) else None
+        c_val = (p.tax_rate / 100.0) if p and p.tax_rate else None
+        write_formula_cell(
+            ws, 7, c,
+            formula=f"='26_Tax_Schedule'!{col}6",
+            cached_value=c_val,
+            num_format=FMT_PERCENT,
+            font=FONT_FORMULA,
+            border=BORDER_BOX,
+            alignment=ALIGN_RIGHT,
+        )
 
     # Row 8: NOPAT
     ws.cell(row=8, column=2, value="NOPAT (EBIT x (1 - Tax))").font = FONT_TOTAL
-    for idx, p in enumerate(FORECAST_PERIODS):
+    for idx, p_label in enumerate(FORECAST_PERIODS):
         c = 3 + idx
         col_let = chr(67 + idx)
-        cell = ws.cell(row=8, column=c, value=f"={col_let}6*(1-{col_let}7)")
-        cell.font = FONT_TOTAL
-        cell.number_format = FMT_AMOUNT
-        cell.alignment = ALIGN_RIGHT
-        cell.border = BORDER_TOTAL
+        p = fcffs[idx] if idx < len(fcffs) else None
+        c_val = p.nopat if p else None
+        write_formula_cell(
+            ws, 8, c,
+            formula=f"={col_let}6*(1-{col_let}7)",
+            cached_value=c_val,
+            num_format=FMT_AMOUNT,
+            font=FONT_TOTAL,
+            border=BORDER_TOTAL,
+            alignment=ALIGN_RIGHT,
+        )
 
     # Row 9: Plus: D&A
     ws.cell(row=9, column=2, value="Plus: D&A Expense").font = FONT_SUBHEADER
     for idx, col in enumerate(["C", "D", "E", "F", "G"]):
         c = 3 + idx
-        cell = ws.cell(row=9, column=c, value=f"='20_Operating_Model'!{col}10")
-        cell.font = FONT_FORMULA
-        cell.number_format = FMT_AMOUNT
-        cell.alignment = ALIGN_RIGHT
-        cell.border = BORDER_BOX
+        p = fcffs[idx] if idx < len(fcffs) else None
+        c_val = p.da if p else None
+        write_formula_cell(
+            ws, 9, c,
+            formula=f"='20_Operating_Model'!{col}10",
+            cached_value=c_val,
+            num_format=FMT_AMOUNT,
+            font=FONT_FORMULA,
+            border=BORDER_BOX,
+            alignment=ALIGN_RIGHT,
+        )
 
     # Row 10: Less: Capex
     ws.cell(row=10, column=2, value="Less: Capex Outflow").font = FONT_SUBHEADER
     for idx, col in enumerate(["C", "D", "E", "F", "G"]):
         c = 3 + idx
-        cell = ws.cell(row=10, column=c, value=f"=ABS('20_Operating_Model'!{col}24)")
-        cell.font = FONT_FORMULA
-        cell.number_format = FMT_AMOUNT
-        cell.alignment = ALIGN_RIGHT
-        cell.border = BORDER_BOX
+        p = fcffs[idx] if idx < len(fcffs) else None
+        c_val = abs(p.capex) if p and p.capex else None
+        write_formula_cell(
+            ws, 10, c,
+            formula=f"=ABS('20_Operating_Model'!{col}24)",
+            cached_value=c_val,
+            num_format=FMT_AMOUNT,
+            font=FONT_FORMULA,
+            border=BORDER_BOX,
+            alignment=ALIGN_RIGHT,
+        )
 
     # Row 11: Less: Change in Working Capital
     ws.cell(row=11, column=2, value="Less: Change in Working Capital").font = FONT_SUBHEADER
-    for idx, p in enumerate(FORECAST_PERIODS):
+    for idx, p_label in enumerate(FORECAST_PERIODS):
         c = 3 + idx
         col_let = chr(67 + idx)
-        cell = ws.cell(row=11, column=c, value=f"='20_Operating_Model'!{col_let}16+'20_Operating_Model'!{col_let}10-'20_Operating_Model'!{col_let}23")
-        cell.font = FONT_FORMULA
-        cell.number_format = FMT_AMOUNT
-        cell.alignment = ALIGN_RIGHT
-        cell.border = BORDER_BOX
+        p = fcffs[idx] if idx < len(fcffs) else None
+        c_val = p.delta_working_capital if p else None
+        write_formula_cell(
+            ws, 11, c,
+            formula=f"='20_Operating_Model'!{col_let}16+'20_Operating_Model'!{col_let}10-'20_Operating_Model'!{col_let}23",
+            cached_value=c_val,
+            num_format=FMT_AMOUNT,
+            font=FONT_FORMULA,
+            border=BORDER_BOX,
+            alignment=ALIGN_RIGHT,
+        )
 
     # Row 12: Free Cash Flow to Firm (FCFF)
     ws.cell(row=12, column=2, value="FREE CASH FLOW TO FIRM (FCFF)").font = FONT_TOTAL
-    for idx, p in enumerate(FORECAST_PERIODS):
+    for idx, p_label in enumerate(FORECAST_PERIODS):
         c = 3 + idx
         col_let = chr(67 + idx)
-        cell = ws.cell(row=12, column=c, value=f"={col_let}8+{col_let}9-{col_let}10-{col_let}11")
-        cell.font = FONT_TOTAL
-        cell.number_format = FMT_AMOUNT
-        cell.alignment = ALIGN_RIGHT
-        cell.border = BORDER_TOTAL
+        p = fcffs[idx] if idx < len(fcffs) else None
+        c_val = p.fcff if p else None
+        write_formula_cell(
+            ws, 12, c,
+            formula=f"={col_let}8+{col_let}9-{col_let}10-{col_let}11",
+            cached_value=c_val,
+            num_format=FMT_AMOUNT,
+            font=FONT_TOTAL,
+            border=BORDER_TOTAL,
+            alignment=ALIGN_RIGHT,
+        )
 
     # Row 13: Discount Factor
     ws.cell(row=13, column=2, value="Discount Factor (1 / (1+WACC)^t)").font = FONT_SUBHEADER
-    for idx, p in enumerate(FORECAST_PERIODS):
+    for idx, p_label in enumerate(FORECAST_PERIODS):
         c = 3 + idx
         t = idx + 1
-        cell = ws.cell(row=13, column=c, value=f"=1/((1+'30_WACC'!C15)^{t})")
-        cell.font = FONT_FORMULA
-        cell.number_format = "0.000000"
-        cell.alignment = ALIGN_RIGHT
-        cell.border = BORDER_BOX
+        p = fcffs[idx] if idx < len(fcffs) else None
+        c_val = p.discount_factor if p else None
+        write_formula_cell(
+            ws, 13, c,
+            formula=f"=1/((1+'30_WACC'!C15)^{t})",
+            cached_value=c_val,
+            num_format="0.000000",
+            font=FONT_FORMULA,
+            border=BORDER_BOX,
+            alignment=ALIGN_RIGHT,
+        )
 
     # Row 14: Present Value of FCFF
     ws.cell(row=14, column=2, value="PRESENT VALUE OF FCFF").font = FONT_TOTAL
-    for idx, p in enumerate(FORECAST_PERIODS):
+    for idx, p_label in enumerate(FORECAST_PERIODS):
         c = 3 + idx
         col_let = chr(67 + idx)
-        cell = ws.cell(row=14, column=c, value=f"={col_let}12*{col_let}13")
-        cell.font = FONT_TOTAL
-        cell.number_format = FMT_AMOUNT
-        cell.alignment = ALIGN_RIGHT
-        cell.border = BORDER_TOTAL
+        p = fcffs[idx] if idx < len(fcffs) else None
+        c_val = p.pv_fcff if p else None
+        write_formula_cell(
+            ws, 14, c,
+            formula=f"={col_let}12*{col_let}13",
+            cached_value=c_val,
+            num_format=FMT_AMOUNT,
+            font=FONT_TOTAL,
+            border=BORDER_TOTAL,
+            alignment=ALIGN_RIGHT,
+        )
 
     # DCF Bridge Block (rows 17-23, Column B = labels, Column H = values)
     ws["B16"] = "DCF BRIDGE — EV TO EQUITY VALUE"
@@ -254,24 +326,36 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ccy = spec.metadata.currency
     net_debt = (base_val.dcf_bridge.less_net_debt if base_val and base_val.dcf_bridge.less_net_debt is not None else 0.0)
     bridge_rows = [
-        ("Cumulative PV of FCFF", "=SUM(C14:G14)", FMT_CURRENCY_INT),
-        ("PV of Terminal Value", "='32_Terminal_Value'!C13", FMT_CURRENCY_INT),
-        ("ENTERPRISE VALUE (EV)", "=H17+H18", FMT_CURRENCY_INT),
-        ("Less: Net Debt / (Cash)", net_debt, FMT_CURRENCY_INT),
-        ("EQUITY VALUE", "=H19-H20", FMT_CURRENCY_INT),
-        (f"Diluted Shares ({spec.metadata.units.capitalize()[:2]})", "='27_Share_Count'!E6", FMT_AMOUNT),
-        (f"IMPLIED SHARE PRICE ({ccy})", "=H21/H22", FMT_PRICE),
+        ("Cumulative PV of FCFF", "=SUM(C14:G14)", base_val.dcf_bridge.sum_pv_fcff if base_val else 0, FMT_CURRENCY_INT),
+        ("PV of Terminal Value", "='32_Terminal_Value'!C13", base_val.dcf_bridge.pv_terminal_value if base_val else 0, FMT_CURRENCY_INT),
+        ("ENTERPRISE VALUE (EV)", "=H17+H18", base_val.dcf_bridge.enterprise_value if base_val else 0, FMT_CURRENCY_INT),
+        ("Less: Net Debt / (Cash)", net_debt, net_debt, FMT_CURRENCY_INT),
+        ("EQUITY VALUE", "=H19-H20", base_val.dcf_bridge.equity_value if base_val else 0, FMT_CURRENCY_INT),
+        (f"Diluted Shares ({spec.metadata.units.capitalize()[:2]})", "='27_Share_Count'!E6", base_val.dcf_bridge.shares_outstanding if base_val else 0, FMT_AMOUNT),
+        (f"IMPLIED SHARE PRICE ({ccy})", "=H21/H22", base_val.dcf_bridge.implied_share_price if base_val else 0, FMT_PRICE),
     ]
 
-    for idx, (lbl, formula, fmt) in enumerate(bridge_rows):
+    for idx, (lbl, formula, c_val, fmt) in enumerate(bridge_rows):
         r = 17 + idx
         is_price = idx == len(bridge_rows) - 1
         ws.cell(row=r, column=2, value=lbl).font = FONT_TOTAL if is_price else FONT_SUBHEADER
-        ws.cell(row=r, column=8, value=formula).number_format = fmt
-        cell = ws.cell(row=r, column=8)
-        cell.font = FONT_TITLE if is_price else FONT_TOTAL
-        cell.alignment = ALIGN_RIGHT
-        cell.border = BORDER_TOTAL
+        
+        if str(formula).startswith("="):
+            write_formula_cell(
+                ws, r, 8,
+                formula=formula,
+                cached_value=c_val,
+                num_format=fmt,
+                font=FONT_TITLE if is_price else FONT_TOTAL,
+                border=BORDER_TOTAL if is_price else BORDER_BOX,
+                alignment=ALIGN_RIGHT,
+            )
+        else:
+            cell = ws.cell(row=r, column=8, value=formula)
+            cell.font = FONT_TITLE if is_price else FONT_TOTAL
+            cell.number_format = fmt
+            cell.alignment = ALIGN_RIGHT
+            cell.border = BORDER_TOTAL if is_price else BORDER_BOX
 
     return ws
 
@@ -287,34 +371,46 @@ def render_terminal_value_tab(wb: Workbook, spec: ModelSpecification) -> Workshe
     ws["B3"].font = FONT_SECTION
 
     write_table_header(ws, 5, ["Terminal Value Parameter", "Value", "Methodology / Rule Notes"], start_col=2)
-
     ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
+    base_val = spec.get_valuation("base")
     tv_rows = [
-        ("Terminal Growth Rate %", 0.04, FMT_PERCENT, True, "Perpetuity growth rate (must be < WACC)"),
-        (f"FY31 Final Year FCFF ({ccy})", "='31_DCF'!G12", FMT_AMOUNT, False, "Final forecast year FCFF"),
-        ("Gordon Growth Undiscounted TV", "=(C7*(1+C6)/('30_WACC'!C15-C6))", FMT_CURRENCY_INT, False, "TV = FCFF_n * (1+g) / (WACC - g)"),
-        ("Exit Multiple (EV/EBITDA)", 20.0, FMT_MULTIPLE, True, "Exit EV/EBITDA multiple"),
-        (f"FY31 Final Year EBITDA ({ccy})", "='20_Operating_Model'!G9", FMT_AMOUNT, False, "Final forecast year EBITDA"),
-        ("Exit Multiple Undiscounted TV", "=C9*C10", FMT_CURRENCY_INT, False, "TV = EBITDA_n * Exit Multiple"),
-        ("Discount Factor (t=5)", "='31_DCF'!G13", "0.000000", False, "Discount factor for FY31"),
-        ("DISCOUNTED TERMINAL VALUE (PV)", "=C8*C12", FMT_CURRENCY_INT, False, "Gordon Growth PV of Terminal Value"),
+        ("Terminal Growth Rate %", 0.04, None, FMT_PERCENT, True, "Perpetuity growth rate (must be < WACC)"),
+        (f"FY31 Final Year FCFF ({ccy})", "='31_DCF'!G12", base_val.terminal_value.final_year_fcff if base_val else 0, FMT_AMOUNT, False, "Final forecast year FCFF"),
+        ("Gordon Growth Undiscounted TV", "=(C7*(1+C6)/('30_WACC'!C15-C6))", base_val.terminal_value.terminal_value_undiscounted if base_val else 0, FMT_CURRENCY_INT, False, "TV = FCFF_n * (1+g) / (WACC - g)"),
+        ("Exit Multiple (EV/EBITDA)", 20.0, None, FMT_MULTIPLE, True, "Exit EV/EBITDA multiple"),
+        (f"FY31 Final Year EBITDA ({ccy})", "='20_Operating_Model'!G9", base_val.terminal_value.final_year_ebitda if base_val else 0, FMT_AMOUNT, False, "Final forecast year EBITDA"),
+        ("Exit Multiple Undiscounted TV", "=C9*C10", base_val.terminal_value.exit_multiple_tv_undiscounted if base_val else 0, FMT_CURRENCY_INT, False, "TV = EBITDA_n * Exit Multiple"),
+        ("Discount Factor (t=5)", "='31_DCF'!G13", base_val.terminal_value.discount_factor if base_val else 0, "0.000000", False, "Discount factor for FY31"),
+        ("DISCOUNTED TERMINAL VALUE (PV)", "=C8*C12", base_val.dcf_bridge.pv_terminal_value if base_val else 0, FMT_CURRENCY_INT, False, "Gordon Growth PV of Terminal Value"),
     ]
 
-    for idx, (lbl, val, fmt, is_inp, note) in enumerate(tv_rows):
+    for idx, (lbl, val, c_val, fmt, is_inp, note) in enumerate(tv_rows):
         r = 6 + idx
         is_tot = idx == len(tv_rows) - 1
         ws.cell(row=r, column=2, value=lbl).font = FONT_TOTAL if is_tot else FONT_SUBHEADER
-        cell_v = ws.cell(row=r, column=3, value=val)
-        cell_v.font = FONT_INPUT if is_inp else (FONT_TOTAL if is_tot else FONT_FORMULA)
-        cell_v.number_format = fmt
-        cell_v.alignment = ALIGN_RIGHT
+        
+        if str(val).startswith("="):
+            write_formula_cell(
+                ws, r, 3,
+                formula=val,
+                cached_value=c_val,
+                num_format=fmt,
+                font=FONT_TOTAL if is_tot else FONT_FORMULA,
+                border=BORDER_TOTAL if is_tot else BORDER_BOX,
+                alignment=ALIGN_RIGHT,
+            )
+        else:
+            cell_v = ws.cell(row=r, column=3, value=val)
+            cell_v.font = FONT_INPUT if is_inp else (FONT_TOTAL if is_tot else FONT_FORMULA)
+            cell_v.number_format = fmt
+            cell_v.alignment = ALIGN_RIGHT
+            cell_v.border = BORDER_TOTAL if is_tot else BORDER_BOX
 
         cell_n = ws.cell(row=r, column=4, value=note)
         cell_n.font = FONT_SUBTITLE
         cell_n.alignment = ALIGN_LEFT
-
-        for c in range(2, 5):
-            ws.cell(row=r, column=c).border = BORDER_TOTAL if is_tot else BORDER_BOX
+        ws.cell(row=r, column=2).border = BORDER_TOTAL if is_tot else BORDER_BOX
+        ws.cell(row=r, column=4).border = BORDER_TOTAL if is_tot else BORDER_BOX
 
     return ws
 
@@ -365,14 +461,14 @@ def render_sensitivity_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
             cell.alignment = ALIGN_RIGHT
             cell.border = BORDER_BOX
 
-    # Table 2: WACC vs Exit Multiple (rows 13-19)
-    ws["B13"] = "WACC % \\ Exit Multiple"
+    # Table 2: WACC % \\ Multiple
+    ws["B13"] = "WACC % \\ Multiple"
     ws["B13"].font = FONT_HEADER
     ws["B13"].fill = FILL_HEADER
 
     t2 = sens_tables[1] if len(sens_tables) > 1 else None
-    m_cols = [m for m in t2.col_values] if t2 else [16.0, 18.0, 20.0, 22.0, 24.0]
-    wacc_rows2 = [w / 100.0 for w in t2.row_values] if t2 else wacc_rows
+    m_cols = t2.col_values if t2 else [15.0, 17.5, 20.0, 22.5, 25.0]
+    wacc_rows2 = [w / 100.0 for w in t2.row_values] if t2 else [0.11, 0.12, 0.1295, 0.14, 0.15]
     grid2 = t2.results_grid if t2 else []
 
     for r_idx, w in enumerate(wacc_rows2):
@@ -418,32 +514,50 @@ def render_reverse_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
 
     mkt_price = rev_dcf.market_price if (rev_dcf and rev_dcf.market_price) else 0.0
     implied_g = (rev_dcf.implied_terminal_growth / 100.0) if (rev_dcf and rev_dcf.implied_terminal_growth) else 0.0
+    shares = base_val.dcf_bridge.shares_outstanding if base_val else 1.0
 
     ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
     net_debt = (base_val.dcf_bridge.less_net_debt if base_val and base_val.dcf_bridge.less_net_debt is not None else 0.0)
+
+    eq_val_mkt = mkt_price * shares
+    ev_mkt = eq_val_mkt + net_debt
+    pv_tv_mkt = ev_mkt - (base_val.dcf_bridge.sum_pv_fcff if base_val else 0)
+
     rows = [
-        (f"Current Market Benchmark Price ({spec.metadata.currency})", mkt_price, FMT_PRICE, True, "Market price input"),
-        (f"Market Implied Equity Value ({ccy})", "=C6*'27_Share_Count'!E6", FMT_CURRENCY_INT, False, "Market Price * Diluted Shares"),
-        (f"Market Implied EV ({ccy})", f"=C7{net_debt:+.2f}", FMT_CURRENCY_INT, False, "Implied Equity Value + Net Debt"),
-        (f"Market Implied PV of TV ({ccy})", "=C8-'31_DCF'!H17", FMT_CURRENCY_INT, False, "Implied EV - Cumulative PV(FCFF)"),
-        ("MARKET IMPLIED TERMINAL GROWTH %", implied_g, FMT_PERCENT_PRECISION, False, rev_dcf.method_note if rev_dcf and rev_dcf.method_note else "Exact solved implied perpetuity growth rate"),
+        (f"Current Market Benchmark Price ({spec.metadata.currency})", mkt_price, None, FMT_PRICE, True, "Market price input"),
+        (f"Market Implied Equity Value ({ccy})", "=C6*'27_Share_Count'!E6", eq_val_mkt, FMT_CURRENCY_INT, False, "Market Price * Diluted Shares"),
+        (f"Market Implied EV ({ccy})", f"=C7{net_debt:+.2f}", ev_mkt, FMT_CURRENCY_INT, False, "Implied Equity Value + Net Debt"),
+        (f"Market Implied PV of TV ({ccy})", "=C8-'31_DCF'!H17", pv_tv_mkt, FMT_CURRENCY_INT, False, "Implied EV - Cumulative PV(FCFF)"),
+        ("MARKET IMPLIED TERMINAL GROWTH %", implied_g, None, FMT_PERCENT_PRECISION, False, rev_dcf.method_note if rev_dcf and rev_dcf.method_note else "Exact solved implied perpetuity growth rate"),
     ]
 
-    for idx, (lbl, val, fmt, is_inp, note) in enumerate(rows):
+    for idx, (lbl, val, c_val, fmt, is_inp, note) in enumerate(rows):
         r = 6 + idx
         is_tot = idx == len(rows) - 1
         ws.cell(row=r, column=2, value=lbl).font = FONT_TOTAL if is_tot else FONT_SUBHEADER
-        cell_v = ws.cell(row=r, column=3, value=val)
-        cell_v.font = FONT_INPUT if is_inp else (FONT_TOTAL if is_tot else FONT_FORMULA)
-        cell_v.number_format = fmt
-        cell_v.alignment = ALIGN_RIGHT
+        
+        if str(val).startswith("="):
+            write_formula_cell(
+                ws, r, 3,
+                formula=val,
+                cached_value=c_val,
+                num_format=fmt,
+                font=FONT_TOTAL if is_tot else FONT_FORMULA,
+                border=BORDER_TOTAL if is_tot else BORDER_BOX,
+                alignment=ALIGN_RIGHT,
+            )
+        else:
+            cell_v = ws.cell(row=r, column=3, value=val)
+            cell_v.font = FONT_INPUT if is_inp else (FONT_TOTAL if is_tot else FONT_FORMULA)
+            cell_v.number_format = fmt
+            cell_v.alignment = ALIGN_RIGHT
+            cell_v.border = BORDER_TOTAL if is_tot else BORDER_BOX
 
         cell_n = ws.cell(row=r, column=4, value=note)
         cell_n.font = FONT_SUBTITLE
         cell_n.alignment = ALIGN_LEFT
-
-        for c in range(2, 5):
-            ws.cell(row=r, column=c).border = BORDER_TOTAL if is_tot else BORDER_BOX
+        ws.cell(row=r, column=2).border = BORDER_TOTAL if is_tot else BORDER_BOX
+        ws.cell(row=r, column=4).border = BORDER_TOTAL if is_tot else BORDER_BOX
 
     return ws
 
