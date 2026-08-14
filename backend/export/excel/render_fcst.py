@@ -239,18 +239,29 @@ def render_debt_schedule(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ws["B2"] = "DEBT & BORROWINGS SCHEDULE (GENERIC)"
     ws["B2"].font = FONT_TITLE
     ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
-    ws["B3"] = f"{spec.metadata.name} — generic debt schedule (zero balance if debt-free)"
+    ws["B3"] = f"{spec.metadata.name} — debt schedule from base scenario"
     ws["B3"].font = FONT_SECTION
 
     headers = ["Debt Component"] + FORECAST_PERIODS
     write_table_header(ws, 5, headers, start_col=2)
 
+    base_ds = next((d for d in spec.debt_schedule if d.scenario == "base"), None)
+
+    def _period_val(attr: str, period: str) -> float:
+        if base_ds is None:
+            return 0.0
+        for dp in base_ds.periods:
+            if dp.period == period:
+                return getattr(dp, attr)
+        return 0.0
+
     debt_rows = [
-        (f"Opening Debt Balance ({ccy})", FMT_AMOUNT, ["=0.0"] * len(FORECAST_PERIODS)),
-        (f"Debt Drawdowns ({ccy})", FMT_AMOUNT, ["=0.0"] * len(FORECAST_PERIODS)),
-        (f"Scheduled Repayments ({ccy})", FMT_AMOUNT, ["=0.0"] * len(FORECAST_PERIODS)),
-        (f"Closing Debt Balance ({ccy})", FMT_AMOUNT, ["=0.0"] * len(FORECAST_PERIODS)),
-        (f"Interest Expense ({ccy})", FMT_AMOUNT, ["=0.0"] * len(FORECAST_PERIODS)),
+        (f"Opening Debt Balance ({ccy})", FMT_AMOUNT, [_period_val("opening_balance", p) for p in FORECAST_PERIODS]),
+        (f"Debt Drawdowns ({ccy})", FMT_AMOUNT, [_period_val("draws", p) for p in FORECAST_PERIODS]),
+        (f"Scheduled Repayments ({ccy})", FMT_AMOUNT, [_period_val("scheduled_repayment", p) for p in FORECAST_PERIODS]),
+        (f"Optional Repayments ({ccy})", FMT_AMOUNT, [_period_val("optional_repayment", p) for p in FORECAST_PERIODS]),
+        (f"Closing Debt Balance ({ccy})", FMT_AMOUNT, [_period_val("closing_balance", p) for p in FORECAST_PERIODS]),
+        (f"Interest Expense ({ccy})", FMT_AMOUNT, [_period_val("interest_expense", p) for p in FORECAST_PERIODS]),
     ]
 
     for idx, (label, fmt, vals) in enumerate(debt_rows):
