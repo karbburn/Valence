@@ -72,15 +72,15 @@ async function handleSearchInput(query) {
         const res = await fetch(`/api/companies/search?q=${encodeURIComponent(query)}&limit=10`);
         const results = await res.json();
         if (!results || results.length === 0) {
-            drop.innerHTML = `<div class="p-3 text-xs text-slate-500">No matching companies found</div>`;
+            drop.innerHTML = `<div class="p-3 text-xs text-slate-400 font-medium">No matching companies found</div>`;
         } else {
             drop.innerHTML = results.map(c => `
-                <div onclick="selectCompanyFromSearch('${c.company_id}')" class="px-3.5 py-2 hover:bg-slate-800 cursor-pointer flex items-center justify-between text-xs border-b border-slate-800/50 last:border-0">
-                    <div>
-                        <span class="font-bold text-slate-200">${c.ticker}</span>
-                        <span class="text-slate-400 font-medium ml-1.5">${c.name}</span>
+                <div onclick="selectCompanyFromSearch('${c.company_id}', '${c.ticker}', '${c.name.replace(/'/g, "\\'")}')" class="px-3.5 py-2.5 hover:bg-slate-800 cursor-pointer flex items-center justify-between text-xs border-b border-slate-800/80 last:border-0 search-result-item">
+                    <div class="flex items-center gap-2">
+                        <span class="font-extrabold text-white text-xs font-mono bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">${c.ticker}</span>
+                        <span class="text-slate-200 font-semibold text-xs truncate max-w-[150px]">${c.name}</span>
                     </div>
-                    <span class="px-1.5 py-0.5 rounded text-[10px] font-mono ${c.market === 'us' ? 'bg-blue-950 text-blue-300 border border-blue-800' : 'bg-orange-950 text-orange-300 border border-orange-800'}">${c.market.toUpperCase()}</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold ${c.market === 'us' ? 'ticker-badge-us' : 'ticker-badge-india'}">${c.market.toUpperCase()}</span>
                 </div>
             `).join('');
         }
@@ -97,9 +97,21 @@ function handleSearchFocus() {
     }
 }
 
-function selectCompanyFromSearch(companyId) {
+function selectCompanyFromSearch(companyId, ticker, name) {
     document.getElementById("search-dropdown").classList.add("hidden");
     document.getElementById("company-search-input").value = "";
+    
+    const select = document.getElementById("company-select");
+    if (select) {
+        let opt = select.querySelector(`option[value="${companyId}"]`);
+        if (!opt) {
+            opt = document.createElement("option");
+            opt.value = companyId;
+            opt.textContent = `${ticker || companyId} — ${name || 'Search Result'}`;
+            select.appendChild(opt);
+        }
+        select.value = companyId;
+    }
     fetchModelSpec(companyId);
 }
 

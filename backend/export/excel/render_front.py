@@ -185,7 +185,7 @@ def render_executive_summary(wb: Workbook, spec: ModelSpecification) -> Workshee
     ws["B6"] = mkt_price
     ws["B6"].number_format = FMT_PRICE
 
-    ws["C6"] = f"='31_DCF'!H23"  # Live formula reference to DCF tab implied share price
+    ws["C6"] = f"='35_Scenario_Analysis'!C6"  # Live formula reference to base scenario implied share price
     ws["C6"].number_format = FMT_PRICE
 
     ws["D6"] = f"=(C6-B6)/B6"
@@ -216,15 +216,15 @@ def render_executive_summary(wb: Workbook, spec: ModelSpecification) -> Workshee
     ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
     curr = spec.metadata.currency
     val_rows = [
-        (f"Implied Share Price ({curr})", "='31_DCF'!H23", "='35_Scenario_Analysis'!C6", "='35_Scenario_Analysis'!D6", FMT_PRICE),
-        (f"Enterprise Value ({ccy})", "='31_DCF'!H19", "='35_Scenario_Analysis'!C7", "='35_Scenario_Analysis'!D7", FMT_CURRENCY_INT),
-        (f"Net Cash / (Debt) ({ccy})", "='31_DCF'!H20", "='35_Scenario_Analysis'!C8", "='35_Scenario_Analysis'!D8", FMT_CURRENCY_INT),
-        (f"Equity Value ({ccy})", "='31_DCF'!H21", "='35_Scenario_Analysis'!C9", "='35_Scenario_Analysis'!D9", FMT_CURRENCY_INT),
-        ("Diluted Shares", "='31_DCF'!H22", "='35_Scenario_Analysis'!C10", "='35_Scenario_Analysis'!D10", FMT_AMOUNT),
-        ("Discount Rate (WACC %)", "='30_WACC'!C15", "='35_Scenario_Analysis'!C11", "='35_Scenario_Analysis'!D11", FMT_PERCENT),
-        ("Terminal Growth Rate %", "='32_Terminal_Value'!C6", "='35_Scenario_Analysis'!C12", "='35_Scenario_Analysis'!D12", FMT_PERCENT),
-        (f"FY31 Revenue ({ccy})", "='20_Operating_Model'!F6", "='35_Scenario_Analysis'!C13", "='35_Scenario_Analysis'!D13", FMT_CURRENCY_INT),
-        ("FY31 EBITDA Margin %", "='20_Operating_Model'!F8", "='35_Scenario_Analysis'!C14", "='35_Scenario_Analysis'!D14", FMT_PERCENT),
+        (f"Implied Share Price ({curr})", "='35_Scenario_Analysis'!C6", "='35_Scenario_Analysis'!D6", "='35_Scenario_Analysis'!E6", FMT_PRICE),
+        (f"Enterprise Value ({ccy})", "='35_Scenario_Analysis'!C7", "='35_Scenario_Analysis'!D7", "='35_Scenario_Analysis'!E7", FMT_CURRENCY_INT),
+        (f"Net Cash / (Debt) ({ccy})", "='35_Scenario_Analysis'!C8", "='35_Scenario_Analysis'!D8", "='35_Scenario_Analysis'!E8", FMT_CURRENCY_INT),
+        (f"Equity Value ({ccy})", "='35_Scenario_Analysis'!C9", "='35_Scenario_Analysis'!D9", "='35_Scenario_Analysis'!E9", FMT_CURRENCY_INT),
+        ("Diluted Shares", "='35_Scenario_Analysis'!C10", "='35_Scenario_Analysis'!D10", "='35_Scenario_Analysis'!E10", FMT_AMOUNT),
+        ("Discount Rate (WACC %)", "='35_Scenario_Analysis'!C11", "='35_Scenario_Analysis'!D11", "='35_Scenario_Analysis'!E11", FMT_PERCENT),
+        ("Terminal Growth Rate %", "='35_Scenario_Analysis'!C12", "='35_Scenario_Analysis'!D12", "='35_Scenario_Analysis'!E12", FMT_PERCENT),
+        (f"FY31 Revenue ({ccy})", "='35_Scenario_Analysis'!C13", "='35_Scenario_Analysis'!D13", "='35_Scenario_Analysis'!E13", FMT_CURRENCY_INT),
+        ("FY31 EBITDA Margin %", "='35_Scenario_Analysis'!C14", "='35_Scenario_Analysis'!D14", "='35_Scenario_Analysis'!E14", FMT_PERCENT),
     ]
 
     for idx, (lbl, f_base, f_bull, f_bear, fmt) in enumerate(val_rows):
