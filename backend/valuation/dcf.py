@@ -39,9 +39,13 @@ def compute_fcff_periods(
         nopat = ebit * (1.0 - tax_rate / 100.0)
         da = forecast.get_value("canonical.is.depreciation_amortization", p, scenario) or 0.0
 
-        # Capex from investing activities (outflow is negative in CF, take absolute)
-        inv_cf = forecast.get_value("canonical.cf.investing_activities", p, scenario) or 0.0
-        capex = abs(inv_cf)
+        # Real capex from canonical.cf.capex, falling back to investing activities proxy
+        capex_val = forecast.get_value("canonical.cf.capex", p, scenario)
+        if capex_val is not None:
+            capex = abs(capex_val)
+        else:
+            inv_cf = forecast.get_value("canonical.cf.investing_activities", p, scenario) or 0.0
+            capex = abs(inv_cf)
 
         # Working Capital delta: Operating CF = Net Profit + DA - delta_WC
         np_val = forecast.get_value("canonical.is.net_profit", p, scenario) or 0.0

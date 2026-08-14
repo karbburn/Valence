@@ -128,17 +128,29 @@ def suggest_base_assumptions(
         result.append(_make("dio_days", dio, p, "base", source_dio))
 
     # ------------------------------------------------------------------ #
-    # 8. Capex % Revenue — 3yr average using investing_activities / revenue
+    # 8. Capex % Revenue — 3yr average using canonical capex / revenue
     # ------------------------------------------------------------------ #
     capex_pcts = []
+    used_direct_capex = False
     for p in periods:
-        inv = historical_model.cash_flow_statement.get_value("canonical.cf.investing_activities", p)
+        capex_val = historical_model.cash_flow_statement.get_value("canonical.cf.capex", p)
+        if capex_val is not None:
+            used_direct_capex = True
+        else:
+            inv = historical_model.cash_flow_statement.get_value("canonical.cf.investing_activities", p)
+            if inv is not None:
+                capex_val = abs(inv)
+
         rev = historical_model.income_statement.get_value("canonical.is.revenue", p)
-        if inv is not None and rev and rev > 0:
-            # investing_activities is negative when capex outflows; take absolute
-            capex_pcts.append(round(abs(inv) / rev * 100.0, 4))
+        if capex_val is not None and rev and rev > 0:
+            capex_pcts.append(round(abs(capex_val) / rev * 100.0, 4))
+
     capex_pct = _avg(capex_pcts) or 2.5
-    source_capex = "3yr average |investing_activities| % revenue (FY24-FY26)"
+    if used_direct_capex:
+        source_capex = "3yr average GAAP capex (canonical.cf.capex) % revenue (FY24-FY26)"
+    else:
+        source_capex = "derived — 3yr average |investing_activities| proxy % revenue (FY24-FY26)"
+
     for p in FORECAST_PERIODS:
         result.append(_make("capex_pct_revenue", capex_pct, p, "base", source_capex))
 

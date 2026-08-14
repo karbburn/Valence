@@ -3,28 +3,45 @@ from __future__ import annotations
 """
 SEC EDGAR structured data ingestion module.
 
-Parses XBRL company facts and US GAAP filing concepts, returning
-provenance-tagged RawDatapoint records for US-listed filers.
+Fetches live XBRL company facts from SEC EDGAR API (data.sec.gov) or parses
+offline synthetic export files, returning provenance-tagged RawDatapoint records
+for US-listed filers.
+
+Supports direct US GAAP Capex mapping (`PaymentsToAcquirePropertyPlantAndEquipment`)
+replacing investing cash flow proxies.
 
 Design decision — single-source by design:
-    India-sourced ingestion (screener.py) reconciles data from a primary
-    export against a secondary BSE/NSE filing source. SEC EDGAR company facts
-    are structured XBRL, machine-generated, and authoritative by definition.
-    Reconciling EDGAR against a second source would risk double-counting
-    adjustments and is intentionally omitted here. The Source literal
-    "sec_edgar" identifies EDGAR-sourced records throughout the pipeline
-    and should never trigger reconciliation code paths.
-
-All values are in USD millions unless overridden at the parser call site.
+    SEC EDGAR company facts are structured XBRL, machine-generated, and
+    authoritative by definition. Reconciling EDGAR against a second source is
+    intentionally omitted here. The Source literal "sec_edgar" identifies
+    EDGAR-sourced records throughout the pipeline.
 """
 
 import hashlib
+import logging
+import time
 from datetime import date, datetime
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 import openpyxl
+import requests
 
 from backend.data.store import RawDatapoint, Source, Status
+
+logger = logging.getLogger(__name__)
+
+SEC_HEADERS = {
+    "User-Agent": "ValencePlatform team@valence.com",
+    "Accept-Encoding": "gzip, deflate",
+}
+
+# Known CIK lookup table
+CIK_REGISTRY: Dict[str, str] = {
+    "aapl_us": "0000320193",
+    "msft_us": "0000789019",
+    "infy_us": "0001065280",
+}
 
 
 def _datapoint_id(company_id: str, metric: str, period: str, source: str, section: str, row: int) -> str:
@@ -49,19 +66,153 @@ def _period_label(d: date) -> str:
     return f"FY{str(d.year)[2:]}"
 
 
-def parse_sec_edgar_export(path: str | Path, company_id: str = "aapl_us") -> list[RawDatapoint]:
-    """Parse SEC EDGAR company facts structured export into RawDatapoints.
+# US GAAP XBRL Concept Tag Mappings to Raw Metric Labels
+US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
+    # (Raw Metric Label, [XBRL Tags in priority order], Section)
+    ("Revenues", ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet"], "PROFIT & LOSS"),
+    ("Cost of sales", ["CostOfGoodsAndServicesSold", "CostOfRevenue"], "PROFIT & LOSS"),
+    ("Gross profit", ["GrossProfit"], "PROFIT & LOSS"),
+    ("Total operating expenses", ["OperatingExpenses"], "PROFIT & LOSS"),
+    ("Operating profit", ["OperatingIncomeLoss"], "PROFIT & LOSS"),
+    ("Depreciation", ["DepreciationDepletionAndAmortization", "DepreciationAndAmortization"], "PROFIT & LOSS"),
+    ("Finance cost", ["InterestExpense"], "PROFIT & LOSS"),
+    ("Other Income", ["NonoperatingIncomeExpense"], "PROFIT & LOSS"),
+    ("Profit before tax", [
+        "IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeTaxes",
+        "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+    ], "PROFIT & LOSS"),
+    ("Tax", ["IncomeTaxExpenseBenefit"], "PROFIT & LOSS"),
+    ("Net Profit", ["NetIncomeLoss"], "PROFIT & LOSS"),
+    ("Net Block", ["PropertyPlantAndEquipmentNet"], "BALANCE SHEET"),
+    ("Cash & Bank", ["CashAndCashEquivalentsAtCarryingValue"], "BALANCE SHEET"),
+    ("Trade receivables", ["AccountsReceivableNetCurrent"], "BALANCE SHEET"),
+    ("Total assets", ["Assets"], "BALANCE SHEET"),
+    ("Borrowings", ["LongTermDebtAndCapitalLeaseObligations", "LongTermDebtNoncurrent", "ShortTermBorrowings"], "BALANCE SHEET"),
+    ("Total liabilities", ["Liabilities"], "BALANCE SHEET"),
+    ("Total equity", ["StockholdersEquity"], "BALANCE SHEET"),
+    ("Cash from Operating Activity", ["NetCashProvidedByUsedInOperatingActivities"], "CASH FLOW:"),
+    ("Cash from Investing Activity", ["NetCashProvidedByUsedInInvestingActivities"], "CASH FLOW:"),
+    ("Cash from Financing Activity", ["NetCashProvidedByUsedInFinancingActivities"], "CASH FLOW:"),
+    ("PaymentsToAcquirePropertyPlantAndEquipment", ["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"], "CASH FLOW:"),
+    ("Basic (in shares)", ["CommonStockSharesOutstanding", "EntityCommonStockSharesOutstanding"], "PROFIT & LOSS"),
+]
+
+
+def resolve_cik(company_id: str) -> str:
+    """Resolve 10-digit zero-padded CIK string for company_id."""
+    if company_id in CIK_REGISTRY:
+        return CIK_REGISTRY[company_id]
+
+    ticker = company_id.split("_")[0].upper()
+    url = "https://www.sec.gov/files/company_tickers.json"
+    try:
+        resp = requests.get(url, headers=SEC_HEADERS, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            for entry in data.values():
+                if entry.get("ticker", "").upper() == ticker:
+                    cik_int = entry["cik_str"]
+                    return str(cik_int).zfill(10)
+    except Exception as e:
+        logger.warning("Failed SEC CIK lookup for %s: %s", company_id, e)
+
+    # Default fallback to AAPL CIK if unresolved
+    return "0000320193"
+
+
+def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]:
+    """Fetch live XBRL company facts from SEC EDGAR API and return RawDatapoints.
 
     Args:
-        path: Path to the SEC EDGAR source XLSX file (generated by generate_us_sources.py).
-        company_id: Dynamic company identifier supplied by the caller at ingestion time
-            (e.g. "aapl_us", "msft_us", "infy_us"). Not a static constant.
+        company_id: Identifier e.g. "aapl_us", "msft_us", "infy_us".
 
     Returns:
-        List of RawDatapoint records tagged with source="sec_edgar",
-        currency="USD", units="millions". Reconciliation against a second
-        source is intentionally omitted (see module docstring).
+        List of RawDatapoint records tagged with real US GAAP Capex and source="sec_edgar".
     """
+    cik = resolve_cik(company_id)
+    url = f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
+
+    # Rate limiting compliance: 10 req/sec max (0.1s delay)
+    time.sleep(0.1)
+
+    resp = requests.get(url, headers=SEC_HEADERS, timeout=15)
+    if resp.status_code != 200:
+        raise RuntimeError(f"SEC EDGAR API HTTP {resp.status_code} for CIK {cik} ({company_id})")
+
+    facts_data = resp.json()
+    us_gaap = facts_data.get("facts", {}).get("us-gaap", {})
+    if not us_gaap:
+        raise ValueError(f"No us-gaap facts found in SEC EDGAR response for CIK {cik}")
+
+    datapoints: list[RawDatapoint] = []
+    now = datetime.now()
+
+    # Target fiscal years
+    target_fys = {2024: "FY24", 2025: "FY25", 2026: "FY26"}
+
+    for metric_label, tag_list, section in US_GAAP_TAG_MAP:
+        selected_tag = None
+        tag_data = None
+        for tag in tag_list:
+            if tag in us_gaap:
+                selected_tag = tag
+                tag_data = us_gaap[tag]
+                break
+
+        if not selected_tag or not tag_data:
+            continue
+
+        units_dict = tag_data.get("units", {})
+        unit_items = units_dict.get("USD", []) or units_dict.get("shares", []) or units_dict.get("pure", [])
+
+        # Filter for annual 10-K forms matching target fiscal years
+        by_fy: Dict[int, dict] = {}
+        for item in unit_items:
+            if item.get("form") == "10-K" and item.get("fp") == "FY":
+                fy = item.get("fy")
+                if fy in target_fys:
+                    # Keep latest filing if multiple
+                    by_fy[fy] = item
+
+        for fy, item in by_fy.items():
+            period_lbl = target_fys[fy]
+            raw_val = float(item["val"])
+
+            # Unit conversion: monetary items to USD Millions (shares remain raw)
+            if metric_label == "Basic (in shares)":
+                val = raw_val
+            else:
+                val = raw_val / 1e6
+
+            end_date_str = item.get("end")
+            end_d = date.fromisoformat(end_date_str) if end_date_str else date(fy, 12, 31)
+
+            dp_id = _datapoint_id(company_id, metric_label, period_lbl, "sec_edgar", section, fy)
+            datapoints.append(
+                RawDatapoint(
+                    id=dp_id,
+                    company_id=company_id,
+                    metric_raw=metric_label,
+                    period_label=period_lbl,
+                    period_end_date=end_d,
+                    value=round(val, 4),
+                    currency="USD",
+                    units="millions",
+                    source="sec_edgar",
+                    source_location=f"SEC_EDGAR_Live_CompanyFacts!{selected_tag}",
+                    status="reported",
+                    update_date=now,
+                )
+            )
+
+    if not datapoints:
+        raise ValueError(f"Failed to parse any valid 10-K datapoints from SEC EDGAR for {company_id}")
+
+    return datapoints
+
+
+def parse_sec_edgar_export(path: str | Path, company_id: str = "aapl_us") -> list[RawDatapoint]:
+    """Parse local SEC EDGAR source XLSX file (regression fixture) into RawDatapoints."""
     wb = openpyxl.load_workbook(path, data_only=True)
     ws = wb["Data Sheet"]
     rows = list(ws.iter_rows(values_only=True))
