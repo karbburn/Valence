@@ -18,7 +18,7 @@ from backend.valuation.dcf import (
 )
 from backend.valuation.reverse_dcf import compute_reverse_dcf
 from backend.valuation.sensitivity import compute_sensitivity_tables
-from backend.valuation.wacc import DEFAULT_CURRENT_PRICE, compute_wacc
+from backend.valuation.wacc import DEFAULT_CURRENT_PRICE, MARKET_PRICE_BY_COMPANY, compute_wacc
 
 
 def run_valuation(
@@ -30,9 +30,13 @@ def run_valuation(
 
     Args:
         spec: ModelSpecification with forecast, assumptions, and debt schedules populated.
-        current_share_price: Current market share price for reverse DCF.
+        current_share_price: Current market share price for reverse DCF. Defaults to the
+            per-company benchmark price; falls back to the generic default when unset.
         historical_model: HistoricalModel for reverse DCF revenue CAGR solver.
     """
+    if current_share_price == DEFAULT_CURRENT_PRICE:
+        current_share_price = MARKET_PRICE_BY_COMPANY.get(spec.metadata.company_id, current_share_price)
+
     valuation_outputs: List[ValuationOutput] = []
 
     # Sourced cash from latest historicals (FY26)
