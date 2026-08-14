@@ -39,13 +39,14 @@ def compute_fcff_periods(
         nopat = ebit * (1.0 - tax_rate / 100.0)
         da = forecast.get_value("canonical.is.depreciation_amortization", p, scenario) or 0.0
 
-        # Real capex from canonical.cf.capex, falling back to investing activities proxy
+        # Real capex from canonical.cf.capex, falling back to D&A as conservative maintenance proxy.
+        # NOTE: Do NOT use total investing activities — they include M&A which inflates capex significantly.
         capex_val = forecast.get_value("canonical.cf.capex", p, scenario)
         if capex_val is not None:
             capex = abs(capex_val)
         else:
-            inv_cf = forecast.get_value("canonical.cf.investing_activities", p, scenario) or 0.0
-            capex = abs(inv_cf)
+            # Conservative fallback: maintenance capex ≈ D&A (standard assumption for large-cap tech)
+            capex = abs(da)
 
         # Working Capital delta: Operating CF = Net Profit + DA - delta_WC
         np_val = forecast.get_value("canonical.is.net_profit", p, scenario) or 0.0
