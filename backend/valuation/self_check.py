@@ -105,10 +105,10 @@ def main() -> None:
     wacc_pct = base_val.wacc.wacc
     last_fcff = fcffs[-1].fcff
     last_ebitda = spec.forecast.get_value("canonical.is.ebitda", "FY31", "base") or 0.0
-    cash_cr = spec.historicals.get_value("canonical.bs.cash_and_bank", "FY26") or 22201.0
+    cash_cr = spec.historicals.get_value("canonical.bs.cash_and_bank", "FY26") or 0.0
     base_ds = next((d for d in spec.debt_schedule if d.scenario == "base"), None)
     debt_cr = (base_ds.closing("FY26") if base_ds else 0.0) or (spec.historicals.get_value("canonical.bs.borrowings", "FY26") or 0.0)
-    shares_cr = spec.share_count.get_diluted("FY26") or 405.76
+    shares_cr = (spec.share_count.get_diluted("FY26") if spec.share_count else None) or spec.metadata.shares_outstanding or 405.76
 
     rt_tv = compute_terminal_value(last_fcff, last_ebitda, wacc_pct, rev_dcf.implied_terminal_growth)
     rt_bridge, _ = compute_dcf_bridge(fcffs, rt_tv, cash_cr, debt_cr, shares_cr)
