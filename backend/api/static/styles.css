@@ -30,6 +30,48 @@ body {
     background: #475569;
 }
 
+/* Select Option Dark Mode Fix */
+select option {
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+    padding: 8px 12px;
+}
+
+/* High Contrast Input & Search Styling */
+#company-search-input {
+    background-color: #090d16;
+    color: #ffffff;
+    border-color: #475569;
+    font-weight: 500;
+}
+#company-search-input::placeholder {
+    color: #94a3b8;
+}
+#company-search-input:focus {
+    border-color: #818cf8;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
+}
+
+/* Search Dropdown Styling */
+.search-result-item {
+    transition: background-color 0.15s ease-in-out;
+}
+.search-result-item:hover {
+    background-color: #1e293b;
+}
+
+/* Ticker & Header Badges */
+.ticker-badge-india {
+    background-color: rgba(249, 115, 22, 0.15);
+    color: #fdba74;
+    border: 1px solid rgba(249, 115, 22, 0.4);
+}
+.ticker-badge-us {
+    background-color: rgba(59, 130, 246, 0.15);
+    color: #93c5fd;
+    border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
 /* Inputs & Range Sliders */
 input[type=range] {
     -webkit-appearance: none;

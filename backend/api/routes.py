@@ -236,16 +236,15 @@ def search_companies(
     market: Optional[str] = Query(None, description="Filter by market ('india' or 'us')"),
     limit: int = Query(20, ge=1, le=100, description="Max search results"),
 ) -> List[Dict[str, Any]]:
-    """Real-time autocomplete search across ticker and company name for onboarded/partial companies."""
+    """Real-time autocomplete search across ticker and company name for universe companies."""
     from backend.data.universe.store import search_universe_companies
     from backend.models.spec.metadata import get_metadata_for_company
 
     _ensure_universe_seeded()
     m_filter = market if market in ("india", "us") else None
-    matches = search_universe_companies(query=q, market=m_filter, limit=limit)
-    results = [
-        c for c in matches if c.onboarding_status in ("onboarded", "partial")
-    ]
+    matches = search_universe_companies(query=q, market=m_filter, limit=100)
+    matches.sort(key=lambda c: (0 if c.onboarding_status in ("onboarded", "partial") else 1, c.ticker))
+    results = matches[:limit]
 
     payload = []
     for c in results:

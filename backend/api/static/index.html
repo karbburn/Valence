@@ -23,15 +23,18 @@
 
             <!-- Company Search / Selection -->
             <div class="relative flex items-center gap-3">
-                <div class="relative w-64">
-                    <input type="text" id="company-search-input" placeholder="Search ticker or name..." 
-                           class="w-full bg-slate-950 border border-slate-700 text-slate-200 text-xs font-medium rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-500 placeholder-slate-500"
+                <div class="relative w-72">
+                    <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    </div>
+                    <input type="text" id="company-search-input" placeholder="Search ticker (e.g. INFY, AAPL)..." 
+                           class="w-full bg-slate-950 border border-slate-700 text-slate-100 text-xs font-semibold rounded-lg pl-8 pr-3 py-1.5 focus:outline-none focus:border-indigo-400 placeholder-slate-400 shadow-inner"
                            oninput="handleSearchInput(this.value)" onfocus="handleSearchFocus()">
-                    <div id="search-dropdown" class="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 hidden max-h-64 overflow-y-auto">
+                    <div id="search-dropdown" class="absolute top-full left-0 right-0 mt-1.5 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 hidden max-h-72 overflow-y-auto divide-y divide-slate-800">
                         <!-- Populated dynamically -->
                     </div>
                 </div>
-                <select id="company-select" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs font-semibold rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 cursor-pointer" onchange="handleCompanyChange(this.value)">
+                <select id="company-select" class="bg-slate-900 border border-slate-700 text-slate-100 text-xs font-bold rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-400 cursor-pointer shadow-sm" onchange="handleCompanyChange(this.value)">
                     <option value="infy_infy">INFY — Infosys Ltd (India)</option>
                     <option value="tcs_tcs">TCS — Tata Consultancy (India)</option>
                     <option value="tatamotors_tatamotors">TATAMOTORS — Tata Motors (India)</option>
@@ -41,8 +44,8 @@
                     <option value="infy_us">INFY — Infosys ADR (US)</option>
                 </select>
                 <div class="flex flex-col">
-                    <span id="company-name" class="font-semibold text-xs text-slate-200 uppercase tracking-wide">INFOSYS LIMITED</span>
-                    <span id="ticker-badge" class="text-[10px] font-mono text-indigo-400">INDIA: INFY (INR)</span>
+                    <span id="company-name" class="font-bold text-xs text-white uppercase tracking-wide">INFOSYS LIMITED</span>
+                    <span id="ticker-badge" class="text-[10px] font-mono font-bold text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/30">INDIA: INFY (INR)</span>
                 </div>
             </div>
         </div>
