@@ -80,11 +80,10 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
     ("Cost of sales", [
         "CostOfGoodsAndServicesSold", 
         "CostOfRevenue", 
-        "CostOfGoodsSold", 
-        "CostsAndExpenses"
+        "CostOfGoodsSold"
     ], "PROFIT & LOSS"),
     ("Gross profit", ["GrossProfit"], "PROFIT & LOSS"),
-    ("Total operating expenses", ["OperatingExpenses", "CostsAndExpenses"], "PROFIT & LOSS"),
+    ("Total operating expenses", ["OperatingExpenses"], "PROFIT & LOSS"),
     ("Operating profit", ["OperatingIncomeLoss", "OperatingProfit", "IncomeLossFromOperations"], "PROFIT & LOSS"),
     ("Depreciation", [
         "DepreciationDepletionAndAmortization", 
@@ -111,14 +110,23 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
     ("Cash & Bank", [
         "CashAndCashEquivalentsAtCarryingValue", 
         "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
-        "CashAndShortTermInvestments",
-        "MarketableSecuritiesCurrent"
+        "CashAndShortTermInvestments"
+    ], "BALANCE SHEET"),
+    ("Current investments", [
+        "MarketableSecuritiesCurrent",
+        "AvailableForSaleSecuritiesCurrent",
+        "ShortTermInvestments"
+    ], "BALANCE SHEET"),
+    ("Inventory", [
+        "InventoryNet",
+        "InventoryGross",
+        "InventoryFinishedGoods"
     ], "BALANCE SHEET"),
     ("Trade receivables", [
         "AccountsReceivableNetCurrent", 
         "ReceivablesNetCurrent"
     ], "BALANCE SHEET"),
-    ("Total assets", ["Assets", "AssetsCurrent"], "BALANCE SHEET"),
+    ("Total assets", ["Assets"], "BALANCE SHEET"),
     ("Borrowings", [
         "LongTermDebtAndCapitalLeaseObligations", 
         "LongTermDebtNoncurrent", 
@@ -126,7 +134,7 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
         "LongTermDebt",
         "DebtCurrent"
     ], "BALANCE SHEET"),
-    ("Total liabilities", ["Liabilities", "LiabilitiesCurrent"], "BALANCE SHEET"),
+    ("Total liabilities", ["Liabilities"], "BALANCE SHEET"),
     ("Total equity", ["StockholdersEquity", "CommonStockValue"], "BALANCE SHEET"),
     ("Cash from Operating Activity", [
         "NetCashProvidedByUsedInOperatingActivities",
