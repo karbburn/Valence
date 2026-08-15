@@ -36,6 +36,8 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Basic (₹)": ("canonical.is.eps_basic", "is"),
     "Basic (in shares) 2.13 4,046,019,309": ("canonical.is.eps_basic", "is"),
     "Diluted (₹)": ("canonical.is.eps_diluted", "is"),
+    "EPS in Rs": ("canonical.is.eps_diluted", "is"),
+    "EPS in Rs.": ("canonical.is.eps_diluted", "is"),
 
     # --- Balance Sheet (Assets) ---
     "Net Block": ("canonical.bs.ppe", "bs"),
@@ -66,6 +68,7 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Total current assets": ("canonical.bs.total_current_assets", "bs"),
     "Total assets": ("canonical.bs.total_assets", "bs"),
     "Total Assets": ("canonical.bs.total_assets", "bs"),
+    "Total_Asset": ("canonical.bs.total_assets", "bs"),
 
     # --- Balance Sheet (Liabilities & Equity) ---
     "Equity Share Capital": ("canonical.bs.equity_capital", "bs"),
@@ -89,6 +92,7 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Total liabilities": ("canonical.bs.total_liabilities", "bs"),
     "Total liabilities and equity": ("canonical.bs.total_liabilities_and_equity", "bs"),
     "Total Liabilities & Equity": ("canonical.bs.total_liabilities_and_equity", "bs"),
+    "Total_Liab": ("canonical.bs.total_liabilities_and_equity", "bs"),
 
     # --- Cash Flow Statement ---
     "Cash from Operating Activity": ("canonical.cf.operating_activities", "cf"),

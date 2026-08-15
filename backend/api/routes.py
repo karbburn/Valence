@@ -272,9 +272,7 @@ def search_companies(
 
     _ensure_universe_seeded()
     m_filter = market if market in ("india", "us") else None
-    matches = search_universe_companies(query=q, market=m_filter, limit=100)
-    matches.sort(key=lambda c: (0 if c.onboarding_status in ("onboarded", "partial") else 1, c.ticker))
-    results = matches[:limit]
+    results = search_universe_companies(query=q, market=m_filter, limit=limit)
 
     payload = []
     for c in results:

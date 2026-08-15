@@ -69,32 +69,87 @@ def _period_label(d: date) -> str:
 # US GAAP XBRL Concept Tag Mappings to Raw Metric Labels
 US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
     # (Raw Metric Label, [XBRL Tags in priority order], Section)
-    ("Revenues", ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet"], "PROFIT & LOSS"),
-    ("Cost of sales", ["CostOfGoodsAndServicesSold", "CostOfRevenue"], "PROFIT & LOSS"),
+    ("Revenues", [
+        "Revenues", 
+        "RevenueFromContractWithCustomerExcludingAssessedTax", 
+        "SalesRevenueNet", 
+        "OperatingRevenue", 
+        "TotalRevenueNet", 
+        "TotalRevenuesAndOtherIncome"
+    ], "PROFIT & LOSS"),
+    ("Cost of sales", [
+        "CostOfGoodsAndServicesSold", 
+        "CostOfRevenue", 
+        "CostOfGoodsSold", 
+        "CostsAndExpenses"
+    ], "PROFIT & LOSS"),
     ("Gross profit", ["GrossProfit"], "PROFIT & LOSS"),
-    ("Total operating expenses", ["OperatingExpenses"], "PROFIT & LOSS"),
-    ("Operating profit", ["OperatingIncomeLoss"], "PROFIT & LOSS"),
-    ("Depreciation", ["DepreciationDepletionAndAmortization", "DepreciationAndAmortization"], "PROFIT & LOSS"),
-    ("Finance cost", ["InterestExpense"], "PROFIT & LOSS"),
-    ("Other Income", ["NonoperatingIncomeExpense"], "PROFIT & LOSS"),
+    ("Total operating expenses", ["OperatingExpenses", "CostsAndExpenses"], "PROFIT & LOSS"),
+    ("Operating profit", ["OperatingIncomeLoss", "OperatingProfit", "IncomeLossFromOperations"], "PROFIT & LOSS"),
+    ("Depreciation", [
+        "DepreciationDepletionAndAmortization", 
+        "DepreciationAndAmortization",
+        "Depreciation"
+    ], "PROFIT & LOSS"),
+    ("Finance cost", ["InterestExpense", "InterestAndDebtExpense"], "PROFIT & LOSS"),
+    ("Other Income", ["NonoperatingIncomeExpense", "OtherNonoperatingIncomeExpense"], "PROFIT & LOSS"),
     ("Profit before tax", [
         "IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeTaxes",
         "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+        "IncomeLossFromContinuingOperationsBeforeIncomeTaxes",
     ], "PROFIT & LOSS"),
-    ("Tax", ["IncomeTaxExpenseBenefit"], "PROFIT & LOSS"),
-    ("Net Profit", ["NetIncomeLoss"], "PROFIT & LOSS"),
-    ("Net Block", ["PropertyPlantAndEquipmentNet"], "BALANCE SHEET"),
-    ("Cash & Bank", ["CashAndCashEquivalentsAtCarryingValue"], "BALANCE SHEET"),
-    ("Trade receivables", ["AccountsReceivableNetCurrent"], "BALANCE SHEET"),
-    ("Total assets", ["Assets"], "BALANCE SHEET"),
-    ("Borrowings", ["LongTermDebtAndCapitalLeaseObligations", "LongTermDebtNoncurrent", "ShortTermBorrowings"], "BALANCE SHEET"),
-    ("Total liabilities", ["Liabilities"], "BALANCE SHEET"),
-    ("Total equity", ["StockholdersEquity"], "BALANCE SHEET"),
-    ("Cash from Operating Activity", ["NetCashProvidedByUsedInOperatingActivities"], "CASH FLOW:"),
-    ("Cash from Investing Activity", ["NetCashProvidedByUsedInInvestingActivities"], "CASH FLOW:"),
-    ("Cash from Financing Activity", ["NetCashProvidedByUsedInFinancingActivities"], "CASH FLOW:"),
-    ("PaymentsToAcquirePropertyPlantAndEquipment", ["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"], "CASH FLOW:"),
-    ("Basic (in shares)", ["CommonStockSharesOutstanding", "EntityCommonStockSharesOutstanding"], "PROFIT & LOSS"),
+    ("Tax", ["IncomeTaxExpenseBenefit", "IncomeTaxesPaidNet"], "PROFIT & LOSS"),
+    ("Net Profit", [
+        "NetIncomeLoss", 
+        "ProfitLoss", 
+        "NetIncomeLossAvailableToCommonStockholdersBasic"
+    ], "PROFIT & LOSS"),
+    ("Net Block", [
+        "PropertyPlantAndEquipmentNet", 
+        "PropertyPlantAndEquipmentGross"
+    ], "BALANCE SHEET"),
+    ("Cash & Bank", [
+        "CashAndCashEquivalentsAtCarryingValue", 
+        "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+        "CashAndShortTermInvestments",
+        "MarketableSecuritiesCurrent"
+    ], "BALANCE SHEET"),
+    ("Trade receivables", [
+        "AccountsReceivableNetCurrent", 
+        "ReceivablesNetCurrent"
+    ], "BALANCE SHEET"),
+    ("Total assets", ["Assets", "AssetsCurrent"], "BALANCE SHEET"),
+    ("Borrowings", [
+        "LongTermDebtAndCapitalLeaseObligations", 
+        "LongTermDebtNoncurrent", 
+        "ShortTermBorrowings",
+        "LongTermDebt",
+        "DebtCurrent"
+    ], "BALANCE SHEET"),
+    ("Total liabilities", ["Liabilities", "LiabilitiesCurrent"], "BALANCE SHEET"),
+    ("Total equity", ["StockholdersEquity", "CommonStockValue"], "BALANCE SHEET"),
+    ("Cash from Operating Activity", [
+        "NetCashProvidedByUsedInOperatingActivities",
+        "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"
+    ], "CASH FLOW:"),
+    ("Cash from Investing Activity", [
+        "NetCashProvidedByUsedInInvestingActivities",
+        "NetCashProvidedByUsedInInvestingActivitiesContinuingOperations"
+    ], "CASH FLOW:"),
+    ("Cash from Financing Activity", [
+        "NetCashProvidedByUsedInFinancingActivities",
+        "NetCashProvidedByUsedInFinancingActivitiesContinuingOperations"
+    ], "CASH FLOW:"),
+    ("PaymentsToAcquirePropertyPlantAndEquipment", [
+        "PaymentsToAcquirePropertyPlantAndEquipment", 
+        "PaymentsToAcquireProductiveAssets",
+        "PaymentsToAcquirePropertyPlantEquipment"
+    ], "CASH FLOW:"),
+    ("Basic (in shares)", [
+        "CommonStockSharesOutstanding", 
+        "EntityCommonStockSharesOutstanding",
+        "WeightedAverageNumberOfSharesOutstandingBasic"
+    ], "PROFIT & LOSS"),
 ]
 
 
@@ -124,7 +179,7 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
     """Fetch live XBRL company facts from SEC EDGAR API and return RawDatapoints.
 
     Args:
-        company_id: Identifier e.g. "aapl_us", "msft_us", "infy_us".
+        company_id: Identifier e.g. "aapl_us", "msft_us", "tsla_us", "meta_us".
 
     Returns:
         List of RawDatapoint records tagged with real US GAAP Capex and source="sec_edgar".
@@ -144,11 +199,31 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
     if not us_gaap:
         raise ValueError(f"No us-gaap facts found in SEC EDGAR response for CIK {cik}")
 
+    # Discover available 10-K fiscal years from key financial concepts
+    available_fys: set[int] = set()
+    for probe_tag in ["Revenues", "SalesRevenueNet", "NetIncomeLoss", "Assets", "OperatingIncomeLoss"]:
+        if probe_tag in us_gaap:
+            for u in us_gaap[probe_tag].get("units", {}).values():
+                for itm in u:
+                    if itm.get("form") in ("10-K", "20-F") and itm.get("fp") == "FY" and itm.get("fy"):
+                        try:
+                            available_fys.add(int(itm["fy"]))
+                        except (ValueError, TypeError):
+                            pass
+
+    sorted_fys = sorted(list(available_fys))
+    if len(sorted_fys) >= 3:
+        target_fys_list = sorted_fys[-3:]
+    elif len(sorted_fys) > 0:
+        target_fys_list = sorted_fys
+    else:
+        target_fys_list = [2024, 2025, 2026]
+
+    # Map sequential historical periods
+    target_fys = {fy: f"FY{str(fy)[2:]}" for fy in target_fys_list}
+
     datapoints: list[RawDatapoint] = []
     now = datetime.now()
-
-    # Target fiscal years
-    target_fys = {2024: "FY24", 2025: "FY25", 2026: "FY26"}
 
     for metric_label, tag_list, section in US_GAAP_TAG_MAP:
         selected_tag = None
@@ -168,7 +243,7 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
         # Filter for annual 10-K forms matching target fiscal years
         by_fy: Dict[int, dict] = {}
         for item in unit_items:
-            if item.get("form") == "10-K" and item.get("fp") == "FY":
+            if item.get("form") in ("10-K", "20-F") and item.get("fp") == "FY":
                 fy = item.get("fy")
                 if fy in target_fys:
                     # Keep latest filing if multiple

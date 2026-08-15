@@ -112,11 +112,25 @@ def search_universe_companies(
     try:
         sql = "SELECT * FROM company_universe WHERE 1=1"
         params: list[Any] = []
-
+        order_params: list[Any] = []
         if query.strip():
+            raw_q = query.strip()
             sql += " AND (ticker LIKE ? OR name LIKE ?)"
-            q_str = f"%{query.strip()}%"
+            q_str = f"%{raw_q}%"
             params.extend([q_str, q_str])
+            order_clause = """
+                ORDER BY 
+                    CASE WHEN UPPER(ticker) = UPPER(?) THEN 1 
+                         WHEN UPPER(ticker) LIKE UPPER(?) THEN 2 
+                         WHEN UPPER(name) LIKE UPPER(?) THEN 3 
+                         ELSE 4 END ASC,
+                    CASE WHEN onboarding_status = 'onboarded' THEN 0 ELSE 1 END ASC,
+                    LENGTH(ticker) ASC,
+                    ticker ASC
+            """
+            order_params = [raw_q, f"{raw_q}%", f"{raw_q}%"]
+        else:
+            order_clause = " ORDER BY CASE WHEN onboarding_status = 'onboarded' THEN 0 ELSE 1 END ASC, ticker ASC"
 
         if market:
             sql += " AND market = ?"
@@ -129,7 +143,8 @@ def search_universe_companies(
         if non_financial_only:
             sql += " AND is_financial = 0"
 
-        sql += " ORDER BY ticker ASC LIMIT ?"
+        sql += f"{order_clause} LIMIT ?"
+        params.extend(order_params)
         params.append(limit)
 
         rows = conn.execute(sql, params).fetchall()
