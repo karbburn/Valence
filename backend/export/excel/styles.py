@@ -14,6 +14,8 @@ Enforces visual consistency across all workbook tabs:
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 # Font definitions
+FONT_BRAND_TITLE = Font(name="Trebuchet MS", size=18, bold=True, color="1F4E79")
+FONT_BRAND_SUBTITLE = Font(name="Trebuchet MS", size=10, bold=True, italic=True, color="595959")
 FONT_TITLE = Font(name="Calibri", size=16, bold=True, color="1F4E79")
 FONT_SUBTITLE = Font(name="Calibri", size=11, italic=True, color="595959")
 FONT_SECTION = Font(name="Calibri", size=12, bold=True, color="1F4E79")

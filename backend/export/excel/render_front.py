@@ -35,6 +35,8 @@ from backend.export.excel.styles import (
     FMT_PERCENT,
     FMT_PRICE,
     FONT_ALERT,
+    FONT_BRAND_SUBTITLE,
+    FONT_BRAND_TITLE,
     FONT_FORMULA,
     FONT_HEADER,
     FONT_INPUT,
@@ -56,37 +58,25 @@ def get_assumption_value(spec: ModelSpecification, driver_key: str, period: str,
     return 0.0
 
 
-from pathlib import Path
-from openpyxl.drawing.image import Image as OpenpyxlImage
-
-
 def render_cover(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ws = wb.create_sheet(title="00_Cover")
     apply_tab_defaults(ws, freeze_cell="A1")
     set_col_widths(ws, {"A": 5, "B": 28, "C": 45, "D": 20})
 
-    # Header / Branding Slot
-    ws["B2"] = "VALENCE FINANCIAL MODELING PLATFORM"
-    ws["B2"].font = FONT_SUBTITLE
+    # Header / Branding Slot (Clean design font — no logo image)
+    ws["B2"] = "V A L E N C E"
+    ws["B2"].font = FONT_BRAND_TITLE
+    ws["B2"].alignment = ALIGN_LEFT
 
-    icon_path = Path(__file__).resolve().parent / "assets" / "icon.png"
-    if not icon_path.exists():
-        icon_path = Path(__file__).resolve().parent.parent.parent.parent / "assets" / "icon.png"
+    ws["B3"] = "INSTITUTIONAL VALUATION PLATFORM"
+    ws["B3"].font = FONT_BRAND_SUBTITLE
+    ws["B3"].alignment = ALIGN_LEFT
 
-    if icon_path.exists():
-        try:
-            img = OpenpyxlImage(str(icon_path))
-            img.width = 64
-            img.height = 64
-            ws.add_image(img, "D2")
-        except Exception as e:
-            print(f"Warning: could not add cover logo image: {e}")
+    ws["B5"] = spec.metadata.name.upper()
+    ws["B5"].font = FONT_TITLE
 
-    ws["B3"] = spec.metadata.name.upper()
-    ws["B3"].font = FONT_TITLE
-
-    ws["B4"] = f"Ticker: {spec.metadata.ticker} | Market: {spec.metadata.market.upper()} | Fiscal Basis: {spec.metadata.fiscal_year_end}"
-    ws["B4"].font = FONT_SECTION
+    ws["B6"] = f"Ticker: {spec.metadata.ticker} | Market: {spec.metadata.market.upper()} | Fiscal Basis: {spec.metadata.fiscal_year_end}"
+    ws["B6"].font = FONT_SECTION
 
     # Metadata Card Box
     ws["B7"] = "MODEL METADATA"
