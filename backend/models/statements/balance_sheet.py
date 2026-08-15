@@ -148,7 +148,31 @@ def assemble_balance_sheet(
     is_balanced: Dict[str, bool] = {}
     imbalance: Dict[str, float] = {}
 
+    # Reconcile Total Assets from sum of Non-Current Assets and Current Assets
+    nca_item = next((i for i in items if i.canonical_key == "canonical.bs.total_non_current_assets"), None)
+    ca_item = next((i for i in items if i.canonical_key == "canonical.bs.total_current_assets"), None)
     assets_item = next((i for i in items if i.canonical_key == "canonical.bs.total_assets"), None)
+
+    if nca_item and ca_item:
+        reconciled_assets_vals = {}
+        for p in periods:
+            nca_val = nca_item.values_by_period.get(p, 0.0)
+            ca_val = ca_item.values_by_period.get(p, 0.0)
+            reconciled_assets_vals[p] = nca_val + ca_val
+        
+        if assets_item:
+            assets_item.values_by_period = reconciled_assets_vals
+        else:
+            assets_item = BalanceSheetLineItem(
+                canonical_key="canonical.bs.total_assets",
+                display_label="Total Assets",
+                category="summary",
+                values_by_period=reconciled_assets_vals,
+                currency=nca_item.currency,
+                units=nca_item.units,
+            )
+            items.append(assets_item)
+
     liab_eq_item = next((i for i in items if i.canonical_key == "canonical.bs.total_liabilities_and_equity"), None)
 
     if assets_item and not liab_eq_item:
