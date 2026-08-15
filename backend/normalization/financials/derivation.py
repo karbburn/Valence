@@ -216,4 +216,60 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
                     new_derived.append(ta_dp)
                     lookup[ta_key] = ta_dp
 
+            # 6. Total Equity Derivation
+            te_key = (company_id, period, "canonical.bs.total_equity")
+            if te_key not in lookup:
+                ta_dp = lookup.get(ta_key)
+                tl_dp = lookup.get((company_id, period, "canonical.bs.total_liabilities"))
+                sc_dp = lookup.get((company_id, period, "canonical.bs.equity_share_capital"))
+                res_dp = lookup.get((company_id, period, "canonical.bs.other_equity")) or lookup.get((company_id, period, "canonical.bs.retained_earnings"))
+
+                if ta_dp is not None and tl_dp is not None:
+                    derived_te_val = ta_dp.value - tl_dp.value
+                    te_dp = _build_derived(
+                        company_id=company_id,
+                        canonical_key="canonical.bs.total_equity",
+                        period=period,
+                        metric_raw="Total Equity (Derived)",
+                        value=derived_te_val,
+                        anchor=ta_dp,
+                        source_ids=ta_dp.source_datapoint_ids + tl_dp.source_datapoint_ids,
+                        formula="total_equity = total_assets - total_liabilities",
+                    )
+                    new_derived.append(te_dp)
+                    lookup[te_key] = te_dp
+                elif sc_dp is not None and res_dp is not None:
+                    derived_te_val = sc_dp.value + res_dp.value
+                    te_dp = _build_derived(
+                        company_id=company_id,
+                        canonical_key="canonical.bs.total_equity",
+                        period=period,
+                        metric_raw="Total Equity (Derived)",
+                        value=derived_te_val,
+                        anchor=sc_dp,
+                        source_ids=sc_dp.source_datapoint_ids + res_dp.source_datapoint_ids,
+                        formula="total_equity = equity_share_capital + reserves",
+                    )
+                    new_derived.append(te_dp)
+                    lookup[te_key] = te_dp
+
+            # 7. Total Liabilities & Equity Reconciliation Derivation
+            tle_key = (company_id, period, "canonical.bs.total_liabilities_and_equity")
+            tl_dp = lookup.get((company_id, period, "canonical.bs.total_liabilities"))
+            te_dp = lookup.get((company_id, period, "canonical.bs.total_equity"))
+            if tl_dp is not None and te_dp is not None:
+                calculated_tle = tl_dp.value + te_dp.value
+                tle_dp = _build_derived(
+                    company_id=company_id,
+                    canonical_key="canonical.bs.total_liabilities_and_equity",
+                    period=period,
+                    metric_raw="Total Liabilities & Equity (Reconciled)",
+                    value=calculated_tle,
+                    anchor=tl_dp,
+                    source_ids=tl_dp.source_datapoint_ids + te_dp.source_datapoint_ids,
+                    formula="total_liabilities_and_equity = total_liabilities + total_equity",
+                )
+                new_derived.append(tle_dp)
+                lookup[tle_key] = tle_dp
+
     return new_derived

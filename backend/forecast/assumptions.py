@@ -182,14 +182,21 @@ def suggest_base_assumptions(
         if capex_val is not None and rev and rev > 0:
             capex_pcts.append(round(abs(capex_val) / rev * 100.0, 4))
 
-    capex_pct = _avg(capex_pcts) or 2.5
-    if used_direct_capex:
-        source_capex = f"Multi-year average GAAP capex (canonical.cf.capex) % revenue ({first_p}-{last_p})"
-    else:
-        source_capex = f"derived — Multi-year average |investing_activities| proxy % revenue ({first_p}-{last_p})"
+    hist_capex_pct = _avg(capex_pcts) or 2.5
+    steady_state_capex = max(da_pct * 1.25, min(hist_capex_pct, 4.0))
+    is_expansion_cycle = hist_capex_pct > (da_pct * 1.35) and hist_capex_pct > 6.0
+    capex_fade_weights = [0.0, 0.20, 0.45, 0.65, 0.85] if is_expansion_cycle else [0.0, 0.0, 0.0, 0.0, 0.0]
 
-    for p in FORECAST_PERIODS:
-        result.append(_make("capex_pct_revenue", capex_pct, p, "base", source_capex))
+    for idx, p in enumerate(FORECAST_PERIODS):
+        w_fade = capex_fade_weights[idx] if idx < len(capex_fade_weights) else 0.0
+        p_capex = round((1.0 - w_fade) * hist_capex_pct + w_fade * steady_state_capex, 4)
+        if is_expansion_cycle and w_fade > 0:
+            source_capex = f"Peak cycle CapEx ({hist_capex_pct:.1f}%) fading to steady-state maintenance ({steady_state_capex:.1f}%)"
+        elif used_direct_capex:
+            source_capex = f"Multi-year average GAAP capex (canonical.cf.capex) % revenue ({first_p}-{last_p})"
+        else:
+            source_capex = f"derived — Multi-year average |investing_activities| proxy % revenue ({first_p}-{last_p})"
+        result.append(_make("capex_pct_revenue", p_capex, p, "base", source_capex))
 
     # ------------------------------------------------------------------ #
     # 9. Debt Repayment — zero (borrowings carried flat across forecast)
