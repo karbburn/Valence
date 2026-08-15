@@ -15,17 +15,17 @@ from backend.models.spec.forecast import FORECAST_PERIODS
 # Bull/Bear deltas per driver (additive to base value, per period).
 # These are complete overrides — not multipliers.
 _BULL_DELTAS: dict[str, float] = {
-    "revenue_growth": +2.0,   # pp
-    "ebitda_margin":  +1.0,   # pp
-    "ebit_margin":    +0.8,   # pp
-    "dso_days":       -5.0,   # days (lower = better)
+    "revenue_growth": +5.0,   # pp higher growth momentum
+    "ebitda_margin":  +2.5,   # pp margin expansion
+    "ebit_margin":    +2.0,   # pp operating leverage
+    "dso_days":       -5.0,   # days (improved collection)
 }
 
 _BEAR_DELTAS: dict[str, float] = {
-    "revenue_growth": -2.0,
-    "ebitda_margin":  -1.0,
-    "ebit_margin":    -0.8,
-    "dso_days":       +5.0,
+    "revenue_growth": -5.0,   # pp growth deceleration
+    "ebitda_margin":  -2.5,   # pp margin compression
+    "ebit_margin":    -2.0,   # pp operating deleverage
+    "dso_days":       +5.0,   # days (slower collection)
 }
 
 

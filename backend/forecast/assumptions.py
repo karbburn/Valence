@@ -63,15 +63,29 @@ def suggest_base_assumptions(
     default_tax = 21.0 if is_us else 25.17
 
     # ------------------------------------------------------------------ #
-    # 1. Revenue Growth — Historical CAGR (first_p -> last_p)
+    # 1. Revenue Growth — Dynamic Institutional Fade Curve Engine
     # ------------------------------------------------------------------ #
     rev_start = historical_model.income_statement.get_value("canonical.is.revenue", first_p)
     rev_end = historical_model.income_statement.get_value("canonical.is.revenue", last_p)
     rev_cagr = _cagr(rev_start, rev_end, num_years)
-    rev_growth = rev_cagr if rev_cagr is not None else 10.0
-    source_rev = f"Historical revenue CAGR ({first_p}-{last_p})"
-    for p in FORECAST_PERIODS:
-        result.append(_make("revenue_growth", rev_growth, p, "base", source_rev))
+    base_cagr = rev_cagr if (rev_cagr is not None and rev_cagr > -50.0) else 10.0
+
+    # Institutional Growth Fade multipliers for FY27..FY31
+    if base_cagr > 25.0:
+        # High-growth fade curve (e.g. 88% -> 44% -> 26% -> 16% -> 11% -> 8%)
+        fade_factors = [0.50, 0.30, 0.18, 0.12, 0.08]
+    elif base_cagr > 10.0:
+        # Moderate-growth fade curve
+        fade_factors = [1.00, 0.85, 0.70, 0.55, 0.45]
+    else:
+        # Stable/low-growth flat trajectory
+        fade_factors = [1.00, 1.00, 1.00, 1.00, 1.00]
+
+    for idx, p in enumerate(FORECAST_PERIODS):
+        factor = fade_factors[idx] if idx < len(fade_factors) else 1.0
+        g_val = round(max(5.0 if base_cagr > 10.0 else base_cagr, base_cagr * factor), 2)
+        source_rev = f"CAGR ({first_p}-{last_p}: {base_cagr:.1f}%) faded by factor {factor:.2f}"
+        result.append(_make("revenue_growth", g_val, p, "base", source_rev))
 
     # ------------------------------------------------------------------ #
     # 2. EBITDA Margin — Multi-year average
@@ -126,10 +140,18 @@ def suggest_base_assumptions(
         result.append(_make("dpo_days", dpo, p, "base", source_dpo))
 
     # ------------------------------------------------------------------ #
-    # 7b. DIO — zero for services companies
+    # 7b. DIO — Dynamic Hardware/Inventory vs Services Detection
     # ------------------------------------------------------------------ #
-    dio = 0.0  # Default 0.0 for services
-    source_dio = "zero — services/tech company with minimal inventory"
+    inv_val = historical_model.balance_sheet.get_value("canonical.bs.inventory", last_p) or 0.0
+    cogs_val = historical_model.income_statement.get_value("canonical.is.cost_of_sales", last_p) or 0.0
+
+    if inv_val > 0 and cogs_val > 0:
+        dio = round((inv_val / cogs_val) * 365.0, 1)
+        source_dio = f"Computed from historical inventory ({inv_val:.0f}) and COGS ({cogs_val:.0f})"
+    else:
+        dio = 0.0
+        source_dio = "zero — asset-light services/software company"
+
     for p in FORECAST_PERIODS:
         result.append(_make("dio_days", dio, p, "base", source_dio))
 

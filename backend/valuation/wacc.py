@@ -73,9 +73,11 @@ def compute_wacc(
     # Fetch market data for company
     mdata = get_company_market_data(company_id, market=market)  # type: ignore
 
-    # 1. Cost of Equity (CAPM)
+    # 1. Cost of Equity (CAPM) with Blume's Adjusted Beta for mega-caps
     rfr = risk_free_rate if risk_free_rate is not None else mdata.risk_free_rate.value
-    b = beta if beta is not None else mdata.beta.value
+    raw_b = beta if beta is not None else mdata.beta.value
+    # Apply Blume's Adjusted Beta (0.67 * raw + 0.33 * 1.0) if raw beta > 1.8 to normalize extreme short-term beta spikes
+    b = round(0.67 * raw_b + 0.33, 3) if (raw_b > 1.8 and beta is None) else raw_b
     erp = equity_risk_premium if equity_risk_premium is not None else mdata.equity_risk_premium.value
 
     cost_of_equity = rfr + (b * erp)
