@@ -61,6 +61,7 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Trade receivables": ("canonical.bs.trade_receivables", "bs"),
     "Trade receivables and unbilled revenue": ("canonical.bs.trade_receivables", "bs"),
     "Unbilled revenue": ("canonical.bs.unbilled_revenue", "bs"),
+    "Inventory": ("canonical.bs.inventory", "bs"),
     "Cash & Bank": ("canonical.bs.cash_and_bank", "bs"),
     "Cash and cash equivalents": ("canonical.bs.cash_and_bank", "bs"),
     "Prepayments and other assets": ("canonical.bs.prepayments_other_current_assets", "bs"),

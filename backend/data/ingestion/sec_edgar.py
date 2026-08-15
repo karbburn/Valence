@@ -126,6 +126,8 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
         "AccountsReceivableNetCurrent", 
         "ReceivablesNetCurrent"
     ], "BALANCE SHEET"),
+    ("Prepayments and other assets", ["PrepaidExpenseAndOtherAssetsCurrent", "PrepaidExpenseCurrent"], "BALANCE SHEET"),
+    ("Total current assets", ["AssetsCurrent"], "BALANCE SHEET"),
     ("Total assets", ["Assets"], "BALANCE SHEET"),
     ("Borrowings", [
         "LongTermDebtAndCapitalLeaseObligations", 
@@ -134,6 +136,7 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
         "LongTermDebt",
         "DebtCurrent"
     ], "BALANCE SHEET"),
+    ("Total current liabilities", ["LiabilitiesCurrent"], "BALANCE SHEET"),
     ("Total liabilities", ["Liabilities"], "BALANCE SHEET"),
     ("Total equity", ["StockholdersEquity", "CommonStockValue"], "BALANCE SHEET"),
     ("Cash from Operating Activity", [
@@ -238,9 +241,26 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
         tag_data = None
         for tag in tag_list:
             if tag in us_gaap:
-                selected_tag = tag
-                tag_data = us_gaap[tag]
-                break
+                # Check if this tag has items for our target_fys
+                units_dict = us_gaap[tag].get("units", {})
+                unit_items = units_dict.get("USD", []) or units_dict.get("shares", []) or units_dict.get("pure", [])
+                has_target_data = False
+                for item in unit_items:
+                    if item.get("form") in ("10-K", "20-F") and item.get("fp") == "FY" and item.get("fy") in target_fys:
+                        has_target_data = True
+                        break
+                if has_target_data:
+                    selected_tag = tag
+                    tag_data = us_gaap[tag]
+                    break
+
+        # Fallback to the first tag in tag_list that is present in us_gaap if no tag had target_fys data
+        if not selected_tag:
+            for tag in tag_list:
+                if tag in us_gaap:
+                    selected_tag = tag
+                    tag_data = us_gaap[tag]
+                    break
 
         if not selected_tag or not tag_data:
             continue

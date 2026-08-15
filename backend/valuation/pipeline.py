@@ -48,9 +48,9 @@ def run_valuation(
 
     # 2. Sourced cash from latest historicals (FY26), falling back to 0.0 (never constant Infosys 22201.0)
     latest_hist = spec.historicals.periods[-1] if spec.historicals.periods else "FY26"
-    cash_cr = spec.historicals.get_value("canonical.bs.cash_and_bank", latest_hist)
-    if cash_cr is None:
-        cash_cr = 0.0
+    cash_and_bank = spec.historicals.get_value("canonical.bs.cash_and_bank", latest_hist) or 0.0
+    current_inv = spec.historicals.get_value("canonical.bs.current_investments", latest_hist) or 0.0
+    cash_cr = cash_and_bank + current_inv
 
     # 3. Sourced diluted share count, resolving dynamically per company
     shares_cr: Optional[float] = None
