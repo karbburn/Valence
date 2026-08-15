@@ -23,6 +23,7 @@ US_COMPANIES = {
             "Sales": [383285.0, 391035.0, 410000.0],
             "Cost of sales": [214137.0, 217000.0, 226000.0],
             "Other Expenses": [54847.0, 51035.0, 52000.0],
+            "Operating Profit": [114301.0, 123000.0, 132000.0],  # Sales - Cost of sales - Other Expenses (29.8% - 32.2% margin per 10-K)
             "Other Income": [-261.0, 300.0, 500.0],
             "Depreciation": [11519.0, 11800.0, 12100.0],
             "Interest": [3933.0, 3700.0, 3500.0],
@@ -40,10 +41,10 @@ US_COMPANIES = {
             "Net Block": [45680.0, 48000.0, 51000.0],
             "Capital Work in Progress": [2500.0, 2600.0, 2700.0],
             "Investments": [90200.0, 95000.0, 100000.0],  # Marketable securities
-            "Other Assets": [169650.0, 166400.0, 166300.0],
+            "Other Assets": [46650.0, 42400.0, 41300.0],
             "Total_Asset": [308030.0, 312000.0, 320000.0],
             "Receivables": [29508.0, 31000.0, 33000.0],
-            "Cash & Bank": [29965.0, 32000.0, 35000.0],
+            "Cash & Bank": [153000.0, 156000.0, 160000.0],  # Total Cash + ST/LT Marketable Securities (10-K)
         },
         "cf": {
             # Source: Apple 10-K FY2024. Capex (PPE purchases) separated from investing CF.
