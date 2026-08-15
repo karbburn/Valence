@@ -9,11 +9,14 @@ DERIVATION_RULES: Dict[str, str] = {
     "canonical.is.ebitda_fallback": (
         "ebitda = canonical.is.pbt + canonical.is.finance_cost + canonical.is.depreciation_amortization"
     ),
+    "canonical.is.operating_profit": "operating_profit = canonical.is.ebitda - canonical.is.depreciation_amortization",
+    "canonical.is.gross_profit": "gross_profit = canonical.is.revenue - canonical.is.cost_of_sales",
 }
 
 
 def _build_derived(
     company_id: str,
+    canonical_key: str,
     period: str,
     metric_raw: str,
     value: float,
@@ -23,7 +26,7 @@ def _build_derived(
 ) -> CanonicalDatapoint:
     return CanonicalDatapoint(
         company_id=company_id,
-        canonical_key="canonical.is.ebitda",
+        canonical_key=canonical_key,
         metric_raw=metric_raw,
         period_label=period,
         period_end_date=anchor.period_end_date,
@@ -37,11 +40,10 @@ def _build_derived(
 
 
 def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[CanonicalDatapoint]:
-    """Derive non-reported canonical metrics (such as EBITDA) using explicit formulas.
+    """Derive non-reported canonical metrics (such as Operating Profit and EBITDA) using explicit formulas.
 
     Attaches status = 'derived', references source datapoint IDs, and records derivation formula.
-    Falls back to a bottom-up EBITDA (PBT + finance cost + D&A) when a company's
-    income statement lacks a standalone operating-profit line.
+    Falls back to Operating Profit (EBITDA - D&A) when a company's statement reports EBITDA directly.
     """
     # Index datapoints by (company_id, period_label, canonical_key)
     lookup: Dict[Tuple[str, str, str], CanonicalDatapoint] = {}
@@ -56,21 +58,60 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
 
     for company_id, periods in periods_by_company.items():
         for period in periods:
-            # 1. EBITDA Derivation
+            # 1. Operating Profit Derivation
+            op_profit_key = (company_id, period, "canonical.is.operating_profit")
+            if op_profit_key not in lookup:
+                ebitda = lookup.get((company_id, period, "canonical.is.ebitda"))
+                da = lookup.get((company_id, period, "canonical.is.depreciation_amortization"))
+                pbt = lookup.get((company_id, period, "canonical.is.pbt"))
+                finance_cost = lookup.get((company_id, period, "canonical.is.finance_cost"))
+                other_income = lookup.get((company_id, period, "canonical.is.other_income"))
+
+                if ebitda is not None and da is not None:
+                    formula = DERIVATION_RULES["canonical.is.operating_profit"]
+                    op_dp = _build_derived(
+                        company_id=company_id,
+                        canonical_key="canonical.is.operating_profit",
+                        period=period,
+                        metric_raw="Operating Profit (Derived)",
+                        value=ebitda.value - da.value,
+                        anchor=ebitda,
+                        source_ids=ebitda.source_datapoint_ids + da.source_datapoint_ids,
+                        formula=formula,
+                    )
+                    new_derived.append(op_dp)
+                    lookup[op_profit_key] = op_dp
+                elif pbt is not None and finance_cost is not None:
+                    other_inc_val = other_income.value if other_income else 0.0
+                    source_ids = pbt.source_datapoint_ids + finance_cost.source_datapoint_ids
+                    if other_income:
+                        source_ids += other_income.source_datapoint_ids
+                    op_dp = _build_derived(
+                        company_id=company_id,
+                        canonical_key="canonical.is.operating_profit",
+                        period=period,
+                        metric_raw="Operating Profit (Derived)",
+                        value=pbt.value + finance_cost.value - other_inc_val,
+                        anchor=pbt,
+                        source_ids=source_ids,
+                        formula="operating_profit = pbt + finance_cost - other_income",
+                    )
+                    new_derived.append(op_dp)
+                    lookup[op_profit_key] = op_dp
+
+            # 2. EBITDA Derivation
             ebitda_key = (company_id, period, "canonical.is.ebitda")
             if ebitda_key not in lookup:
-                op_profit_key = (company_id, period, "canonical.is.operating_profit")
-                da_key = (company_id, period, "canonical.is.depreciation_amortization")
-                pbt_key = (company_id, period, "canonical.is.pbt")
-                finance_cost_key = (company_id, period, "canonical.is.finance_cost")
-
-                op_profit = lookup.get(op_profit_key)
-                da = lookup.get(da_key)
+                op_profit = lookup.get((company_id, period, "canonical.is.operating_profit"))
+                da = lookup.get((company_id, period, "canonical.is.depreciation_amortization"))
+                pbt = lookup.get((company_id, period, "canonical.is.pbt"))
+                finance_cost = lookup.get((company_id, period, "canonical.is.finance_cost"))
 
                 if op_profit is not None and da is not None:
                     formula = DERIVATION_RULES["canonical.is.ebitda"]
                     ebitda_dp = _build_derived(
                         company_id=company_id,
+                        canonical_key="canonical.is.ebitda",
                         period=period,
                         metric_raw="EBITDA (Derived)",
                         value=op_profit.value + da.value,
@@ -80,24 +121,41 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
                     )
                     new_derived.append(ebitda_dp)
                     lookup[ebitda_key] = ebitda_dp
-                else:
-                    pbt = lookup.get(pbt_key)
-                    finance_cost = lookup.get(finance_cost_key)
-                    if pbt is not None and da is not None and finance_cost is not None:
-                        formula = DERIVATION_RULES["canonical.is.ebitda_fallback"]
-                        ebitda_dp = _build_derived(
-                            company_id=company_id,
-                            period=period,
-                            metric_raw="EBITDA (Derived)",
-                            value=pbt.value + finance_cost.value + da.value,
-                            anchor=pbt,
-                            source_ids=pbt.source_datapoint_ids + finance_cost.source_datapoint_ids + da.source_datapoint_ids,
-                            formula=formula,
-                        )
-                        new_derived.append(ebitda_dp)
-                        lookup[ebitda_key] = ebitda_dp
+                elif pbt is not None and da is not None and finance_cost is not None:
+                    formula = DERIVATION_RULES["canonical.is.ebitda_fallback"]
+                    ebitda_dp = _build_derived(
+                        company_id=company_id,
+                        canonical_key="canonical.is.ebitda",
+                        period=period,
+                        metric_raw="EBITDA (Derived)",
+                        value=pbt.value + finance_cost.value + da.value,
+                        anchor=pbt,
+                        source_ids=pbt.source_datapoint_ids + finance_cost.source_datapoint_ids + da.source_datapoint_ids,
+                        formula=formula,
+                    )
+                    new_derived.append(ebitda_dp)
+                    lookup[ebitda_key] = ebitda_dp
 
-            # 2. Current Investments Derivation Fallback
+            # 3. Gross Profit Derivation
+            gp_key = (company_id, period, "canonical.is.gross_profit")
+            if gp_key not in lookup:
+                rev = lookup.get((company_id, period, "canonical.is.revenue"))
+                cogs = lookup.get((company_id, period, "canonical.is.cost_of_sales"))
+                if rev is not None and cogs is not None:
+                    gp_dp = _build_derived(
+                        company_id=company_id,
+                        canonical_key="canonical.is.gross_profit",
+                        period=period,
+                        metric_raw="Gross Profit (Derived)",
+                        value=rev.value - abs(cogs.value),
+                        anchor=rev,
+                        source_ids=rev.source_datapoint_ids + cogs.source_datapoint_ids,
+                        formula="gross_profit = revenue - cost_of_sales",
+                    )
+                    new_derived.append(gp_dp)
+                    lookup[gp_key] = gp_dp
+
+            # 4. Current Investments Derivation Fallback
             ci_key = (company_id, period, "canonical.bs.current_investments")
             tca_key = (company_id, period, "canonical.bs.total_current_assets")
             if ci_key not in lookup and tca_key in lookup:
@@ -135,5 +193,27 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
                     )
                     new_derived.append(ci_dp)
                     lookup[ci_key] = ci_dp
+
+            # 5. Total Assets Reconciliation Derivation
+            ta_key = (company_id, period, "canonical.bs.total_assets")
+            tnca = lookup.get((company_id, period, "canonical.bs.total_non_current_assets"))
+            tca_dp = lookup.get((company_id, period, "canonical.bs.total_current_assets"))
+
+            if tnca is not None and tca_dp is not None:
+                calculated_ta = tnca.value + tca_dp.value
+                existing_ta = lookup.get(ta_key)
+                if existing_ta is None or abs(existing_ta.value - calculated_ta) > 1.0:
+                    ta_dp = _build_derived(
+                        company_id=company_id,
+                        canonical_key="canonical.bs.total_assets",
+                        period=period,
+                        metric_raw="Total Assets (Reconciled)",
+                        value=calculated_ta,
+                        anchor=tnca,
+                        source_ids=tnca.source_datapoint_ids + tca_dp.source_datapoint_ids,
+                        formula="total_assets = total_non_current_assets + total_current_assets",
+                    )
+                    new_derived.append(ta_dp)
+                    lookup[ta_key] = ta_dp
 
     return new_derived
