@@ -212,7 +212,7 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
 
     # Discover available 10-K fiscal years from key financial concepts
     available_fys: set[int] = set()
-    for probe_tag in ["Revenues", "SalesRevenueNet", "NetIncomeLoss", "Assets", "OperatingIncomeLoss"]:
+    for probe_tag in ["Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet", "NetIncomeLoss", "Assets", "OperatingIncomeLoss"]:
         if probe_tag in us_gaap:
             for u in us_gaap[probe_tag].get("units", {}).values():
                 for itm in u:
