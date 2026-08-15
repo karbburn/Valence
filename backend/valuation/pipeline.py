@@ -47,14 +47,15 @@ def run_valuation(
         current_share_price = mdata.price.value
 
     # 2. Sourced cash from latest historicals (FY26), falling back to 0.0 (never constant Infosys 22201.0)
-    cash_cr = spec.historicals.get_value("canonical.bs.cash_and_bank", "FY26")
+    latest_hist = spec.historicals.periods[-1] if spec.historicals.periods else "FY26"
+    cash_cr = spec.historicals.get_value("canonical.bs.cash_and_bank", latest_hist)
     if cash_cr is None:
         cash_cr = 0.0
 
-    # 3. Sourced diluted share count, resolving dynamically per company (never constant Infosys 405.76)
+    # 3. Sourced diluted share count, resolving dynamically per company
     shares_cr: Optional[float] = None
     if spec.share_count:
-        shares_cr = spec.share_count.get_diluted("FY26") or spec.share_count.get_diluted("FY27")
+        shares_cr = spec.share_count.get_diluted(latest_hist) or spec.share_count.get_diluted("FY27")
     if not shares_cr or shares_cr <= 0:
         if spec.metadata.shares_outstanding and spec.metadata.shares_outstanding > 0:
             shares_cr = spec.metadata.shares_outstanding
@@ -66,7 +67,7 @@ def run_valuation(
     for scenario in ["base", "bull", "bear"]:
         # Find debt schedule for scenario, falling back to historical borrowings
         ds = next((d for d in spec.debt_schedule if d.scenario == scenario), None)
-        debt_cr = (ds.closing("FY26") if ds else 0.0) or (spec.historicals.get_value("canonical.bs.borrowings", "FY26") or 0.0)
+        debt_cr = (ds.closing(latest_hist) if ds else 0.0) or (spec.historicals.get_value("canonical.bs.borrowings", latest_hist) or 0.0)
 
         # 4. Compute WACC Breakdown — source inputs from assumptions if set, else market data provider
         def _wacc_input(driver_key: str) -> Optional[float]:

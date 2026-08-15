@@ -155,11 +155,17 @@ async function fetchModelSpec(companyId = currentCompanyId) {
 
         const res = await fetch(`/api/model/${companyId}`);
         if (!res.ok) {
-            showError(`Failed to load model for ${companyId} (${res.status})`);
+            let detail = `${res.status}`;
+            try {
+                const errJson = await res.json();
+                if (errJson.detail) detail = errJson.detail;
+            } catch (e) {}
+            showError(`Failed to load ${companyId}: ${detail}`);
             return;
         }
         currentSpec = await res.json();
         renderDashboard();
+        loadCompanySelector();
     } catch (err) {
         showError(`Network error: ${err.message}`);
     } finally {

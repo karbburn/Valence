@@ -50,10 +50,15 @@ def _ensure_universe_seeded() -> None:
         _UNIVERSE_SEEDED = True
 
 
+from backend.data.batch import ensure_company_ingested
+from backend.data.universe.store import update_onboarding_status
+
+
 def _get_hist_model(company_id: str = "infy_infy") -> HistoricalModel:
     """Return cached HistoricalModel for the given company_id."""
     global _HIST_MODEL_CACHE
     if company_id not in _HIST_MODEL_CACHE:
+        ensure_company_ingested(company_id)
         _HIST_MODEL_CACHE[company_id] = run_historical(
             target_periods=["FY24", "FY25", "FY26"],
             company_id=company_id,
@@ -72,16 +77,33 @@ def _get_or_build_spec(company_id: str = "infy_infy") -> ModelSpecification:
                 print(f"Loaded {company_id} ModelSpecification from precomputed cache.")
             except Exception as e:
                 print(f"Failed to load cache for {company_id}, compiling live: {e}")
+                ensure_company_ingested(company_id)
                 hist_m = _get_hist_model(company_id)
                 f_spec = run_forecast_pipeline(hist_m)
                 v_spec = run_valuation(f_spec)
                 _MODEL_CACHE[company_id] = run_qa(v_spec)
         else:
+            print(f"No precomputed cache for {company_id}. Ingesting & compiling live...")
+            ensure_company_ingested(company_id)
             hist_m = _get_hist_model(company_id)
             f_spec = run_forecast_pipeline(hist_m)
             v_spec = run_valuation(f_spec)
             q_spec = run_qa(v_spec)
             _MODEL_CACHE[company_id] = q_spec
+
+            try:
+                cache_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(cache_path, "w", encoding="utf-8") as f:
+                    f.write(q_spec.serialize())
+                print(f"Wrote compiled cache for {company_id}.")
+            except Exception as e:
+                print(f"Warning: could not write cache for {company_id}: {e}")
+
+            try:
+                update_onboarding_status(company_id, "onboarded", notes="On-demand live ingestion")
+            except Exception:
+                pass
+
     return _MODEL_CACHE[company_id]
 
 
@@ -101,8 +123,16 @@ class RevertRequest(BaseModel):
 @router.get("/model/{company_id}")
 def get_model_spec(company_id: str = "infy_infy") -> Dict[str, Any]:
     """Fetch complete ModelSpecification JSON for company."""
-    spec = _get_or_build_spec(company_id)
-    return spec.model_dump(mode="json")
+    try:
+        spec = _get_or_build_spec(company_id)
+        return spec.model_dump(mode="json")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=422 if "No canonical" in str(e) or "unmapped" in str(e) else 500,
+            detail=f"Could not build valuation model for '{company_id}': {str(e)}"
+        )
 
 
 @router.post("/model/recompute")

@@ -63,7 +63,8 @@ SEED_COMPANIES: list[dict] = [
         "exchange": "NSE",
         "sector": "Information Technology",
         "industry": "IT Services",
-        "onboarding_status": "not_yet_attempted",
+        "onboarding_status": "onboarded",
+        "onboarding_notes": "Tier 2 Expansion - Fully validated",
     },
     {
         "company_id": "hcltech_hcltech",
@@ -73,7 +74,8 @@ SEED_COMPANIES: list[dict] = [
         "exchange": "NSE",
         "sector": "Information Technology",
         "industry": "IT Services",
-        "onboarding_status": "not_yet_attempted",
+        "onboarding_status": "onboarded",
+        "onboarding_notes": "Tier 2 Expansion - Fully validated",
     },
     {
         "company_id": "lt_lt",
@@ -83,7 +85,8 @@ SEED_COMPANIES: list[dict] = [
         "exchange": "NSE",
         "sector": "Capital Goods",
         "industry": "Engineering & Construction",
-        "onboarding_status": "not_yet_attempted",
+        "onboarding_status": "onboarded",
+        "onboarding_notes": "Tier 2 Expansion - Fully validated",
     },
     {
         "company_id": "sunpharma_sunpharma",
@@ -93,7 +96,8 @@ SEED_COMPANIES: list[dict] = [
         "exchange": "NSE",
         "sector": "Healthcare",
         "industry": "Pharmaceuticals",
-        "onboarding_status": "not_yet_attempted",
+        "onboarding_status": "onboarded",
+        "onboarding_notes": "Tier 2 Expansion - Fully validated",
     },
     # --- Financial Excluded India Samples (to verify filter) ---
     {
@@ -159,7 +163,8 @@ SEED_COMPANIES: list[dict] = [
         "exchange": "NASDAQ",
         "sector": "Technology",
         "industry": "Semiconductors",
-        "onboarding_status": "not_yet_attempted",
+        "onboarding_status": "onboarded",
+        "onboarding_notes": "Tier 2 Expansion - Fully validated",
     },
     {
         "company_id": "googl_us",
@@ -169,7 +174,8 @@ SEED_COMPANIES: list[dict] = [
         "exchange": "NASDAQ",
         "sector": "Communication Services",
         "industry": "Internet Content & Information",
-        "onboarding_status": "not_yet_attempted",
+        "onboarding_status": "onboarded",
+        "onboarding_notes": "Tier 2 Expansion - Fully validated",
     },
     {
         "company_id": "amzn_us",
@@ -179,7 +185,8 @@ SEED_COMPANIES: list[dict] = [
         "exchange": "NASDAQ",
         "sector": "Consumer Cyclical",
         "industry": "Internet Retail",
-        "onboarding_status": "not_yet_attempted",
+        "onboarding_status": "onboarded",
+        "onboarding_notes": "Tier 2 Expansion - Fully validated",
     },
     # --- Financial Excluded US Samples (to verify filter) ---
     {
