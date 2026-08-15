@@ -351,8 +351,17 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     for idx, (lbl, formula, c_val, fmt) in enumerate(bridge_rows):
         r = 17 + idx
         is_price = idx == len(bridge_rows) - 1
-        ws.cell(row=r, column=2, value=lbl).font = FONT_TOTAL if is_price else FONT_SUBHEADER
         
+        # Merge label columns B..G so there are no empty/unformatted cells between label and value column H
+        ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=7)
+        cell_lbl = ws.cell(row=r, column=2, value=lbl)
+        cell_lbl.font = FONT_TOTAL if is_price else FONT_SUBHEADER
+        cell_lbl.alignment = ALIGN_LEFT
+        
+        # Apply borders across merged label cells B..G
+        for col in range(2, 8):
+            ws.cell(row=r, column=col).border = BORDER_TOTAL if is_price else BORDER_BOX
+
         if str(formula).startswith("="):
             write_formula_cell(
                 ws, r, 8,
