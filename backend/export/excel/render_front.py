@@ -104,9 +104,10 @@ def render_cover(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         ws.cell(row=row, column=2).border = BORDER_BOX
         ws.cell(row=row, column=3).border = BORDER_BOX
 
-    # Footer note
-    ws["B20"] = "CONFIDENTIAL — FOR INTERNAL ANALYST USE ONLY"
-    ws["B20"].font = FONT_SUBTITLE
+    # Footer note with creator hyperlink
+    ws["B20"] = "By Sourabh"
+    ws["B20"].font = FONT_HYPERLINK
+    ws["B20"].hyperlink = "https://sourabh08.vercel.app/"
 
     return ws
 
@@ -239,11 +240,11 @@ def render_model_guide(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     write_table_header(ws, r_fm, ["Valuation Metric", "Excel Formula Structure", "Methodology Explanation (Plain English)"], start_col=2)
     
     formula_guide = [
-        ("Free Cash Flow to Firm (FCFF)", "=NOPAT + D&A - CapEx - ΔNWC", "The actual cash left over for all capital providers after paying operating expenses, taxes, and capital investments."),
-        ("Mid-Year Discount Factor", "=1/((1+WACC)^(t - 0.5))", "Discounts future cash flows assuming cash is received evenly throughout the year (exponent t - 0.5 for t=1..5)."),
-        ("Terminal Value (Gordon Growth)", "=FCFF_5 * (1 + g) / (WACC - g)", "Estimates the value of all cash flows beyond Year 5 assuming the company grows forever at a steady rate g."),
-        ("Equity Value Bridge", "=EV + Cash + MktSec + NonCurrInv - Debt", "Converts Enterprise Value (business operations) to Equity Value (shareholders' wealth) by adding cash and subtracting debt."),
-        ("Implied Share Price", "=Equity Value / Diluted Shares", "Calculates the fair value price per share to compare directly against live market stock price."),
+        ("Free Cash Flow to Firm (FCFF)", "NOPAT + D&A - CapEx - ΔNWC", "The actual cash left over for all capital providers after paying operating expenses, taxes, and capital investments."),
+        ("Mid-Year Discount Factor", "1 / ((1 + WACC) ^ (t - 0.5))", "Discounts future cash flows assuming cash is received evenly throughout the year (exponent t - 0.5 for t=1..5)."),
+        ("Terminal Value (Gordon Growth)", "FCFF_5 * (1 + g) / (WACC - g)", "Estimates the value of all cash flows beyond Year 5 assuming the company grows forever at a steady rate g."),
+        ("Equity Value Bridge", "EV + Cash + MktSec + NonCurrInv - Debt", "Converts Enterprise Value (business operations) to Equity Value (shareholders' wealth) by adding cash and subtracting debt."),
+        ("Implied Share Price", "Equity Value / Diluted Shares", "Calculates the fair value price per share to compare directly against live market stock price."),
     ]
     for idx, (metric, form_str, desc) in enumerate(formula_guide):
         row_i = r_fm + 1 + idx
