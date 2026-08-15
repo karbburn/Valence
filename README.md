@@ -61,7 +61,6 @@ Valence/
 │   ├── normalization/        # Taxonomy mapping registry & canonical metric derivations
 │   ├── validation/           # QA model validation checks & diagnostic pipeline
 │   └── valuation/            # DCF, WACC (CAPM), Reverse DCF, and Sensitivity analysis
-├── assets/                   # Design assets, icon, and system architecture docs
 └── README.md
 ```
 
