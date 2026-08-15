@@ -107,6 +107,42 @@ def assemble_income_statement(
                 )
             )
 
+    # Derivation Fallback: Ensure canonical.is.operating_profit exists if missing
+    op_item = next((i for i in items if i.canonical_key == "canonical.is.operating_profit"), None)
+    if op_item is None or not op_item.values_by_period:
+        rev_item = next((i for i in items if i.canonical_key == "canonical.is.revenue"), None)
+        cos_item = next((i for i in items if i.canonical_key == "canonical.is.cost_of_sales"), None)
+        gp_item = next((i for i in items if i.canonical_key == "canonical.is.gross_profit"), None)
+        other_exp_item = next((i for i in items if i.canonical_key == "canonical.is.other_exp"), None)
+        selling_admin_item = next((i for i in items if i.canonical_key == "canonical.is.selling_admin_exp"), None)
+
+        derived_op: Dict[str, float] = {}
+        for p in periods:
+            r_val = rev_item.values_by_period.get(p) if rev_item else None
+            gp_val = gp_item.values_by_period.get(p) if gp_item else None
+            cos_val = cos_item.values_by_period.get(p) if cos_item else None
+            if gp_val is None and r_val is not None and cos_val is not None:
+                gp_val = r_val - cos_val
+
+            oe_val = (other_exp_item.values_by_period.get(p) if other_exp_item else 0.0) or 0.0
+            sa_val = (selling_admin_item.values_by_period.get(p) if selling_admin_item else 0.0) or 0.0
+            opex = oe_val + sa_val
+
+            if gp_val is not None and opex > 0:
+                derived_op[p] = round(gp_val - opex, 2)
+
+        if derived_op:
+            items.append(
+                IncomeStatementLineItem(
+                    canonical_key="canonical.is.operating_profit",
+                    display_label="Operating Profit / EBIT",
+                    values_by_period=derived_op,
+                    currency=items[0].currency if items else "USD",
+                    units=items[0].units if items else "millions",
+                    lineage_ids_by_period={},
+                )
+            )
+
     return IncomeStatement(
         company_id=company_id,
         periods=periods,
