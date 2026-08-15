@@ -37,10 +37,20 @@ from backend.export.excel.styles import (
     FONT_ALERT,
     FONT_BRAND_SUBTITLE,
     FONT_BRAND_TITLE,
+    FILL_CODE,
+    FMT_AMOUNT,
+    FMT_CURRENCY_INT,
+    FMT_PERCENT,
+    FMT_PRICE,
+    FONT_ALERT,
+    FONT_BRAND_SUBTITLE,
+    FONT_BRAND_TITLE,
+    FONT_CODE,
     FONT_FORMULA,
     FONT_HEADER,
     FONT_INPUT,
     FONT_HYPERLINK,
+    FONT_SIGNATURE,
     FONT_PASS,
     FONT_SECTION,
     FONT_SUBHEADER,
@@ -104,9 +114,9 @@ def render_cover(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         ws.cell(row=row, column=2).border = BORDER_BOX
         ws.cell(row=row, column=3).border = BORDER_BOX
 
-    # Footer note with creator hyperlink
+    # Footer note with creator hyperlink (Prominent 14pt Signature)
     ws["B20"] = "By Sourabh"
-    ws["B20"].font = FONT_HYPERLINK
+    ws["B20"].font = FONT_SIGNATURE
     ws["B20"].hyperlink = "https://sourabh08.vercel.app/"
 
     return ws
@@ -115,7 +125,7 @@ def render_cover(wb: Workbook, spec: ModelSpecification) -> Worksheet:
 def render_model_guide(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ws = wb.create_sheet(title="01_Model_Guide")
     apply_tab_defaults(ws, freeze_cell="A5")
-    set_col_widths(ws, {"A": 5, "B": 25, "C": 28, "D": 50})
+    set_col_widths(ws, {"A": 5, "B": 32, "C": 45, "D": 65})
 
     ws["B2"] = "WORKBOOK MODEL GUIDE"
     ws["B2"].font = FONT_TITLE
@@ -249,7 +259,10 @@ def render_model_guide(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     for idx, (metric, form_str, desc) in enumerate(formula_guide):
         row_i = r_fm + 1 + idx
         ws.cell(row=row_i, column=2, value=metric).font = FONT_SUBHEADER
-        ws.cell(row=row_i, column=3, value=form_str).font = FONT_FORMULA
+        cell_form = ws.cell(row=row_i, column=3, value=form_str)
+        cell_form.font = FONT_CODE
+        cell_form.fill = FILL_CODE
+        cell_form.alignment = ALIGN_LEFT
         ws.cell(row=row_i, column=4, value=desc).font = FONT_FORMULA
         for c in range(2, 5):
             ws.cell(row=row_i, column=c).border = BORDER_BOX
