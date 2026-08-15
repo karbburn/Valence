@@ -320,7 +320,7 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         )
 
     # DCF Bridge Block (rows 17-28, Column B = labels, Column H = values)
-    ws["B16"] = "DCF BRIDGE — EV TO EQUITY VALUE (INSTITUTIONAL BREAKDOWN)"
+    ws["B16"] = "DCF BRIDGE — EV TO EQUITY VALUE"
     ws["B16"].font = FONT_SECTION
 
     ccy = spec.metadata.currency

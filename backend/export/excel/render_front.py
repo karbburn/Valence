@@ -68,7 +68,7 @@ def render_cover(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ws["B2"].font = FONT_BRAND_TITLE
     ws["B2"].alignment = ALIGN_LEFT
 
-    ws["B3"] = "INSTITUTIONAL VALUATION PLATFORM"
+    ws["B3"] = "VALENCE VALUATION PLATFORM"
     ws["B3"].font = FONT_BRAND_SUBTITLE
     ws["B3"].alignment = ALIGN_LEFT
 
