@@ -115,13 +115,22 @@ def suggest_base_assumptions(
         result.append(_make("da_pct_revenue", da_pct, p, "base", source_da))
 
     # ------------------------------------------------------------------ #
-    # 5. Effective Tax Rate — Multi-year average
+    # 5. Effective Tax Rate — Multi-year average with statutory convergence
     # ------------------------------------------------------------------ #
     tax_rates = [ratios.get_value("effective_tax_rate_pct", p) for p in periods]
-    tax_rate = _avg(tax_rates) or default_tax
-    source_tax = f"Multi-year average effective tax rate ({first_p}-{last_p})"
-    for p in FORECAST_PERIODS:
-        result.append(_make("tax_rate", tax_rate, p, "base", source_tax))
+    hist_tax_rate = _avg(tax_rates) or default_tax
+
+    # Fade towards statutory rate in Years 3-5 (reflecting global minimum tax / credit phase-outs)
+    tax_fade_weights = [0.0, 0.0, 0.25, 0.50, 0.75]  # weight on statutory rate
+    for idx, p in enumerate(FORECAST_PERIODS):
+        w_stat = tax_fade_weights[idx] if idx < len(tax_fade_weights) else 1.0
+        p_tax = round((1.0 - w_stat) * hist_tax_rate + w_stat * default_tax, 2)
+        source_tax = (
+            f"Effective tax rate ({hist_tax_rate:.1f}%) fading to statutory ({default_tax:.1f}%)"
+            if w_stat > 0
+            else f"Multi-year average effective tax rate ({first_p}-{last_p})"
+        )
+        result.append(_make("tax_rate", p_tax, p, "base", source_tax))
 
     # ------------------------------------------------------------------ #
     # 6. DSO — most recent historical period

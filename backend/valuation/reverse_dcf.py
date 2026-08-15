@@ -32,11 +32,16 @@ def compute_reverse_dcf(
     cash_cr: float,
     debt_cr: float,
     shares_cr: float,
+    marketable_securities_cr: float = 0.0,
+    non_current_investments_cr: float = 0.0,
+    minority_interest_cr: float = 0.0,
+    preferred_stock_cr: float = 0.0,
     forecast: Optional[Forecast] = None,
     assumptions: Optional[List[AssumptionObject]] = None,
     historical_model=None,
     terminal_growth_rate: float = 4.0,
     exit_multiple: float = 20.0,
+    timing_convention: str = "mid_year",
 ) -> ReverseDCF:
     """Solve for implied terminal growth rate and revenue CAGR given market share price.
 
@@ -47,18 +52,25 @@ def compute_reverse_dcf(
         cash_cr: Cash balance in crores.
         debt_cr: Debt balance in crores.
         shares_cr: Diluted share count in crores.
+        marketable_securities_cr: Current investments balance.
+        non_current_investments_cr: Non-current investments balance.
+        minority_interest_cr: Minority interest balance.
+        preferred_stock_cr: Preferred stock balance.
         forecast: Forecast object (needed for revenue CAGR solver).
         assumptions: Base scenario assumptions (needed for revenue CAGR solver).
         historical_model: Historical model (needed for revenue CAGR solver).
         terminal_growth_rate: Base terminal growth rate.
         exit_multiple: Base exit multiple.
+        timing_convention: "mid_year" or "end_year".
     """
     if market_price <= 0 or shares_cr <= 0:
         return ReverseDCF(market_price=market_price, method_note="Invalid price or share count")
 
     # 1. Target Equity Value and EV
     target_equity_val = market_price * shares_cr
-    net_debt = debt_cr - cash_cr
+    total_liquid_and_investments = cash_cr + marketable_securities_cr + non_current_investments_cr
+    total_obligations = debt_cr + minority_interest_cr + preferred_stock_cr
+    net_debt = total_obligations - total_liquid_and_investments
     target_ev = target_equity_val + net_debt
 
     # 2. Target PV of Terminal Value
@@ -66,7 +78,7 @@ def compute_reverse_dcf(
     target_pv_tv = target_ev - sum_pv_fcff
 
     wacc_frac = wacc_pct / 100.0
-    df5 = 1.0 / ((1.0 + wacc_frac) ** 5)
+    df5 = 1.0 / ((1.0 + wacc_frac) ** 5.0)
 
     # Undiscounted target TV
     target_tv_undiscounted = target_pv_tv / df5 if df5 > 0 else 0.0
@@ -91,8 +103,13 @@ def compute_reverse_dcf(
             cash_cr=cash_cr,
             debt_cr=debt_cr,
             shares_cr=shares_cr,
+            marketable_securities_cr=marketable_securities_cr,
+            non_current_investments_cr=non_current_investments_cr,
+            minority_interest_cr=minority_interest_cr,
+            preferred_stock_cr=preferred_stock_cr,
             terminal_growth_rate=terminal_growth_rate,
             exit_multiple=exit_multiple,
+            timing_convention=timing_convention,
         )
 
     note = f"Solved exact implied perpetuity growth rate for market price INR {market_price:.2f}"
@@ -116,8 +133,13 @@ def _solve_implied_revenue_cagr(
     cash_cr: float,
     debt_cr: float,
     shares_cr: float,
-    terminal_growth_rate: float,
-    exit_multiple: float,
+    marketable_securities_cr: float = 0.0,
+    non_current_investments_cr: float = 0.0,
+    minority_interest_cr: float = 0.0,
+    preferred_stock_cr: float = 0.0,
+    terminal_growth_rate: float = 4.0,
+    exit_multiple: float = 20.0,
+    timing_convention: str = "mid_year",
     lo: float = -10.0,
     hi: float = 50.0,
     tol: float = 0.01,
@@ -144,7 +166,7 @@ def _solve_implied_revenue_cagr(
         trial_forecast = run_forecast(trial_assumptions, historical_model, "base")
 
         # Compute FCFF at base WACC
-        fcffs = compute_fcff_periods(trial_forecast, wacc_pct, "base")
+        fcffs = compute_fcff_periods(trial_forecast, wacc_pct, "base", timing_convention=timing_convention)  # type: ignore
         if not fcffs:
             return 0.0
 
@@ -152,8 +174,26 @@ def _solve_implied_revenue_cagr(
         last_ebitda = trial_forecast.get_value("canonical.is.ebitda", "FY31", "base") or 0.0
 
         # Compute DCF
-        tv = compute_terminal_value(last_fcff, last_ebitda, wacc_pct, terminal_growth_rate, exit_multiple, "gordon_growth")
-        bridge, _ = compute_dcf_bridge(fcffs, tv, cash_cr, debt_cr, shares_cr)
+        tv = compute_terminal_value(
+            last_fcff,
+            last_ebitda,
+            wacc_pct,
+            terminal_growth_rate,
+            exit_multiple,
+            "gordon_growth",
+            timing_convention=timing_convention,  # type: ignore
+        )
+        bridge, _ = compute_dcf_bridge(
+            fcffs,
+            tv,
+            cash_cr=cash_cr,
+            debt_cr=debt_cr,
+            shares_cr=shares_cr,
+            marketable_securities_cr=marketable_securities_cr,
+            non_current_investments_cr=non_current_investments_cr,
+            minority_interest_cr=minority_interest_cr,
+            preferred_stock_cr=preferred_stock_cr,
+        )
         return bridge.implied_share_price
 
     # Check boundaries
