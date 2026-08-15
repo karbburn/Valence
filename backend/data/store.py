@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 if TYPE_CHECKING:
     from backend.normalization.taxonomy.models import CanonicalDatapoint, TaxonomyMapping
 
-Source = Literal["screener", "bse_filing", "nse_filing", "sec_edgar"]
+Source = Literal["screener", "bse_filing", "nse_filing", "sec_edgar", "yfinance_live", "twelvedata"]
 Status = Literal["reported", "reported_adjusted", "derived"]
 
 

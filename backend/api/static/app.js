@@ -83,26 +83,35 @@ async function handleSearchInput(query) {
     const drop = document.getElementById("search-dropdown");
     if (!query?.trim()) { drop.classList.add("hidden"); return; }
     try {
-        const res = await fetch(`/api/companies/search?q=${encodeURIComponent(query)}&limit=12`);
+        const res = await fetch(`/api/companies/search?q=${encodeURIComponent(query)}&limit=15`);
         const results = await res.json();
         if (!results?.length) {
-            drop.innerHTML = `<div class="px-4 py-3 text-xs text-slate-400">No matching companies</div>`;
+            drop.innerHTML = `<div class="px-4 py-3 text-xs text-slate-400">No matching companies found in US/India universe</div>`;
         } else {
             drop.innerHTML = results.map(c => {
-                const mktClass = c.market === 'us' ? 'bg-blue-900/60 text-blue-300 border-blue-700' : 'bg-orange-900/60 text-orange-300 border-orange-700';
-                const statusDot = c.onboarding_status === 'onboarded' ? '🟢' : '🔴';
-                return `<div onclick="selectCompanyFromSearch('${c.company_id}','${c.ticker}','${c.name.replace(/'/g,"\\'")}','${c.market}')"
-                    class="px-4 py-2.5 hover:bg-slate-800 cursor-pointer flex items-center justify-between text-xs border-b border-slate-800 last:border-0">
-                    <div class="flex items-center gap-2.5">
-                        <span class="font-bold text-white font-mono bg-slate-800 px-2 py-0.5 rounded border border-slate-700">${c.ticker}</span>
-                        <div>
-                            <div class="text-slate-100 font-semibold truncate max-w-[160px]">${c.name}</div>
-                            <div class="text-slate-500 text-[10px]">${c.sector || ''}</div>
+                const isUS = c.market === 'us';
+                const flag = isUS ? '🇺🇸' : '🇮🇳';
+                const mktBadge = isUS ? 'bg-blue-950/80 text-blue-300 border-blue-800' : 'bg-orange-950/80 text-orange-300 border-orange-800';
+                const isOnboarded = c.onboarding_status === 'onboarded';
+                const statusBadge = isOnboarded 
+                    ? '<span class="text-[9px] font-bold text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800">⚡ INSTANT</span>'
+                    : '<span class="text-[9px] font-bold text-indigo-300 bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-800">🌐 LIVE BUILD</span>';
+                
+                return `<div onclick="selectCompanyFromSearch('${c.company_id}','${c.ticker}','${c.name.replace(/'/g,"\\'")}','${c.market}', ${isOnboarded})"
+                    class="px-4 py-2.5 hover:bg-slate-800/90 cursor-pointer flex items-center justify-between text-xs border-b border-slate-800/80 last:border-0 transition-colors">
+                    <div class="flex items-center gap-2.5 min-w-0 pr-2">
+                        <span class="font-bold text-white font-mono bg-slate-950 px-2 py-0.5 rounded border border-slate-700 text-xs shrink-0">${c.ticker}</span>
+                        <div class="min-w-0">
+                            <div class="text-slate-100 font-semibold truncate text-xs">${c.name}</div>
+                            <div class="text-slate-500 text-[10px] truncate">${c.sector || 'Equities'} · ${c.exchange || (isUS ? 'SEC_EDGAR' : 'NSE')}</div>
                         </div>
                     </div>
-                    <div class="flex items-center gap-1.5">
-                        <span class="text-[9px] font-bold ${statusDot === '🔴' ? 'text-slate-500' : 'text-emerald-400'}">${c.onboarding_status === 'onboarded' ? 'READY' : 'PENDING'}</span>
-                        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold border ${mktClass}">${c.market.toUpperCase()}</span>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        ${statusBadge}
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold border flex items-center gap-1 ${mktBadge}">
+                            <span>${flag}</span>
+                            <span>${c.market.toUpperCase()}</span>
+                        </span>
                     </div>
                 </div>`;
             }).join('');
@@ -116,7 +125,7 @@ function handleSearchFocus() {
     if (input?.value?.trim()) handleSearchInput(input.value);
 }
 
-function selectCompanyFromSearch(companyId, ticker, name, market) {
+function selectCompanyFromSearch(companyId, ticker, name, market, isCached = false) {
     document.getElementById("search-dropdown").classList.add("hidden");
     document.getElementById("company-search-input").value = "";
     const select = document.getElementById("company-select");
@@ -130,6 +139,20 @@ function selectCompanyFromSearch(companyId, ticker, name, market) {
         }
         select.value = companyId;
     }
+    
+    // Customize loading message
+    const titleEl = document.getElementById("loading-title");
+    const subEl = document.getElementById("loading-subtitle");
+    if (titleEl && subEl) {
+        if (!isCached) {
+            titleEl.textContent = `Compiling Live Model for ${ticker}`;
+            subEl.textContent = `Ingesting ${market === 'us' ? 'SEC EDGAR 10-K' : 'NSE'} statements, normalizing financial taxonomy, and calculating DCF valuation...`;
+        } else {
+            titleEl.textContent = `Loading ${ticker} Model`;
+            subEl.textContent = `Loading precomputed valuation model and live market quotes...`;
+        }
+    }
+    
     fetchModelSpec(companyId);
 }
 

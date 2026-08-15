@@ -27,22 +27,14 @@ SEC_HEADERS = {
     "Accept-Encoding": "gzip, deflate",
 }
 
-# Standard India Universe Seed Listing
-INDIA_LISTINGS: List[Dict[str, str]] = [
-    {"symbol": "INFY", "name": "Infosys Limited", "sector": "Information Technology", "industry": "IT Services & Consulting"},
-    {"symbol": "TCS", "name": "Tata Consultancy Services Limited", "sector": "Information Technology", "industry": "IT Services & Consulting"},
-    {"symbol": "TATAMOTORS", "name": "Tata Motors Limited", "sector": "Automotive", "industry": "Automobiles"},
-    {"symbol": "TATASTEEL", "name": "Tata Steel Limited", "sector": "Metals & Mining", "industry": "Steel & Iron Products"},
-    {"symbol": "WIPRO", "name": "Wipro Limited", "sector": "Information Technology", "industry": "IT Services"},
-    {"symbol": "HCLTECH", "name": "HCL Technologies Limited", "sector": "Information Technology", "industry": "IT Services"},
-    {"symbol": "LT", "name": "Larsen & Toubro Limited", "sector": "Capital Goods", "industry": "Engineering & Construction"},
-    {"symbol": "SUNPHARMA", "name": "Sun Pharmaceutical Industries Limited", "sector": "Healthcare", "industry": "Pharmaceuticals"},
-    {"symbol": "RELIANCE", "name": "Reliance Industries Limited", "sector": "Energy", "industry": "Oil & Gas / Conglomerate"},
-    {"symbol": "BHARTIARTL", "name": "Bharti Airtel Limited", "sector": "Telecommunication", "industry": "Telecom Services"},
-    {"symbol": "ITC", "name": "ITC Limited", "sector": "Consumer Goods", "industry": "FMCG"},
-    {"symbol": "HDFCBANK", "name": "HDFC Bank Limited", "sector": "Financial Services", "industry": "Private Sector Bank"},
-    {"symbol": "ICICIBANK", "name": "ICICI Bank Limited", "sector": "Financial Services", "industry": "Private Sector Bank"},
-]
+from backend.data.universe.india_universe_data import INDIA_EQUITIES
+
+# Initial precomputed target companies
+ONBOARDED_SEEDS = {
+    "infy_infy", "tcs_tcs", "tatamotors_tatamotors", "tatasteel_tatasteel",
+    "wipro_wipro", "hcltech_hcltech", "lt_lt", "sunpharma_sunpharma",
+    "aapl_us", "msft_us", "infy_us", "nvda_us", "googl_us", "amzn_us"
+}
 
 
 def acquire_india_universe() -> List[UniverseCompany]:
@@ -50,7 +42,7 @@ def acquire_india_universe() -> List[UniverseCompany]:
     companies: List[UniverseCompany] = []
     now = datetime.now()
 
-    for item in INDIA_LISTINGS:
+    for item in INDIA_EQUITIES:
         sym = item["symbol"].strip().upper()
         cid = f"{sym.lower()}_{sym.lower()}"
         is_fin, reason = is_financial_sector(item["sector"], item["industry"])
@@ -64,8 +56,8 @@ def acquire_india_universe() -> List[UniverseCompany]:
             sector=item["sector"],
             industry=item["industry"],
             is_financial=is_fin,
-            onboarding_status="onboarded" if cid in ("infy_infy", "tcs_tcs", "tatamotors_tatamotors", "tatasteel_tatasteel") else "not_yet_attempted",
-            onboarding_notes=f"Acquired via India Universe Listing ({reason})",
+            onboarding_status="onboarded" if cid in ONBOARDED_SEEDS else "not_yet_attempted",
+            onboarding_notes=f"Acquired via India Master Listing ({reason})",
             last_updated=now,
         )
         companies.append(c)
@@ -91,9 +83,19 @@ def acquire_us_universe() -> List[UniverseCompany]:
                 if not ticker or not name:
                     continue
 
+                # Filter out obvious warrants, units, preferreds
+                if any(x in ticker for x in ["-P", ".P", "-W", ".W", "-U", ".U", "/"]):
+                    continue
+
                 cid = f"{ticker.lower()}_us"
-                # Determine financial filter from title keywords
-                is_fin, reason = is_financial_sector("Technology", name)
+                
+                # Check financial keywords in title
+                name_upper = name.upper()
+                is_fin = any(kw in name_upper for kw in [
+                    " BANK", " BANC", "BANCSHARES", "FINANCIAL", "CAPITAL CORP", 
+                    "INSURANCE", "REIT", "REAL ESTATE INVESTMENT", "MORTGAGE", "TRUST", "FUNDS"
+                ])
+                reason = "Financial Institution Filter" if is_fin else "Non-Financial Filer"
 
                 c = UniverseCompany(
                     company_id=cid,
@@ -101,11 +103,11 @@ def acquire_us_universe() -> List[UniverseCompany]:
                     name=name,
                     market="us",
                     exchange="SEC_EDGAR",
-                    sector="General",
-                    industry="General",
+                    sector="Financial Services" if is_fin else "General Non-Financial",
+                    industry="Financial" if is_fin else "Corporate 10-K Filer",
                     is_financial=is_fin,
-                    onboarding_status="onboarded" if cid in ("aapl_us", "msft_us", "infy_us") else "not_yet_attempted",
-                    onboarding_notes=f"Acquired via SEC company_tickers.json (CIK: {entry.get('cik_str')})",
+                    onboarding_status="onboarded" if cid in ONBOARDED_SEEDS else "not_yet_attempted",
+                    onboarding_notes=f"Acquired via SEC EDGAR (CIK: {entry.get('cik_str')}) - {reason}",
                     last_updated=now,
                 )
                 companies.append(c)
