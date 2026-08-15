@@ -125,12 +125,23 @@ curl -O "http://localhost:8000/api/export/excel?company_id=infy_infy"
 
 ---
 
-## Verification & Self-Checks
+## Verification & Institutional Audit Suite
 
-Run the automated self-check test suites to verify Excel generation and API endpoints:
+Valence includes an automated **12-Point Institutional Financial Audit Suite** for post-export model verification across all generated `.xlsx` workbooks (`amzn_valuation_model.xlsx`, `nvda_valuation_model.xlsx`, `sunpharma_valuation_model.xlsx`, `infosys_valuation_model.xlsx`):
+
+- **3-Statement Accounting Equality**: Verifies $\text{Total Assets} = \text{Total Liabilities} + \text{Total Equity}$ for all historical and forecast periods (FY24–FY31) with zero balance sheet gap.
+- **Financial Math Tie-Outs**:
+  - $\text{EV Tie-out}$: $\text{EV} = \sum \text{PV(FCFF)} + \text{PV(TV)}$ ($\Delta = 0.0000$).
+  - $\text{Net Debt Cash Bridge}$: $\text{Net Debt} = \text{Borrowings} - \text{Liquid Cash \& Investments}$ ($\Delta = 0.0000$).
+  - $\text{Equity Value Tie-out}$: $\text{Equity Value} = \text{EV} - \text{Net Debt}$ ($\Delta = 0.0000$).
+  - $\text{Implied Share Price}$: $\text{Price} = \frac{\text{Equity Value}}{\text{Diluted Shares}}$ ($\Delta < 0.005$).
+- **Institutional Visual Branding**:
+  - **`By Sourabh` Signature**: 14pt bold blue signature hyperlink on `00_Cover` cell `B20` hyperlinked to [https://sourabh08.vercel.app/](https://sourabh08.vercel.app/).
+  - **Consolas Formula Code Blocks**: `01_Model_Guide` Column C formulas styled in `Consolas 11pt Bold` with light blue tint background fill (`#EFF6FF`).
+  - **DCF Bridge Grid Formatting**: `31_DCF` Bridge labels merged across range `B:G` with clean double-underline accounting borders on final totals.
 
 ```bash
-# Run Excel Exporter Self-Check
+# Run Institutional Financial Audit & Excel Exporter Self-Check
 python -m backend.export.excel.self_check
 
 # Run Web API & Recomputation Self-Check
