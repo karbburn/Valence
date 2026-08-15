@@ -56,6 +56,10 @@ def get_assumption_value(spec: ModelSpecification, driver_key: str, period: str,
     return 0.0
 
 
+from pathlib import Path
+from openpyxl.drawing.image import Image as OpenpyxlImage
+
+
 def render_cover(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ws = wb.create_sheet(title="00_Cover")
     apply_tab_defaults(ws, freeze_cell="A1")
@@ -64,6 +68,19 @@ def render_cover(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     # Header / Branding Slot
     ws["B2"] = "VALENCE FINANCIAL MODELING PLATFORM"
     ws["B2"].font = FONT_SUBTITLE
+
+    icon_path = Path(__file__).resolve().parent / "assets" / "icon.png"
+    if not icon_path.exists():
+        icon_path = Path(__file__).resolve().parent.parent.parent.parent / "assets" / "icon.png"
+
+    if icon_path.exists():
+        try:
+            img = OpenpyxlImage(str(icon_path))
+            img.width = 64
+            img.height = 64
+            ws.add_image(img, "D2")
+        except Exception as e:
+            print(f"Warning: could not add cover logo image: {e}")
 
     ws["B3"] = spec.metadata.name.upper()
     ws["B3"].font = FONT_TITLE
