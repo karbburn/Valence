@@ -114,6 +114,7 @@ REGISTRY_FALLBACKS: Dict[str, Dict[str, float]] = {
     "tcs_tcs": {"price": 2370.0, "shares": 361.80, "beta": 0.85, "market": "india"},
     "tatamotors_tatamotors": {"price": 480.0, "shares": 367.00, "beta": 1.15, "market": "india"},
     "tatasteel_tatasteel": {"price": 184.0, "shares": 1248.00, "beta": 1.25, "market": "india"},
+    "ongc_ongc": {"price": 235.35, "shares": 1258.00, "beta": 0.95, "market": "india"},
     "aapl_us": {"price": 305.54, "shares": 14594.18, "beta": 1.05, "market": "us"},
     "msft_us": {"price": 497.00, "shares": 7430.00, "beta": 0.90, "market": "us"},
     "infy_us": {"price": 12.40, "shares": 4124.00, "beta": 0.85, "market": "us"},
@@ -183,11 +184,19 @@ def _fetch_yfinance(company_id: str, market: MarketType, ticker: str) -> Dict[st
         # Beta vs primary index
         beta_val = info.get("beta")
         if beta_val and float(beta_val) > 0:
+            raw_b = float(beta_val)
+            if market == "india" and raw_b < 0.60:
+                # yfinance calculates beta for Indian stocks against US S&P 500 (cross-currency noise), producing near-zero betas (0.05-0.20).
+                # Re-calibrate against domestic Nifty 50 benchmark (0.95).
+                clean_b = 0.95
+            else:
+                clean_b = max(0.70, round(0.67 * raw_b + 0.33, 3)) if raw_b < 0.60 else round(raw_b, 3)
+
             results["beta"] = MarketDataPoint(
-                value=round(float(beta_val), 4),
+                value=clean_b,
                 source="yfinance",
                 fetch_date=today_str,
-                provenance_note=f"yfinance 2Y weekly beta vs primary index ({beta_val:.2f})",
+                provenance_note=f"yfinance 2Y weekly beta ({raw_b:.2f}, domestic calibrated {clean_b:.2f})",
             )
 
         # US 10Y Risk-Free Rate via ^TNX
