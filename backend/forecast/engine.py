@@ -65,37 +65,41 @@ def run_forecast(
 
     items: List[ForecastLineItem] = []
 
-    # Seed prior-period values from last historical (FY26)
+    # Seed prior-period values from last available historical period
+    last_p = historical_model.periods[-1] if (historical_model.periods and len(historical_model.periods) > 0) else "FY26"
     hist_is = historical_model.income_statement
     hist_bs = historical_model.balance_sheet
     hist_cf = historical_model.cash_flow_statement
 
-    prior_rev = hist_is.get_value("canonical.is.revenue", "FY26") or 0.0
-    prior_total_assets = hist_bs.get_value("canonical.bs.total_assets", "FY26") or 0.0
-    prior_total_equity = hist_bs.get_value("canonical.bs.total_equity", "FY26") or 0.0
+    prior_rev = hist_is.get_value("canonical.is.revenue", last_p) or 0.0
+    prior_total_assets = hist_bs.get_value("canonical.bs.total_assets", last_p) or 0.0
+    prior_total_equity = hist_bs.get_value("canonical.bs.total_equity", last_p) or 0.0
     prior_trade_rec = (
-        (hist_bs.get_value("canonical.bs.trade_receivables", "FY26") or 0.0) +
-        (hist_bs.get_value("canonical.bs.unbilled_revenue", "FY26") or 0.0)
+        (hist_bs.get_value("canonical.bs.trade_receivables", last_p) or 0.0) +
+        (hist_bs.get_value("canonical.bs.unbilled_revenue", last_p) or 0.0)
     )
-    prior_trade_pay = hist_bs.get_value("canonical.bs.trade_payables", "FY26") or 0.0
-    prior_ppe = hist_bs.get_value("canonical.bs.ppe", "FY26") or 0.0
-    prior_cash = hist_bs.get_value("canonical.bs.cash_and_bank", "FY26") or 0.0
+    prior_trade_pay = hist_bs.get_value("canonical.bs.trade_payables", last_p) or 0.0
+    prior_ppe = hist_bs.get_value("canonical.bs.ppe", last_p) or 0.0
+    prior_cash = hist_bs.get_value("canonical.bs.cash_and_bank", last_p) or 0.0
 
-    # Carry forward quasi-stable items from FY26
-    other_income = hist_is.get_value("canonical.is.other_income", "FY26") or 4000.0
-    finance_cost = hist_is.get_value("canonical.is.finance_cost", "FY26") or 416.0
-    other_income_pct_rev = (other_income / prior_rev * 100.0) if prior_rev > 0 else 4.0
-    finance_cost_pct_rev = (finance_cost / prior_rev * 100.0) if prior_rev > 0 else 0.4
+    # Carry forward quasi-stable items from last historical period (no hardcoded Infosys 4000/416 fallbacks)
+    other_income = hist_is.get_value("canonical.is.other_income", last_p) or 0.0
+    finance_cost = hist_is.get_value("canonical.is.finance_cost", last_p) or 0.0
+    other_income_pct_rev = (other_income / prior_rev * 100.0) if prior_rev > 0 else 0.0
+    finance_cost_pct_rev = (finance_cost / prior_rev * 100.0) if prior_rev > 0 else 0.0
 
-    # Compute historical gross margin from FY26 (or default to 30% for services)
-    hist_gp = hist_is.get_value("canonical.is.gross_profit", "FY26")
-    hist_rev = hist_is.get_value("canonical.is.revenue", "FY26")
+    # Compute historical gross margin from last historical period
+    hist_gp = hist_is.get_value("canonical.is.gross_profit", last_p)
+    hist_rev = hist_is.get_value("canonical.is.revenue", last_p)
     gross_margin_hist = (hist_gp / hist_rev * 100.0) if (hist_gp and hist_rev and hist_rev > 0) else 30.0
 
-    # Compute historical dividend payout ratio from FY26
-    hist_div = hist_cf.get_value("canonical.cf.dividends_paid", "FY26") if hasattr(hist_cf, 'get_value') else None
-    hist_np = hist_is.get_value("canonical.is.net_profit", "FY26")
-    dividend_payout_pct = abs(hist_div / hist_np) if (hist_div and hist_np and hist_np > 0) else 0.65
+    # Compute historical dividend payout ratio from last historical period
+    hist_div = hist_cf.get_value("canonical.cf.dividends_paid", last_p) if hasattr(hist_cf, 'get_value') else None
+    hist_np = hist_is.get_value("canonical.is.net_profit", last_p)
+    dividend_payout_pct = abs(hist_div / hist_np) if (hist_div and hist_np and hist_np > 0) else 0.40
+
+    is_us = historical_model.company_id.endswith("_us")
+    default_tax_rate = 21.0 if is_us else 25.17
 
     for period in FORECAST_PERIODS:
         # --- Driver lookups ---
@@ -103,7 +107,7 @@ def run_forecast(
         ebitda_margin = _get(assumptions, "ebitda_margin", period, scenario) or 23.0
         ebit_margin = _get(assumptions, "ebit_margin", period, scenario) or 20.0
         da_pct_rev = _get(assumptions, "da_pct_revenue", period, scenario) or 2.9
-        tax_rate = _get(assumptions, "tax_rate", period, scenario) or 25.17
+        tax_rate = _get(assumptions, "tax_rate", period, scenario) or default_tax_rate
         dso = _get(assumptions, "dso_days", period, scenario) or 100.0
         dio = _get(assumptions, "dio_days", period, scenario) or 0.0
         dpo = _get(assumptions, "dpo_days", period, scenario) or 14.0
