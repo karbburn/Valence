@@ -26,6 +26,8 @@ FONT_INPUT = Font(name="Calibri", size=11, color="1F4E79")         # Blue font =
 FONT_FORMULA = Font(name="Calibri", size=11, color="000000")       # Black font = formula
 FONT_LINK = Font(name="Calibri", size=11, color="375623")          # Green font = cross-sheet link
 FONT_HYPERLINK = Font(name="Calibri", size=11, underline="single", color="0563C1") # Hyperlink blue
+FONT_SIGNATURE = Font(name="Calibri", size=14, bold=True, color="2563EB", underline="single") # 14pt signature link
+FONT_CODE = Font(name="Consolas", size=11, bold=True, color="1E40AF") # Code formula font
 FONT_ALERT = Font(name="Calibri", size=11, bold=True, color="C00000") # Red font = alert/failure
 FONT_PASS = Font(name="Calibri", size=11, bold=True, color="375623")  # Green font = pass
 FONT_TOTAL = Font(name="Calibri", size=11, bold=True, color="000000") # Bold total line
@@ -34,6 +36,7 @@ FONT_TOTAL = Font(name="Calibri", size=11, bold=True, color="000000") # Bold tot
 FILL_HEADER = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
 FILL_SUBHEADER = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
 FILL_CARD = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+FILL_CODE = PatternFill(start_color="EFF6FF", end_color="EFF6FF", fill_type="solid")
 FILL_PASS = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
 FILL_FAIL = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")
 
