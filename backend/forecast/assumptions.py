@@ -63,14 +63,14 @@ def suggest_base_assumptions(
     default_tax = 21.0 if is_us else 25.17
 
     # ------------------------------------------------------------------ #
-    # 1. Revenue Growth — Dynamic Institutional Fade Curve Engine
+    # 1. Revenue Growth — Dynamic Fade Curve Engine
     # ------------------------------------------------------------------ #
     rev_start = historical_model.income_statement.get_value("canonical.is.revenue", first_p)
     rev_end = historical_model.income_statement.get_value("canonical.is.revenue", last_p)
     rev_cagr = _cagr(rev_start, rev_end, num_years)
     base_cagr = rev_cagr if (rev_cagr is not None and rev_cagr > -50.0) else 10.0
 
-    # Institutional Growth Fade multipliers for FY27..FY31
+    # Growth Fade multipliers for FY27..FY31
     if base_cagr > 25.0:
         # High-growth fade curve (e.g. 88% -> 44% -> 26% -> 16% -> 11% -> 8%)
         fade_factors = [0.50, 0.30, 0.18, 0.12, 0.08]
