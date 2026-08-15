@@ -44,8 +44,9 @@ class FCFFPeriod(BaseModel):
     capex: Optional[float] = None
     delta_working_capital: Optional[float] = None   # increase in WC = cash outflow
     fcff: Optional[float] = None                    # free cash flow to firm
-    discount_factor: Optional[float] = None         # 1 / (1 + WACC)^t
+    discount_factor: Optional[float] = None         # 1 / (1 + WACC)^(t - 0.5) for mid-year
     pv_fcff: Optional[float] = None                 # FCFF × discount_factor
+    timing_convention: Literal["mid_year", "end_year"] = "mid_year"
 
 
 class TerminalValue(BaseModel):
@@ -55,10 +56,15 @@ class TerminalValue(BaseModel):
     which feeds into the DCF bridge.
     """
     method: TerminalValueMethod = "gordon_growth"
+    timing_convention: Literal["mid_year", "end_year"] = "mid_year"
     # Gordon growth inputs
     terminal_growth_rate: Optional[float] = None    # % — must be < WACC (QA check)
     final_year_fcff: Optional[float] = None
     terminal_value_undiscounted: Optional[float] = None   # TV = FCFF_n*(1+g) / (WACC-g)
+    # Quality & Reinvestment Metrics
+    terminal_nopat: Optional[float] = None          # EBIT_5 * (1+g) * (1 - tax)
+    reinvestment_rate: Optional[float] = None       # % — Reinvestment / Terminal NOPAT
+    implied_roic: Optional[float] = None            # % — g / Reinvestment Rate
     # Exit multiple inputs
     exit_multiple: Optional[float] = None           # EV/EBITDA multiple
     final_year_ebitda: Optional[float] = None
@@ -77,8 +83,15 @@ class DCFBridge(BaseModel):
     sum_pv_fcff: Optional[float] = None
     pv_terminal_value: Optional[float] = None
     enterprise_value: Optional[float] = None        # sum_pv_fcff + pv_terminal_value
-    less_net_debt: Optional[float] = None           # debt - cash; negative = net cash
-    equity_value: Optional[float] = None            # EV - net_debt
+    # Comprehensive Non-Operating Components
+    cash_and_equivalents: Optional[float] = None    # cash & bank
+    marketable_securities: Optional[float] = None   # current investments
+    non_current_investments: Optional[float] = None # LT financial investments / equity stakes
+    total_debt: Optional[float] = None              # total borrowings
+    minority_interest: Optional[float] = None       # non-controlling interests
+    preferred_stock: Optional[float] = None         # preferred equity
+    less_net_debt: Optional[float] = None           # (Debt + NCI + Pref) - (Cash + MktSec + NonCurrInv)
+    equity_value: Optional[float] = None            # EV - less_net_debt
     shares_outstanding: Optional[float] = None      # diluted, in units
     implied_share_price: Optional[float] = None     # equity_value / shares
 
@@ -111,6 +124,7 @@ class ValuationOutput(BaseModel):
     reconstruct live formulas — not just paste EV and share price.
     """
     scenario: ScenarioLabel
+    timing_convention: Literal["mid_year", "end_year"] = "mid_year"
     wacc: WACCBreakdown = WACCBreakdown()
     fcff_by_period: List[FCFFPeriod] = []
     terminal_value: TerminalValue = TerminalValue()

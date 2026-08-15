@@ -285,8 +285,8 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
             alignment=ALIGN_RIGHT,
         )
 
-    # Row 13: Discount Factor
-    ws.cell(row=13, column=2, value="Discount Factor (1 / (1+WACC)^t)").font = FONT_SUBHEADER
+    # Row 13: Discount Factor (Mid-Year Convention)
+    ws.cell(row=13, column=2, value="Mid-Year Discount Factor (1 / (1+WACC)^(t - 0.5))").font = FONT_SUBHEADER
     for idx, p_label in enumerate(FORECAST_PERIODS):
         c = 3 + idx
         t = idx + 1
@@ -294,7 +294,7 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         c_val = p.discount_factor if p else None
         write_formula_cell(
             ws, 13, c,
-            formula=f"=1/((1+'30_WACC'!C15)^{t})",
+            formula=f"=1/((1+'30_WACC'!C15)^({t}-0.5))",
             cached_value=c_val,
             num_format="0.000000",
             font=FONT_FORMULA,
@@ -319,20 +319,33 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
             alignment=ALIGN_RIGHT,
         )
 
-    # DCF Bridge Block (rows 17-23, Column B = labels, Column H = values)
-    ws["B16"] = "DCF BRIDGE — EV TO EQUITY VALUE"
+    # DCF Bridge Block (rows 17-28, Column B = labels, Column H = values)
+    ws["B16"] = "DCF BRIDGE — EV TO EQUITY VALUE (INSTITUTIONAL BREAKDOWN)"
     ws["B16"].font = FONT_SECTION
 
     ccy = spec.metadata.currency
-    net_debt = (base_val.dcf_bridge.less_net_debt if base_val and base_val.dcf_bridge.less_net_debt is not None else 0.0)
+    b_obj = base_val.dcf_bridge if base_val else None
+
+    cash_val = b_obj.cash_and_equivalents if (b_obj and b_obj.cash_and_equivalents is not None) else 0.0
+    mkt_sec_val = b_obj.marketable_securities if (b_obj and b_obj.marketable_securities is not None) else 0.0
+    non_curr_inv_val = b_obj.non_current_investments if (b_obj and b_obj.non_current_investments is not None) else 0.0
+    tot_debt_val = b_obj.total_debt if (b_obj and b_obj.total_debt is not None) else 0.0
+    min_int_val = ((b_obj.minority_interest or 0.0) + (b_obj.preferred_stock or 0.0)) if b_obj else 0.0
+    net_debt = (b_obj.less_net_debt if b_obj and b_obj.less_net_debt is not None else 0.0)
+
     bridge_rows = [
-        ("Cumulative PV of FCFF", "=SUM(C14:G14)", base_val.dcf_bridge.sum_pv_fcff if base_val else 0, FMT_CURRENCY_INT),
-        ("PV of Terminal Value", "='32_Terminal_Value'!C13", base_val.dcf_bridge.pv_terminal_value if base_val else 0, FMT_CURRENCY_INT),
-        ("ENTERPRISE VALUE (EV)", "=H17+H18", base_val.dcf_bridge.enterprise_value if base_val else 0, FMT_CURRENCY_INT),
-        ("Less: Net Debt / (Cash)", net_debt, net_debt, FMT_CURRENCY_INT),
-        ("EQUITY VALUE", "=H19-H20", base_val.dcf_bridge.equity_value if base_val else 0, FMT_CURRENCY_INT),
-        (f"Diluted Shares ({spec.metadata.units.capitalize()[:2]})", "='27_Share_Count'!E6", base_val.dcf_bridge.shares_outstanding if base_val else 0, FMT_AMOUNT),
-        (f"IMPLIED SHARE PRICE ({ccy})", "=H21/H22", base_val.dcf_bridge.implied_share_price if base_val else 0, FMT_PRICE),
+        ("Cumulative PV of FCFF (Mid-Year)", "=SUM(C14:G14)", b_obj.sum_pv_fcff if b_obj else 0, FMT_CURRENCY_INT),
+        ("PV of Terminal Value", "='32_Terminal_Value'!C13", b_obj.pv_terminal_value if b_obj else 0, FMT_CURRENCY_INT),
+        ("ENTERPRISE VALUE (EV)", "=H17+H18", b_obj.enterprise_value if b_obj else 0, FMT_CURRENCY_INT),
+        ("Plus: Cash & Cash Equivalents", cash_val, cash_val, FMT_CURRENCY_INT),
+        ("Plus: Marketable Securities", mkt_sec_val, mkt_sec_val, FMT_CURRENCY_INT),
+        ("Plus: Non-Current Investments", non_curr_inv_val, non_curr_inv_val, FMT_CURRENCY_INT),
+        ("Less: Total Debt", tot_debt_val, tot_debt_val, FMT_CURRENCY_INT),
+        ("Less: Minority Interest & Preferred", min_int_val, min_int_val, FMT_CURRENCY_INT),
+        ("Net Non-Operating Debt / (Cash)", "=(H23+H24)-(H20+H21+H22)", net_debt, FMT_CURRENCY_INT),
+        ("EQUITY VALUE", "=H19-H25", b_obj.equity_value if b_obj else 0, FMT_CURRENCY_INT),
+        (f"Diluted Shares ({spec.metadata.units.capitalize()[:2]})", "='27_Share_Count'!E6", b_obj.shares_outstanding if b_obj else 0, FMT_AMOUNT),
+        (f"IMPLIED SHARE PRICE ({ccy})", "=H26/H27", b_obj.implied_share_price if b_obj else 0, FMT_PRICE),
     ]
 
     for idx, (lbl, formula, c_val, fmt) in enumerate(bridge_rows):
@@ -363,30 +376,40 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
 def render_terminal_value_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ws = wb.create_sheet(title="32_Terminal_Value")
     apply_tab_defaults(ws, freeze_cell="A5")
-    set_col_widths(ws, {"A": 5, "B": 35, "C": 20, "D": 45})
+    set_col_widths(ws, {"A": 5, "B": 38, "C": 20, "D": 45})
 
-    ws["B2"] = "TERMINAL VALUE CALCULATION (DUAL METHOD)"
+    ws["B2"] = "TERMINAL VALUE CALCULATION (DUAL METHOD & QUALITY CHECKS)"
     ws["B2"].font = FONT_TITLE
-    ws["B3"] = "Gordon Perpetuity Growth & Exit Multiple Methods"
+    ws["B3"] = "Gordon Perpetuity Growth, Exit Multiple & Terminal ROIC Analysis"
     ws["B3"].font = FONT_SECTION
 
     write_table_header(ws, 5, ["Terminal Value Parameter", "Value", "Methodology / Rule Notes"], start_col=2)
     ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
     base_val = spec.get_valuation("base")
+    tv = base_val.terminal_value if base_val else None
+
+    reinvest_fmt = FMT_PERCENT if (tv and tv.reinvestment_rate is not None) else "@"
+    reinvest_val = (tv.reinvestment_rate / 100.0) if (tv and tv.reinvestment_rate is not None) else "-"
+    roic_fmt = FMT_PERCENT if (tv and tv.implied_roic is not None) else "@"
+    roic_val = (tv.implied_roic / 100.0) if (tv and tv.implied_roic is not None) else "-"
+
     tv_rows = [
-        ("Terminal Growth Rate %", 0.04, None, FMT_PERCENT, True, "Perpetuity growth rate (must be < WACC)"),
-        (f"FY31 Final Year FCFF ({ccy})", "='31_DCF'!G12", base_val.terminal_value.final_year_fcff if base_val else 0, FMT_AMOUNT, False, "Final forecast year FCFF"),
-        ("Gordon Growth Undiscounted TV", "=(C7*(1+C6)/('30_WACC'!C15-C6))", base_val.terminal_value.terminal_value_undiscounted if base_val else 0, FMT_CURRENCY_INT, False, "TV = FCFF_n * (1+g) / (WACC - g)"),
-        ("Exit Multiple (EV/EBITDA)", 20.0, None, FMT_MULTIPLE, True, "Exit EV/EBITDA multiple"),
-        (f"FY31 Final Year EBITDA ({ccy})", "='20_Operating_Model'!G9", base_val.terminal_value.final_year_ebitda if base_val else 0, FMT_AMOUNT, False, "Final forecast year EBITDA"),
-        ("Exit Multiple Undiscounted TV", "=C9*C10", base_val.terminal_value.exit_multiple_tv_undiscounted if base_val else 0, FMT_CURRENCY_INT, False, "TV = EBITDA_n * Exit Multiple"),
-        ("Discount Factor (t=5)", "='31_DCF'!G13", base_val.terminal_value.discount_factor if base_val else 0, "0.000000", False, "Discount factor for FY31"),
+        ("Terminal Growth Rate %", (tv.terminal_growth_rate or 4.0) / 100.0 if tv else 0.04, None, FMT_PERCENT, True, "Perpetuity growth rate (must be < WACC)"),
+        (f"FY31 Final Year FCFF ({ccy})", "='31_DCF'!G12", tv.final_year_fcff if tv else 0, FMT_AMOUNT, False, "Final forecast year FCFF"),
+        ("Gordon Growth Undiscounted TV", "=(C7*(1+C6)/('30_WACC'!C15-C6))", tv.terminal_value_undiscounted if tv else 0, FMT_CURRENCY_INT, False, "TV = FCFF_n * (1+g) / (WACC - g)"),
+        ("Exit Multiple (EV/EBITDA)", tv.exit_multiple if tv else 20.0, None, FMT_MULTIPLE, True, "Exit EV/EBITDA multiple"),
+        (f"FY31 Final Year EBITDA ({ccy})", "='20_Operating_Model'!G9", tv.final_year_ebitda if tv else 0, FMT_AMOUNT, False, "Final forecast year EBITDA"),
+        ("Exit Multiple Undiscounted TV", "=C9*C10", tv.exit_multiple_tv_undiscounted if tv else 0, FMT_CURRENCY_INT, False, "TV = EBITDA_n * Exit Multiple"),
+        ("Discount Factor (t=5)", "=1/((1+'30_WACC'!C15)^5)", tv.discount_factor if tv else 0, "0.000000", False, "Discount factor for Year 5"),
         ("DISCOUNTED TERMINAL VALUE (PV)", "=C8*C12", base_val.dcf_bridge.pv_terminal_value if base_val else 0, FMT_CURRENCY_INT, False, "Gordon Growth PV of Terminal Value"),
+        ("Terminal Year NOPAT (Quality Check)", tv.terminal_nopat if (tv and tv.terminal_nopat is not None) else "-", None, FMT_CURRENCY_INT if (tv and tv.terminal_nopat) else "@", False, "Terminal NOPAT = EBIT_5 * (1+g) * (1 - Tax)"),
+        ("Implied Reinvestment Rate %", reinvest_val, None, reinvest_fmt, False, "Reinvestment Rate = (Terminal NOPAT - Terminal FCFF) / NOPAT"),
+        ("Implied Terminal ROIC %", roic_val, None, roic_fmt, False, "ValueDriver check: g / Reinvestment Rate"),
     ]
 
     for idx, (lbl, val, c_val, fmt, is_inp, note) in enumerate(tv_rows):
         r = 6 + idx
-        is_tot = idx == len(tv_rows) - 1
+        is_tot = idx == 7  # DISCOUNTED TERMINAL VALUE (PV)
         ws.cell(row=r, column=2, value=lbl).font = FONT_TOTAL if is_tot else FONT_SUBHEADER
         
         if str(val).startswith("="):

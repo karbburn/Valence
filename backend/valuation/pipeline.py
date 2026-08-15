@@ -47,9 +47,15 @@ def run_valuation(
         current_share_price = mdata.price.value
 
     # 2. Sourced cash from latest historicals (FY26), falling back to 0.0 (never constant Infosys 22201.0)
+    # 2. Sourced cash & investments from latest historicals (FY26), falling back to 0.0
     latest_hist = spec.historicals.periods[-1] if spec.historicals.periods else "FY26"
     cash_and_bank = spec.historicals.get_value("canonical.bs.cash_and_bank", latest_hist) or 0.0
     current_inv = spec.historicals.get_value("canonical.bs.current_investments", latest_hist) or 0.0
+    non_current_inv = spec.historicals.get_value("canonical.bs.non_current_investments", latest_hist) or 0.0
+    minority_int = spec.historicals.get_value("canonical.bs.minority_interest", latest_hist) or 0.0
+    pref_stock = spec.historicals.get_value("canonical.bs.preferred_stock", latest_hist) or 0.0
+    
+    # Liquid cash used in WACC weights
     cash_cr = cash_and_bank + current_inv
 
     # 3. Sourced diluted share count, resolving dynamically per company
@@ -94,21 +100,25 @@ def run_valuation(
         )
         wacc_pct = wacc_breakdown.wacc or 12.0
 
-        # 5. Compute FCFF Periods
-        fcff_periods = compute_fcff_periods(spec.forecast, wacc_pct, scenario)
+        # 5. Compute FCFF Periods (using mid-year discounting)
+        fcff_periods = compute_fcff_periods(spec.forecast, wacc_pct, scenario, timing_convention="mid_year")
 
         # 6. Compute Terminal Value (Gordon Growth default)
         last_fcff = fcff_periods[-1].fcff if fcff_periods and fcff_periods[-1].fcff else 0.0
         last_ebitda = spec.forecast.get_value("canonical.is.ebitda", "FY31", scenario) or 0.0
+        last_ebit = spec.forecast.get_value("canonical.is.operating_profit", "FY31", scenario) or 0.0
 
         # Drivers for terminal value
         term_g = 4.0
         exit_mult = 20.0
+        term_tax = 21.0 if market == "us" else 25.17
         for a in spec.assumptions:
             if a.driver_key == "terminal_growth_rate" and a.scenario == scenario:
                 term_g = a.value
             elif a.driver_key == "exit_ev_multiple" and a.scenario == scenario:
                 exit_mult = a.value
+            elif a.driver_key == "tax_rate" and a.period == "FY31" and a.scenario == scenario:
+                term_tax = a.value
 
         terminal_val = compute_terminal_value(
             last_fcff=last_fcff,
@@ -117,14 +127,21 @@ def run_valuation(
             terminal_growth_rate=term_g,
             exit_multiple=exit_mult,
             active_method="gordon_growth",
+            last_ebit=last_ebit,
+            terminal_tax_rate=term_tax,
+            timing_convention="mid_year",
         )
 
         # 7. DCF Bridge (EV -> Equity Value -> Implied Share Price)
         dcf_bridge, updated_tv = compute_dcf_bridge(
             fcff_periods=fcff_periods,
             terminal_value=terminal_val,
-            cash_cr=cash_cr,
+            cash_cr=cash_and_bank,
+            marketable_securities_cr=current_inv,
+            non_current_investments_cr=non_current_inv,
             debt_cr=debt_cr,
+            minority_interest_cr=minority_int,
+            preferred_stock_cr=pref_stock,
             shares_cr=shares_cr,
         )
 
@@ -133,14 +150,19 @@ def run_valuation(
             market_price=current_share_price,
             fcff_periods=fcff_periods,
             wacc_pct=wacc_pct,
-            cash_cr=cash_cr,
+            cash_cr=cash_and_bank,
             debt_cr=debt_cr,
             shares_cr=shares_cr,
+            marketable_securities_cr=current_inv,
+            non_current_investments_cr=non_current_inv,
+            minority_interest_cr=minority_int,
+            preferred_stock_cr=pref_stock,
             forecast=spec.forecast,
             assumptions=spec.assumptions,
             historical_model=historical_model,
             terminal_growth_rate=term_g,
             exit_multiple=exit_mult,
+            timing_convention="mid_year",
         )
 
         # Divergence Gate (sanity check on implied terminal growth band [-2%, 5%])
@@ -154,17 +176,23 @@ def run_valuation(
         sensitivity_tables = compute_sensitivity_tables(
             forecast=spec.forecast,
             wacc_breakdown=wacc_breakdown,
-            cash_cr=cash_cr,
+            cash_cr=cash_and_bank,
             debt_cr=debt_cr,
             shares_cr=shares_cr,
+            marketable_securities_cr=current_inv,
+            non_current_investments_cr=non_current_inv,
+            minority_interest_cr=minority_int,
+            preferred_stock_cr=pref_stock,
             scenario=scenario,
             base_g=term_g,
             base_exit_mult=exit_mult,
+            timing_convention="mid_year",
         )
 
         valuation_outputs.append(
             ValuationOutput(
                 scenario=scenario,  # type: ignore
+                timing_convention="mid_year",
                 wacc=wacc_breakdown,
                 fcff_by_period=fcff_periods,
                 terminal_value=updated_tv,

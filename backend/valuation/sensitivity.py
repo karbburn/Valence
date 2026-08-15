@@ -24,9 +24,14 @@ def compute_sensitivity_tables(
     cash_cr: float,
     debt_cr: float,
     shares_cr: float,
+    marketable_securities_cr: float = 0.0,
+    non_current_investments_cr: float = 0.0,
+    minority_interest_cr: float = 0.0,
+    preferred_stock_cr: float = 0.0,
     scenario: str = "base",
     base_g: float = 4.0,
     base_exit_mult: float = 20.0,
+    timing_convention: str = "mid_year",
 ) -> List[SensitivityTable]:
     """Generate two-variable sensitivity grids for WACC x Terminal Growth & WACC x Exit Multiple."""
     from backend.valuation.dcf import (
@@ -56,7 +61,7 @@ def compute_sensitivity_tables(
     grid1: List[List[Optional[float]]] = []
     for w in wacc_steps:
         row: List[Optional[float]] = []
-        fcffs = compute_fcff_periods(forecast, w, scenario)
+        fcffs = compute_fcff_periods(forecast, w, scenario, timing_convention=timing_convention)  # type: ignore
         last_fcff = fcffs[-1].fcff if fcffs and fcffs[-1].fcff else 0.0
         last_ebitda = forecast.get_value("canonical.is.ebitda", "FY31", scenario) or 0.0
 
@@ -64,8 +69,26 @@ def compute_sensitivity_tables(
             if g >= w:
                 row.append(None)
             else:
-                tv = compute_terminal_value(last_fcff, last_ebitda, w, g, base_exit_mult, "gordon_growth")
-                bridge, _ = compute_dcf_bridge(fcffs, tv, cash_cr, debt_cr, shares_cr)
+                tv = compute_terminal_value(
+                    last_fcff,
+                    last_ebitda,
+                    w,
+                    g,
+                    base_exit_mult,
+                    "gordon_growth",
+                    timing_convention=timing_convention,  # type: ignore
+                )
+                bridge, _ = compute_dcf_bridge(
+                    fcffs,
+                    tv,
+                    cash_cr=cash_cr,
+                    debt_cr=debt_cr,
+                    shares_cr=shares_cr,
+                    marketable_securities_cr=marketable_securities_cr,
+                    non_current_investments_cr=non_current_investments_cr,
+                    minority_interest_cr=minority_interest_cr,
+                    preferred_stock_cr=preferred_stock_cr,
+                )
                 row.append(bridge.implied_share_price)
         grid1.append(row)
 
@@ -89,13 +112,31 @@ def compute_sensitivity_tables(
     grid2: List[List[Optional[float]]] = []
     for w in wacc_steps:
         row: List[Optional[float]] = []
-        fcffs = compute_fcff_periods(forecast, w, scenario)
+        fcffs = compute_fcff_periods(forecast, w, scenario, timing_convention=timing_convention)  # type: ignore
         last_fcff = fcffs[-1].fcff if fcffs and fcffs[-1].fcff else 0.0
         last_ebitda = forecast.get_value("canonical.is.ebitda", "FY31", scenario) or 0.0
 
         for m in mult_steps:
-            tv = compute_terminal_value(last_fcff, last_ebitda, w, base_g, m, "exit_multiple")
-            bridge, _ = compute_dcf_bridge(fcffs, tv, cash_cr, debt_cr, shares_cr)
+            tv = compute_terminal_value(
+                last_fcff,
+                last_ebitda,
+                w,
+                base_g,
+                m,
+                "exit_multiple",
+                timing_convention=timing_convention,  # type: ignore
+            )
+            bridge, _ = compute_dcf_bridge(
+                fcffs,
+                tv,
+                cash_cr=cash_cr,
+                debt_cr=debt_cr,
+                shares_cr=shares_cr,
+                marketable_securities_cr=marketable_securities_cr,
+                non_current_investments_cr=non_current_investments_cr,
+                minority_interest_cr=minority_interest_cr,
+                preferred_stock_cr=preferred_stock_cr,
+            )
             row.append(bridge.implied_share_price)
         grid2.append(row)
 

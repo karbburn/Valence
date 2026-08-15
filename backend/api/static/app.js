@@ -423,14 +423,14 @@ function renderDCFSchedule() {
         { label: "− CapEx",                 fn: p => `(${fmtNum(Math.abs(p.capex))})` },
         { label: "± ΔNWC",                  fn: p => fmtNum(-(p.delta_working_capital || 0)) },
         { label: "= FCFF",                  fn: p => fmtNum(p.fcff),     bold: true, total: true },
-        { label: "Discount Factor",         fn: p => (p.discount_factor || 0).toFixed(4) },
+        { label: "Mid-Year Discount Factor", fn: p => (p.discount_factor || 0).toFixed(4) },
         { label: "PV(FCFF)",                fn: p => fmtNum(p.pv_fcff),  bold: true },
     ];
 
     let html = `<table class="w-full text-xs">
         <thead>
             <tr class="border-b border-slate-700">
-                <th class="px-3 py-2 text-left text-slate-400 font-semibold">DCF Line Item</th>
+                <th class="px-3 py-2 text-left text-slate-400 font-semibold">DCF Line Item (Mid-Year)</th>
                 ${fcffs.map(p => `<th class="px-3 py-2 text-right text-slate-400 font-semibold">${p.period}</th>`).join('')}
             </tr>
         </thead>
@@ -445,9 +445,9 @@ function renderDCFSchedule() {
         </tr>`;
     });
 
-    // TV & Bridge summary
+    // TV & Bridge summary with institutional non-operating breakdown
     html += `<tr class="border-t-2 border-slate-600 bg-slate-900/60">
-        <td class="px-3 py-2 text-slate-400 text-[11px] font-semibold">Σ PV(FCFF)</td>
+        <td class="px-3 py-2 text-slate-400 text-[11px] font-semibold">Σ PV(FCFF) [Mid-Year]</td>
         <td colspan="${fcffs.length}" class="px-3 py-2 text-right font-mono font-bold text-slate-200 text-[11px]">${sym}${fmtNum(bridge.sum_pv_fcff)}</td>
     </tr>
     <tr class="bg-slate-900/60">
@@ -459,20 +459,22 @@ function renderDCFSchedule() {
         <td colspan="${fcffs.length}" class="px-3 py-2 text-right font-mono font-bold text-indigo-300 text-[11px]">${sym}${fmtNum(bridge.enterprise_value)}</td>
     </tr>
     <tr class="bg-slate-900/60">
-        <td class="px-3 py-2 text-slate-400 text-[11px]">${(bridge.less_net_debt || 0) < 0 ? '+ Net Cash' : '− Net Debt'}</td>
-        <td colspan="${fcffs.length}" class="px-3 py-2 text-right font-mono text-[11px] ${(bridge.less_net_debt || 0) < 0 ? 'text-emerald-400' : 'text-rose-400'}">${(bridge.less_net_debt || 0) < 0 ? sym : '-'+sym}${fmtNum(Math.abs(bridge.less_net_debt || 0))}</td>
+        <td class="px-3 py-2 text-slate-400 text-[11px]">${(bridge.less_net_debt || 0) < 0 ? '+ Net Cash & Investments' : '− Net Debt'}</td>
+        <td colspan="${fcffs.length}" class="px-3 py-2 text-right font-mono text-[11px] ${(bridge.less_net_debt || 0) < 0 ? 'text-emerald-400' : 'text-rose-400'}">${(bridge.less_net_debt || 0) < 0 ? '+ ' + sym : '- ' + sym}${fmtNum(Math.abs(bridge.less_net_debt || 0))}</td>
     </tr>
     <tr class="bg-emerald-950/20 border-t border-emerald-800/30">
         <td class="px-3 py-2 text-emerald-300 font-bold text-[11px]">Equity Value → Implied Price</td>
         <td colspan="${fcffs.length}" class="px-3 py-2 text-right font-mono font-bold text-emerald-300 text-[11px]">${sym}${fmtNum(bridge.equity_value)} → ${sym}${fmtNum(bridge.implied_share_price, 2)} / share</td>
     </tr>
     </tbody></table>
-    <div class="mt-3 px-3 py-2 bg-slate-800/40 rounded-lg text-[11px] text-slate-400">
-        <span class="font-semibold text-slate-300">WACC: ${(wacc.wacc || 0).toFixed(2)}%</span>
-        &nbsp;·&nbsp; Ke: ${(wacc.cost_of_equity || 0).toFixed(2)}%
-        &nbsp;·&nbsp; Kd(AT): ${(wacc.cost_of_debt || 0).toFixed(2)}%
-        &nbsp;·&nbsp; Eq Wt: ${((wacc.equity_weight || 0) * 100).toFixed(1)}%
-        &nbsp;·&nbsp; Debt: ${sym}${fmtNum(bridge.less_net_debt || 0)} (net)
+    <div class="mt-3 px-3 py-2 bg-slate-800/40 rounded-lg text-[11px] text-slate-400 flex flex-wrap items-center justify-between gap-2">
+        <div>
+            <span class="font-semibold text-slate-300">WACC: ${(wacc.wacc || 0).toFixed(2)}%</span>
+            &nbsp;·&nbsp; Ke: ${(wacc.cost_of_equity || 0).toFixed(2)}%
+            &nbsp;·&nbsp; Kd(AT): ${(wacc.cost_of_debt || 0).toFixed(2)}%
+            &nbsp;·&nbsp; Eq Wt: ${((wacc.equity_weight || 0) * 100).toFixed(1)}%
+        </div>
+        ${tv.implied_roic ? `<div class="text-indigo-300 font-mono">Terminal ROIC: ${tv.implied_roic.toFixed(1)}% (Reinvest ${tv.reinvestment_rate?.toFixed(1)}%)</div>` : ''}
     </div>`;
 
     container.innerHTML = html;
