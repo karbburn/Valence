@@ -178,9 +178,9 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
             period_lbl = target_fys[fy]
             raw_val = float(item["val"])
 
-            # Unit conversion: monetary items to USD Millions (shares remain raw)
+            # Unit conversion: all items to USD Millions / shares in Millions
             if metric_label == "Basic (in shares)":
-                val = raw_val
+                val = raw_val / 1e6
             else:
                 val = raw_val / 1e6
 

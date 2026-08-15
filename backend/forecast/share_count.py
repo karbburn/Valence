@@ -44,13 +44,16 @@ class ShareCountSchedule(BaseModel):
 def build_share_count(
     historical_model: HistoricalModel,
     forecast_periods: List[str] = FORECAST_PERIODS,
-    historical_periods: List[str] = ("FY24", "FY25", "FY26"),
+    historical_periods: Optional[List[str]] = None,
 ) -> ShareCountSchedule:
     """Build a historical + forecast share count schedule.
 
     Historical: derived from net_profit / eps_diluted (and net_profit / eps_basic).
-    Forecast: FY26 diluted share count held flat — explicit named assumption.
+    Forecast: latest historical period diluted share count held flat — explicit named assumption.
     """
+    if historical_periods is None:
+        historical_periods = historical_model.periods
+
     is_ = historical_model.income_statement
     schedule: List[ShareCountPeriod] = []
 

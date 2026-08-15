@@ -101,6 +101,76 @@ COMPANY_METADATA_REGISTRY: dict[str, ModelMetadata] = {
         fiscal_year_end="March 31",
         shares_outstanding=4124.0,
     ),
+    "wipro_wipro": ModelMetadata(
+        company_id="wipro_wipro",
+        ticker="WIPRO",
+        name="Wipro Limited",
+        market="india",
+        currency="INR",
+        units="crores",
+        fiscal_year_end="March 31",
+        shares_outstanding=522.0,
+    ),
+    "hcltech_hcltech": ModelMetadata(
+        company_id="hcltech_hcltech",
+        ticker="HCLTECH",
+        name="HCL Technologies Limited",
+        market="india",
+        currency="INR",
+        units="crores",
+        fiscal_year_end="March 31",
+        shares_outstanding=271.0,
+    ),
+    "lt_lt": ModelMetadata(
+        company_id="lt_lt",
+        ticker="LT",
+        name="Larsen & Toubro Limited",
+        market="india",
+        currency="INR",
+        units="crores",
+        fiscal_year_end="March 31",
+        shares_outstanding=137.5,
+    ),
+    "sunpharma_sunpharma": ModelMetadata(
+        company_id="sunpharma_sunpharma",
+        ticker="SUNPHARMA",
+        name="Sun Pharmaceutical Industries Limited",
+        market="india",
+        currency="INR",
+        units="crores",
+        fiscal_year_end="March 31",
+        shares_outstanding=240.0,
+    ),
+    "nvda_us": ModelMetadata(
+        company_id="nvda_us",
+        ticker="NVDA",
+        name="NVIDIA Corporation",
+        market="us",
+        currency="USD",
+        units="millions",
+        fiscal_year_end="January 31",
+        shares_outstanding=24500.0,
+    ),
+    "googl_us": ModelMetadata(
+        company_id="googl_us",
+        ticker="GOOGL",
+        name="Alphabet Inc.",
+        market="us",
+        currency="USD",
+        units="millions",
+        fiscal_year_end="December 31",
+        shares_outstanding=12400.0,
+    ),
+    "amzn_us": ModelMetadata(
+        company_id="amzn_us",
+        ticker="AMZN",
+        name="Amazon.com, Inc.",
+        market="us",
+        currency="USD",
+        units="millions",
+        fiscal_year_end="December 31",
+        shares_outstanding=10500.0,
+    ),
 }
 
 
@@ -108,29 +178,44 @@ def get_metadata_for_company(company_id: str) -> ModelMetadata:
     """Return ModelMetadata for company_id.
 
     Registered companies return their canonical metadata. Unregistered companies
-    are derived from the company_id slug: the first token becomes the ticker and
-    a ``_us`` suffix selects USD/millions US-market defaults (India otherwise).
+    are derived from the company_id slug and the company universe database.
     """
     if company_id in COMPANY_METADATA_REGISTRY:
         return COMPANY_METADATA_REGISTRY[company_id]
-    parts = company_id.split("_")
-    ticker = parts[0].upper()
-    if parts[-1] == "us":
+
+    # Check universe database
+    name = None
+    market = "us" if company_id.endswith("_us") else "india"
+    ticker = company_id.split("_")[0].upper()
+
+    try:
+        from backend.data.universe.store import get_universe_company
+        co = get_universe_company(company_id)
+        if co:
+            name = co.name
+            ticker = co.ticker
+            market = co.market
+    except Exception:
+        pass
+
+    if market == "us":
         return ModelMetadata(
             company_id=company_id,
             ticker=ticker,
-            name=f"{ticker} Inc.",
+            name=name or f"{ticker} Inc.",
             market="us",
             currency="USD",
             units="millions",
             fiscal_year_end="December 31",
+            shares_outstanding=1000.0,
         )
     return ModelMetadata(
         company_id=company_id,
         ticker=ticker,
-        name=f"{ticker} Limited",
+        name=name or f"{ticker} Limited",
         market="india",
         currency="INR",
         units="crores",
         fiscal_year_end="March 31",
+        shares_outstanding=100.0,
     )
