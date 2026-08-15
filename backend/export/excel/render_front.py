@@ -163,6 +163,73 @@ def render_model_guide(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         for c in range(2, 5):
             ws.cell(row=row, column=c).border = BORDER_BOX
 
+    # ------------------------------------------------------------------ #
+    # How To Use This Model — User Guide Section
+    # ------------------------------------------------------------------ #
+    start_r = 6 + len(guide_items) + 2
+
+    ws.cell(row=start_r, column=2, value="HOW TO USE THIS MODEL").font = FONT_TITLE
+    ws.cell(row=start_r + 1, column=2, value="Essential User Guide, Color Conventions, and Modeling Workflow").font = FONT_SUBTITLE
+
+    # 1. Color Coding & Conventions
+    r = start_r + 3
+    write_table_header(ws, r, ["Convention", "Cell Type", "Description"], start_col=2)
+    
+    color_guide = [
+        ("Blue Text / Shaded Fill", "Analyst Input / Override", "Cells containing editable driver assumptions or model toggles (e.g. 03_Model_Control, 51_Assumption_Log)"),
+        ("Black Text", "Dynamic Excel Formula", "Cells containing automated 3-statement forecast logic & DCF valuation math"),
+        ("Blue Underline", "Hyperlink Navigation", "Clickable links to navigate directly between model sheets (e.g. 01_Model_Guide)"),
+        ("Green / Red Text", "QA / Delta Indicator", "Pass/Fail indicators, upside percentages, and balance sheet reconciliation flags"),
+    ]
+    for idx, (conv, ctype, desc) in enumerate(color_guide):
+        row_i = r + 1 + idx
+        ws.cell(row=row_i, column=2, value=conv).font = FONT_SUBHEADER
+        ws.cell(row=row_i, column=3, value=ctype).font = FONT_FORMULA
+        ws.cell(row=row_i, column=4, value=desc).font = FONT_FORMULA
+        for c in range(2, 5):
+            ws.cell(row=row_i, column=c).border = BORDER_BOX
+
+    # 2. Modeling Workflow
+    r_wf = r + len(color_guide) + 2
+    write_table_header(ws, r_wf, ["Workflow Step", "Target Sheet", "Modeling Action & Purpose"], start_col=2)
+    
+    workflow_guide = [
+        ("Step 1: Executive Overview", "02_Executive_Summary", "Get a 60-second summary of implied share price vs market benchmark, WACC, and scenario outputs."),
+        ("Step 2: Operating Model", "20_Operating_Model", "Analyze historical financial actuals (FY24-FY26) and 5-year integrated 3-statement forecast (FY27-FY31)."),
+        ("Step 3: WACC & DCF Schedule", "30_WACC & 31_DCF", "Examine CAPM Cost of Equity, mid-year discount factors, free cash flows to firm, and non-operating equity bridge."),
+        ("Step 4: Terminal Value & ROIC", "32_Terminal_Value", "Validate dual terminal value outputs (Gordon Growth vs Exit Multiple) and check implied terminal ROIC consistency."),
+        ("Step 5: Sensitivity & Reverse DCF", "33_Sensitivity & 34_Reverse_DCF", "Test 2D sensitivity matrices (WACC x Growth, WACC x Multiple) and solve for market-implied growth expectations."),
+        ("Step 6: Scenario & Audit Log", "35_Scenario_Analysis & 52_Model_Checks", "Compare Base, Bull, and Bear cases side-by-side and review automated QA check results."),
+    ]
+    for idx, (step, target, desc) in enumerate(workflow_guide):
+        row_i = r_wf + 1 + idx
+        ws.cell(row=row_i, column=2, value=step).font = FONT_SUBHEADER
+        cell_t = ws.cell(row=row_i, column=3, value=target)
+        cell_t.font = FONT_HYPERLINK
+        first_sheet = target.split(" ")[0]
+        cell_t.hyperlink = f"#'{first_sheet}'!A1"
+        ws.cell(row=row_i, column=4, value=desc).font = FONT_FORMULA
+        for c in range(2, 5):
+            ws.cell(row=row_i, column=c).border = BORDER_BOX
+
+    # 3. Key Valuation Formulas
+    r_fm = r_wf + len(workflow_guide) + 2
+    write_table_header(ws, r_fm, ["Valuation Metric", "Excel Formula Structure", "Methodology Explanation"], start_col=2)
+    
+    formula_guide = [
+        ("Mid-Year Discounting", "=1/((1+WACC)^(t - 0.5))", "Cash flows are discounted using mid-year convention exponent (t - 0.5) for periods t=1..5."),
+        ("Terminal Value (Gordon Growth)", "=FCFF_5 * (1 + g) / (WACC - g)", "Perpetuity cash flow capitalized at WACC - terminal growth rate, discounted to PV at t=5.0."),
+        ("Equity Value Bridge", "=EV + Cash + MktSec + NonCurrInv - Debt", "Enterprise Value plus liquid cash and non-current investments less debt and minority interest."),
+        ("Implied Share Price", "=Equity Value / Diluted Shares", "Equity Value divided by diluted share count."),
+    ]
+    for idx, (metric, form_str, desc) in enumerate(formula_guide):
+        row_i = r_fm + 1 + idx
+        ws.cell(row=row_i, column=2, value=metric).font = FONT_SUBHEADER
+        ws.cell(row=row_i, column=3, value=form_str).font = FONT_FORMULA
+        ws.cell(row=row_i, column=4, value=desc).font = FONT_FORMULA
+        for c in range(2, 5):
+            ws.cell(row=row_i, column=c).border = BORDER_BOX
+
     return ws
 
 
