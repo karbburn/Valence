@@ -95,7 +95,12 @@ def compute_wacc(
 
     shares_val: Optional[float] = None
     if share_count_schedule:
-        shares_val = share_count_schedule.get_diluted("FY26") or share_count_schedule.get_diluted("FY27")
+        latest_p = share_count_schedule.periods[0] if (share_count_schedule and share_count_schedule.periods) else "FY26"
+        shares_val = (
+            share_count_schedule.get_diluted(latest_p)
+            or share_count_schedule.get_diluted("FY26")
+            or share_count_schedule.get_diluted("FY27")
+        )
     if not shares_val or shares_val <= 0:
         shares_val = mdata.shares_outstanding.value
 

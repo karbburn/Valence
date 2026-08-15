@@ -53,82 +53,88 @@ def suggest_base_assumptions(
 
     Every method is explicitly named in the source field — no unlabelled heuristics.
     """
-    periods = ["FY24", "FY25", "FY26"]
+    periods = historical_model.periods if (historical_model.periods and len(historical_model.periods) > 0) else ["FY24", "FY25", "FY26"]
+    first_p = periods[0]
+    last_p = periods[-1]
+    num_years = len(periods) - 1 if len(periods) > 1 else 1
     result: List[AssumptionObject] = []
 
+    is_us = historical_model.company_id.endswith("_us")
+    default_tax = 21.0 if is_us else 25.17
+
     # ------------------------------------------------------------------ #
-    # 1. Revenue Growth — 3yr CAGR FY24→FY26
+    # 1. Revenue Growth — Historical CAGR (first_p -> last_p)
     # ------------------------------------------------------------------ #
-    rev_fy24 = historical_model.income_statement.get_value("canonical.is.revenue", "FY24")
-    rev_fy26 = historical_model.income_statement.get_value("canonical.is.revenue", "FY26")
-    rev_cagr = _cagr(rev_fy24, rev_fy26, 2)
+    rev_start = historical_model.income_statement.get_value("canonical.is.revenue", first_p)
+    rev_end = historical_model.income_statement.get_value("canonical.is.revenue", last_p)
+    rev_cagr = _cagr(rev_start, rev_end, num_years)
     rev_growth = rev_cagr if rev_cagr is not None else 10.0
-    source_rev = "3yr revenue CAGR (FY24-FY26)"
+    source_rev = f"Historical revenue CAGR ({first_p}-{last_p})"
     for p in FORECAST_PERIODS:
         result.append(_make("revenue_growth", rev_growth, p, "base", source_rev))
 
     # ------------------------------------------------------------------ #
-    # 2. EBITDA Margin — 3yr average
+    # 2. EBITDA Margin — Multi-year average
     # ------------------------------------------------------------------ #
     ebitda_margins = [ratios.get_value("ebitda_margin_pct", p) for p in periods]
     ebitda_margin = _avg(ebitda_margins) or 23.5
-    source_ebitda = "3yr average EBITDA margin (FY24-FY26)"
+    source_ebitda = f"Multi-year average EBITDA margin ({first_p}-{last_p})"
     for p in FORECAST_PERIODS:
         result.append(_make("ebitda_margin", ebitda_margin, p, "base", source_ebitda))
 
     # ------------------------------------------------------------------ #
-    # 3. EBIT Margin — 3yr average operating margin
+    # 3. EBIT Margin — Multi-year average operating margin
     # ------------------------------------------------------------------ #
     ebit_margins = [ratios.get_value("operating_margin_pct", p) for p in periods]
     ebit_margin = _avg(ebit_margins) or 20.0
-    source_ebit = "3yr average operating margin (FY24-FY26)"
+    source_ebit = f"Multi-year average operating margin ({first_p}-{last_p})"
     for p in FORECAST_PERIODS:
         result.append(_make("ebit_margin", ebit_margin, p, "base", source_ebit))
 
     # ------------------------------------------------------------------ #
-    # 4. D&A % Revenue — 3yr average
+    # 4. D&A % Revenue — Multi-year average
     # ------------------------------------------------------------------ #
     da_pcts = [ratios.get_value("da_pct_revenue", p) for p in periods]
     da_pct = _avg(da_pcts) or 2.9
-    source_da = "3yr average D&A % revenue (FY24-FY26)"
+    source_da = f"Multi-year average D&A % revenue ({first_p}-{last_p})"
     for p in FORECAST_PERIODS:
         result.append(_make("da_pct_revenue", da_pct, p, "base", source_da))
 
     # ------------------------------------------------------------------ #
-    # 5. Effective Tax Rate — 3yr average
+    # 5. Effective Tax Rate — Multi-year average
     # ------------------------------------------------------------------ #
     tax_rates = [ratios.get_value("effective_tax_rate_pct", p) for p in periods]
-    tax_rate = _avg(tax_rates) or 25.17
-    source_tax = "3yr average effective tax rate (FY24-FY26)"
+    tax_rate = _avg(tax_rates) or default_tax
+    source_tax = f"Multi-year average effective tax rate ({first_p}-{last_p})"
     for p in FORECAST_PERIODS:
         result.append(_make("tax_rate", tax_rate, p, "base", source_tax))
 
     # ------------------------------------------------------------------ #
-    # 6. DSO — most recent period (FY26)
+    # 6. DSO — most recent historical period
     # ------------------------------------------------------------------ #
-    dso = ratios.get_value("dso_days", "FY26") or 100.0
-    source_dso = "most recent period DSO (FY26)"
+    dso = ratios.get_value("dso_days", last_p) or 100.0
+    source_dso = f"most recent period DSO ({last_p})"
     for p in FORECAST_PERIODS:
         result.append(_make("dso_days", dso, p, "base", source_dso))
 
     # ------------------------------------------------------------------ #
-    # 7. DPO — most recent period (FY26)
+    # 7. DPO — most recent historical period
     # ------------------------------------------------------------------ #
-    dpo = ratios.get_value("dpo_days", "FY26") or 14.0
-    source_dpo = "most recent period DPO (FY26)"
+    dpo = ratios.get_value("dpo_days", last_p) or 14.0
+    source_dpo = f"most recent period DPO ({last_p})"
     for p in FORECAST_PERIODS:
         result.append(_make("dpo_days", dpo, p, "base", source_dpo))
 
     # ------------------------------------------------------------------ #
-    # 7b. DIO — zero for services companies (Infosys)
+    # 7b. DIO — zero for services companies
     # ------------------------------------------------------------------ #
-    dio = 0.0  # Infosys is services; no material inventory
-    source_dio = "zero — services company with no material inventory"
+    dio = 0.0  # Default 0.0 for services
+    source_dio = "zero — services/tech company with minimal inventory"
     for p in FORECAST_PERIODS:
         result.append(_make("dio_days", dio, p, "base", source_dio))
 
     # ------------------------------------------------------------------ #
-    # 8. Capex % Revenue — 3yr average using canonical capex / revenue
+    # 8. Capex % Revenue — Multi-year average using canonical capex / revenue
     # ------------------------------------------------------------------ #
     capex_pcts = []
     used_direct_capex = False
@@ -147,9 +153,9 @@ def suggest_base_assumptions(
 
     capex_pct = _avg(capex_pcts) or 2.5
     if used_direct_capex:
-        source_capex = "3yr average GAAP capex (canonical.cf.capex) % revenue (FY24-FY26)"
+        source_capex = f"Multi-year average GAAP capex (canonical.cf.capex) % revenue ({first_p}-{last_p})"
     else:
-        source_capex = "derived — 3yr average |investing_activities| proxy % revenue (FY24-FY26)"
+        source_capex = f"derived — Multi-year average |investing_activities| proxy % revenue ({first_p}-{last_p})"
 
     for p in FORECAST_PERIODS:
         result.append(_make("capex_pct_revenue", capex_pct, p, "base", source_capex))
