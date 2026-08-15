@@ -164,22 +164,44 @@ def render_model_guide(wb: Workbook, spec: ModelSpecification) -> Worksheet:
             ws.cell(row=row, column=c).border = BORDER_BOX
 
     # ------------------------------------------------------------------ #
-    # How To Use This Model — User Guide Section
+    # How To Use This Model — Student & Analyst User Guide
     # ------------------------------------------------------------------ #
     start_r = 6 + len(guide_items) + 2
 
-    ws.cell(row=start_r, column=2, value="HOW TO USE THIS MODEL").font = FONT_TITLE
-    ws.cell(row=start_r + 1, column=2, value="Essential User Guide, Color Conventions, and Modeling Workflow").font = FONT_SUBTITLE
+    ws.cell(row=start_r, column=2, value="HOW TO USE THIS MODEL (STUDENT & ANALYST GUIDE)").font = FONT_TITLE
+    ws.cell(row=start_r + 1, column=2, value="A beginner-friendly step-by-step guide to reading, modifying, and understanding this financial model.").font = FONT_SUBTITLE
 
-    # 1. Color Coding & Conventions
-    r = start_r + 3
-    write_table_header(ws, r, ["Convention", "Cell Type", "Description"], start_col=2)
+    # Beginner Conceptual Explanation Card Box
+    r_intro = start_r + 3
+    ws.cell(row=r_intro, column=2, value="1. VALUATION CONCEPTUAL OVERVIEW (WHAT IS A DCF?)").font = FONT_HEADER
+    ws.cell(row=r_intro, column=2).fill = FILL_HEADER
+    ws.cell(row=r_intro, column=3).fill = FILL_HEADER
+    ws.cell(row=r_intro, column=4).fill = FILL_HEADER
+
+    concept_steps = [
+        ("Core Objective", "Calculate the intrinsic fair value per share of a company by discounting its future cash flow generator back to today."),
+        ("Step 1: Cash Flow", "Forecast 5 years of Free Cash Flow to Firm (FCFF) — the net cash left over after operating expenses, taxes, and capital investments."),
+        ("Step 2: Discount Rate", "Discount future cash flows back to present value using WACC (Weighted Average Cost of Capital) to adjust for risk and time value of money."),
+        ("Step 3: Equity Bridge", "Add Cash & Investments to Enterprise Value, subtract Total Debt to find Equity Value, and divide by Diluted Share Count."),
+        ("Step 4: Decision Rule", "If Implied Fair Price > Live Market Price, the stock is Undervalued (Bullish). If lower, the stock is Overvalued (Bearish)."),
+    ]
+    for idx, (lbl, desc) in enumerate(concept_steps):
+        row_i = r_intro + 1 + idx
+        ws.cell(row=row_i, column=2, value=lbl).font = FONT_SUBHEADER
+        ws.cell(row=row_i, column=3, value=desc).font = FONT_FORMULA
+        ws.merge_cells(start_row=row_i, start_column=3, end_row=row_i, end_column=4)
+        for c in range(2, 5):
+            ws.cell(row=row_i, column=c).border = BORDER_BOX
+
+    # 2. Color Coding & Cell Conventions
+    r = r_intro + len(concept_steps) + 2
+    write_table_header(ws, r, ["Convention", "Cell Type", "Description & How to Interact"], start_col=2)
     
     color_guide = [
-        ("Blue Text / Shaded Fill", "Analyst Input / Override", "Cells containing editable driver assumptions or model toggles (e.g. 03_Model_Control, 51_Assumption_Log)"),
-        ("Black Text", "Dynamic Excel Formula", "Cells containing automated 3-statement forecast logic & DCF valuation math"),
-        ("Blue Underline", "Hyperlink Navigation", "Clickable links to navigate directly between model sheets (e.g. 01_Model_Guide)"),
-        ("Green / Red Text", "QA / Delta Indicator", "Pass/Fail indicators, upside percentages, and balance sheet reconciliation flags"),
+        ("Blue Text / Shaded Fill", "Analyst Input / Override", "EDITABLE BY YOU! Modify these numbers (e.g. expected revenue growth % or profit margins) in 03_Model_Control or 51_Assumption_Log."),
+        ("Black Text", "Dynamic Excel Formula", "AUTOMATED MATH! Calculated automatically using standard accounting, 3-statement, and DCF formulas."),
+        ("Blue Underline", "Hyperlink Navigation", "CLICKABLE LINKS! Click any tab name to navigate directly to that worksheet."),
+        ("Green / Red Text", "QA / Delta Indicator", "MODEL FEEDBACK! Green indicates balance sheet 100% balance or positive upside; Red flags potential errors or downside."),
     ]
     for idx, (conv, ctype, desc) in enumerate(color_guide):
         row_i = r + 1 + idx
@@ -189,14 +211,14 @@ def render_model_guide(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         for c in range(2, 5):
             ws.cell(row=row_i, column=c).border = BORDER_BOX
 
-    # 2. Modeling Workflow
+    # 3. Modeling Workflow
     r_wf = r + len(color_guide) + 2
     write_table_header(ws, r_wf, ["Workflow Step", "Target Sheet", "Modeling Action & Purpose"], start_col=2)
     
     workflow_guide = [
-        ("Step 1: Executive Overview", "02_Executive_Summary", "Get a 60-second summary of implied share price vs market benchmark, WACC, and scenario outputs."),
-        ("Step 2: Operating Model", "20_Operating_Model", "Analyze historical financial actuals (FY24-FY26) and 5-year integrated 3-statement forecast (FY27-FY31)."),
-        ("Step 3: WACC & DCF Schedule", "30_WACC & 31_DCF", "Examine CAPM Cost of Equity, mid-year discount factors, free cash flows to firm, and non-operating equity bridge."),
+        ("Step 1: Executive Overview", "02_Executive_Summary", "Start here! Get a 60-second summary of implied share price vs market benchmark, WACC, and scenario outputs."),
+        ("Step 2: Operating Model", "20_Operating_Model", "Inspect historical financial actuals (FY24-FY26) and 5-year integrated 3-statement forecast (FY27-FY31)."),
+        ("Step 3: WACC & DCF Schedule", "30_WACC & 31_DCF", "Examine CAPM Cost of Equity, mid-year discount factors (1+WACC)^-(t-0.5), free cash flows, and non-operating equity bridge."),
         ("Step 4: Terminal Value & ROIC", "32_Terminal_Value", "Validate dual terminal value outputs (Gordon Growth vs Exit Multiple) and check implied terminal ROIC consistency."),
         ("Step 5: Sensitivity & Reverse DCF", "33_Sensitivity & 34_Reverse_DCF", "Test 2D sensitivity matrices (WACC x Growth, WACC x Multiple) and solve for market-implied growth expectations."),
         ("Step 6: Scenario & Audit Log", "35_Scenario_Analysis & 52_Model_Checks", "Compare Base, Bull, and Bear cases side-by-side and review automated QA check results."),
@@ -212,15 +234,16 @@ def render_model_guide(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         for c in range(2, 5):
             ws.cell(row=row_i, column=c).border = BORDER_BOX
 
-    # 3. Key Valuation Formulas
+    # 4. Key Valuation Formulas
     r_fm = r_wf + len(workflow_guide) + 2
-    write_table_header(ws, r_fm, ["Valuation Metric", "Excel Formula Structure", "Methodology Explanation"], start_col=2)
+    write_table_header(ws, r_fm, ["Valuation Metric", "Excel Formula Structure", "Methodology Explanation (Plain English)"], start_col=2)
     
     formula_guide = [
-        ("Mid-Year Discounting", "=1/((1+WACC)^(t - 0.5))", "Cash flows are discounted using mid-year convention exponent (t - 0.5) for periods t=1..5."),
-        ("Terminal Value (Gordon Growth)", "=FCFF_5 * (1 + g) / (WACC - g)", "Perpetuity cash flow capitalized at WACC - terminal growth rate, discounted to PV at t=5.0."),
-        ("Equity Value Bridge", "=EV + Cash + MktSec + NonCurrInv - Debt", "Enterprise Value plus liquid cash and non-current investments less debt and minority interest."),
-        ("Implied Share Price", "=Equity Value / Diluted Shares", "Equity Value divided by diluted share count."),
+        ("Free Cash Flow to Firm (FCFF)", "=NOPAT + D&A - CapEx - ΔNWC", "The actual cash left over for all capital providers after paying operating expenses, taxes, and capital investments."),
+        ("Mid-Year Discount Factor", "=1/((1+WACC)^(t - 0.5))", "Discounts future cash flows assuming cash is received evenly throughout the year (exponent t - 0.5 for t=1..5)."),
+        ("Terminal Value (Gordon Growth)", "=FCFF_5 * (1 + g) / (WACC - g)", "Estimates the value of all cash flows beyond Year 5 assuming the company grows forever at a steady rate g."),
+        ("Equity Value Bridge", "=EV + Cash + MktSec + NonCurrInv - Debt", "Converts Enterprise Value (business operations) to Equity Value (shareholders' wealth) by adding cash and subtracting debt."),
+        ("Implied Share Price", "=Equity Value / Diluted Shares", "Calculates the fair value price per share to compare directly against live market stock price."),
     ]
     for idx, (metric, form_str, desc) in enumerate(formula_guide):
         row_i = r_fm + 1 + idx
