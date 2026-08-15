@@ -93,7 +93,7 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Total liabilities": ("canonical.bs.total_liabilities", "bs"),
     "Total liabilities and equity": ("canonical.bs.total_liabilities_and_equity", "bs"),
     "Total Liabilities & Equity": ("canonical.bs.total_liabilities_and_equity", "bs"),
-    "Total_Liab": ("canonical.bs.total_liabilities_and_equity", "bs"),
+    "Total_Liab": ("canonical.bs.total_liabilities", "bs"),
 
     # --- Cash Flow Statement ---
     "Cash from Operating Activity": ("canonical.cf.operating_activities", "cf"),
@@ -115,13 +115,16 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Stock compensation expense": ("canonical.cf.other_adjustments", "cf"),
     "Net Cash Flow": ("canonical.cf.net_change_in_cash", "cf"),
 
-    # --- Metadata & Share Counts ---
     "No. of Equity Shares": ("canonical.meta.share_count", "meta"),
     "Basic (in shares)": ("canonical.meta.share_count", "meta"),
     "4,052,169,447": ("canonical.meta.share_count", "meta"),
     "Face value": ("canonical.meta.face_value", "meta"),
     "New Bonus Shares": ("canonical.meta.bonus_shares", "meta"),
     "Total": ("canonical.bs.total_assets", "bs"),
+    "Total_Asset": ("canonical.bs.total_assets", "bs"),
+    "Total Assets": ("canonical.bs.total_assets", "bs"),
+    "Total Liabilities Net Minority Interest": ("canonical.bs.total_liabilities", "bs"),
+    "Total Non Current Liabilities Net Minority Interest": ("canonical.bs.total_non_current_liabilities", "bs"),
 }
 
 
