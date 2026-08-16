@@ -16,7 +16,7 @@ export function MobileGuard() {
             Screen Too Narrow
           </h2>
           <p className="text-[12px] text-[#94a3b8] leading-relaxed">
-            Valence is an institutional financial modeling terminal requiring a minimum 900px viewport for multi-column schedules.
+            Valence is a multi-column financial modeling terminal requiring a minimum 900px viewport for financial schedules.
           </p>
           <p className="text-[11px] text-[#64748b]">
             Please enlarge your browser window or switch to a desktop workstation.

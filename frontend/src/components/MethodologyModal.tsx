@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { Modal } from './Modal'
-import { Info, CheckCircle2, ShieldCheck, Scale } from 'lucide-react'
+import { ShieldCheck, Scale } from 'lucide-react'
 import { ModelSpecification, ScenarioLabel } from '@/lib/types'
 import { fmtNum, fmtPct, getCurrencySymbol } from '@/lib/formatters'
 
@@ -42,10 +42,10 @@ export function MethodologyModal({
           <ShieldCheck className="w-5 h-5 text-[#0ea5e9] shrink-0 mt-0.5" />
           <div className="space-y-1">
             <h4 className="font-bold text-[#7dd3fc] text-[13px]">
-              Institutional FCFF Model (Wall Street Standard)
+              Unlevered Free Cash Flow (FCFF) Model
             </h4>
             <p className="text-[#94a3b8] leading-relaxed text-[11.5px]">
-              Valence uses <strong className="text-[#f8fafc]">Unlevered Free Cash Flow to Firm (FCFF)</strong> discounted at the <strong className="text-[#f8fafc]">Weighted Average Cost of Capital (WACC)</strong>. Retail platforms (like AlphaSpread) often use simplified Net Income / FCFE models discounted at Cost of Equity ($K_e$), which omit CapEx and Working Capital reinvestment drag.
+              Valence calculates intrinsic value using <strong className="text-[#f8fafc]">Unlevered Free Cash Flow to Firm (FCFF)</strong> discounted at the <strong className="text-[#f8fafc]">Weighted Average Cost of Capital (WACC)</strong>. Simplified Net Income or FCFE models often omit capital expenditures and working capital reinvestment drag.
             </p>
           </div>
         </div>
@@ -57,10 +57,10 @@ export function MethodologyModal({
               <tr className="bg-[#0d1220] border-b border-[#1e283d] text-[#94a3b8]">
                 <th className="p-2.5 font-semibold">Valuation Factor</th>
                 <th className="p-2.5 font-bold text-[#0ea5e9] bg-[#0ea5e9]/5 border-r border-[#1e283d] w-5/12">
-                  Valence (Institutional FCFF)
+                  Valence FCFF Model
                 </th>
                 <th className="p-2.5 font-semibold text-[#94a3b8] w-5/12">
-                  Retail Models (AlphaSpread Net Income)
+                  Net Income / FCFE Models
                 </th>
               </tr>
             </thead>
@@ -91,7 +91,7 @@ export function MethodologyModal({
                   Explicit CapEx & Working Capital deducted
                 </td>
                 <td className="p-2.5 text-[#94a3b8]">
-                  Omitted or zero reinvestment assumed
+                  Omitted or unconstrained
                 </td>
               </tr>
 
@@ -111,7 +111,7 @@ export function MethodologyModal({
                   {impliedPrice != null ? `${currencySym}${fmtNum(impliedPrice, 2)}` : '—'} / share
                 </td>
                 <td className="p-2.5 text-[#94a3b8] font-semibold">
-                  Typically higher (ignores CapEx drag)
+                  Differs based on cash flow definitions
                 </td>
               </tr>
             </tbody>
@@ -122,10 +122,10 @@ export function MethodologyModal({
         <div className="bg-[#111622] border border-[#1e283d] rounded-[4px] p-3 space-y-2">
           <div className="flex items-center space-x-2 text-[#f8fafc] font-semibold text-[12px]">
             <Scale className="w-4 h-4 text-[#0ea5e9]" />
-            <span>Why Institutional Investors Use FCFF</span>
+            <span>Why FCFF Cash Flow Accounting is Used</span>
           </div>
           <p className="text-[#94a3b8] text-[11px] leading-relaxed">
-            Net income does not represent cash available to investors because companies must spend real cash on Capital Expenditures (CapEx) to maintain growth and tie up capital in inventory and receivables (ΔNWC). Valence deducts these real cash drags, preventing false over-optimism.
+            Net income does not represent total cash available to investors because companies must spend real cash on Capital Expenditures (CapEx) to maintain operations and tie up capital in inventory and receivables (ΔNWC). FCFF accounts for these reinvestment requirements.
           </p>
         </div>
 
@@ -135,7 +135,7 @@ export function MethodologyModal({
             onClick={onClose}
             className="px-4 py-1.5 bg-[#0ea5e9] hover:bg-[#38bdf8] text-white text-[12px] font-semibold rounded-[4px] transition-colors cursor-pointer"
           >
-            Got it
+            Close
           </button>
         </div>
       </div>

@@ -58,10 +58,10 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
             <button
               onClick={onOpenMethodology}
               className="flex items-center space-x-1 text-[10px] font-mono text-[#0ea5e9] bg-[#0ea5e9]/10 border border-[#0ea5e9]/20 hover:bg-[#0ea5e9]/20 rounded-[3px] px-2 py-0.5 transition-colors cursor-pointer ml-1"
-              title="Methodology breakdown vs retail screeners (AlphaSpread)"
+              title="Methodology breakdown: FCFF at WACC"
             >
               <Info className="w-3 h-3 text-[#0ea5e9]" />
-              <span>FCFF vs AlphaSpread</span>
+              <span>Methodology Details</span>
             </button>
           )}
         </div>
