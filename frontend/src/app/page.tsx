@@ -15,6 +15,7 @@ import { FullModelView } from '@/components/FullModelView'
 import { QAModal } from '@/components/QAModal'
 import { SaveModal } from '@/components/SaveModal'
 import { SavedModelsModal } from '@/components/SavedModelsModal'
+import { MethodologyModal } from '@/components/MethodologyModal'
 import { MobileGuard } from '@/components/MobileGuard'
 import { useModelSpec } from '@/hooks/useModelSpec'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
@@ -41,6 +42,7 @@ export default function HomePage() {
   const [qaOpen, setQaOpen] = useState(false)
   const [saveOpen, setSaveOpen] = useState(false)
   const [savedModelsOpen, setSavedModelsOpen] = useState(false)
+  const [methodologyOpen, setMethodologyOpen] = useState(false)
 
   // Keyboard Shortcuts (Ctrl+S, 1/2/3 mode keys, Escape, Left/Right arrows)
   useKeyboardShortcuts({
@@ -51,9 +53,10 @@ export default function HomePage() {
       setQaOpen(false)
       setSaveOpen(false)
       setSavedModelsOpen(false)
+      setMethodologyOpen(false)
     },
     currentScenario: scenario,
-    hasOpenModal: qaOpen || saveOpen || savedModelsOpen,
+    hasOpenModal: qaOpen || saveOpen || savedModelsOpen || methodologyOpen,
   })
 
   useEffect(() => {
@@ -173,14 +176,22 @@ export default function HomePage() {
 
             {/* Right Column: DCF Valuation Schedule & Forecast Summary */}
             <div className="lg:col-span-8 space-y-4">
-              <DCFSchedule spec={spec} scenario={scenario} />
+              <DCFSchedule
+                spec={spec}
+                scenario={scenario}
+                onOpenMethodology={() => setMethodologyOpen(true)}
+              />
               <ForecastTable spec={spec} scenario={scenario} />
             </div>
           </div>
         )}
 
         {spec && mode === 'quick' && (
-          <QuickDCFView spec={spec} scenario={scenario} />
+          <QuickDCFView
+            spec={spec}
+            scenario={scenario}
+            onOpenMethodology={() => setMethodologyOpen(true)}
+          />
         )}
 
         {spec && mode === 'full' && (
@@ -207,6 +218,13 @@ export default function HomePage() {
         open={savedModelsOpen}
         onClose={() => setSavedModelsOpen(false)}
         onLoadModel={handleLoadSavedModel}
+      />
+
+      <MethodologyModal
+        open={methodologyOpen}
+        onClose={() => setMethodologyOpen(false)}
+        spec={spec}
+        scenario={scenario}
       />
 
       {/* Toast Notification System */}

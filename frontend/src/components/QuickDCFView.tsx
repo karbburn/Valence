@@ -1,23 +1,24 @@
 'use client'
 
 import React from 'react'
-import { Sparkles, ArrowUpRight, ArrowDownRight, Layers } from 'lucide-react'
+import { Sparkles, ArrowUpRight, ArrowDownRight, Layers, Info } from 'lucide-react'
 import { ModelSpecification, ScenarioLabel } from '@/lib/types'
 import { fmtNum, fmtPct, fmtPrice, getCurrencySymbol } from '@/lib/formatters'
 
 export interface QuickDCFViewProps {
   spec: ModelSpecification | null
   scenario: ScenarioLabel
+  onOpenMethodology?: () => void
 }
 
-export function QuickDCFView({ spec, scenario }: QuickDCFViewProps) {
+export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFViewProps) {
   const valuation =
     spec?.valuation?.find((v) => v.scenario === scenario) || spec?.valuation?.[0]
 
   if (!valuation) {
     return (
-      <div className="bg-surface border border-border rounded-[4px] p-8 text-center text-[#64748b] text-[13px]">
-        No valuation data available for this scenario.
+      <div className="bg-surface border border-border rounded-[4px] p-6 text-center text-[#64748b] text-[12px]">
+        No valuation summary available for this scenario.
       </div>
     )
   }
@@ -25,26 +26,19 @@ export function QuickDCFView({ spec, scenario }: QuickDCFViewProps) {
   const currency = spec?.metadata?.currency || 'INR'
   const currencySym = getCurrencySymbol(currency)
   const bridge = valuation.dcf_bridge || {}
+  const reverseDcf = valuation.reverse_dcf || {}
   const wacc = valuation.wacc || {}
   const tv = valuation.terminal_value || {}
-  const revDcf = valuation.reverse_dcf || {}
+  const sensTable = valuation.sensitivity_tables?.[0]
 
   const impliedPrice = bridge.implied_share_price ?? null
-  const marketPrice = revDcf.market_price ?? null
+  const marketPrice = reverseDcf.market_price ?? null
 
   let upsidePct: number | null = null
   if (impliedPrice != null && marketPrice != null && marketPrice > 0) {
     upsidePct = ((impliedPrice - marketPrice) / marketPrice) * 100
   }
 
-  // Values from backend are already in percentage scale (e.g., 12.8, 4.0)
-  const waccVal = wacc.wacc ?? null
-  const terminalGrowthVal = tv.terminal_growth_rate ?? 4.0
-  const impliedGVal = revDcf.implied_terminal_growth ?? null
-
-  const sensTable = valuation.sensitivity_tables?.[0]
-  const rowVals = sensTable?.row_values || []
-  const colVals = sensTable?.col_values || []
   const grid = sensTable?.results_grid || []
 
   return (
@@ -52,16 +46,25 @@ export function QuickDCFView({ spec, scenario }: QuickDCFViewProps) {
       {/* Hero 3-Column Valuation Strip */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Intrinsic Value Hero */}
-        <div className="bg-surface border border-[#0ea5e9]/40 rounded-[4px] p-5 text-center flex flex-col justify-center items-center shadow-sm">
+        <div className="bg-surface border border-[#0ea5e9]/40 rounded-[4px] p-5 text-center flex flex-col justify-center items-center shadow-sm relative">
           <div className="flex items-center space-x-1.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-[#94a3b8] mb-1">
             <Sparkles className="w-3.5 h-3.5 text-[#0ea5e9]" />
             <span>DCF Intrinsic Value</span>
+            {onOpenMethodology && (
+              <button
+                onClick={onOpenMethodology}
+                className="text-[#0ea5e9] hover:text-[#7dd3fc] transition-colors p-0.5 ml-1 cursor-pointer"
+                title="Methodology breakdown vs retail screeners (AlphaSpread)"
+              >
+                <Info className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
           <div className="font-mono font-bold text-[30px] text-[#7dd3fc]">
             {impliedPrice != null ? fmtPrice(impliedPrice, currency, 2) : '—'}
           </div>
           <div className="text-[11px] text-[#64748b] mt-1 font-mono">
-            Per Share ({currency})
+            Per Share ({currency}) · FCFF @ WACC
           </div>
         </div>
 
@@ -93,9 +96,9 @@ export function QuickDCFView({ spec, scenario }: QuickDCFViewProps) {
             {upsidePct != null ? (
               <>
                 {upsidePct >= 0 ? (
-                  <ArrowUpRight className="w-6 h-6 shrink-0" />
+                  <ArrowUpRight className="w-6 h-6 text-[#10b981]" />
                 ) : (
-                  <ArrowDownRight className="w-6 h-6 shrink-0" />
+                  <ArrowDownRight className="w-6 h-6 text-[#ef4444]" />
                 )}
                 <span>
                   {upsidePct >= 0 ? '+' : ''}
@@ -103,138 +106,139 @@ export function QuickDCFView({ spec, scenario }: QuickDCFViewProps) {
                 </span>
               </>
             ) : (
-              <span>—</span>
+              '—'
             )}
           </div>
           <div className="text-[11px] text-[#64748b] mt-1">
-            Relative to Intrinsic DCF
+            vs Current Market Quote
           </div>
         </div>
       </div>
 
-      {/* Key Valuation Drivers Summary Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-[#080c14] border border-[#1e283d] rounded-[4px] p-4 flex flex-col justify-between">
-          <span className="text-[12px] font-semibold text-[#64748b]">
-            Discount Rate (WACC)
-          </span>
-          <div className="font-mono font-bold text-[20px] text-[#f8fafc] mt-1">
-            {waccVal != null ? fmtPct(waccVal, 2) : '—'}
+      {/* Methodology & Inputs Strip */}
+      <div className="bg-surface border border-border rounded-[4px] p-4 space-y-3 shadow-sm">
+        <div className="flex items-center justify-between border-b border-border pb-2">
+          <div className="font-semibold text-[13px] text-text-main flex items-center space-x-2">
+            <Layers className="w-4 h-4 text-[#0ea5e9]" />
+            <span>Key Model Valuation Inputs</span>
           </div>
-          <span className="text-[11px] text-[#475569] mt-0.5">CAPM Matrix</span>
+          {onOpenMethodology && (
+            <button
+              onClick={onOpenMethodology}
+              className="text-[11px] text-[#0ea5e9] hover:underline flex items-center space-x-1 cursor-pointer font-mono"
+            >
+              <Info className="w-3.5 h-3.5" />
+              <span>Why Valence vs AlphaSpread?</span>
+            </button>
+          )}
         </div>
 
-        <div className="bg-[#080c14] border border-[#1e283d] rounded-[4px] p-4 flex flex-col justify-between">
-          <span className="text-[12px] font-semibold text-[#64748b]">
-            Terminal Growth Rate (g)
-          </span>
-          <div className="font-mono font-bold text-[20px] text-[#f8fafc] mt-1">
-            {fmtPct(terminalGrowthVal, 2)}
-          </div>
-          <span className="text-[11px] text-[#475569] mt-0.5">Perpetual Gordon Growth</span>
-        </div>
-
-        <div className="bg-[#080c14] border border-[#1e283d] rounded-[4px] p-4 flex flex-col justify-between">
-          <span className="text-[12px] font-semibold text-[#64748b]">
-            Market Implied Growth (Reverse DCF)
-          </span>
-          <div className="font-mono font-bold text-[20px] text-[#f8fafc] mt-1">
-            {impliedGVal != null ? fmtPct(impliedGVal, 2) : '—'}
-          </div>
-          <span className="text-[11px] text-[#475569] mt-0.5">Growth Priced by Market</span>
-        </div>
-      </div>
-
-      {/* 2-Way Sensitivity Matrix Table */}
-      {sensTable && (
-        <div className="bg-surface border border-border rounded-[4px] p-5 shadow-sm space-y-3">
-          <div className="flex items-center justify-between border-b border-border pb-3">
-            <div className="flex items-center space-x-2">
-              <Layers className="w-4 h-4 text-[#0ea5e9]" />
-              <h3 className="font-bold text-[14px] text-text-main">
-                Valuation Sensitivity Matrix
-              </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-mono text-[12px]">
+          <div className="bg-[#0d1220] border border-[#1e283d] rounded-[4px] p-2.5">
+            <div className="text-[10px] text-[#64748b] uppercase tracking-[0.04em]">
+              WACC (Discount Rate)
             </div>
-            <span className="font-mono text-[10px] text-[#94a3b8]">
-              WACC (Rows) vs Terminal Growth % (Cols) → Share Price ({currencySym})
-            </span>
+            <div className="font-bold text-[#f8fafc] mt-0.5">
+              {fmtPct(wacc.wacc, 2)}
+            </div>
           </div>
 
-          <div className="overflow-x-auto border border-[#1e283d] rounded-[4px]">
-            <table className="w-full text-[11px] border-collapse">
+          <div className="bg-[#0d1220] border border-[#1e283d] rounded-[4px] p-2.5">
+            <div className="text-[10px] text-[#64748b] uppercase tracking-[0.04em]">
+              Terminal Growth (g)
+            </div>
+            <div className="font-bold text-[#f8fafc] mt-0.5">
+              {fmtPct(tv.terminal_growth_rate, 2)}
+            </div>
+          </div>
+
+          <div className="bg-[#0d1220] border border-[#1e283d] rounded-[4px] p-2.5">
+            <div className="text-[10px] text-[#64748b] uppercase tracking-[0.04em]">
+              Implied Terminal g
+            </div>
+            <div className="font-bold text-[#7dd3fc] mt-0.5">
+              {reverseDcf.implied_terminal_growth != null
+                ? fmtPct(reverseDcf.implied_terminal_growth, 2)
+                : '—'}
+            </div>
+          </div>
+
+          <div className="bg-[#0d1220] border border-[#1e283d] rounded-[4px] p-2.5">
+            <div className="text-[10px] text-[#64748b] uppercase tracking-[0.04em]">
+              Model Template
+            </div>
+            <div className="font-bold text-[#10b981] mt-0.5">
+              FCFF (Wall St Std)
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 2-Way Sensitivity Table */}
+      {sensTable && (
+        <div className="bg-surface border border-border rounded-[4px] p-4 space-y-3 shadow-sm">
+          <div className="flex items-center justify-between border-b border-border pb-2">
+            <div>
+              <h3 className="font-bold text-[13px] text-text-main">
+                2-Way Sensitivity Matrix
+              </h3>
+              <p className="text-[11px] text-[#64748b]">
+                Implied Share Price ({currency}) across WACC vs Terminal Growth ($g$)
+              </p>
+            </div>
+            <div className="font-mono text-[10px] text-[#0ea5e9] bg-[#0ea5e9]/10 border border-[#0ea5e9]/20 px-2 py-0.5 rounded-[3px]">
+              Base: {currencySym}{fmtNum(impliedPrice, 2)}
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-center text-[11px] font-mono border-collapse">
               <thead>
-                <tr className="bg-[#0d1220] border-b border-[#1e283d] h-9">
-                  <th className="px-3 py-2 text-left font-semibold text-[#64748b]">
+                <tr className="bg-[#0d1220]">
+                  <th className="p-2 border border-[#1e283d] text-left text-[#64748b]">
                     WACC \ g
                   </th>
-                  {colVals.map((g) => {
-                    const isBaseCol =
-                      Math.abs(g - (tv.terminal_growth_rate || 4.0)) < 0.1
-                    return (
-                      <th
-                        key={g}
-                        className={`px-3 py-2 text-right font-mono font-bold ${
-                          isBaseCol ? 'text-[#7dd3fc]' : 'text-[#94a3b8]'
-                        }`}
-                      >
-                        {fmtPct(g, 1)}
-                      </th>
-                    )
-                  })}
+                  {sensTable.col_values?.map((gVal) => (
+                    <th
+                      key={gVal}
+                      className="p-2 border border-[#1e283d] text-[#94a3b8]"
+                    >
+                      {gVal.toFixed(1)}%
+                    </th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#1e283d]/60 font-mono">
-                {rowVals.map((w, ri) => {
-                  const isBaseRow =
-                    Math.abs(w - (wacc.wacc || 12.0)) < 0.1
-                  return (
-                    <tr
-                      key={w}
-                      className={
-                        isBaseRow
-                          ? 'bg-[#0ea5e9]/[0.06]'
-                          : 'hover:bg-[#192030]/40 transition-colors'
+              <tbody>
+                {sensTable.row_values?.map((waccVal, rIdx) => (
+                  <tr key={waccVal}>
+                    <td className="p-2 border border-[#1e283d] font-bold text-left bg-[#0d1220] text-[#94a3b8]">
+                      {waccVal.toFixed(1)}%
+                    </td>
+                    {grid[rIdx]?.map((val, cIdx) => {
+                      const isBase =
+                        Math.abs(waccVal - (wacc.wacc || 0)) < 0.6 &&
+                        Math.abs((sensTable.col_values?.[cIdx] || 0) - (tv.terminal_growth_rate || 0)) < 0.6
+
+                      let cellBg = 'bg-surface hover:bg-[#192030]'
+                      if (isBase) {
+                        cellBg = 'bg-[#0ea5e9]/20 border-2 border-[#0ea5e9] font-bold text-[#7dd3fc]'
+                      } else if (marketPrice != null && val != null && val > marketPrice) {
+                        cellBg = 'bg-[#10b981]/10 text-[#6ee7b7]'
+                      } else if (marketPrice != null && val != null && val < marketPrice) {
+                        cellBg = 'bg-[#ef4444]/10 text-[#fca5a5]'
                       }
-                    >
-                      <td
-                        className={`px-3 py-2 ${
-                          isBaseRow
-                            ? 'text-[#7dd3fc] font-bold'
-                            : 'text-[#64748b]'
-                        }`}
-                      >
-                        {fmtPct(w, 1)}
-                      </td>
-                      {(grid[ri] || []).map((v, ci) => {
-                        const isBaseCell =
-                          isBaseRow &&
-                          Math.abs(
-                            colVals[ci] - (tv.terminal_growth_rate || 4.0)
-                          ) < 0.1
 
-                        let cellClass = 'text-[#94a3b8]'
-                        if (isBaseCell) {
-                          cellClass =
-                            'bg-[#0ea5e9]/20 text-[#7dd3fc] font-bold border border-[#0ea5e9]/40'
-                        } else if (v != null && marketPrice != null && marketPrice > 0) {
-                          const cellUpside = ((v - marketPrice) / marketPrice) * 100
-                          if (cellUpside > 10) cellClass = 'text-[#10b981] font-semibold'
-                          else if (cellUpside >= 0) cellClass = 'text-[#f8fafc]'
-                          else cellClass = 'text-[#ef4444]'
-                        }
-
-                        return (
-                          <td
-                            key={ci}
-                            className={`px-3 py-2 text-right ${cellClass}`}
-                          >
-                            {v != null ? `${currencySym}${fmtNum(v, 0)}` : '—'}
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  )
-                })}
+                      return (
+                        <td
+                          key={cIdx}
+                          className={`p-2 border border-[#1e283d] transition-colors ${cellBg}`}
+                        >
+                          {currencySym}{fmtNum(val, 0)}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
