@@ -10,6 +10,8 @@ import { DriverPanel } from '@/components/DriverPanel'
 import { WACCBreakdown } from '@/components/WACCBreakdown'
 import { DCFSchedule } from '@/components/DCFSchedule'
 import { ForecastTable } from '@/components/ForecastTable'
+import { QuickDCFView } from '@/components/QuickDCFView'
+import { FullModelView } from '@/components/FullModelView'
 import { useModelSpec } from '@/hooks/useModelSpec'
 import { ScenarioLabel } from '@/lib/types'
 import { saveModel } from '@/lib/api'
@@ -102,7 +104,7 @@ export default function HomePage() {
 
       {/* Main Workspace Layout */}
       <main className="flex-1 w-full max-w-[1680px] mx-auto p-5">
-        {mode === 'analyst' ? (
+        {mode === 'analyst' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
             {/* Left Column: Driver Sliders & WACC Breakdown */}
             <div className="lg:col-span-4 space-y-5">
@@ -121,15 +123,14 @@ export default function HomePage() {
               <ForecastTable spec={spec} scenario={scenario} />
             </div>
           </div>
-        ) : (
-          <div className="bg-surface border border-border rounded-[4px] p-6 text-center text-[#94a3b8]">
-            <div className="font-mono text-[12px] text-[#7dd3fc] uppercase tracking-[0.04em]">
-              {mode === 'quick' ? 'Quick DCF View' : '3-Statement Model View'}
-            </div>
-            <p className="text-[12px] mt-2 text-[#64748b]">
-              View mode view will be active in next stage.
-            </p>
-          </div>
+        )}
+
+        {mode === 'quick' && (
+          <QuickDCFView spec={spec} scenario={scenario} />
+        )}
+
+        {mode === 'full' && (
+          <FullModelView spec={spec} scenario={scenario} />
         )}
       </main>
 
