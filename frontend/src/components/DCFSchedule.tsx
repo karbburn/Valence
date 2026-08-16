@@ -45,7 +45,7 @@ export function DCFSchedule({ spec, scenario }: DCFScheduleProps) {
   const isNetCash = netDebt < 0
 
   return (
-    <div className="bg-surface border border-border rounded-[4px] p-3.5 flex flex-col shadow-sm select-none">
+    <div className="bg-surface border border-border rounded-[4px] p-3.5 flex flex-col shadow-sm">
       {/* Header & Bridge Summary */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between border-b border-border pb-2.5 mb-2.5 gap-2">
         <div className="flex items-center space-x-2">

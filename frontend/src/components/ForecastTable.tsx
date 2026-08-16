@@ -43,7 +43,7 @@ export function ForecastTable({ spec, scenario }: ForecastTableProps) {
   }
 
   return (
-    <div className="bg-surface border border-border rounded-[4px] p-3.5 flex flex-col shadow-sm select-none">
+    <div className="bg-surface border border-border rounded-[4px] p-3.5 flex flex-col shadow-sm">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border pb-2.5 mb-2.5">
         <div className="flex items-center space-x-2">

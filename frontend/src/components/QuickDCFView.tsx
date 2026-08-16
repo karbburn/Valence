@@ -48,7 +48,7 @@ export function QuickDCFView({ spec, scenario }: QuickDCFViewProps) {
   const grid = sensTable?.results_grid || []
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 select-none">
+    <div className="max-w-4xl mx-auto space-y-6">
       {/* Hero 3-Column Valuation Strip */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Intrinsic Value Hero */}

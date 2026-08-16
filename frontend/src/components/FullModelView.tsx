@@ -87,7 +87,7 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
   }
 
   return (
-    <div className="bg-surface border border-border rounded-[4px] p-3.5 shadow-sm space-y-3.5 select-none">
+    <div className="bg-surface border border-border rounded-[4px] p-3.5 shadow-sm space-y-3.5">
       {/* Tab bar navigation & Unit Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-2.5 gap-2.5">
         <div className="flex items-center bg-[#111622] border border-[#1e283d] rounded-[6px] p-1 space-x-1">
