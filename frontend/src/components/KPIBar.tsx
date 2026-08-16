@@ -40,7 +40,7 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
     : null
 
   return (
-    <div className="w-full bg-[#111622]/40 border-b border-[#1e283d] px-5 py-3 select-none">
+    <div className="w-full bg-[#111622]/40 border-b border-[#1e283d] px-[14px] py-[10px] select-none">
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         {/* KPI 1: DCF Implied Price (Primary KPI) */}
         <div className="bg-[#111622] border border-[#0ea5e9]/40 rounded-[4px] px-3.5 py-2.5 flex flex-col justify-between shadow-sm">

@@ -32,6 +32,10 @@
   --c-warning: #f59e0b;
   --c-warning-subtle: rgba(245, 158, 11, 0.10);
 
+  /* Destructive */
+  --c-destructive: #ef4444;
+  --c-destructive-subtle: rgba(239, 68, 68, 0.10);
+
   /* Excel */
   --c-excel-bg: #065f46;
   --c-excel-text: #6ee7b7;
@@ -55,8 +59,8 @@
 
   --color-accent: var(--c-accent);
   --color-accent-hover: var(--c-accent-hover);
-  --color-accent-subtle: var(--c-accent-subtle);
-  --color-accent-border: var(--c-accent-border);
+  --color-[#0ea5e9]-subtle: var(--c-accent-subtle);
+  --color-[#0ea5e9]-border: var(--c-accent-border);
 
   --color-positive: var(--c-positive);
   --color-positive-subtle: var(--c-positive-subtle);
@@ -64,6 +68,8 @@
   --color-negative-subtle: var(--c-negative-subtle);
   --color-warning: var(--c-warning);
   --color-warning-subtle: var(--c-warning-subtle);
+  --color-destructive: var(--c-destructive);
+  --color-destructive-subtle: var(--c-destructive-subtle);
 
   --color-excel-bg: var(--c-excel-bg);
   --color-excel-text: var(--c-excel-text);

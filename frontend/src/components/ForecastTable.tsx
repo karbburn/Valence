@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useMemo } from 'react'
 import { TrendingUp } from 'lucide-react'
 import { ModelSpecification, ScenarioLabel } from '@/lib/types'
 import { fmtNum, getCurrencySymbol, getCurrencyUnit } from '@/lib/formatters'
@@ -29,14 +29,17 @@ export function ForecastTable({ spec, scenario }: ForecastTableProps) {
     { key: 'canonical.cf.operating_activities', label: 'Operating Cash Flow', bold: false },
   ]
 
+  // Memoized lookup map to avoid O(rows * periods * N) linear searches on render
+  const valMap = useMemo(() => {
+    const map = new Map<string, number | null>()
+    for (const li of lineItems) {
+      map.set(`${li.canonical_key}:${li.period_label}:${li.scenario}`, li.value)
+    }
+    return map
+  }, [lineItems])
+
   const getVal = (canonicalKey: string, period: string) => {
-    const item = lineItems.find(
-      (li) =>
-        li.canonical_key === canonicalKey &&
-        li.period_label === period &&
-        li.scenario === scenario
-    )
-    return item?.value ?? null
+    return valMap.get(`${canonicalKey}:${period}:${scenario}`) ?? null
   }
 
   return (
@@ -50,7 +53,7 @@ export function ForecastTable({ spec, scenario }: ForecastTableProps) {
           </h2>
         </div>
         <span className="font-mono text-[10px] text-[#94a3b8]">
-          FY27 – FY31 ({unit})
+          FY27–FY31 ({unit})
         </span>
       </div>
 

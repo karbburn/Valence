@@ -25,6 +25,7 @@ const config: Config = {
         positive: { DEFAULT: 'var(--c-positive)', subtle: 'var(--c-positive-subtle)' },
         negative: { DEFAULT: 'var(--c-negative)', subtle: 'var(--c-negative-subtle)' },
         warning: { DEFAULT: 'var(--c-warning)', subtle: 'var(--c-warning-subtle)' },
+        destructive: { DEFAULT: 'var(--c-destructive)', subtle: 'var(--c-destructive-subtle)' },
         excel: {
           bg: 'var(--c-excel-bg)',
           text: 'var(--c-excel-text)',

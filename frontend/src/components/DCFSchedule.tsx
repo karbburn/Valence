@@ -3,7 +3,7 @@
 import React from 'react'
 import { TableProperties } from 'lucide-react'
 import { ModelSpecification, ScenarioLabel } from '@/lib/types'
-import { fmtNum, fmtMoney, getCurrencySymbol } from '@/lib/formatters'
+import { fmtNum, fmtMoney, fmtPct, getCurrencySymbol } from '@/lib/formatters'
 
 export interface DCFScheduleProps {
   spec: ModelSpecification | null
@@ -31,7 +31,7 @@ export function DCFSchedule({ spec, scenario }: DCFScheduleProps) {
 
   const rows = [
     { label: 'EBIT (Operating Profit)', fn: (p: typeof fcffs[0]) => fmtNum(p.ebit), bold: false, total: false },
-    { label: 'Tax Rate %', fn: (p: typeof fcffs[0]) => `${((p.tax_rate || 0) * 100).toFixed(1)}%`, bold: false, total: false },
+    { label: 'Tax Rate %', fn: (p: typeof fcffs[0]) => fmtPct(p.tax_rate != null ? p.tax_rate * 100 : null, 1), bold: false, total: false },
     { label: 'NOPAT', fn: (p: typeof fcffs[0]) => fmtNum(p.nopat), bold: true, total: false },
     { label: '+ D&A', fn: (p: typeof fcffs[0]) => fmtNum(p.da), bold: false, total: false },
     { label: '− CapEx', fn: (p: typeof fcffs[0]) => p.capex != null ? `(${fmtNum(Math.abs(p.capex))})` : '—', bold: false, total: false },
@@ -205,10 +205,10 @@ export function DCFSchedule({ spec, scenario }: DCFScheduleProps) {
       {/* WACC & ROIC Subtext Footer */}
       <div className="mt-3 px-3 py-2 bg-[#0d1220] border border-[#1e283d] rounded-[4px] text-[10px] font-mono text-[#94a3b8] flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center space-x-3">
-          <span><strong className="text-[#f8fafc]">WACC:</strong> {((wacc.wacc || 0) * 100).toFixed(2)}%</span>
-          <span><strong className="text-[#f8fafc]">Cost of Equity:</strong> {((wacc.cost_of_equity || 0) * 100).toFixed(2)}%</span>
-          <span><strong className="text-[#f8fafc]">Cost of Debt:</strong> {((wacc.cost_of_debt || 0) * 100).toFixed(2)}%</span>
-          <span><strong className="text-[#f8fafc]">Equity Wt:</strong> {((wacc.equity_weight || 0) * 100).toFixed(1)}%</span>
+          <span><strong className="text-[#f8fafc]">WACC:</strong> {fmtPct(wacc.wacc != null ? wacc.wacc * 100 : null, 2)}</span>
+          <span><strong className="text-[#f8fafc]">Cost of Equity:</strong> {fmtPct(wacc.cost_of_equity != null ? wacc.cost_of_equity * 100 : null, 2)}</span>
+          <span><strong className="text-[#f8fafc]">Cost of Debt:</strong> {fmtPct(wacc.cost_of_debt != null ? wacc.cost_of_debt * 100 : null, 2)}</span>
+          <span><strong className="text-[#f8fafc]">Equity Wt:</strong> {fmtPct(wacc.equity_weight != null ? wacc.equity_weight * 100 : null, 1)}</span>
         </div>
         {tv.implied_roic != null && (
           <div className="text-[#7dd3fc]">
