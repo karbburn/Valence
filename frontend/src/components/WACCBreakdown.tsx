@@ -31,12 +31,12 @@ export function WACCBreakdown({ spec, scenario }: WACCBreakdownProps) {
   const waccVal = wacc.wacc ?? null
 
   return (
-    <div className="bg-surface border border-border rounded-[4px] p-4 flex flex-col shadow-sm select-none">
+    <div className="bg-surface border border-border rounded-[4px] p-3.5 flex flex-col shadow-sm select-none">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border pb-3 mb-3">
+      <div className="flex items-center justify-between border-b border-border pb-2.5 mb-2.5">
         <div className="flex items-center space-x-2">
           <Percent className="w-4 h-4 text-[#0ea5e9]" />
-          <h2 className="font-bold text-[15px] text-text-main">
+          <h2 className="font-bold text-[14px] text-text-main">
             WACC & Capital Cost
           </h2>
         </div>
@@ -98,11 +98,11 @@ export function WACCBreakdown({ spec, scenario }: WACCBreakdownProps) {
         </div>
 
         {/* WACC Summary (Primary Highlight) */}
-        <div className="flex items-center justify-between px-[8px] py-[8px] bg-[#0ea5e9]/10 border-t border-[#0ea5e9]/30">
-          <span className="font-bold text-[13px] text-[#7dd3fc]">
+        <div className="flex items-center justify-between px-[8px] py-[7px] bg-[#0ea5e9]/10 border-t border-[#0ea5e9]/30">
+          <span className="font-bold text-[12.5px] text-[#7dd3fc]">
             Weighted Average Cost of Capital
           </span>
-          <span className="font-mono font-bold text-[14px] text-[#7dd3fc]">
+          <span className="font-mono font-bold text-[13.5px] text-[#7dd3fc]">
             {fmtPct(waccVal, 2)}
           </span>
         </div>
@@ -110,7 +110,7 @@ export function WACCBreakdown({ spec, scenario }: WACCBreakdownProps) {
 
       {/* Footnote */}
       {wacc.source_notes && (
-        <div className="text-[10px] font-mono text-[#475569] mt-2.5 truncate">
+        <div className="text-[10px] font-mono text-[#475569] mt-2 truncate">
           Source: {wacc.source_notes}
         </div>
       )}

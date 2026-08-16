@@ -38,21 +38,21 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
   const terminalGrowthVal = tvObj?.terminal_growth_rate ?? null
 
   return (
-    <div className="w-full bg-[#111622]/40 border-b border-[#1e283d] px-[14px] py-[10px] select-none">
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+    <div className="w-full bg-[#111622]/40 border-b border-[#1e283d] px-[14px] py-[8px] select-none">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2.5">
         {/* KPI 1: DCF Implied Price (Primary KPI) */}
-        <div className="bg-[#111622] border border-[#0ea5e9]/40 rounded-[4px] px-3.5 py-2.5 flex flex-col justify-between shadow-sm">
+        <div className="bg-[#111622] border border-[#0ea5e9]/40 rounded-[4px] px-3 py-2 flex flex-col justify-between shadow-sm">
           <span className="font-semibold text-[11px] uppercase tracking-[0.04em] text-[#94a3b8]">
             DCF Implied Price
           </span>
-          <div className="font-mono font-bold text-[18px] text-[#7dd3fc] mt-0.5">
+          <div className="font-mono font-bold text-[17px] text-[#7dd3fc] mt-0.5">
             {impliedPrice != null ? `${currencySym}${fmtNum(impliedPrice, 2)}` : '—'}
           </div>
-          <div className="text-[11px] font-semibold mt-1">
+          <div className="text-[10.5px] font-semibold mt-0.5">
             {upsidePct != null ? (
               <span className={upsidePct >= 0 ? 'text-[#10b981]' : 'text-[#ef4444]'}>
                 {upsidePct >= 0 ? '+' : ''}
-                {fmtPct(upsidePct, 1)} vs market
+                {fmtPct(upsidePct, 1)} vs mkt
               </span>
             ) : (
               <span className="text-[#64748b]">Intrinsic Value</span>
@@ -61,66 +61,66 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
         </div>
 
         {/* KPI 2: Market Price */}
-        <div className="bg-[#111622] border border-[#1e283d] rounded-[4px] px-3.5 py-2.5 flex flex-col justify-between">
+        <div className="bg-[#111622] border border-[#1e283d] rounded-[4px] px-3 py-2 flex flex-col justify-between">
           <span className="font-semibold text-[11px] uppercase tracking-[0.04em] text-[#94a3b8]">
             Market Price
           </span>
-          <div className="font-mono font-bold text-[18px] text-[#f8fafc] mt-0.5">
+          <div className="font-mono font-bold text-[17px] text-[#f8fafc] mt-0.5">
             {marketPrice != null ? `${currencySym}${fmtNum(marketPrice, 2)}` : '—'}
           </div>
-          <div className="text-[11px] font-semibold text-[#64748b] mt-1">
+          <div className="text-[10.5px] font-semibold text-[#64748b] mt-0.5">
             Live / Benchmark
           </div>
         </div>
 
         {/* KPI 3: Enterprise Value */}
-        <div className="bg-[#111622] border border-[#1e283d] rounded-[4px] px-3.5 py-2.5 flex flex-col justify-between">
+        <div className="bg-[#111622] border border-[#1e283d] rounded-[4px] px-3 py-2 flex flex-col justify-between">
           <span className="font-semibold text-[11px] uppercase tracking-[0.04em] text-[#94a3b8]">
             Enterprise Value
           </span>
-          <div className="font-mono font-bold text-[18px] text-[#f8fafc] mt-0.5">
+          <div className="font-mono font-bold text-[17px] text-[#f8fafc] mt-0.5">
             {ev != null ? fmtMoney(ev, currency) : '—'}
           </div>
-          <div className="text-[11px] font-semibold text-[#64748b] mt-1">
+          <div className="text-[10.5px] font-semibold text-[#64748b] mt-0.5">
             PV FCFF + PV TV
           </div>
         </div>
 
         {/* KPI 4: Equity Value */}
-        <div className="bg-[#111622] border border-[#1e283d] rounded-[4px] px-3.5 py-2.5 flex flex-col justify-between">
+        <div className="bg-[#111622] border border-[#1e283d] rounded-[4px] px-3 py-2 flex flex-col justify-between">
           <span className="font-semibold text-[11px] uppercase tracking-[0.04em] text-[#94a3b8]">
             Equity Value
           </span>
-          <div className="font-mono font-bold text-[18px] text-[#f8fafc] mt-0.5">
+          <div className="font-mono font-bold text-[17px] text-[#f8fafc] mt-0.5">
             {equityVal != null ? fmtMoney(equityVal, currency) : '—'}
           </div>
-          <div className="text-[11px] font-semibold text-[#64748b] mt-1">
+          <div className="text-[10.5px] font-semibold text-[#64748b] mt-0.5">
             Net Debt Adjusted
           </div>
         </div>
 
         {/* KPI 5: WACC */}
-        <div className="bg-[#111622] border border-[#1e283d] rounded-[4px] px-3.5 py-2.5 flex flex-col justify-between">
+        <div className="bg-[#111622] border border-[#1e283d] rounded-[4px] px-3 py-2 flex flex-col justify-between">
           <span className="font-semibold text-[11px] uppercase tracking-[0.04em] text-[#94a3b8]">
             WACC
           </span>
-          <div className="font-mono font-bold text-[18px] text-[#f8fafc] mt-0.5">
+          <div className="font-mono font-bold text-[17px] text-[#f8fafc] mt-0.5">
             {waccVal != null ? fmtPct(waccVal, 2) : '—'}
           </div>
-          <div className="text-[11px] font-semibold text-[#64748b] mt-1">
+          <div className="text-[10.5px] font-semibold text-[#64748b] mt-0.5">
             CAPM / Capital Cost
           </div>
         </div>
 
         {/* KPI 6: Terminal Growth (g) */}
-        <div className="bg-[#111622] border border-[#1e283d] rounded-[4px] px-3.5 py-2.5 flex flex-col justify-between">
+        <div className="bg-[#111622] border border-[#1e283d] rounded-[4px] px-3 py-2 flex flex-col justify-between">
           <span className="font-semibold text-[11px] uppercase tracking-[0.04em] text-[#94a3b8]">
             Terminal Growth (g)
           </span>
-          <div className="font-mono font-bold text-[18px] text-[#f8fafc] mt-0.5">
+          <div className="font-mono font-bold text-[17px] text-[#f8fafc] mt-0.5">
             {terminalGrowthVal != null ? fmtPct(terminalGrowthVal, 2) : '—'}
           </div>
-          <div className="text-[11px] font-semibold text-[#64748b] mt-1">
+          <div className="text-[10.5px] font-semibold text-[#64748b] mt-0.5">
             Gordon Growth
           </div>
         </div>

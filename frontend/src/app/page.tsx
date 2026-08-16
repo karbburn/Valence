@@ -17,6 +17,7 @@ import { SaveModal } from '@/components/SaveModal'
 import { SavedModelsModal } from '@/components/SavedModelsModal'
 import { MobileGuard } from '@/components/MobileGuard'
 import { useModelSpec } from '@/hooks/useModelSpec'
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { ScenarioLabel, CompanySummary } from '@/lib/types'
 import { saveModel, loadSavedModel } from '@/lib/api'
 
@@ -40,6 +41,20 @@ export default function HomePage() {
   const [qaOpen, setQaOpen] = useState(false)
   const [saveOpen, setSaveOpen] = useState(false)
   const [savedModelsOpen, setSavedModelsOpen] = useState(false)
+
+  // Keyboard Shortcuts (Ctrl+S, 1/2/3 mode keys, Escape, Left/Right arrows)
+  useKeyboardShortcuts({
+    onSave: () => setSaveOpen(true),
+    onSetMode: setMode,
+    onScenarioChange: setScenario,
+    onCloseModals: () => {
+      setQaOpen(false)
+      setSaveOpen(false)
+      setSavedModelsOpen(false)
+    },
+    currentScenario: scenario,
+    hasOpenModal: qaOpen || saveOpen || savedModelsOpen,
+  })
 
   useEffect(() => {
     loadModel('infy_infy')
@@ -136,7 +151,7 @@ export default function HomePage() {
       <KPIBar spec={spec} scenario={scenario} />
 
       {/* Main Workspace Layout */}
-      <main className="flex-1 w-full max-w-[1680px] mx-auto p-5">
+      <main className="flex-1 w-full max-w-[1680px] mx-auto p-4 sm:p-5">
         {!spec && !loading && (
           <div className="bg-surface border border-border rounded-[4px] p-8 text-center text-[#64748b] text-[13px]">
             No valuation model loaded. Use the search bar in the header to select a company.
@@ -144,9 +159,9 @@ export default function HomePage() {
         )}
 
         {spec && mode === 'analyst' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
             {/* Left Column: Driver Sliders & WACC Breakdown */}
-            <div className="lg:col-span-4 space-y-5">
+            <div className="lg:col-span-4 space-y-4">
               <DriverPanel
                 spec={spec}
                 scenario={scenario}
@@ -157,7 +172,7 @@ export default function HomePage() {
             </div>
 
             {/* Right Column: DCF Valuation Schedule & Forecast Summary */}
-            <div className="lg:col-span-8 space-y-5">
+            <div className="lg:col-span-8 space-y-4">
               <DCFSchedule spec={spec} scenario={scenario} />
               <ForecastTable spec={spec} scenario={scenario} />
             </div>
