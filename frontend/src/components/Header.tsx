@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { Save, Bookmark, FileSpreadsheet, CheckCircle2, AlertTriangle } from 'lucide-react'
-import { ModelSpecification, ScenarioLabel } from '@/lib/types'
+import { ModelSpecification, ScenarioLabel, CompanySummary } from '@/lib/types'
 import { CompanySearch } from './CompanySearch'
 
 export interface HeaderProps {
@@ -12,7 +12,7 @@ export interface HeaderProps {
   companyId: string
   onModeChange: (mode: 'analyst' | 'quick' | 'full') => void
   onScenarioChange: (scenario: ScenarioLabel) => void
-  onSelectCompany: (companyId: string, ticker: string, name: string) => void
+  onSelectCompany: (company: CompanySummary) => void
   onSave?: () => void
   onOpenSaved?: () => void
   onOpenQA?: () => void
