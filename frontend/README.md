@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Valence Frontend — Institutional Valuation Terminal
 
-## Getting Started
+Next.js 15+ App Router application implementing the Valence financial modeling interface with real-time valuation updates, 3-statement financial schedules, and DCF analysis.
 
-First, run the development server:
+---
 
+## 🛠 Tech Stack
+
+- **Framework**: Next.js 15+ (App Router)
+- **Language**: TypeScript (Strict mode, zero `any` types)
+- **Styling**: Tailwind CSS with custom CSS variables & theme tokens
+- **Icons**: `lucide-react`
+- **Typography**: Inter (UI labels) + JetBrains Mono (financial data with global `tabular-nums`)
+- **Accent Palette**: Teal (`#0ea5e9`) & Light Cyan (`#7dd3fc`)
+
+---
+
+## 🏛 Architecture & Layout
+
+### 1. View Modes
+- **Analyst Mode (`1`)**: 12-column grid featuring interactive driver sliders and flat CAPM WACC breakdown in the left pane (4 cols), alongside a 5-period FCFF DCF valuation schedule with subtotal bridges and a 5-year forecast summary table in the right pane (8 cols).
+- **Quick DCF Mode (`2`)**: Executive overview with hero intrinsic share price, benchmark market quote, upside/downside percentage trend, key CAPM/growth parameters, and a 2-way WACC $\times$ Terminal Growth ($g$) sensitivity matrix.
+- **Full 3-Statement Mode (`3`)**: Complete 12-period model with tabbed navigation for Income Statement, Balance Sheet, and Cash Flow Statement, featuring distinct audited historical (`H`) and explicit forecast (`F`) columns separated by vertical demarcations.
+
+### 2. Interactive Systems & Modals
+- **Company Search (`CompanySearch.tsx`)**: Debounced multi-market lookup (US SEC EDGAR & India NSE) with status badges (`INSTANT` precomputed vs `LIVE` build) and keyboard navigation (`ArrowDown`, `ArrowUp`, `Enter`, `Escape`).
+- **QA Consistency Audit (`QAModal.tsx`)**: Inspects automated balance sheet balancing, NOPAT derivation, and growth rate validity checks.
+- **Model Persistence (`SaveModal.tsx` & `SavedModelsModal.tsx`)**: Replaces native browser prompts and confirms with accessible modal dialogs and inline deletion verification.
+- **Mobile Viewport Guard (`MobileGuard.tsx`)**: Enforces institutional desktop viewport standards ($\ge 900\text{px}$).
+
+### 3. Global Keyboard Shortcuts (`useKeyboardShortcuts.ts`)
+- **`Ctrl+S` / `Cmd+S`**: Open Save Model modal.
+- **`1` / `2` / `3`**: Switch between Analyst, Quick DCF, and 3-Statement modes.
+- **`ArrowLeft` / `ArrowRight`**: Navigate between Base, Bull, and Bear scenarios.
+- **`Escape`**: Dismiss open modal or company search dropdown.
+
+---
+
+## 🚀 Getting Started
+
+### 1. Install Dependencies
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd frontend
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Run Local Development Server
+```bash
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser. API requests to `/api/*` are automatically proxied to FastAPI on `http://localhost:8000/api/*`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Type Checking & Production Build
+```bash
+# Type check without emitting files
+npx tsc --noEmit
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# Production build
+npm run build
+```
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 📋 Design System Constraints & Anti-Patterns
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Valence enforces strict institutional aesthetic standards:
+- **No Indigo/Violet Accents**: Only `#0ea5e9` (Teal) is permitted.
+- **No Gradients or Glows**: Flat backgrounds, subtle 1px border delimitations.
+- **No Rounded-XL / Rounded-Full on Data Cells**: Cards use `rounded-[4px]`, modals use `rounded-[6px]`.
+- **No Emoji or Decorative Icons**: Institutional iconography only.
+- **Numeric Precision**: All numbers formatted with `fmtNum`, `fmtMoney`, or `fmtPct` using JetBrains Mono with tabular numbers.
