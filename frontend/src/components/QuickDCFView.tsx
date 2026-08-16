@@ -3,7 +3,7 @@
 import React from 'react'
 import { Sparkles, ArrowUpRight, ArrowDownRight, Layers } from 'lucide-react'
 import { ModelSpecification, ScenarioLabel } from '@/lib/types'
-import { fmtNum, fmtPct, getCurrencySymbol } from '@/lib/formatters'
+import { fmtNum, fmtPct, fmtPrice, getCurrencySymbol } from '@/lib/formatters'
 
 export interface QuickDCFViewProps {
   spec: ModelSpecification | null
@@ -58,7 +58,7 @@ export function QuickDCFView({ spec, scenario }: QuickDCFViewProps) {
             <span>DCF Intrinsic Value</span>
           </div>
           <div className="font-mono font-bold text-[30px] text-[#7dd3fc]">
-            {impliedPrice != null ? `${currencySym}${fmtNum(impliedPrice, 2)}` : '—'}
+            {impliedPrice != null ? fmtPrice(impliedPrice, currency, 2) : '—'}
           </div>
           <div className="text-[11px] text-[#64748b] mt-1 font-mono">
             Per Share ({currency})
@@ -71,7 +71,7 @@ export function QuickDCFView({ spec, scenario }: QuickDCFViewProps) {
             Current Market Price
           </div>
           <div className="font-mono font-bold text-[26px] text-[#f8fafc]">
-            {marketPrice != null ? `${currencySym}${fmtNum(marketPrice, 2)}` : '—'}
+            {marketPrice != null ? fmtPrice(marketPrice, currency, 2) : '—'}
           </div>
           <div className="text-[11px] text-[#64748b] mt-1">
             Benchmark Quote

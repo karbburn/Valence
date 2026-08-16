@@ -16,6 +16,14 @@ export function fmtNum(val: number | null | undefined, decimals = 0): string {
   })
 }
 
+export function fmtPrice(val: number | null | undefined, currency = 'INR', decimals = 2): string {
+  if (val == null || isNaN(val)) return '—'
+  const sym = getCurrencySymbol(currency)
+  const abs = Math.abs(val)
+  const sign = val < 0 ? '-' : ''
+  return `${sign}${sym}${fmtNum(abs, decimals)}`
+}
+
 export function fmtMoney(val: number | null | undefined, currency = 'INR'): string {
   if (val == null || isNaN(val)) return '—'
   const sym = getCurrencySymbol(currency)

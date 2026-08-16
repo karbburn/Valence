@@ -42,17 +42,17 @@ export function Header({
       : 'failed'
 
   return (
-    <header className="sticky top-0 z-40 h-[48px] w-full bg-[#111622]/95 backdrop-blur-md border-b border-[#1e283d] px-5 flex items-center justify-between text-sans select-none">
+    <header className="sticky top-0 z-40 h-[48px] w-full bg-[#111622]/95 backdrop-blur-md border-b border-[#1e283d] px-4 flex items-center justify-between text-sans select-none gap-3">
       {/* Left section: Logo, Search, Company Badge */}
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-3 shrink-0">
         {/* Brand Logo */}
-        <div className="flex items-center space-x-2.5">
-          <div className="w-[30px] h-[30px] bg-white rounded-[4px] p-[3px] flex items-center justify-center shadow-sm">
+        <div className="flex items-center space-x-2 shrink-0">
+          <div className="w-[28px] h-[28px] bg-white rounded-[4px] p-[2px] flex items-center justify-center shadow-sm">
             <div className="w-full h-full bg-[#080c14] rounded-[2px] border border-[#1e283d] flex items-center justify-center">
               <div className="w-2 h-2 bg-[#0ea5e9] rounded-full" />
             </div>
           </div>
-          <span className="font-bold text-[18px] tracking-[0.05em] text-[#f8fafc]">
+          <span className="font-bold text-[17px] tracking-[0.05em] text-[#f8fafc]">
             VALENCE
           </span>
         </div>
@@ -62,11 +62,11 @@ export function Header({
 
         {/* Active Company Badge */}
         {metadata && (
-          <div className="flex items-center space-x-2 bg-[#0d1220] border border-[#1e283d] rounded-[4px] px-2.5 py-1">
-            <span className="font-bold text-[11px] uppercase tracking-[0.04em] text-[#f8fafc]">
+          <div className="hidden sm:flex items-center space-x-2 bg-[#0d1220] border border-[#1e283d] rounded-[4px] px-2.5 py-1 max-w-[220px]">
+            <span className="font-bold text-[11px] uppercase tracking-[0.04em] text-[#f8fafc] truncate">
               {metadata.name}
             </span>
-            <span className="font-mono font-bold text-[10px] text-[#7dd3fc] bg-[#0ea5e9]/10 border border-[#0ea5e9]/20 rounded-[3px] px-1.5 py-0.5">
+            <span className="font-mono font-bold text-[10px] text-[#7dd3fc] bg-[#0ea5e9]/10 border border-[#0ea5e9]/20 rounded-[3px] px-1.5 py-0.5 shrink-0">
               {metadata.ticker}
             </span>
           </div>
@@ -77,13 +77,13 @@ export function Header({
       <div
         role="tablist"
         aria-label="View Mode Navigation"
-        className="flex items-center bg-[#111622] border border-[#1e283d] rounded-[6px] p-1 space-x-1"
+        className="flex items-center bg-[#111622] border border-[#1e283d] rounded-[6px] p-0.5 space-x-1 shrink-0"
       >
         <button
           role="tab"
           aria-selected={mode === 'analyst'}
           onClick={() => onModeChange('analyst')}
-          className={`px-3 py-1 text-[12px] font-medium rounded-[4px] transition-colors ${
+          className={`px-3 py-1 text-[12px] font-medium rounded-[4px] whitespace-nowrap transition-colors ${
             mode === 'analyst'
               ? 'bg-[#0ea5e9] text-white font-semibold shadow-sm'
               : 'text-[#64748b] hover:text-[#f8fafc]'
@@ -95,7 +95,7 @@ export function Header({
           role="tab"
           aria-selected={mode === 'quick'}
           onClick={() => onModeChange('quick')}
-          className={`px-3 py-1 text-[12px] font-medium rounded-[4px] transition-colors ${
+          className={`px-3 py-1 text-[12px] font-medium rounded-[4px] whitespace-nowrap transition-colors ${
             mode === 'quick'
               ? 'bg-[#0ea5e9] text-white font-semibold shadow-sm'
               : 'text-[#64748b] hover:text-[#f8fafc]'
@@ -107,7 +107,7 @@ export function Header({
           role="tab"
           aria-selected={mode === 'full'}
           onClick={() => onModeChange('full')}
-          className={`px-3 py-1 text-[12px] font-medium rounded-[4px] transition-colors ${
+          className={`px-3 py-1 text-[12px] font-medium rounded-[4px] whitespace-nowrap transition-colors ${
             mode === 'full'
               ? 'bg-[#0ea5e9] text-white font-semibold shadow-sm'
               : 'text-[#64748b] hover:text-[#f8fafc]'
@@ -118,12 +118,12 @@ export function Header({
       </div>
 
       {/* Right section: Scenario Toggle, QA Badge, Action Buttons */}
-      <div className="flex items-center space-x-3">
+      <div className="flex items-center space-x-2.5 shrink-0">
         {/* Scenario Control */}
         <div
           role="tablist"
           aria-label="Valuation Scenario"
-          className="flex items-center bg-[#111622] border border-[#1e283d] rounded-[6px] p-0.5 space-x-0.5"
+          className="flex items-center bg-[#111622] border border-[#1e283d] rounded-[6px] p-0.5 space-x-0.5 shrink-0"
         >
           {(['base', 'bull', 'bear'] as ScenarioLabel[]).map((sc) => (
             <button
@@ -131,7 +131,7 @@ export function Header({
               role="tab"
               aria-selected={scenario === sc}
               onClick={() => onScenarioChange(sc)}
-              className={`px-2.5 py-0.5 text-[11px] font-medium capitalize rounded-[4px] transition-colors ${
+              className={`px-2.5 py-0.5 text-[11px] font-medium capitalize rounded-[4px] whitespace-nowrap transition-colors ${
                 scenario === sc
                   ? 'bg-[#2a3652] text-[#f8fafc] font-bold'
                   : 'text-[#64748b] hover:text-[#94a3b8]'
@@ -145,7 +145,7 @@ export function Header({
         {/* QA Status Badge */}
         <button
           onClick={onOpenQA}
-          className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[9px] font-bold tracking-[0.04em] uppercase border transition-colors ${
+          className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-[4px] text-[9.5px] font-bold tracking-[0.04em] uppercase border whitespace-nowrap shrink-0 transition-colors ${
             qaStatus === 'passed'
               ? 'bg-[#10b981]/10 text-[#10b981] border-[#10b981]/30 hover:bg-[#10b981]/20'
               : qaStatus === 'failed'
@@ -161,7 +161,9 @@ export function Header({
           ) : qaStatus === 'failed' ? (
             <>
               <AlertTriangle className="w-3 h-3 text-[#ef4444]" />
-              <span>{failedChecks.length} CHECKS FAILED</span>
+              <span>
+                {failedChecks.length} {failedChecks.length === 1 ? 'CHECK' : 'CHECKS'} FAILED
+              </span>
             </>
           ) : (
             <span>QA NOT RUN</span>
@@ -169,10 +171,10 @@ export function Header({
         </button>
 
         {/* Action Buttons */}
-        <div className="flex items-center space-x-1.5">
+        <div className="flex items-center space-x-1.5 shrink-0">
           <button
             onClick={onSave}
-            className="flex items-center space-x-1 px-3 py-1 bg-[#0ea5e9] hover:bg-[#38bdf8] text-white text-[12px] font-semibold rounded-[4px] transition-colors"
+            className="flex items-center space-x-1 px-2.5 py-1 bg-[#0ea5e9] hover:bg-[#38bdf8] text-white text-[11.5px] font-semibold rounded-[4px] transition-colors"
           >
             <Save className="w-3.5 h-3.5" />
             <span>Save</span>
@@ -180,7 +182,7 @@ export function Header({
 
           <button
             onClick={onOpenSaved}
-            className="flex items-center space-x-1 px-2.5 py-1 bg-[#192030] hover:bg-[#2a3652] text-[#94a3b8] hover:text-[#f8fafc] border border-[#1e283d] text-[12px] font-semibold rounded-[4px] transition-colors"
+            className="flex items-center space-x-1 px-2.5 py-1 bg-[#192030] hover:bg-[#2a3652] text-[#94a3b8] hover:text-[#f8fafc] border border-[#1e283d] text-[11.5px] font-semibold rounded-[4px] transition-colors"
           >
             <Bookmark className="w-3.5 h-3.5" />
             <span>Saved</span>
@@ -188,7 +190,7 @@ export function Header({
 
           <button
             onClick={onExportExcel}
-            className="flex items-center space-x-1 px-2.5 py-1 bg-[#065f46] hover:bg-[#047857] text-[#6ee7b7] border border-[#047857] text-[12px] font-semibold rounded-[4px] transition-colors"
+            className="flex items-center space-x-1 px-2.5 py-1 bg-[#065f46] hover:bg-[#047857] text-[#6ee7b7] border border-[#047857] text-[11.5px] font-semibold rounded-[4px] transition-colors"
           >
             <FileSpreadsheet className="w-3.5 h-3.5" />
             <span>Excel</span>
