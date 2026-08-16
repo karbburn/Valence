@@ -15,8 +15,9 @@ import { FullModelView } from '@/components/FullModelView'
 import { QAModal } from '@/components/QAModal'
 import { SaveModal } from '@/components/SaveModal'
 import { SavedModelsModal } from '@/components/SavedModelsModal'
+import { MobileGuard } from '@/components/MobileGuard'
 import { useModelSpec } from '@/hooks/useModelSpec'
-import { ScenarioLabel } from '@/lib/types'
+import { ScenarioLabel, CompanySummary } from '@/lib/types'
 import { saveModel, loadSavedModel } from '@/lib/api'
 
 export default function HomePage() {
@@ -29,6 +30,12 @@ export default function HomePage() {
   const [toastType, setToastType] = useState<'success' | 'error' | 'warning' | 'info'>('success')
   const [localError, setLocalError] = useState<string | null>(null)
 
+  // Context-aware loading copy
+  const [loadingTitle, setLoadingTitle] = useState('Compiling Valuation Model')
+  const [loadingSubtitle, setLoadingSubtitle] = useState(
+    'Ingesting live financial statements, normalizing taxonomy, and solving DCF & WACC matrices...'
+  )
+
   // Modal visibility states
   const [qaOpen, setQaOpen] = useState(false)
   const [saveOpen, setSaveOpen] = useState(false)
@@ -38,10 +45,23 @@ export default function HomePage() {
     loadModel('infy_infy')
   }, [loadModel])
 
-  const handleSelectCompany = (id: string, ticker: string, name: string) => {
-    loadModel(id)
+  const handleSelectCompany = (company: CompanySummary) => {
+    setLocalError(null)
+    const isLive = company.onboarding_status !== 'onboarded'
+
+    if (isLive) {
+      setLoadingTitle(`Compiling Live Model for ${company.ticker}`)
+      setLoadingSubtitle(
+        `Ingesting live financial statements, normalizing taxonomy, and solving DCF matrices...`
+      )
+    } else {
+      setLoadingTitle(`Loading ${company.ticker} Model`)
+      setLoadingSubtitle(`Loading precomputed valuation model from local registry...`)
+    }
+
+    loadModel(company.company_id)
     setToastType('info')
-    setToastMessage(`Loaded: ${ticker} (${name})`)
+    setToastMessage(`Loaded: ${company.ticker} (${company.name})`)
   }
 
   const handleDriverChange = async (driverKey: string, value: number) => {
@@ -64,8 +84,10 @@ export default function HomePage() {
   }
 
   const handleLoadSavedModel = async (modelId: string) => {
+    setLocalError(null)
+    setLoadingTitle('Loading Saved Model')
+    setLoadingSubtitle('Retrieving persisted valuation model parameters...')
     const loadedSpec = await loadSavedModel(modelId)
-    // If the loaded model specifies a company, reload or use loaded spec
     if (loadedSpec?.metadata?.company_id) {
       await loadModel(loadedSpec.metadata.company_id)
     }
@@ -79,8 +101,15 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-canvas text-text-main flex flex-col font-sans">
+      {/* Mobile Viewport Guard (<900px) */}
+      <MobileGuard />
+
       {/* Page Loading Overlay */}
-      <LoadingOverlay visible={loading} />
+      <LoadingOverlay
+        visible={loading}
+        title={loadingTitle}
+        subtitle={loadingSubtitle}
+      />
 
       {/* Global Error Banner */}
       <ErrorBanner
@@ -108,7 +137,13 @@ export default function HomePage() {
 
       {/* Main Workspace Layout */}
       <main className="flex-1 w-full max-w-[1680px] mx-auto p-5">
-        {mode === 'analyst' && (
+        {!spec && !loading && (
+          <div className="bg-surface border border-border rounded-[4px] p-8 text-center text-[#64748b] text-[13px]">
+            No valuation model loaded. Use the search bar in the header to select a company.
+          </div>
+        )}
+
+        {spec && mode === 'analyst' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
             {/* Left Column: Driver Sliders & WACC Breakdown */}
             <div className="lg:col-span-4 space-y-5">
@@ -129,11 +164,11 @@ export default function HomePage() {
           </div>
         )}
 
-        {mode === 'quick' && (
+        {spec && mode === 'quick' && (
           <QuickDCFView spec={spec} scenario={scenario} />
         )}
 
-        {mode === 'full' && (
+        {spec && mode === 'full' && (
           <FullModelView spec={spec} scenario={scenario} />
         )}
       </main>

@@ -6,7 +6,7 @@ import { CompanySummary } from '@/lib/types'
 import { useCompanies } from '@/hooks/useCompanies'
 
 export interface CompanySearchProps {
-  onSelectCompany: (companyId: string, ticker: string, name: string) => void
+  onSelectCompany: (company: CompanySummary) => void
 }
 
 export function CompanySearch({ onSelectCompany }: CompanySearchProps) {
@@ -47,7 +47,7 @@ export function CompanySearch({ onSelectCompany }: CompanySearchProps) {
   }
 
   const handleSelect = (c: CompanySummary) => {
-    onSelectCompany(c.company_id, c.ticker, c.name)
+    onSelectCompany(c)
     setQuery('')
     clearSearch()
     setIsOpen(false)
