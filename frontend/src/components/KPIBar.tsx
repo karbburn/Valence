@@ -34,10 +34,8 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
 
   const ev = bridge?.enterprise_value ?? null
   const equityVal = bridge?.equity_value ?? null
-  const waccVal = waccObj?.wacc ? waccObj.wacc * 100 : null
-  const terminalGrowthVal = tvObj?.terminal_growth_rate
-    ? tvObj.terminal_growth_rate * 100
-    : null
+  const waccVal = waccObj?.wacc ?? null
+  const terminalGrowthVal = tvObj?.terminal_growth_rate ?? null
 
   return (
     <div className="w-full bg-[#111622]/40 border-b border-[#1e283d] px-[14px] py-[10px] select-none">

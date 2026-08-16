@@ -37,13 +37,10 @@ export function QuickDCFView({ spec, scenario }: QuickDCFViewProps) {
     upsidePct = ((impliedPrice - marketPrice) / marketPrice) * 100
   }
 
-  const waccVal = wacc.wacc != null ? wacc.wacc * 100 : null
-  const terminalGrowthVal =
-    tv.terminal_growth_rate != null ? tv.terminal_growth_rate * 100 : 4.0
-  const impliedGVal =
-    revDcf.implied_terminal_growth != null
-      ? revDcf.implied_terminal_growth * 100
-      : null
+  // Values from backend are already in percentage scale (e.g., 12.8, 4.0)
+  const waccVal = wacc.wacc ?? null
+  const terminalGrowthVal = tv.terminal_growth_rate ?? 4.0
+  const impliedGVal = revDcf.implied_terminal_growth ?? null
 
   const sensTable = valuation.sensitivity_tables?.[0]
   const rowVals = sensTable?.row_values || []
@@ -172,7 +169,7 @@ export function QuickDCFView({ spec, scenario }: QuickDCFViewProps) {
                   </th>
                   {colVals.map((g) => {
                     const isBaseCol =
-                      Math.abs(g - (tv.terminal_growth_rate || 0.04)) < 0.005
+                      Math.abs(g - (tv.terminal_growth_rate || 4.0)) < 0.1
                     return (
                       <th
                         key={g}
@@ -180,7 +177,7 @@ export function QuickDCFView({ spec, scenario }: QuickDCFViewProps) {
                           isBaseCol ? 'text-[#7dd3fc]' : 'text-[#94a3b8]'
                         }`}
                       >
-                        {fmtPct(g * 100, 1)}
+                        {fmtPct(g, 1)}
                       </th>
                     )
                   })}
@@ -189,7 +186,7 @@ export function QuickDCFView({ spec, scenario }: QuickDCFViewProps) {
               <tbody className="divide-y divide-[#1e283d]/60 font-mono">
                 {rowVals.map((w, ri) => {
                   const isBaseRow =
-                    Math.abs(w - (wacc.wacc || 0.12)) < 0.005
+                    Math.abs(w - (wacc.wacc || 12.0)) < 0.1
                   return (
                     <tr
                       key={w}
@@ -206,14 +203,14 @@ export function QuickDCFView({ spec, scenario }: QuickDCFViewProps) {
                             : 'text-[#64748b]'
                         }`}
                       >
-                        {fmtPct(w * 100, 1)}
+                        {fmtPct(w, 1)}
                       </td>
                       {(grid[ri] || []).map((v, ci) => {
                         const isBaseCell =
                           isBaseRow &&
                           Math.abs(
-                            colVals[ci] - (tv.terminal_growth_rate || 0.04)
-                          ) < 0.005
+                            colVals[ci] - (tv.terminal_growth_rate || 4.0)
+                          ) < 0.1
 
                         let cellClass = 'text-[#94a3b8]'
                         if (isBaseCell) {

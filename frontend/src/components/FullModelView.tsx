@@ -147,7 +147,7 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>{p}</span>
-                    <span className="text-[10px] font-bold bg-[#192030] border border-[#1e283d] text-[#64748b] px-1 py-0.2 rounded-[2px]">
+                    <span className="text-[10px] font-bold bg-[#192030] border border-[#1e283d] text-[#64748b] px-1 py-[1px] rounded-[2px]">
                       H
                     </span>
                   </div>
@@ -161,7 +161,7 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>{p}</span>
-                    <span className="text-[10px] font-bold bg-[#0ea5e9]/10 border border-[#0ea5e9]/30 text-[#7dd3fc] px-1 py-0.2 rounded-[2px]">
+                    <span className="text-[10px] font-bold bg-[#0ea5e9]/10 border border-[#0ea5e9]/30 text-[#7dd3fc] px-1 py-[1px] rounded-[2px]">
                       F
                     </span>
                   </div>
