@@ -1,16 +1,17 @@
 'use client'
 
 import React from 'react'
-import { TableProperties } from 'lucide-react'
+import { TableProperties, Info } from 'lucide-react'
 import { ModelSpecification, ScenarioLabel } from '@/lib/types'
 import { fmtNum, fmtMoney, fmtPct, getCurrencySymbol } from '@/lib/formatters'
 
 export interface DCFScheduleProps {
   spec: ModelSpecification | null
   scenario: ScenarioLabel
+  onOpenMethodology?: () => void
 }
 
-export function DCFSchedule({ spec, scenario }: DCFScheduleProps) {
+export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFScheduleProps) {
   const valuation =
     spec?.valuation?.find((v) => v.scenario === scenario) || spec?.valuation?.[0]
 
@@ -53,6 +54,16 @@ export function DCFSchedule({ spec, scenario }: DCFScheduleProps) {
           <h2 className="font-bold text-[14px] text-text-main">
             FCFF & DCF Valuation Schedule
           </h2>
+          {onOpenMethodology && (
+            <button
+              onClick={onOpenMethodology}
+              className="flex items-center space-x-1 text-[10px] font-mono text-[#0ea5e9] bg-[#0ea5e9]/10 border border-[#0ea5e9]/20 hover:bg-[#0ea5e9]/20 rounded-[3px] px-2 py-0.5 transition-colors cursor-pointer ml-1"
+              title="Methodology breakdown vs retail screeners (AlphaSpread)"
+            >
+              <Info className="w-3 h-3 text-[#0ea5e9]" />
+              <span>FCFF vs AlphaSpread</span>
+            </button>
+          )}
         </div>
 
         {/* Inline DCF Bridge Strip */}
