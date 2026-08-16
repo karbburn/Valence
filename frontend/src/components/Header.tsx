@@ -1,8 +1,9 @@
 'use client'
 
 import React from 'react'
-import { Search, Save, Bookmark, FileSpreadsheet, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { Save, Bookmark, FileSpreadsheet, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { ModelSpecification, ScenarioLabel } from '@/lib/types'
+import { CompanySearch } from './CompanySearch'
 
 export interface HeaderProps {
   spec: ModelSpecification | null
@@ -11,13 +12,11 @@ export interface HeaderProps {
   companyId: string
   onModeChange: (mode: 'analyst' | 'quick' | 'full') => void
   onScenarioChange: (scenario: ScenarioLabel) => void
-  onCompanyChange?: (companyId: string) => void
+  onSelectCompany: (companyId: string, ticker: string, name: string) => void
   onSave?: () => void
   onOpenSaved?: () => void
   onOpenQA?: () => void
   onExportExcel?: () => void
-  searchQuery?: string
-  onSearchChange?: (query: string) => void
 }
 
 export function Header({
@@ -26,12 +25,11 @@ export function Header({
   scenario,
   onModeChange,
   onScenarioChange,
+  onSelectCompany,
   onSave,
   onOpenSaved,
   onOpenQA,
   onExportExcel,
-  searchQuery = '',
-  onSearchChange,
 }: HeaderProps) {
   const metadata = spec?.metadata
   const qaChecks = spec?.qa?.checks || []
@@ -59,17 +57,8 @@ export function Header({
           </span>
         </div>
 
-        {/* Company Search Input */}
-        <div className="relative w-64">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#64748b]" />
-          <input
-            type="text"
-            placeholder="Search ticker or company..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange?.(e.target.value)}
-            className="w-full h-8 bg-[#0d1220] border border-[#2a3652] rounded-[4px] pl-8 pr-3 text-[12px] text-[#f8fafc] placeholder-[#475569] focus:outline-none focus:border-[#0ea5e9] focus:ring-1 focus:ring-[#0ea5e9]/30 transition-colors"
-          />
-        </div>
+        {/* Company Search Component */}
+        <CompanySearch onSelectCompany={onSelectCompany} />
 
         {/* Active Company Badge */}
         {metadata && (

@@ -12,9 +12,12 @@ import { DCFSchedule } from '@/components/DCFSchedule'
 import { ForecastTable } from '@/components/ForecastTable'
 import { QuickDCFView } from '@/components/QuickDCFView'
 import { FullModelView } from '@/components/FullModelView'
+import { QAModal } from '@/components/QAModal'
+import { SaveModal } from '@/components/SaveModal'
+import { SavedModelsModal } from '@/components/SavedModelsModal'
 import { useModelSpec } from '@/hooks/useModelSpec'
 import { ScenarioLabel } from '@/lib/types'
-import { saveModel } from '@/lib/api'
+import { saveModel, loadSavedModel } from '@/lib/api'
 
 export default function HomePage() {
   const { spec, loading, error, companyId, loadModel, recompute, revert } =
@@ -24,12 +27,22 @@ export default function HomePage() {
   const [scenario, setScenario] = useState<ScenarioLabel>('base')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [toastType, setToastType] = useState<'success' | 'error' | 'warning' | 'info'>('success')
-  const [searchQuery, setSearchQuery] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
+
+  // Modal visibility states
+  const [qaOpen, setQaOpen] = useState(false)
+  const [saveOpen, setSaveOpen] = useState(false)
+  const [savedModelsOpen, setSavedModelsOpen] = useState(false)
 
   useEffect(() => {
     loadModel('infy_infy')
   }, [loadModel])
+
+  const handleSelectCompany = (id: string, ticker: string, name: string) => {
+    loadModel(id)
+    setToastType('info')
+    setToastMessage(`Loaded: ${ticker} (${name})`)
+  }
 
   const handleDriverChange = async (driverKey: string, value: number) => {
     await recompute(driverKey, value, scenario)
@@ -43,29 +56,21 @@ export default function HomePage() {
     setToastMessage(`${driverKey} reverted`)
   }
 
-  const handleSave = async () => {
+  const handleSaveSubmit = async (name: string) => {
     if (!companyId) return
-    const defaultName = `${spec?.metadata?.name || 'Model'} – ${scenario.toUpperCase()}`
-    const name = window.prompt('Save model as:', defaultName)
-    if (!name) return
+    await saveModel(companyId, name)
+    setToastType('success')
+    setToastMessage(`Saved model: "${name}"`)
+  }
 
-    try {
-      await saveModel(companyId, name)
-      setToastType('success')
-      setToastMessage(`Saved: "${name}"`)
-    } catch (err) {
-      setLocalError(err instanceof Error ? err.message : 'Save failed')
+  const handleLoadSavedModel = async (modelId: string) => {
+    const loadedSpec = await loadSavedModel(modelId)
+    // If the loaded model specifies a company, reload or use loaded spec
+    if (loadedSpec?.metadata?.company_id) {
+      await loadModel(loadedSpec.metadata.company_id)
     }
-  }
-
-  const handleOpenSaved = () => {
-    setToastType('info')
-    setToastMessage('Saved models dialog ready')
-  }
-
-  const handleOpenQA = () => {
-    setToastType('info')
-    setToastMessage('QA checks dialog ready')
+    setToastType('success')
+    setToastMessage(`Loaded saved model`)
   }
 
   const handleExportExcel = () => {
@@ -91,12 +96,11 @@ export default function HomePage() {
         companyId={companyId}
         onModeChange={setMode}
         onScenarioChange={setScenario}
-        onSave={handleSave}
-        onOpenSaved={handleOpenSaved}
-        onOpenQA={handleOpenQA}
+        onSelectCompany={handleSelectCompany}
+        onSave={() => setSaveOpen(true)}
+        onOpenSaved={() => setSavedModelsOpen(true)}
+        onOpenQA={() => setQaOpen(true)}
         onExportExcel={handleExportExcel}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
       />
 
       {/* KPI Ticker Strip */}
@@ -133,6 +137,27 @@ export default function HomePage() {
           <FullModelView spec={spec} scenario={scenario} />
         )}
       </main>
+
+      {/* Modals */}
+      <QAModal
+        open={qaOpen}
+        onClose={() => setQaOpen(false)}
+        qa={spec?.qa || null}
+      />
+
+      <SaveModal
+        open={saveOpen}
+        onClose={() => setSaveOpen(false)}
+        companyName={spec?.metadata?.name || 'Valuation Model'}
+        scenario={scenario}
+        onSave={handleSaveSubmit}
+      />
+
+      <SavedModelsModal
+        open={savedModelsOpen}
+        onClose={() => setSavedModelsOpen(false)}
+        onLoadModel={handleLoadSavedModel}
+      />
 
       {/* Toast Notification System */}
       <Toast
