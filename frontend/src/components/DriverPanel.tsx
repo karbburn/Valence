@@ -45,12 +45,12 @@ export function DriverPanel({
   const scenarioAssumptions = assumptions.filter((a) => a.scenario === scenario)
 
   return (
-    <div className="bg-surface border border-border rounded-[4px] p-4 flex flex-col shadow-sm select-none">
+    <div className="bg-surface border border-border rounded-[4px] p-3.5 flex flex-col shadow-sm select-none">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border pb-3 mb-3">
+      <div className="flex items-center justify-between border-b border-border pb-2.5 mb-2.5">
         <div className="flex items-center space-x-2">
           <Sliders className="w-4 h-4 text-[#0ea5e9]" />
-          <h2 className="font-bold text-[15px] text-text-main">
+          <h2 className="font-bold text-[14px] text-text-main">
             Valuation Drivers
           </h2>
         </div>
@@ -60,7 +60,7 @@ export function DriverPanel({
       </div>
 
       {/* Driver List */}
-      <div className="space-y-2.5 max-h-[calc(100vh-340px)] overflow-y-auto pr-1">
+      <div className="space-y-2 max-h-[calc(100vh-340px)] overflow-y-auto pr-1">
         {DRIVER_CONFIGS.map((cfg) => {
           const matched = scenarioAssumptions.find((a) => a.driver_key === cfg.key)
           const val = matched?.value ?? 0

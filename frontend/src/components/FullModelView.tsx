@@ -87,9 +87,9 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
   }
 
   return (
-    <div className="bg-surface border border-border rounded-[4px] p-5 shadow-sm space-y-4 select-none">
+    <div className="bg-surface border border-border rounded-[4px] p-3.5 shadow-sm space-y-3.5 select-none">
       {/* Tab bar navigation & Unit Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-3 gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-2.5 gap-2.5">
         <div className="flex items-center bg-[#111622] border border-[#1e283d] rounded-[6px] p-1 space-x-1">
           <button
             onClick={() => setActiveTab('is')}
@@ -135,15 +135,15 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
       <div className="overflow-x-auto border border-[#1e283d] rounded-[4px]">
         <table className="w-full text-[11px] border-collapse">
           <thead>
-            <tr className="bg-[#0d1220] border-b border-[#1e283d] h-9">
-              <th className="px-3 py-2 text-left font-semibold text-[#94a3b8] uppercase tracking-[0.04em] w-56">
+            <tr className="bg-[#0d1220] border-b border-[#1e283d] h-8">
+              <th className="px-3 py-1.5 text-left font-semibold text-[#94a3b8] uppercase tracking-[0.04em] w-56">
                 Line Item
               </th>
               {/* Historical Columns Header */}
               {histPeriods.map((p) => (
                 <th
                   key={p}
-                  className="px-3 py-2 text-right font-mono font-semibold text-[#94a3b8] w-24"
+                  className="px-3 py-1.5 text-right font-mono font-semibold text-[#94a3b8] w-24"
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>{p}</span>
@@ -153,11 +153,13 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
                   </div>
                 </th>
               ))}
-              {/* Forecast Columns Header */}
-              {fcastPeriods.map((p) => (
+              {/* Forecast Columns Header (with visual separator on first column) */}
+              {fcastPeriods.map((p, idx) => (
                 <th
                   key={p}
-                  className="px-3 py-2 text-right font-mono font-bold text-[#f8fafc] w-24"
+                  className={`px-3 py-1.5 text-right font-mono font-bold text-[#f8fafc] w-24 ${
+                    idx === 0 ? 'border-l-2 border-[#374766]' : ''
+                  }`}
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>{p}</span>
@@ -178,7 +180,7 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
               return (
                 <tr key={i} className={rowStyle}>
                   <td
-                    className={`px-3 py-2 ${
+                    className={`px-3 py-1.5 ${
                       r.bold ? 'text-[#f8fafc]' : 'text-[#cbd5e1]'
                     }`}
                   >
@@ -191,7 +193,7 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
                     return (
                       <td
                         key={p}
-                        className={`px-3 py-2 text-right ${
+                        className={`px-3 py-1.5 text-right ${
                           r.bold ? 'text-[#f8fafc]' : 'text-[#64748b]'
                         }`}
                       >
@@ -199,16 +201,16 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
                       </td>
                     )
                   })}
-                  {/* Forecast Values */}
-                  {fcastPeriods.map((p) => {
+                  {/* Forecast Values (with visual separator on first column) */}
+                  {fcastPeriods.map((p, idx) => {
                     let val = getForecastVal(r.key, p)
                     if (r.negate && val != null) val = Math.abs(val)
                     return (
                       <td
                         key={p}
-                        className={`px-3 py-2 text-right ${
-                          r.bold ? 'text-[#7dd3fc]' : 'text-[#94a3b8]'
-                        }`}
+                        className={`px-3 py-1.5 text-right ${
+                          idx === 0 ? 'border-l-2 border-[#374766]' : ''
+                        } ${r.bold ? 'text-[#7dd3fc]' : 'text-[#94a3b8]'}`}
                       >
                         {val != null ? `${currencySym}${fmtNum(val)}` : '—'}
                       </td>

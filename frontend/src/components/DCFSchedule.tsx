@@ -45,9 +45,9 @@ export function DCFSchedule({ spec, scenario }: DCFScheduleProps) {
   const isNetCash = netDebt < 0
 
   return (
-    <div className="bg-surface border border-border rounded-[4px] p-4 flex flex-col shadow-sm select-none">
+    <div className="bg-surface border border-border rounded-[4px] p-3.5 flex flex-col shadow-sm select-none">
       {/* Header & Bridge Summary */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between border-b border-border pb-3 mb-3 gap-2">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between border-b border-border pb-2.5 mb-2.5 gap-2">
         <div className="flex items-center space-x-2">
           <TableProperties className="w-4 h-4 text-[#0ea5e9]" />
           <h2 className="font-bold text-[14px] text-text-main">
@@ -56,7 +56,7 @@ export function DCFSchedule({ spec, scenario }: DCFScheduleProps) {
         </div>
 
         {/* Inline DCF Bridge Strip */}
-        <div className="flex items-center space-x-3 text-[11px] font-mono bg-[#0d1220] border border-[#1e283d] rounded-[4px] px-3 py-1 text-[#94a3b8]">
+        <div className="flex items-center space-x-3 text-[11px] font-mono bg-[#0d1220] border border-[#1e283d] rounded-[4px] px-2.5 py-0.5 text-[#94a3b8]">
           <div>
             <span className="text-[#64748b]">PV FCFF: </span>
             <span className="text-[#f8fafc] font-semibold">{fmtMoney(bridge.sum_pv_fcff, currency)}</span>
@@ -85,14 +85,14 @@ export function DCFSchedule({ spec, scenario }: DCFScheduleProps) {
       <div className="overflow-x-auto border border-[#1e283d] rounded-[4px]">
         <table className="w-full text-[11px] border-collapse">
           <thead>
-            <tr className="bg-[#0d1220] border-b border-[#1e283d] h-9">
-              <th className="px-3 py-2 text-left font-semibold text-[#94a3b8] uppercase tracking-[0.04em]">
+            <tr className="bg-[#0d1220] border-b border-[#1e283d] h-8">
+              <th className="px-3 py-1.5 text-left font-semibold text-[#94a3b8] uppercase tracking-[0.04em]">
                 DCF Line Item (Mid-Year)
               </th>
               {fcffs.map((p) => (
                 <th
                   key={p.period}
-                  className="px-3 py-2 text-right font-mono font-bold text-[#f8fafc] w-28"
+                  className="px-3 py-1.5 text-right font-mono font-bold text-[#f8fafc] w-28"
                 >
                   {p.period}
                 </th>
@@ -111,7 +111,7 @@ export function DCFSchedule({ spec, scenario }: DCFScheduleProps) {
               return (
                 <tr key={i} className={rowStyle}>
                   <td
-                    className={`px-3 py-2 ${
+                    className={`px-3 py-1.5 ${
                       r.bold ? 'text-[#f8fafc]' : 'text-[#cbd5e1]'
                     }`}
                   >
@@ -120,7 +120,7 @@ export function DCFSchedule({ spec, scenario }: DCFScheduleProps) {
                   {fcffs.map((p) => (
                     <td
                       key={p.period}
-                      className={`px-3 py-2 text-right ${
+                      className={`px-3 py-1.5 text-right ${
                         r.total
                           ? 'text-[#7dd3fc]'
                           : r.bold
@@ -137,48 +137,48 @@ export function DCFSchedule({ spec, scenario }: DCFScheduleProps) {
 
             {/* Valuation Bridge Rows */}
             <tr className="bg-[#0d1220]/80 border-t-2 border-[#2a3652]">
-              <td className="px-3 py-2 text-[#94a3b8] font-semibold">
+              <td className="px-3 py-1.5 text-[#94a3b8] font-semibold">
                 Σ PV of Explicit Forecasts (PV FCFF)
               </td>
               <td
                 colSpan={fcffs.length}
-                className="px-3 py-2 text-right font-bold text-[#f8fafc]"
+                className="px-3 py-1.5 text-right font-bold text-[#f8fafc]"
               >
                 {currencySym}{fmtNum(bridge.sum_pv_fcff)}
               </td>
             </tr>
 
             <tr className="bg-[#0d1220]/80">
-              <td className="px-3 py-2 text-[#94a3b8] font-semibold">
+              <td className="px-3 py-1.5 text-[#94a3b8] font-semibold">
                 + PV of Terminal Value ({(tv.terminal_growth_rate || 4.0).toFixed(1)}% g, {(tv.tv_pct_of_ev || 0).toFixed(0)}% of EV)
               </td>
               <td
                 colSpan={fcffs.length}
-                className="px-3 py-2 text-right font-bold text-[#f8fafc]"
+                className="px-3 py-1.5 text-right font-bold text-[#f8fafc]"
               >
                 {currencySym}{fmtNum(bridge.pv_terminal_value)}
               </td>
             </tr>
 
             <tr className="bg-[#0ea5e9]/[0.08] border-t border-[#0ea5e9]/30">
-              <td className="px-3 py-2 font-bold text-[#7dd3fc]">
+              <td className="px-3 py-1.5 font-bold text-[#7dd3fc]">
                 Enterprise Value (EV)
               </td>
               <td
                 colSpan={fcffs.length}
-                className="px-3 py-2 text-right font-bold text-[#7dd3fc]"
+                className="px-3 py-1.5 text-right font-bold text-[#7dd3fc]"
               >
                 {currencySym}{fmtNum(bridge.enterprise_value)}
               </td>
             </tr>
 
             <tr className="bg-[#0d1220]/80">
-              <td className="px-3 py-2 text-[#94a3b8] font-semibold">
+              <td className="px-3 py-1.5 text-[#94a3b8] font-semibold">
                 {isNetCash ? '+ Net Cash & Liquid Assets' : '− Total Net Debt'}
               </td>
               <td
                 colSpan={fcffs.length}
-                className={`px-3 py-2 text-right font-bold ${
+                className={`px-3 py-1.5 text-right font-bold ${
                   isNetCash ? 'text-[#10b981]' : 'text-[#ef4444]'
                 }`}
               >
@@ -188,12 +188,12 @@ export function DCFSchedule({ spec, scenario }: DCFScheduleProps) {
             </tr>
 
             <tr className="bg-[#10b981]/[0.08] border-t border-[#10b981]/30">
-              <td className="px-3 py-2 font-bold text-[#6ee7b7]">
+              <td className="px-3 py-1.5 font-bold text-[#6ee7b7]">
                 Equity Value → DCF Implied Share Price
               </td>
               <td
                 colSpan={fcffs.length}
-                className="px-3 py-2 text-right font-bold text-[#6ee7b7]"
+                className="px-3 py-1.5 text-right font-bold text-[#6ee7b7]"
               >
                 {currencySym}{fmtNum(bridge.equity_value)} → {currencySym}{fmtNum(bridge.implied_share_price, 2)} / share
               </td>
@@ -203,7 +203,7 @@ export function DCFSchedule({ spec, scenario }: DCFScheduleProps) {
       </div>
 
       {/* WACC & ROIC Subtext Footer */}
-      <div className="mt-3 px-3 py-2 bg-[#0d1220] border border-[#1e283d] rounded-[4px] text-[10px] font-mono text-[#94a3b8] flex flex-wrap items-center justify-between gap-2">
+      <div className="mt-2.5 px-3 py-1.5 bg-[#0d1220] border border-[#1e283d] rounded-[4px] text-[10px] font-mono text-[#94a3b8] flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center space-x-3">
           <span><strong className="text-[#f8fafc]">WACC:</strong> {fmtPct(wacc.wacc, 2)}</span>
           <span><strong className="text-[#f8fafc]">Cost of Equity:</strong> {fmtPct(wacc.cost_of_equity, 2)}</span>

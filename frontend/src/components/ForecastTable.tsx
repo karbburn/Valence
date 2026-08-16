@@ -43,9 +43,9 @@ export function ForecastTable({ spec, scenario }: ForecastTableProps) {
   }
 
   return (
-    <div className="bg-surface border border-border rounded-[4px] p-4 flex flex-col shadow-sm select-none">
+    <div className="bg-surface border border-border rounded-[4px] p-3.5 flex flex-col shadow-sm select-none">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border pb-3 mb-3">
+      <div className="flex items-center justify-between border-b border-border pb-2.5 mb-2.5">
         <div className="flex items-center space-x-2">
           <TrendingUp className="w-4 h-4 text-[#0ea5e9]" />
           <h2 className="font-bold text-[14px] text-text-main">
@@ -61,14 +61,14 @@ export function ForecastTable({ spec, scenario }: ForecastTableProps) {
       <div className="overflow-x-auto border border-[#1e283d] rounded-[4px]">
         <table className="w-full text-[11px] border-collapse">
           <thead>
-            <tr className="bg-[#0d1220] border-b border-[#1e283d] h-9">
-              <th className="px-3 py-2 text-left font-semibold text-[#94a3b8] uppercase tracking-[0.04em]">
+            <tr className="bg-[#0d1220] border-b border-[#1e283d] h-8">
+              <th className="px-3 py-1.5 text-left font-semibold text-[#94a3b8] uppercase tracking-[0.04em]">
                 Line Item
               </th>
               {periods.map((p) => (
                 <th
                   key={p}
-                  className="px-3 py-2 text-right font-mono font-bold text-[#f8fafc] w-28"
+                  className="px-3 py-1.5 text-right font-mono font-bold text-[#f8fafc] w-28"
                 >
                   {p}
                 </th>
@@ -84,24 +84,44 @@ export function ForecastTable({ spec, scenario }: ForecastTableProps) {
               return (
                 <tr key={i} className={rowStyle}>
                   <td
-                    className={`px-3 py-2 ${
+                    className={`px-3 py-1.5 ${
                       r.bold ? 'text-[#f8fafc]' : 'text-[#cbd5e1]'
                     }`}
                   >
                     {r.label}
                   </td>
-                  {periods.map((p) => {
+                  {periods.map((p, pIdx) => {
                     let val = getVal(r.key, p)
                     if (r.negate && val != null) val = Math.abs(val)
+
+                    // YoY Trend Indicator
+                    let trend: 'up' | 'down' | null = null
+                    if (pIdx > 0 && val != null) {
+                      const prevP = periods[pIdx - 1]
+                      let prevVal = getVal(r.key, prevP)
+                      if (r.negate && prevVal != null) prevVal = Math.abs(prevVal)
+                      if (prevVal != null) {
+                        if (val > prevVal) trend = 'up'
+                        else if (val < prevVal) trend = 'down'
+                      }
+                    }
 
                     return (
                       <td
                         key={p}
-                        className={`px-3 py-2 text-right ${
+                        className={`px-3 py-1.5 text-right ${
                           r.bold ? 'text-[#f8fafc]' : 'text-[#94a3b8]'
                         }`}
                       >
-                        {val != null ? `${currencySym}${fmtNum(val)}` : '—'}
+                        <span className="inline-flex items-center justify-end space-x-1">
+                          <span>{val != null ? `${currencySym}${fmtNum(val)}` : '—'}</span>
+                          {trend === 'up' && (
+                            <span className="text-[#10b981] font-bold text-[9px]">↑</span>
+                          )}
+                          {trend === 'down' && (
+                            <span className="text-[#ef4444] font-bold text-[9px]">↓</span>
+                          )}
+                        </span>
                       </td>
                     )
                   })}
