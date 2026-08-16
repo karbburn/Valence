@@ -32,7 +32,7 @@ export interface DriverPanelProps {
   spec: ModelSpecification | null
   scenario: ScenarioLabel
   onDriverChange: (driverKey: string, value: number) => void
-  onDriverRevert: (driverKey: string) => void
+  onDriverRevert: (driverKey: string, period?: string) => void
 }
 
 export function DriverPanel({
@@ -50,7 +50,7 @@ export function DriverPanel({
       <div className="flex items-center justify-between border-b border-border pb-3 mb-3">
         <div className="flex items-center space-x-2">
           <Sliders className="w-4 h-4 text-[#0ea5e9]" />
-          <h2 className="font-bold text-[14px] text-text-main">
+          <h2 className="font-bold text-[15px] text-text-main">
             Valuation Drivers
           </h2>
         </div>
@@ -78,7 +78,7 @@ export function DriverPanel({
               step={cfg.step}
               isOverride={isOverride}
               onChange={onDriverChange}
-              onRevert={onDriverRevert}
+              onRevert={(key) => onDriverRevert(key, matched?.period || 'FY27')}
             />
           )
         })}

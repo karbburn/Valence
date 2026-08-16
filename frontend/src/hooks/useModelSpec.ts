@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { ModelSpecification } from '@/lib/types'
 import { fetchModelSpec, recomputeModel, revertDriver } from '@/lib/api'
 
@@ -11,7 +11,7 @@ interface UseModelSpecReturn {
   companyId: string
   loadModel: (companyId: string) => Promise<void>
   recompute: (driverKey: string, value: number, scenario?: string) => Promise<void>
-  revert: (driverKey: string, scenario?: string) => Promise<void>
+  revert: (driverKey: string, scenario?: string, period?: string) => Promise<void>
 }
 
 export function useModelSpec(initialCompanyId = 'infy_infy'): UseModelSpecReturn {
@@ -19,6 +19,11 @@ export function useModelSpec(initialCompanyId = 'infy_infy'): UseModelSpecReturn
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [companyId, setCompanyId] = useState(initialCompanyId)
+
+  const companyIdRef = useRef(companyId)
+  useEffect(() => {
+    companyIdRef.current = companyId
+  }, [companyId])
 
   const debounceTimer = useRef<NodeJS.Timeout | null>(null)
 
@@ -45,7 +50,8 @@ export function useModelSpec(initialCompanyId = 'infy_infy'): UseModelSpecReturn
       return new Promise<void>((resolve) => {
         debounceTimer.current = setTimeout(async () => {
           try {
-            const updated = await recomputeModel(companyId, {
+            // Read from current ref to prevent stale closure during company switching
+            const updated = await recomputeModel(companyIdRef.current, {
               driver_key: driverKey,
               value,
               scenario,
@@ -59,19 +65,19 @@ export function useModelSpec(initialCompanyId = 'infy_infy'): UseModelSpecReturn
         }, 300)
       })
     },
-    [companyId]
+    []
   )
 
   const revert = useCallback(
-    async (driverKey: string, scenario = 'base') => {
+    async (driverKey: string, scenario = 'base', period = 'FY27') => {
       try {
-        const updated = await revertDriver(companyId, driverKey, 'FY27', scenario)
+        const updated = await revertDriver(companyIdRef.current, driverKey, period, scenario)
         setSpec(updated)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Revert failed')
       }
     },
-    [companyId]
+    []
   )
 
   return { spec, loading, error, companyId, loadModel, recompute, revert }

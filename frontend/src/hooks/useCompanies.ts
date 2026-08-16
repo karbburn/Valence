@@ -11,7 +11,7 @@ interface UseCompaniesReturn {
   searching: boolean
   error: string | null
   loadCompanies: () => Promise<void>
-  search: (query: string) => Promise<void>
+  search: (query: string) => void
   clearSearch: () => void
 }
 
@@ -37,7 +37,7 @@ export function useCompanies(): UseCompaniesReturn {
     }
   }, [])
 
-  const search = useCallback(async (query: string) => {
+  const search = useCallback((query: string) => {
     if (!query.trim()) {
       setSearchResults([])
       return
@@ -47,23 +47,23 @@ export function useCompanies(): UseCompaniesReturn {
       clearTimeout(searchTimer.current)
     }
 
-    return new Promise<void>((resolve) => {
-      searchTimer.current = setTimeout(async () => {
-        setSearching(true)
-        try {
-          const results = await searchCompanies(query)
-          setSearchResults(results)
-        } catch (err) {
-          setError(err instanceof Error ? err.message : 'Search failed')
-        } finally {
-          setSearching(false)
-          resolve()
-        }
-      }, 200)
-    })
+    searchTimer.current = setTimeout(async () => {
+      setSearching(true)
+      try {
+        const results = await searchCompanies(query)
+        setSearchResults(results)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Search failed')
+      } finally {
+        setSearching(false)
+      }
+    }, 200)
   }, [])
 
   const clearSearch = useCallback(() => {
+    if (searchTimer.current) {
+      clearTimeout(searchTimer.current)
+    }
     setSearchResults([])
   }, [])
 

@@ -12,6 +12,7 @@ import { DCFSchedule } from '@/components/DCFSchedule'
 import { ForecastTable } from '@/components/ForecastTable'
 import { useModelSpec } from '@/hooks/useModelSpec'
 import { ScenarioLabel } from '@/lib/types'
+import { saveModel } from '@/lib/api'
 
 export default function HomePage() {
   const { spec, loading, error, companyId, loadModel, recompute, revert } =
@@ -20,6 +21,7 @@ export default function HomePage() {
   const [mode, setMode] = useState<'analyst' | 'quick' | 'full'>('analyst')
   const [scenario, setScenario] = useState<ScenarioLabel>('base')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [toastType, setToastType] = useState<'success' | 'error' | 'warning' | 'info'>('success')
   const [searchQuery, setSearchQuery] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
 
@@ -29,23 +31,38 @@ export default function HomePage() {
 
   const handleDriverChange = async (driverKey: string, value: number) => {
     await recompute(driverKey, value, scenario)
+    setToastType('info')
     setToastMessage(`${driverKey} → ${value}`)
   }
 
-  const handleDriverRevert = async (driverKey: string) => {
-    await revert(driverKey, scenario)
+  const handleDriverRevert = async (driverKey: string, period?: string) => {
+    await revert(driverKey, scenario, period)
+    setToastType('info')
     setToastMessage(`${driverKey} reverted`)
   }
 
-  const handleSave = () => {
-    setToastMessage(`Saved: "${spec?.metadata?.name || 'Model'} – Base"`)
+  const handleSave = async () => {
+    if (!companyId) return
+    const defaultName = `${spec?.metadata?.name || 'Model'} – ${scenario.toUpperCase()}`
+    const name = window.prompt('Save model as:', defaultName)
+    if (!name) return
+
+    try {
+      await saveModel(companyId, name)
+      setToastType('success')
+      setToastMessage(`Saved: "${name}"`)
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : 'Save failed')
+    }
   }
 
   const handleOpenSaved = () => {
+    setToastType('info')
     setToastMessage('Saved models dialog ready')
   }
 
   const handleOpenQA = () => {
+    setToastType('info')
     setToastMessage('QA checks dialog ready')
   }
 
@@ -119,7 +136,7 @@ export default function HomePage() {
       {/* Toast Notification System */}
       <Toast
         message={toastMessage}
-        type="success"
+        type={toastType}
         onClose={() => setToastMessage(null)}
       />
     </div>

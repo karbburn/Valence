@@ -34,7 +34,7 @@ export function WACCBreakdown({ spec, scenario }: WACCBreakdownProps) {
       <div className="flex items-center justify-between border-b border-border pb-3 mb-3">
         <div className="flex items-center space-x-2">
           <Percent className="w-4 h-4 text-[#0ea5e9]" />
-          <h2 className="font-bold text-[14px] text-text-main">
+          <h2 className="font-bold text-[15px] text-text-main">
             WACC & Capital Cost
           </h2>
         </div>
@@ -46,49 +46,49 @@ export function WACCBreakdown({ spec, scenario }: WACCBreakdownProps) {
       {/* Flat 2-Column Table */}
       <div className="bg-[#0d1220] border border-[#1e283d] rounded-[4px] divide-y divide-[#1e283d] overflow-hidden text-[12px]">
         {/* Risk-Free Rate */}
-        <div className="flex items-center justify-between px-3 py-2">
+        <div className="flex items-center justify-between px-[8px] py-[6px]">
           <span className="text-[#64748b]">Risk-Free Rate (Rf)</span>
           <span className="font-mono text-[#f8fafc]">{fmtPct(rf, 2)}</span>
         </div>
 
         {/* Beta */}
-        <div className="flex items-center justify-between px-3 py-2">
+        <div className="flex items-center justify-between px-[8px] py-[6px]">
           <span className="text-[#64748b]">Beta (β)</span>
           <span className="font-mono text-[#f8fafc]">{beta != null ? beta.toFixed(2) : '—'}</span>
         </div>
 
         {/* Equity Risk Premium */}
-        <div className="flex items-center justify-between px-3 py-2">
+        <div className="flex items-center justify-between px-[8px] py-[6px]">
           <span className="text-[#64748b]">Equity Risk Premium (ERP)</span>
           <span className="font-mono text-[#f8fafc]">{fmtPct(erp, 2)}</span>
         </div>
 
         {/* Cost of Equity (Highlight) */}
-        <div className="flex items-center justify-between px-3 py-2 bg-[#111622]/60">
+        <div className="flex items-center justify-between px-[8px] py-[6px] bg-[#111622]/60">
           <span className="font-semibold text-[#7dd3fc]">Cost of Equity (Ke)</span>
           <span className="font-mono font-bold text-[#7dd3fc]">{fmtPct(ke, 2)}</span>
         </div>
 
         {/* Pre-Tax Cost of Debt */}
-        <div className="flex items-center justify-between px-3 py-2">
+        <div className="flex items-center justify-between px-[8px] py-[6px]">
           <span className="text-[#64748b]">Pre-Tax Cost of Debt (Kd)</span>
           <span className="font-mono text-[#f8fafc]">{fmtPct(preTaxKd, 2)}</span>
         </div>
 
         {/* Marginal Tax Rate */}
-        <div className="flex items-center justify-between px-3 py-2">
+        <div className="flex items-center justify-between px-[8px] py-[6px]">
           <span className="text-[#64748b]">Effective Tax Rate (t)</span>
           <span className="font-mono text-[#f8fafc]">{fmtPct(taxRate, 2)}</span>
         </div>
 
         {/* After-Tax Cost of Debt */}
-        <div className="flex items-center justify-between px-3 py-2">
+        <div className="flex items-center justify-between px-[8px] py-[6px]">
           <span className="text-[#64748b]">After-Tax Cost of Debt</span>
           <span className="font-mono text-[#f8fafc]">{fmtPct(postTaxKd, 2)}</span>
         </div>
 
         {/* Capital Weights */}
-        <div className="flex items-center justify-between px-3 py-2">
+        <div className="flex items-center justify-between px-[8px] py-[6px]">
           <span className="text-[#64748b]">Weights (Equity / Debt)</span>
           <span className="font-mono text-[#94a3b8]">
             {fmtPct(eqWeight, 1)} / {fmtPct(debtWeight, 1)}
@@ -96,7 +96,7 @@ export function WACCBreakdown({ spec, scenario }: WACCBreakdownProps) {
         </div>
 
         {/* WACC Summary (Primary Highlight) */}
-        <div className="flex items-center justify-between px-3 py-2.5 bg-[#0ea5e9]/10 border-t border-[#0ea5e9]/30">
+        <div className="flex items-center justify-between px-[8px] py-[8px] bg-[#0ea5e9]/10 border-t border-[#0ea5e9]/30">
           <span className="font-bold text-[13px] text-[#7dd3fc]">
             Weighted Average Cost of Capital
           </span>

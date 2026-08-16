@@ -85,8 +85,14 @@ export function Header({
       </div>
 
       {/* Center section: Mode Tabs */}
-      <div className="flex items-center bg-[#111622] border border-[#1e283d] rounded-[6px] p-1 space-x-1">
+      <div
+        role="tablist"
+        aria-label="View Mode Navigation"
+        className="flex items-center bg-[#111622] border border-[#1e283d] rounded-[6px] p-1 space-x-1"
+      >
         <button
+          role="tab"
+          aria-selected={mode === 'analyst'}
           onClick={() => onModeChange('analyst')}
           className={`px-3 py-1 text-[12px] font-medium rounded-[4px] transition-colors ${
             mode === 'analyst'
@@ -97,6 +103,8 @@ export function Header({
           Analyst Mode
         </button>
         <button
+          role="tab"
+          aria-selected={mode === 'quick'}
           onClick={() => onModeChange('quick')}
           className={`px-3 py-1 text-[12px] font-medium rounded-[4px] transition-colors ${
             mode === 'quick'
@@ -107,6 +115,8 @@ export function Header({
           Quick DCF
         </button>
         <button
+          role="tab"
+          aria-selected={mode === 'full'}
           onClick={() => onModeChange('full')}
           className={`px-3 py-1 text-[12px] font-medium rounded-[4px] transition-colors ${
             mode === 'full'
@@ -121,10 +131,16 @@ export function Header({
       {/* Right section: Scenario Toggle, QA Badge, Action Buttons */}
       <div className="flex items-center space-x-3">
         {/* Scenario Control */}
-        <div className="flex items-center bg-[#111622] border border-[#1e283d] rounded-[6px] p-0.5 space-x-0.5">
+        <div
+          role="tablist"
+          aria-label="Valuation Scenario"
+          className="flex items-center bg-[#111622] border border-[#1e283d] rounded-[6px] p-0.5 space-x-0.5"
+        >
           {(['base', 'bull', 'bear'] as ScenarioLabel[]).map((sc) => (
             <button
               key={sc}
+              role="tab"
+              aria-selected={scenario === sc}
               onClick={() => onScenarioChange(sc)}
               className={`px-2.5 py-0.5 text-[11px] font-medium capitalize rounded-[4px] transition-colors ${
                 scenario === sc
