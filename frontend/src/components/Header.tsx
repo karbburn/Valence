@@ -47,10 +47,12 @@ export function Header({
       <div className="flex items-center space-x-3 shrink-0">
         {/* Brand Logo */}
         <div className="flex items-center space-x-2 shrink-0">
-          <div className="w-[28px] h-[28px] bg-white rounded-[4px] p-[2px] flex items-center justify-center shadow-sm">
-            <div className="w-full h-full bg-[#080c14] rounded-[2px] border border-[#1e283d] flex items-center justify-center">
-              <div className="w-2 h-2 bg-[#0ea5e9] rounded-full" />
-            </div>
+          <div className="h-8 px-1.5 bg-white rounded-[4px] flex items-center justify-center shadow-sm overflow-hidden border border-white/20">
+            <img
+              src="/logo.png"
+              alt="Valence Logo"
+              className="h-6 w-auto object-contain"
+            />
           </div>
           <span className="font-bold text-[17px] tracking-[0.05em] text-[#f8fafc]">
             VALENCE
