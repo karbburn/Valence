@@ -13,5 +13,3 @@ backend/data/user_models/
 backend/data/cache/
 .env
 AGENTS.md
-CLAUDE.md
-.claude/
