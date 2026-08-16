@@ -54,7 +54,7 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
               <button
                 onClick={onOpenMethodology}
                 className="text-[#0ea5e9] hover:text-[#7dd3fc] transition-colors p-0.5 ml-1 cursor-pointer"
-                title="Methodology breakdown vs retail screeners (AlphaSpread)"
+                title="Methodology breakdown: FCFF at WACC"
               >
                 <Info className="w-3.5 h-3.5" />
               </button>
@@ -128,7 +128,7 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
               className="text-[11px] text-[#0ea5e9] hover:underline flex items-center space-x-1 cursor-pointer font-mono"
             >
               <Info className="w-3.5 h-3.5" />
-              <span>Why Valence vs AlphaSpread?</span>
+              <span>Methodology Details</span>
             </button>
           )}
         </div>
@@ -168,7 +168,7 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
               Model Template
             </div>
             <div className="font-bold text-[#10b981] mt-0.5">
-              FCFF (Wall St Std)
+              Unlevered FCFF
             </div>
           </div>
         </div>
