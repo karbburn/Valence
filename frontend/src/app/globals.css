@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+:root {
+  /* Canvas */
+  --c-canvas: #080c14;
+  --c-surface: #111622;
+  --c-surface-2: #192030;
+  --c-surface-3: #0d1220;
+
+  /* Borders */
+  --c-border: #1e283d;
+  --c-border-interactive: #2a3652;
+  --c-border-strong: #374766;
+
+  /* Text */
+  --c-text: #f8fafc;
+  --c-text-2: #94a3b8;
+  --c-text-3: #64748b;
+  --c-text-4: #475569;
+
+  /* Accent — Teal/Cyan (NON-NEGOTIABLE) */
+  --c-accent: #0ea5e9;
+  --c-accent-hover: #38bdf8;
+  --c-accent-subtle: rgba(14, 165, 233, 0.10);
+  --c-accent-border: rgba(14, 165, 233, 0.30);
+
+  /* Semantic */
+  --c-positive: #10b981;
+  --c-positive-subtle: rgba(16, 185, 129, 0.10);
+  --c-negative: #ef4444;
+  --c-negative-subtle: rgba(239, 68, 68, 0.10);
+  --c-warning: #f59e0b;
+  --c-warning-subtle: rgba(245, 158, 11, 0.10);
+
+  /* Excel */
+  --c-excel-bg: #065f46;
+  --c-excel-text: #6ee7b7;
+  --c-excel-border: #047857;
+}
+
+@theme {
+  --color-canvas: var(--c-canvas);
+  --color-surface: var(--c-surface);
+  --color-surface-2: var(--c-surface-2);
+  --color-surface-3: var(--c-surface-3);
+
+  --color-border: var(--c-border);
+  --color-border-interactive: var(--c-border-interactive);
+  --color-border-strong: var(--c-border-strong);
+
+  --color-text-main: var(--c-text);
+  --color-text-muted: var(--c-text-2);
+  --color-text-dim: var(--c-text-3);
+  --color-text-disabled: var(--c-text-4);
+
+  --color-accent: var(--c-accent);
+  --color-accent-hover: var(--c-accent-hover);
+  --color-accent-subtle: var(--c-accent-subtle);
+  --color-accent-border: var(--c-accent-border);
+
+  --color-positive: var(--c-positive);
+  --color-positive-subtle: var(--c-positive-subtle);
+  --color-negative: var(--c-negative);
+  --color-negative-subtle: var(--c-negative-subtle);
+  --color-warning: var(--c-warning);
+  --color-warning-subtle: var(--c-warning-subtle);
+
+  --color-excel-bg: var(--c-excel-bg);
+  --color-excel-text: var(--c-excel-text);
+  --color-excel-border: var(--c-excel-border);
+
+  --font-sans: var(--font-inter), Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: var(--font-mono), "JetBrains Mono", Fira Code, monospace;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+
+body {
+  background-color: var(--c-canvas);
+  color: var(--c-text);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
