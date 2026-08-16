@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { Save, Bookmark, FileSpreadsheet, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { Save, Bookmark, FileSpreadsheet, CheckCircle2, AlertTriangle, Copy } from 'lucide-react'
 import { ModelSpecification, ScenarioLabel, CompanySummary } from '@/lib/types'
 import { CompanySearch } from './CompanySearch'
 
@@ -17,6 +17,7 @@ export interface HeaderProps {
   onOpenSaved?: () => void
   onOpenQA?: () => void
   onExportExcel?: () => void
+  onCopySummary?: () => void
 }
 
 export function Header({
@@ -30,6 +31,7 @@ export function Header({
   onOpenSaved,
   onOpenQA,
   onExportExcel,
+  onCopySummary,
 }: HeaderProps) {
   const metadata = spec?.metadata
   const qaChecks = spec?.qa?.checks || []
@@ -175,8 +177,17 @@ export function Header({
         {/* Action Buttons */}
         <div className="flex items-center space-x-1.5 shrink-0">
           <button
+            onClick={onCopySummary}
+            title="Copy valuation memo summary to clipboard"
+            className="flex items-center space-x-1 px-2.5 py-1 bg-[#192030] hover:bg-[#2a3652] text-[#7dd3fc] border border-[#0ea5e9]/30 text-[11.5px] font-semibold rounded-[4px] transition-colors cursor-pointer"
+          >
+            <Copy className="w-3.5 h-3.5" />
+            <span>Copy</span>
+          </button>
+
+          <button
             onClick={onSave}
-            className="flex items-center space-x-1 px-2.5 py-1 bg-[#0ea5e9] hover:bg-[#38bdf8] text-white text-[11.5px] font-semibold rounded-[4px] transition-colors"
+            className="flex items-center space-x-1 px-2.5 py-1 bg-[#0ea5e9] hover:bg-[#38bdf8] text-white text-[11.5px] font-semibold rounded-[4px] transition-colors cursor-pointer"
           >
             <Save className="w-3.5 h-3.5" />
             <span>Save</span>
@@ -184,7 +195,7 @@ export function Header({
 
           <button
             onClick={onOpenSaved}
-            className="flex items-center space-x-1 px-2.5 py-1 bg-[#192030] hover:bg-[#2a3652] text-[#94a3b8] hover:text-[#f8fafc] border border-[#1e283d] text-[11.5px] font-semibold rounded-[4px] transition-colors"
+            className="flex items-center space-x-1 px-2.5 py-1 bg-[#192030] hover:bg-[#2a3652] text-[#94a3b8] hover:text-[#f8fafc] border border-[#1e283d] text-[11.5px] font-semibold rounded-[4px] transition-colors cursor-pointer"
           >
             <Bookmark className="w-3.5 h-3.5" />
             <span>Saved</span>
@@ -192,7 +203,7 @@ export function Header({
 
           <button
             onClick={onExportExcel}
-            className="flex items-center space-x-1 px-2.5 py-1 bg-[#065f46] hover:bg-[#047857] text-[#6ee7b7] border border-[#047857] text-[11.5px] font-semibold rounded-[4px] transition-colors"
+            className="flex items-center space-x-1 px-2.5 py-1 bg-[#065f46] hover:bg-[#047857] text-[#6ee7b7] border border-[#047857] text-[11.5px] font-semibold rounded-[4px] transition-colors cursor-pointer"
           >
             <FileSpreadsheet className="w-3.5 h-3.5" />
             <span>Excel</span>
