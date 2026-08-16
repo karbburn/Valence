@@ -31,7 +31,7 @@ export function DCFSchedule({ spec, scenario }: DCFScheduleProps) {
 
   const rows = [
     { label: 'EBIT (Operating Profit)', fn: (p: typeof fcffs[0]) => fmtNum(p.ebit), bold: false, total: false },
-    { label: 'Tax Rate %', fn: (p: typeof fcffs[0]) => fmtPct(p.tax_rate != null ? p.tax_rate * 100 : null, 1), bold: false, total: false },
+    { label: 'Tax Rate %', fn: (p: typeof fcffs[0]) => fmtPct(p.tax_rate, 1), bold: false, total: false },
     { label: 'NOPAT', fn: (p: typeof fcffs[0]) => fmtNum(p.nopat), bold: true, total: false },
     { label: '+ D&A', fn: (p: typeof fcffs[0]) => fmtNum(p.da), bold: false, total: false },
     { label: '− CapEx', fn: (p: typeof fcffs[0]) => p.capex != null ? `(${fmtNum(Math.abs(p.capex))})` : '—', bold: false, total: false },
@@ -150,7 +150,7 @@ export function DCFSchedule({ spec, scenario }: DCFScheduleProps) {
 
             <tr className="bg-[#0d1220]/80">
               <td className="px-3 py-2 text-[#94a3b8] font-semibold">
-                + PV of Terminal Value ({((tv.terminal_growth_rate || 0.04) * 100).toFixed(1)}% g, {(tv.tv_pct_of_ev || 0).toFixed(0)}% of EV)
+                + PV of Terminal Value ({(tv.terminal_growth_rate || 4.0).toFixed(1)}% g, {(tv.tv_pct_of_ev || 0).toFixed(0)}% of EV)
               </td>
               <td
                 colSpan={fcffs.length}
@@ -205,14 +205,14 @@ export function DCFSchedule({ spec, scenario }: DCFScheduleProps) {
       {/* WACC & ROIC Subtext Footer */}
       <div className="mt-3 px-3 py-2 bg-[#0d1220] border border-[#1e283d] rounded-[4px] text-[10px] font-mono text-[#94a3b8] flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center space-x-3">
-          <span><strong className="text-[#f8fafc]">WACC:</strong> {fmtPct(wacc.wacc != null ? wacc.wacc * 100 : null, 2)}</span>
-          <span><strong className="text-[#f8fafc]">Cost of Equity:</strong> {fmtPct(wacc.cost_of_equity != null ? wacc.cost_of_equity * 100 : null, 2)}</span>
-          <span><strong className="text-[#f8fafc]">Cost of Debt:</strong> {fmtPct(wacc.cost_of_debt != null ? wacc.cost_of_debt * 100 : null, 2)}</span>
+          <span><strong className="text-[#f8fafc]">WACC:</strong> {fmtPct(wacc.wacc, 2)}</span>
+          <span><strong className="text-[#f8fafc]">Cost of Equity:</strong> {fmtPct(wacc.cost_of_equity, 2)}</span>
+          <span><strong className="text-[#f8fafc]">Cost of Debt:</strong> {fmtPct(wacc.cost_of_debt, 2)}</span>
           <span><strong className="text-[#f8fafc]">Equity Wt:</strong> {fmtPct(wacc.equity_weight != null ? wacc.equity_weight * 100 : null, 1)}</span>
         </div>
         {tv.implied_roic != null && (
           <div className="text-[#7dd3fc]">
-            Terminal ROIC: {tv.implied_roic.toFixed(1)}% (Reinvest {tv.reinvestment_rate != null ? `${(tv.reinvestment_rate * 100).toFixed(1)}%` : '—'})
+            Terminal ROIC: {tv.implied_roic.toFixed(1)}% (Reinvest {tv.reinvestment_rate != null ? `${tv.reinvestment_rate.toFixed(1)}%` : '—'})
           </div>
         )}
       </div>

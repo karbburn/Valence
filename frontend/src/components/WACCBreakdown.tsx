@@ -17,16 +17,18 @@ export function WACCBreakdown({ spec, scenario }: WACCBreakdownProps) {
 
   if (!wacc) return null
 
-  const rf = wacc.risk_free_rate != null ? wacc.risk_free_rate * 100 : null
-  const beta = wacc.beta != null ? wacc.beta : null
-  const erp = wacc.equity_risk_premium != null ? wacc.equity_risk_premium * 100 : null
-  const ke = wacc.cost_of_equity != null ? wacc.cost_of_equity * 100 : null
-  const preTaxKd = wacc.pre_tax_cost_of_debt != null ? wacc.pre_tax_cost_of_debt * 100 : null
-  const taxRate = wacc.tax_rate != null ? wacc.tax_rate * 100 : null
-  const postTaxKd = wacc.cost_of_debt != null ? wacc.cost_of_debt * 100 : null
+  // Rate values from backend are already in percentage scale (e.g. 7.1, 13.5, 12.8)
+  const rf = wacc.risk_free_rate ?? null
+  const beta = wacc.beta ?? null
+  const erp = wacc.equity_risk_premium ?? null
+  const ke = wacc.cost_of_equity ?? null
+  const preTaxKd = wacc.pre_tax_cost_of_debt ?? null
+  const taxRate = wacc.tax_rate ?? null
+  const postTaxKd = wacc.cost_of_debt ?? null
+  // Weights are fractions (e.g. 0.95 / 0.05)
   const eqWeight = wacc.equity_weight != null ? wacc.equity_weight * 100 : null
   const debtWeight = wacc.debt_weight != null ? wacc.debt_weight * 100 : null
-  const waccVal = wacc.wacc != null ? wacc.wacc * 100 : null
+  const waccVal = wacc.wacc ?? null
 
   return (
     <div className="bg-surface border border-border rounded-[4px] p-4 flex flex-col shadow-sm select-none">

@@ -51,6 +51,7 @@ export function CompanySearch({ onSelectCompany }: CompanySearchProps) {
     setQuery('')
     clearSearch()
     setIsOpen(false)
+    inputRef.current?.blur()
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -69,6 +70,7 @@ export function CompanySearch({ onSelectCompany }: CompanySearchProps) {
       }
     } else if (e.key === 'Escape') {
       setIsOpen(false)
+      inputRef.current?.blur()
     }
   }
 
