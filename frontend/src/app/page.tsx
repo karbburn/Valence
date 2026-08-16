@@ -1,21 +1,94 @@
-export default function Home() {
+'use client'
+
+import React, { useState, useEffect } from 'react'
+import { Header } from '@/components/Header'
+import { KPIBar } from '@/components/KPIBar'
+import { LoadingOverlay } from '@/components/LoadingOverlay'
+import { ErrorBanner } from '@/components/ErrorBanner'
+import { Toast } from '@/components/Toast'
+import { useModelSpec } from '@/hooks/useModelSpec'
+import { ScenarioLabel } from '@/lib/types'
+
+export default function HomePage() {
+  const { spec, loading, error, companyId, loadModel } = useModelSpec('infy_infy')
+  const [mode, setMode] = useState<'analyst' | 'quick' | 'full'>('analyst')
+  const [scenario, setScenario] = useState<ScenarioLabel>('base')
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [localError, setLocalError] = useState<string | null>(null)
+
+  useEffect(() => {
+    loadModel('infy_infy')
+  }, [loadModel])
+
+  const handleSave = () => {
+    setToastMessage(`Saved: "${spec?.metadata?.name || 'Model'} – Base"`)
+  }
+
+  const handleOpenSaved = () => {
+    setToastMessage('Saved models dialog ready')
+  }
+
+  const handleOpenQA = () => {
+    setToastMessage('QA checks dialog ready')
+  }
+
+  const handleExportExcel = () => {
+    setToastMessage('Excel export requested')
+  }
+
   return (
-    <main className="min-h-screen bg-canvas text-[var(--c-text)] p-6 font-sans">
-      <div className="max-w-[1680px] mx-auto space-y-4">
-        <div className="flex items-center justify-between border-b border-[var(--c-border)] pb-4">
-          <div className="flex items-center space-x-3">
-            <div className="w-7 h-7 bg-white rounded-[4px] flex items-center justify-center p-1">
-              <div className="w-full h-full bg-[#080c14] rounded-[2px]" />
-            </div>
-            <span className="font-bold text-[18px] tracking-[0.05em] text-[#f8fafc]">
-              VALENCE
-            </span>
+    <div className="min-h-screen bg-canvas text-text-main flex flex-col font-sans">
+      {/* Page Loading Overlay */}
+      <LoadingOverlay visible={loading} />
+
+      {/* Global Error Banner */}
+      <ErrorBanner
+        message={error || localError}
+        onDismiss={() => setLocalError(null)}
+      />
+
+      {/* Header Toolbar */}
+      <Header
+        spec={spec}
+        mode={mode}
+        scenario={scenario}
+        companyId={companyId}
+        onModeChange={setMode}
+        onScenarioChange={setScenario}
+        onSave={handleSave}
+        onOpenSaved={handleOpenSaved}
+        onOpenQA={handleOpenQA}
+        onExportExcel={handleExportExcel}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+      />
+
+      {/* KPI Ticker Strip */}
+      <KPIBar spec={spec} scenario={scenario} />
+
+      {/* Main Workspace Layout Shell */}
+      <main className="flex-1 w-full max-w-[1680px] mx-auto p-5 space-y-6">
+        <div className="bg-surface border border-border rounded-[4px] p-6 text-center text-[#94a3b8]">
+          <div className="font-mono text-[12px] text-[#7dd3fc] uppercase tracking-[0.04em]">
+            {mode === 'analyst'
+              ? 'Analyst Mode Workspace Shell'
+              : mode === 'quick'
+              ? 'Quick DCF Summary Shell'
+              : '3-Statement Model Shell'}
           </div>
-          <span className="font-mono text-[11px] text-[var(--c-accent)] bg-[var(--c-accent-subtle)] border border-[var(--c-accent-border)] px-2 py-1 rounded-[3px]">
-            STAGE 17 SCAFFOLD
-          </span>
+          <p className="text-[12px] mt-2 text-[#64748b]">
+            Structural frame ready. Data components and interactive driver panel connect in subsequent stages.
+          </p>
         </div>
-      </div>
-    </main>
+      </main>
+
+      {/* Toast Notification System */}
+      <Toast
+        message={toastMessage}
+        type="success"
+        onClose={() => setToastMessage(null)}
+      />
+    </div>
   )
 }
