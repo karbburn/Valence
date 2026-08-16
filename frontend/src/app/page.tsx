@@ -6,11 +6,17 @@ import { KPIBar } from '@/components/KPIBar'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Toast } from '@/components/Toast'
+import { DriverPanel } from '@/components/DriverPanel'
+import { WACCBreakdown } from '@/components/WACCBreakdown'
+import { DCFSchedule } from '@/components/DCFSchedule'
+import { ForecastTable } from '@/components/ForecastTable'
 import { useModelSpec } from '@/hooks/useModelSpec'
 import { ScenarioLabel } from '@/lib/types'
 
 export default function HomePage() {
-  const { spec, loading, error, companyId, loadModel } = useModelSpec('infy_infy')
+  const { spec, loading, error, companyId, loadModel, recompute, revert } =
+    useModelSpec('infy_infy')
+
   const [mode, setMode] = useState<'analyst' | 'quick' | 'full'>('analyst')
   const [scenario, setScenario] = useState<ScenarioLabel>('base')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -20,6 +26,16 @@ export default function HomePage() {
   useEffect(() => {
     loadModel('infy_infy')
   }, [loadModel])
+
+  const handleDriverChange = async (driverKey: string, value: number) => {
+    await recompute(driverKey, value, scenario)
+    setToastMessage(`${driverKey} → ${value}`)
+  }
+
+  const handleDriverRevert = async (driverKey: string) => {
+    await revert(driverKey, scenario)
+    setToastMessage(`${driverKey} reverted`)
+  }
 
   const handleSave = () => {
     setToastMessage(`Saved: "${spec?.metadata?.name || 'Model'} – Base"`)
@@ -34,7 +50,7 @@ export default function HomePage() {
   }
 
   const handleExportExcel = () => {
-    setToastMessage('Excel export requested')
+    window.location.href = `/api/export/excel?company_id=${companyId}`
   }
 
   return (
@@ -67,20 +83,37 @@ export default function HomePage() {
       {/* KPI Ticker Strip */}
       <KPIBar spec={spec} scenario={scenario} />
 
-      {/* Main Workspace Layout Shell */}
-      <main className="flex-1 w-full max-w-[1680px] mx-auto p-5 space-y-6">
-        <div className="bg-surface border border-border rounded-[4px] p-6 text-center text-[#94a3b8]">
-          <div className="font-mono text-[12px] text-[#7dd3fc] uppercase tracking-[0.04em]">
-            {mode === 'analyst'
-              ? 'Analyst Mode Workspace Shell'
-              : mode === 'quick'
-              ? 'Quick DCF Summary Shell'
-              : '3-Statement Model Shell'}
+      {/* Main Workspace Layout */}
+      <main className="flex-1 w-full max-w-[1680px] mx-auto p-5">
+        {mode === 'analyst' ? (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            {/* Left Column: Driver Sliders & WACC Breakdown */}
+            <div className="lg:col-span-4 space-y-5">
+              <DriverPanel
+                spec={spec}
+                scenario={scenario}
+                onDriverChange={handleDriverChange}
+                onDriverRevert={handleDriverRevert}
+              />
+              <WACCBreakdown spec={spec} scenario={scenario} />
+            </div>
+
+            {/* Right Column: DCF Valuation Schedule & Forecast Summary */}
+            <div className="lg:col-span-8 space-y-5">
+              <DCFSchedule spec={spec} scenario={scenario} />
+              <ForecastTable spec={spec} scenario={scenario} />
+            </div>
           </div>
-          <p className="text-[12px] mt-2 text-[#64748b]">
-            Structural frame ready. Data components and interactive driver panel connect in subsequent stages.
-          </p>
-        </div>
+        ) : (
+          <div className="bg-surface border border-border rounded-[4px] p-6 text-center text-[#94a3b8]">
+            <div className="font-mono text-[12px] text-[#7dd3fc] uppercase tracking-[0.04em]">
+              {mode === 'quick' ? 'Quick DCF View' : '3-Statement Model View'}
+            </div>
+            <p className="text-[12px] mt-2 text-[#64748b]">
+              View mode view will be active in next stage.
+            </p>
+          </div>
+        )}
       </main>
 
       {/* Toast Notification System */}
