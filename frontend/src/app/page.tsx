@@ -8,6 +8,7 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { Toast } from '@/components/Toast'
 import { DriverPanel } from '@/components/DriverPanel'
 import { WACCBreakdown } from '@/components/WACCBreakdown'
+import { FinancialRatios } from '@/components/FinancialRatios'
 import { DCFSchedule } from '@/components/DCFSchedule'
 import { ForecastTable } from '@/components/ForecastTable'
 import { QuickDCFView } from '@/components/QuickDCFView'
@@ -21,6 +22,7 @@ import { useModelSpec } from '@/hooks/useModelSpec'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { ScenarioLabel, CompanySummary } from '@/lib/types'
 import { saveModel, loadSavedModel } from '@/lib/api'
+import { fmtPrice } from '@/lib/formatters'
 
 export default function HomePage() {
   const { spec, loading, error, companyId, loadModel, recompute, revert } =
@@ -117,6 +119,24 @@ export default function HomePage() {
     window.location.href = `/api/export/excel?company_id=${companyId}`
   }
 
+  const handleCopySummary = () => {
+    if (!spec) return
+    const ticker = spec.metadata?.ticker || 'MODEL'
+    const name = spec.metadata?.name || 'Company'
+    const currency = spec.metadata?.currency || 'INR'
+    const valuation = spec.valuation?.find((v) => v.scenario === scenario) || spec.valuation?.[0]
+    const bridge = valuation?.dcf_bridge
+    const price = bridge?.implied_share_price != null ? fmtPrice(bridge.implied_share_price, currency, 2) : '—'
+    const mkt = valuation?.reverse_dcf?.market_price != null ? fmtPrice(valuation.reverse_dcf.market_price, currency, 2) : '—'
+    const waccVal = valuation?.wacc?.wacc != null ? `${valuation.wacc.wacc.toFixed(2)}%` : '—'
+
+    const text = `${name} (${ticker}) DCF Valuation [${scenario.toUpperCase()} SCENARIO]\nDCF Implied Price: ${price} | Market Price: ${mkt}\nWACC: ${waccVal} | Model: Unlevered FCFF @ WACC`
+
+    navigator.clipboard.writeText(text)
+    setToastType('success')
+    setToastMessage('Valuation memo summary copied to clipboard!')
+  }
+
   return (
     <div className="min-h-screen bg-canvas text-text-main flex flex-col font-sans">
       {/* Mobile Viewport Guard (<900px) */}
@@ -148,6 +168,7 @@ export default function HomePage() {
         onOpenSaved={() => setSavedModelsOpen(true)}
         onOpenQA={() => setQaOpen(true)}
         onExportExcel={handleExportExcel}
+        onCopySummary={handleCopySummary}
       />
 
       {/* KPI Ticker Strip */}
@@ -163,7 +184,7 @@ export default function HomePage() {
 
         {spec && mode === 'analyst' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-            {/* Left Column: Driver Sliders & WACC Breakdown */}
+            {/* Left Column: Driver Sliders, WACC Breakdown & Return Ratios */}
             <div className="lg:col-span-4 space-y-4">
               <DriverPanel
                 spec={spec}
@@ -172,6 +193,7 @@ export default function HomePage() {
                 onDriverRevert={handleDriverRevert}
               />
               <WACCBreakdown spec={spec} scenario={scenario} />
+              <FinancialRatios spec={spec} scenario={scenario} />
             </div>
 
             {/* Right Column: DCF Valuation Schedule & Forecast Summary */}

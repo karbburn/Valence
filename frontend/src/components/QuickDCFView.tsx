@@ -1,9 +1,9 @@
 'use client'
 
 import React from 'react'
-import { Sparkles, ArrowUpRight, ArrowDownRight, Layers, Info } from 'lucide-react'
+import { Sparkles, ArrowUpRight, ArrowDownRight, Layers, Info, GitCompare } from 'lucide-react'
 import { ModelSpecification, ScenarioLabel } from '@/lib/types'
-import { fmtNum, fmtPct, fmtPrice, getCurrencySymbol } from '@/lib/formatters'
+import { fmtNum, fmtPct, fmtPrice, getCurrencySymbol, fmtMoney } from '@/lib/formatters'
 
 export interface QuickDCFViewProps {
   spec: ModelSpecification | null
@@ -40,6 +40,26 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
   }
 
   const grid = sensTable?.results_grid || []
+
+  // All 3 Scenarios for comparison matrix
+  const baseVal = spec?.valuation?.find((v) => v.scenario === 'base')
+  const bullVal = spec?.valuation?.find((v) => v.scenario === 'bull')
+  const bearVal = spec?.valuation?.find((v) => v.scenario === 'bear')
+
+  const getUpside = (v?: typeof baseVal) => {
+    const p = v?.dcf_bridge?.implied_share_price
+    if (p != null && marketPrice != null && marketPrice > 0) {
+      return ((p - marketPrice) / marketPrice) * 100
+    }
+    return null
+  }
+
+  const bullUpside = getUpside(bullVal)
+  const bearDownside = getUpside(bearVal)
+  const asymmetryRatio =
+    bullUpside != null && bearDownside != null && bearDownside !== 0
+      ? Math.abs(bullUpside / bearDownside)
+      : null
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -112,6 +132,72 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
           <div className="text-[11px] text-[#64748b] mt-1">
             vs Current Market Quote
           </div>
+        </div>
+      </div>
+
+      {/* Side-by-Side Scenario Comparison Matrix */}
+      <div className="bg-surface border border-border rounded-[4px] p-4 space-y-3 shadow-sm">
+        <div className="flex items-center justify-between border-b border-border pb-2">
+          <div className="font-semibold text-[13px] text-text-main flex items-center space-x-2">
+            <GitCompare className="w-4 h-4 text-[#0ea5e9]" />
+            <span>Valuation Scenario Matrix (Base / Bull / Bear)</span>
+          </div>
+          {asymmetryRatio != null && (
+            <div className="font-mono text-[10px] text-[#7dd3fc] bg-[#0ea5e9]/10 border border-[#0ea5e9]/20 px-2 py-0.5 rounded-[3px]">
+              Risk/Reward Asymmetry: {asymmetryRatio.toFixed(1)}x
+            </div>
+          )}
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-[11px] font-mono border-collapse">
+            <thead>
+              <tr className="bg-[#0d1220] border-b border-[#1e283d] text-[#94a3b8]">
+                <th className="p-2.5 font-semibold">Metric / Scenario</th>
+                <th className="p-2.5 font-bold text-[#f8fafc] w-1/4">Base Case</th>
+                <th className="p-2.5 font-bold text-[#10b981] w-1/4">Bull Case</th>
+                <th className="p-2.5 font-bold text-[#ef4444] w-1/4">Bear Case</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#1e283d]/60">
+              <tr>
+                <td className="p-2.5 font-semibold text-[#cbd5e1]">DCF Share Price</td>
+                <td className="p-2.5 font-bold text-[#f8fafc]">
+                  {fmtPrice(baseVal?.dcf_bridge?.implied_share_price, currency, 2)}
+                </td>
+                <td className="p-2.5 font-bold text-[#10b981]">
+                  {fmtPrice(bullVal?.dcf_bridge?.implied_share_price, currency, 2)}
+                </td>
+                <td className="p-2.5 font-bold text-[#ef4444]">
+                  {fmtPrice(bearVal?.dcf_bridge?.implied_share_price, currency, 2)}
+                </td>
+              </tr>
+              <tr>
+                <td className="p-2.5 font-semibold text-[#cbd5e1]">Implied Upside / Downside</td>
+                <td className="p-2.5 font-semibold text-[#94a3b8]">
+                  {getUpside(baseVal) != null ? `${getUpside(baseVal)! >= 0 ? '+' : ''}${fmtPct(getUpside(baseVal), 1)}` : '—'}
+                </td>
+                <td className="p-2.5 font-semibold text-[#10b981]">
+                  {getUpside(bullVal) != null ? `+${fmtPct(getUpside(bullVal), 1)}` : '—'}
+                </td>
+                <td className="p-2.5 font-semibold text-[#ef4444]">
+                  {getUpside(bearVal) != null ? `${fmtPct(getUpside(bearVal), 1)}` : '—'}
+                </td>
+              </tr>
+              <tr>
+                <td className="p-2.5 font-semibold text-[#cbd5e1]">Enterprise Value</td>
+                <td className="p-2.5 text-[#94a3b8]">{fmtMoney(baseVal?.dcf_bridge?.enterprise_value, currency)}</td>
+                <td className="p-2.5 text-[#94a3b8]">{fmtMoney(bullVal?.dcf_bridge?.enterprise_value, currency)}</td>
+                <td className="p-2.5 text-[#94a3b8]">{fmtMoney(bearVal?.dcf_bridge?.enterprise_value, currency)}</td>
+              </tr>
+              <tr>
+                <td className="p-2.5 font-semibold text-[#cbd5e1]">WACC (Discount Rate)</td>
+                <td className="p-2.5 text-[#94a3b8]">{fmtPct(baseVal?.wacc?.wacc, 2)}</td>
+                <td className="p-2.5 text-[#94a3b8]">{fmtPct(bullVal?.wacc?.wacc, 2)}</td>
+                <td className="p-2.5 text-[#94a3b8]">{fmtPct(bearVal?.wacc?.wacc, 2)}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
