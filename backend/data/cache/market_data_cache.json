@@ -817,5 +817,83 @@
       },
       "timestamp": "2026-08-17T14:19:32.382332"
     }
+  },
+  "kaynes_kaynes": {
+    "fetch_date": "2026-08-17",
+    "data": {
+      "company_id": "kaynes_kaynes",
+      "ticker": "KAYNES",
+      "market": "india",
+      "price": {
+        "value": 3651.0,
+        "source": "yfinance",
+        "fetch_date": "2026-08-17",
+        "provenance_note": "yfinance live price for KAYNES.NS"
+      },
+      "shares_outstanding": {
+        "value": 6.7222,
+        "source": "yfinance",
+        "fetch_date": "2026-08-17",
+        "provenance_note": "yfinance live shares outstanding (6.72 Cr)"
+      },
+      "beta": {
+        "value": 1.0,
+        "source": "market_default",
+        "fetch_date": "2026-08-17",
+        "provenance_note": "INDIA market default for beta (beta vs index)"
+      },
+      "risk_free_rate": {
+        "value": 6.78,
+        "source": "market_default",
+        "fetch_date": "2026-08-17",
+        "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
+      },
+      "equity_risk_premium": {
+        "value": 7.08,
+        "source": "market_default",
+        "fetch_date": "2026-08-17",
+        "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
+      },
+      "timestamp": "2026-08-17T16:42:35.849879"
+    }
+  },
+  "tsm_us": {
+    "fetch_date": "2026-08-17",
+    "data": {
+      "company_id": "tsm_us",
+      "ticker": "TSM",
+      "market": "us",
+      "price": {
+        "value": 426.35,
+        "source": "yfinance",
+        "fetch_date": "2026-08-17",
+        "provenance_note": "yfinance live price for TSM"
+      },
+      "shares_outstanding": {
+        "value": 5186.474,
+        "source": "yfinance",
+        "fetch_date": "2026-08-17",
+        "provenance_note": "yfinance live shares outstanding (5186.47 M)"
+      },
+      "beta": {
+        "value": 1.258,
+        "source": "yfinance",
+        "fetch_date": "2026-08-17",
+        "provenance_note": "yfinance 2Y weekly beta (1.26, domestic calibrated 1.26)"
+      },
+      "risk_free_rate": {
+        "value": 4.696,
+        "source": "yfinance",
+        "fetch_date": "2026-08-17",
+        "provenance_note": "yfinance live 10-Year US Treasury yield ^TNX (4.70%)"
+      },
+      "equity_risk_premium": {
+        "value": 4.5,
+        "source": "market_default",
+        "fetch_date": "2026-08-17",
+        "provenance_note": "US market default for erp (Equity Risk Premium %)"
+      },
+      "timestamp": "2026-08-17T16:49:48.305994"
+    }
   }
 }
