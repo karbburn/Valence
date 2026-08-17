@@ -93,8 +93,8 @@ def ensure_company_ingested(company_id: str, db_path: str | Path = DB_PATH) -> N
             from backend.data.pipeline import run as run_india_pipeline
             run_india_pipeline(company_id=company_id, db_path=db_path, clear_db=False)
             run_norm(company_id=company_id)
-        except (FileNotFoundError, Exception) as e:
-            logger.info("Local source file for %s not found, attempting live Indian equity ingestion: %s", company_id, e)
+        except FileNotFoundError:
+            logger.info("Local source file for %s not found, attempting live Indian equity ingestion", company_id)
             from backend.data.ingestion.india_live import fetch_and_parse_india_live
             dps = fetch_and_parse_india_live(company_id=company_id)
             save_datapoints(db_path, dps, clear_existing=True)

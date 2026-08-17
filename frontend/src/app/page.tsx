@@ -25,7 +25,7 @@ import { saveModel, loadSavedModel } from '@/lib/api'
 import { fmtPrice } from '@/lib/formatters'
 
 export default function HomePage() {
-  const { spec, loading, error, companyId, loadModel, recompute, revert } =
+  const { spec, loading, error, companyId, loadModel, applySpec, recompute, revert } =
     useModelSpec('infy_infy')
 
   const [mode, setMode] = useState<'analyst' | 'quick' | 'full'>('analyst')
@@ -97,19 +97,17 @@ export default function HomePage() {
   }
 
   const handleSaveSubmit = async (name: string) => {
-    if (!companyId) return
-    await saveModel(companyId, name)
+    if (!companyId || !spec) return
+    await saveModel(spec, name)
     setToastType('success')
     setToastMessage(`Saved model: "${name}"`)
   }
 
   const handleLoadSavedModel = async (modelId: string) => {
     setLocalError(null)
-    setLoadingTitle('Loading Saved Model')
-    setLoadingSubtitle('Retrieving persisted valuation model parameters...')
     const loadedSpec = await loadSavedModel(modelId)
     if (loadedSpec?.metadata?.company_id) {
-      await loadModel(loadedSpec.metadata.company_id)
+      applySpec(loadedSpec)
     }
     setToastType('success')
     setToastMessage(`Loaded saved model`)

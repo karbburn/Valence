@@ -18,9 +18,9 @@ export const metadata: Metadata = {
   title: 'Valence — Financial Modeling & Valuation Platform',
   description: 'Unlevered FCFF financial modeling and DCF valuation engine',
   icons: {
-    icon: '/favicon.png',
-    shortcut: '/favicon.png',
-    apple: '/favicon.png',
+    icon: '/icon.png',
+    shortcut: '/icon.png',
+    apple: '/icon.png',
   },
 }
 

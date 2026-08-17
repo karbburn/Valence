@@ -10,6 +10,7 @@ interface UseModelSpecReturn {
   error: string | null
   companyId: string
   loadModel: (companyId: string) => Promise<void>
+  applySpec: (spec: ModelSpecification) => void
   recompute: (driverKey: string, value: number, scenario?: string) => Promise<void>
   revert: (driverKey: string, scenario?: string, period?: string) => Promise<void>
 }
@@ -39,6 +40,11 @@ export function useModelSpec(initialCompanyId = 'infy_infy'): UseModelSpecReturn
     } finally {
       setLoading(false)
     }
+  }, [])
+
+  const applySpec = useCallback((next: ModelSpecification) => {
+    setSpec(next)
+    setCompanyId(next.metadata.company_id)
   }, [])
 
   const recompute = useCallback(
@@ -80,5 +86,5 @@ export function useModelSpec(initialCompanyId = 'infy_infy'): UseModelSpecReturn
     []
   )
 
-  return { spec, loading, error, companyId, loadModel, recompute, revert }
+  return { spec, loading, error, companyId, loadModel, applySpec, recompute, revert }
 }
