@@ -2,40 +2,22 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { CompanySummary } from '@/lib/types'
-import { fetchCompanies, searchCompanies } from '@/lib/api'
+import { searchCompanies } from '@/lib/api'
 
 interface UseCompaniesReturn {
-  companies: CompanySummary[]
   searchResults: CompanySummary[]
-  loading: boolean
   searching: boolean
   error: string | null
-  loadCompanies: () => Promise<void>
   search: (query: string) => void
   clearSearch: () => void
 }
 
 export function useCompanies(): UseCompaniesReturn {
-  const [companies, setCompanies] = useState<CompanySummary[]>([])
   const [searchResults, setSearchResults] = useState<CompanySummary[]>([])
-  const [loading, setLoading] = useState(false)
   const [searching, setSearching] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const searchTimer = useRef<NodeJS.Timeout | null>(null)
-
-  const loadCompanies = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await fetchCompanies()
-      setCompanies(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch companies')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
 
   const search = useCallback((query: string) => {
     if (!query.trim()) {
@@ -68,12 +50,9 @@ export function useCompanies(): UseCompaniesReturn {
   }, [])
 
   return {
-    companies,
     searchResults,
-    loading,
     searching,
     error,
-    loadCompanies,
     search,
     clearSearch,
   }

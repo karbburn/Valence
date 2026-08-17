@@ -50,7 +50,7 @@ export function DriverPanel({
       <div className="flex items-center justify-between border-b border-border pb-2.5 mb-2.5">
         <div className="flex items-center space-x-2">
           <Sliders className="w-4 h-4 text-[#0ea5e9]" />
-          <h2 className="font-bold text-[14px] text-text-main">
+          <h2 className="font-bold text-[15px] text-text-main">
             Valuation Drivers
           </h2>
         </div>
