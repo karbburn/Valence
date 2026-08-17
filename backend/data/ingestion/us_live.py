@@ -69,10 +69,12 @@ YF_SHARE_MAP = [
 ]
 
 
-def _fx_to_usd(financial_currency: str) -> float:
+def _fx_to_usd(financial_currency: str | None) -> float:
     """Return the rate to convert a financial_currency unit to USD (USD per unit).
 
-    Falls back to 1.0 (no conversion) when the rate cannot be resolved.
+    Raises ValueError when the FX rate cannot be resolved for a non-USD currency,
+    so callers can fall back to local source files instead of silently corrupting
+    valuations with wrong-currency data.
     """
     if not financial_currency or financial_currency.upper() == "USD":
         return 1.0
@@ -84,7 +86,10 @@ def _fx_to_usd(financial_currency: str) -> float:
             return rate
     except Exception as e:
         logger.warning("Could not fetch FX rate for %s: %s", pair, e)
-    return 1.0
+    raise ValueError(
+        f"Cannot resolve FX rate for {financial_currency} → USD. "
+        f"Falling back to local source files."
+    )
 
 
 def fetch_and_parse_us_live(company_id: str) -> List[RawDatapoint]:

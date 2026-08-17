@@ -4,6 +4,37 @@ export type { CompanySummary, SavedModelHeader, RecomputeRequest } from './types
 
 const BASE = '' // proxied via next.config.ts rewrites
 
+const SAVED_MODELS_KEY = 'valence.savedModels'
+
+interface SavedModelEntry {
+  header: SavedModelHeader
+  spec: ModelSpecification
+}
+
+function readSavedModels(): SavedModelEntry[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(SAVED_MODELS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function writeSavedModels(entries: SavedModelEntry[]): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(SAVED_MODELS_KEY, JSON.stringify(entries))
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+      throw new Error('Storage full — delete some saved models to make room.')
+    }
+    throw e
+  }
+}
+
 export async function fetchModelSpec(companyId: string): Promise<ModelSpecification> {
   const res = await fetch(`${BASE}/api/model/${companyId}`)
   if (!res.ok) {
@@ -59,33 +90,36 @@ export async function searchCompanies(
 }
 
 export async function fetchSavedModels(): Promise<SavedModelHeader[]> {
-  const res = await fetch(`${BASE}/api/models`)
-  if (!res.ok) throw new Error('Failed to load saved models')
-  return res.json()
+  return readSavedModels().map((e) => e.header)
 }
 
 export async function saveModel(
-  companyId: string,
+  spec: ModelSpecification,
   name: string
 ): Promise<{ status: string; header: SavedModelHeader }> {
-  const res = await fetch(`${BASE}/api/models/save`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, company_id: companyId }),
-  })
-  if (!res.ok) throw new Error('Save failed')
-  return res.json()
+  const entries = readSavedModels()
+  const now = new Date().toISOString()
+  const modelId = (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)).slice(0, 12)
+  const header: SavedModelHeader = {
+    model_id: modelId,
+    user_id: 'local',
+    company_id: spec.metadata.company_id,
+    name,
+    model_version: spec.metadata.model_version,
+    created_at: now,
+    updated_at: now,
+  }
+  entries.unshift({ header, spec })
+  writeSavedModels(entries)
+  return { status: 'saved', header }
 }
 
-export async function loadSavedModel(
-  modelId: string
-): Promise<ModelSpecification> {
-  const res = await fetch(`${BASE}/api/models/${modelId}`)
-  if (!res.ok) throw new Error('Load failed')
-  return res.json()
+export async function loadSavedModel(modelId: string): Promise<ModelSpecification> {
+  const entry = readSavedModels().find((e) => e.header.model_id === modelId)
+  if (!entry) throw new Error('Saved model not found')
+  return entry.spec
 }
 
 export async function deleteSavedModel(modelId: string): Promise<void> {
-  const res = await fetch(`${BASE}/api/models/${modelId}`, { method: 'DELETE' })
-  if (!res.ok) throw new Error('Delete failed')
+  writeSavedModels(readSavedModels().filter((e) => e.header.model_id !== modelId))
 }

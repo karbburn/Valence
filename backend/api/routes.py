@@ -10,7 +10,7 @@ Provides API endpoints for:
 - GET /api/export/excel: Trigger openpyxl exporter and download 27-tab .xlsx workbook
 """
 
-import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -300,65 +300,7 @@ def search_companies(
 # ------------------------------------------------------------------ #
 # Persistence Endpoints
 # ------------------------------------------------------------------ #
-
-from fastapi import Depends
-from backend.api.auth import UserSession, get_current_user
-from backend.api.persistence import SavedModelHeader, SavedModelStore
-
-
-class SaveModelRequest(BaseModel):
-    name: Optional[str] = None
-    model_id: Optional[str] = None
-    company_id: str = "infy_infy"
-
-
-@router.post("/models/save")
-def save_user_model(
-    req: SaveModelRequest,
-    user: UserSession = Depends(get_current_user),
-) -> Dict[str, Any]:
-    """Save current ModelSpecification under authenticated user's profile."""
-    spec = _get_or_build_spec(req.company_id)
-    header = SavedModelStore.save(
-        user_id=user.user_id,
-        spec=spec,
-        model_id=req.model_id,
-        name=req.name,
-    )
-    return {"status": "saved", "header": header.dict()}
-
-
-@router.get("/models")
-def list_user_models(
-    user: UserSession = Depends(get_current_user),
-) -> List[Dict[str, Any]]:
-    """List all saved models for authenticated user."""
-    headers = SavedModelStore.list_for_user(user.user_id)
-    return [h.dict() for h in headers]
-
-
-@router.get("/models/{model_id}")
-def load_user_model(
-    model_id: str,
-    user: UserSession = Depends(get_current_user),
-) -> Dict[str, Any]:
-    """Load a specific saved model for user into active workspace."""
-    spec = SavedModelStore.load(user.user_id, model_id)
-    if not spec:
-        raise HTTPException(status_code=404, detail="Saved model not found")
-
-    _MODEL_CACHE[spec.metadata.company_id] = spec
-    return spec.model_dump(mode="json")
-
-
-@router.delete("/models/{model_id}")
-def delete_user_model(
-    model_id: str,
-    user: UserSession = Depends(get_current_user),
-) -> Dict[str, Any]:
-    """Delete a saved model for authenticated user."""
-    ok = SavedModelStore.delete(user.user_id, model_id)
-    if not ok:
-        raise HTTPException(status_code=404, detail="Model not found or already deleted")
-    return {"status": "deleted", "model_id": model_id}
+# NOTE: Model persistence moved to browser localStorage (frontend). The
+# previous server-side /api/models/* endpoints backed by per-user file
+# storage were removed along with auth. No backend persistence exists.
 

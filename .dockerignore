@@ -4,7 +4,12 @@ venv
 __pycache__
 *.pyc
 *.xlsx
+*.db
+.env
+.env.*
 frontend
 assets
 test_*
 scratch_metrics.json
+backend/data/cache/
+backend/data/user_models/
