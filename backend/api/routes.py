@@ -35,6 +35,11 @@ router = APIRouter()
 API_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = API_DIR.parent.parent
 
+
+@router.get("/health")
+async def health() -> Dict[str, str]:
+    return {"status": "ok"}
+
 # In-memory session model cache for fast live recomputation
 _MODEL_CACHE: Dict[str, ModelSpecification] = {}
 _HIST_MODEL_CACHE: Dict[str, HistoricalModel] = {}

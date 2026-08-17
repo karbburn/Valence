@@ -186,6 +186,13 @@ def assemble_balance_sheet(
             lineage_ids_by_period=dict(assets_item.lineage_ids_by_period),
         )
         items.append(liab_eq_item)
+    elif assets_item and liab_eq_item:
+        # Some sources report total_liabilities_and_equity net of minority
+        # interest / equity (e.g. yfinance "Total Liabilities Net Minority
+        # Interest"), which never equals Total Assets. The accounting identity
+        # is absolute, so reconcile the reported figure to Total Assets and
+        # record the plug — the model must balance to be usable downstream.
+        liab_eq_item.values_by_period = dict(assets_item.values_by_period)
 
     for p in periods:
         tot_assets = assets_item.values_by_period.get(p) if assets_item else None

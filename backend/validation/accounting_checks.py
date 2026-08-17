@@ -144,9 +144,14 @@ def check_share_count_consistent(spec: ModelSpecification) -> ModelCheckResult:
     if not spec.share_count:
         errors.append("No share count schedule present in specification")
     else:
-        fy26_shares = spec.share_count.get_diluted("FY26")
+        # Anchor on the latest historical period actually present in the
+        # schedule — companies with incomplete coverage (e.g. only FY24-FY25
+        # historicals) have no FY26 slot, so hardcoding "FY26" is wrong.
+        hist_periods = spec.historicals.periods if spec.historicals else []
+        anchor_period = hist_periods[-1] if hist_periods else None
+        fy26_shares = spec.share_count.get_diluted(anchor_period) if anchor_period else None
         if fy26_shares is None or fy26_shares <= 0:
-            errors.append(f"Invalid FY26 diluted share count ({fy26_shares})")
+            errors.append(f"Invalid {anchor_period} diluted share count ({fy26_shares})")
 
         # Check valuation outputs use the same share count
         for val in spec.valuation:
