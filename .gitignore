@@ -10,6 +10,6 @@ Cwd/
 *.xlsx
 backend/export/output/
 backend/data/user_models/
-backend/data/cache/
 .env
 AGENTS.md
+valence.egg-info/

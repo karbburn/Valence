@@ -7,7 +7,7 @@ Acceptance criteria:
   1. Debt schedule closing balance == FY26 historical borrowings for all 5 periods x 3 scenarios.
   2. reconcile() returns True for the Infosys carry-forward debt schedule.
   3. reconcile() returns False for a deliberately broken synthetic schedule.
-  4. share_count.get_diluted("FY26") equals the official metadata share count (405.76 Cr).
+  4. share_count.get_diluted("FY26") equals the official metadata share count (412.45 Cr).
   5. Forecast share count FY27-FY31 equals FY26 (flat assumption).
   6. ModelSpecification serializes/deserializes without losing debt_schedule or share_count.
 """

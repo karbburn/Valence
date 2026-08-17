@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: valence-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: TWELVEDATA_API_KEY
+        sync: false
