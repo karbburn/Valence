@@ -100,7 +100,7 @@ MARKET_DEFAULTS: Dict[MarketType, Dict[str, float]] = {
     },
     "india": {
         "rfr": 6.78,        # India 10-Year G-Sec yield (%)
-        "erp": 7.31,        # Damodaran India Equity Risk Premium (%)
+        "erp": 7.08,        # Damodaran India Equity Risk Premium (%) - Jan 2026 update
         "beta": 1.00,       # Market default beta
         "price": 1000.0,
         "shares": 400.0,    # Crores

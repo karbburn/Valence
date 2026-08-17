@@ -107,8 +107,12 @@ def compute_historical_ratios(
         if val_np_m is not None:
             ratios_dict["net_margin_pct"][p] = val_np_m
 
+        # Effective tax rate is only meaningful for profitable, undistorted
+        # years: a loss year or a one-time exceptional gain makes tax/pbt
+        # meaningless (negative or near-zero), which would poison downstream
+        # forecast tax averages. Skip those; callers fall back to statutory.
         val_tax = pct(tax, pbt)
-        if val_tax is not None:
+        if val_tax is not None and pbt is not None and pbt > 0 and 0.0 < val_tax <= 50.0:
             ratios_dict["effective_tax_rate_pct"][p] = val_tax
 
         # 2. Growth Rates (YoY)

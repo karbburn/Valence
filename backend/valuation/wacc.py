@@ -23,7 +23,7 @@ from backend.models.spec.valuation import WACCBreakdown
 # Legacy fallback constants retained for backward compatibility where explicit values are omitted.
 DEFAULT_RFR = 6.78       # India 10-Year G-Sec yield (%)
 DEFAULT_BETA = 0.79      # Historical Infosys benchmark beta
-DEFAULT_ERP = 7.31       # India Equity Risk Premium (%)
+DEFAULT_ERP = 7.08       # India Equity Risk Premium (%)
 DEFAULT_CURRENT_PRICE = 1080.0  # INR per share
 
 MARKET_PRICE_BY_COMPANY: dict[str, float] = {
