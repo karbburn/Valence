@@ -119,6 +119,9 @@ def suggest_base_assumptions(
     # ------------------------------------------------------------------ #
     tax_rates = [ratios.get_value("effective_tax_rate_pct", p) for p in periods]
     hist_tax_rate = _avg(tax_rates) or default_tax
+    # Guard against any residual absurd average leaking into WACC.
+    if hist_tax_rate <= 0.0 or hist_tax_rate > 50.0:
+        hist_tax_rate = default_tax
 
     # Fade towards statutory rate in Years 3-5 (reflecting global minimum tax / credit phase-outs)
     tax_fade_weights = [0.0, 0.0, 0.25, 0.50, 0.75]  # weight on statutory rate

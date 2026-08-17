@@ -7,7 +7,7 @@ Universal Expansion — Live Market Data, Real SEC EDGAR, Parameterized India, W
 Acceptance criteria verified:
   1. Market data layer provider fallback chain works cleanly across sources (yfinance -> registry -> market defaults).
   2. US companies (e.g. aapl_us, msft_us) resolve to US Risk-Free Rate (~4.64% US 10Y UST) and Damodaran US ERP (4.50%).
-  3. India companies (e.g. infy_infy, tcs_tcs) resolve to India 10Y G-Sec (6.78%) and India ERP (7.31%).
+  3. India companies (e.g. infy_infy, tcs_tcs) resolve to India 10Y G-Sec (6.78%) and India ERP (7.08%).
   4. Infosys hardcoded fallbacks (405.76 shares, 22201.0 cash) are deleted — US models use USD native share units and cash.
   5. 30_WACC tab provenance notes accurately reflect the target market's provenance.
   6. Divergence gate flags out-of-bounds market-implied growth (< -2.0% or > 5.0%).
@@ -63,7 +63,7 @@ def main() -> None:
     _assert(infy_mdata.market == "india", "Infosys market data resolved as 'india'")
     _assert(infy_mdata.price.value > 0, f"Infosys price resolved ({infy_mdata.price.value} INR)")
     _assert(abs(infy_mdata.risk_free_rate.value - 6.78) < 0.1, f"Infosys RFR resolved to India G-Sec (6.78%) ({infy_mdata.risk_free_rate.value}%)")
-    _assert(abs(infy_mdata.equity_risk_premium.value - 7.31) < 0.01, f"Infosys ERP resolved to India ERP (7.31%) ({infy_mdata.equity_risk_premium.value}%)")
+    _assert(abs(infy_mdata.equity_risk_premium.value - 7.08) < 0.01, f"Infosys ERP resolved to India ERP (7.08%) ({infy_mdata.equity_risk_premium.value}%)")
 
     # ------------------------------------------------------------------ #
     # 2. Test Per-Market WACC Resolution in Valuation Engine
@@ -103,8 +103,8 @@ def main() -> None:
         f"Infosys WACC RFR matches India 10Y G-Sec (6.78%) ({infy_val.wacc.risk_free_rate}%)",
     )
     _assert(
-        abs(infy_val.wacc.equity_risk_premium - 7.31) < 0.01,
-        f"Infosys WACC ERP matches India Damodaran ERP (7.31%) ({infy_val.wacc.equity_risk_premium}%)",
+        abs(infy_val.wacc.equity_risk_premium - 7.08) < 0.01,
+        f"Infosys WACC ERP matches India Damodaran ERP (7.08%) ({infy_val.wacc.equity_risk_premium}%)",
     )
 
     # ------------------------------------------------------------------ #

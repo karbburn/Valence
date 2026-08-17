@@ -207,7 +207,7 @@ def get_metadata_for_company(company_id: str) -> ModelMetadata:
             currency="USD",
             units="millions",
             fiscal_year_end="December 31",
-            shares_outstanding=1000.0,
+            shares_outstanding=_resolve_shares(company_id, market),
         )
     return ModelMetadata(
         company_id=company_id,
@@ -217,5 +217,23 @@ def get_metadata_for_company(company_id: str) -> ModelMetadata:
         currency="INR",
         units="crores",
         fiscal_year_end="March 31",
-        shares_outstanding=100.0,
+        shares_outstanding=_resolve_shares(company_id, market),
     )
+
+
+def _resolve_shares(company_id: str, market: str) -> Optional[float]:
+    """Best-effort live share count for unregistered companies.
+
+    Fallback chain: market data provider (live/cached) -> statutory default.
+    Never a hardcoded placeholder, which silently corrupts any downstream
+    per-share math for unregistered companies.
+    """
+    try:
+        from backend.data.providers.market_data import get_company_market_data
+        md = get_company_market_data(company_id)
+        shares = md.shares_outstanding.value
+        if shares and shares > 0:
+            return float(shares)
+    except Exception:
+        pass
+    return None
