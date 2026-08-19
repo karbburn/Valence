@@ -18,14 +18,27 @@ def select_primary_datapoints(
     for d in canonical_datapoints:
         grouped.setdefault((d.canonical_key, d.period_label), []).append(d)
 
+    # Authoritative source hierarchy — regulatory filings carry more weight than
+    # third-party aggregators or real-time market feeds.  This ensures that when
+    # an NSE/SEC/BSE filing disagrees with a screener or yfinance row, the
+    # regulatory source wins.
+    AUTHORITATIVE_SOURCES = {"nse_filing", "sec_edgar", "bse_filing"}
+    SECONDARY_SOURCES = {"screener"}
+    MARKET_FEED_SOURCES = {"yfinance_live", "twelvedata"}
+
     def _score(dp: CanonicalDatapoint) -> int:
         score = 0
-        # NOTE: No boost for 'derived' status — reported values are authoritative.
-        # Derived line items exist only when a company does not report the metric, so
-        # they win by being the sole candidate for that (canonical_key, period). When a
-        # reported AND derived value coexist (e.g. legacy DB rows), the reported wins.
 
+        # Source-authority boost (regulatory > aggregator > market feed)
         if raw_datapoints_map:
+            sources = {raw_datapoints_map[rid].source for rid in dp.source_datapoint_ids if rid in raw_datapoints_map}
+            if sources & AUTHORITATIVE_SOURCES:
+                score += 200
+            elif sources & SECONDARY_SOURCES:
+                score += 100
+            elif sources & MARKET_FEED_SOURCES:
+                score += 50
+
             locs = [raw_datapoints_map[rid].source_location for rid in dp.source_datapoint_ids if rid in raw_datapoints_map]
             loc_str = " ".join(locs).upper()
 

@@ -5,6 +5,24 @@ India Ingestion & Reconciliation Pipeline Module.
 
 Orchestrates Screener.in primary ingestion, optional secondary BSE/NSE PDF filing extraction,
 and automated metric reconciliation across all onboarded Indian companies.
+
+Data source priority (highest → lowest):
+    1. nse_filing  — NSE annual report PDFs (audited, authoritative for Indian companies)
+    2. sec_edgar   — SEC EDGAR XBRL (authoritative for US-listed companies)
+    3. bse_filing  — BSE annual report PDFs (stub — same data as NSE, for future expansion)
+    4. screener    — Screener.in third-party aggregation (secondary; may differ from filings)
+    5. yfinance_live — Real-time market data (limited financial statement detail)
+
+Source coverage audit (as of current DB):
+    Companies with NSE filing: infy_infy (nse_filing + screener)
+    Companies with SEC EDGAR:  aapl_us, amba_us, amd_us, amzn_us, awi_us, dox_us,
+                               googl_us, infy_us, intc_us, meta_us, msft_us, nflx_us,
+                               nvda_us, tsla_us
+    Companies with screener:   hcltech_hcltech, lt_lt, sunpharma_sunpharma,
+                               tatamotors_tatamotors, tatasteel_tatasteel, tcs_tcs, wipro_wipro
+    Companies with yfinance:   bhartiartl_bhartiartl, hindunilvr_hindunilvr, idea_idea,
+                               itc_itc, kaynes_kaynes, maruti_maruti, ongc_ongc,
+                               reliance_reliance, tatapower_tatapower, tsm_tsm
 """
 
 import json

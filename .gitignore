@@ -13,3 +13,4 @@ backend/data/user_models/
 .env
 AGENTS.md
 valence.egg-info/
+backend/data/cache/
