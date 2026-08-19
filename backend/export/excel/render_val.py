@@ -810,9 +810,26 @@ def render_valuation_comparison(wb: Workbook, spec: ModelSpecification) -> Works
     dcf_bull = bull_val.dcf_bridge.implied_share_price if bull_val else dcf_base * 1.25
     dcf_bear = bear_val.dcf_bridge.implied_share_price if bear_val else dcf_base * 0.75
 
-    # Implied comps prices
-    comps_pe = dcf_base * 1.05
-    comps_ev = dcf_base * 0.98
+    from backend.valuation.comps import compute_trading_comps
+    dcf_b = base_val.dcf_bridge if base_val else None
+    target_rev = spec.forecast.get_value("canonical.is.revenue", "FY27", "base") or 1000.0
+    target_ebitda = spec.forecast.get_value("canonical.is.ebitda", "FY27", "base") or 300.0
+    target_np = spec.forecast.get_value("canonical.is.net_profit", "FY27", "base") or 150.0
+    net_debt = dcf_b.less_net_debt if dcf_b and dcf_b.less_net_debt is not None else 0.0
+    shares = dcf_b.shares_outstanding if dcf_b and dcf_b.shares_outstanding is not None else 100.0
+
+    comps_res = compute_trading_comps(
+        target_ticker=spec.metadata.ticker,
+        target_sector=spec.metadata.sector or "Technology",
+        target_revenue_fy27=target_rev,
+        target_ebitda_fy27=target_ebitda,
+        target_net_profit_fy27=target_np,
+        net_debt=net_debt,
+        shares_outstanding=shares,
+    )
+
+    comps_ev = comps_res.implied_valuations[0].implied_share_price
+    comps_pe = comps_res.implied_valuations[1].implied_share_price
 
     ff = compute_football_field(
         ticker=spec.metadata.ticker,

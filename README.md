@@ -122,11 +122,11 @@ Valence/
 │   ├── export/                        # Excel exporting layer
 │   │   └── excel/                     # openpyxl workbook renderer
 │   │       ├── builder.py             # Low-level openpyxl utilities & OpenXML string patcher
-│   │       ├── exporter.py            # Main export runner (27-tab orchestrator)
+│   │       ├── exporter.py            # Main export runner (30-tab orchestrator)
 │   │       ├── render_front.py        # Covers, guides, executive summary sheets
 │   │       ├── render_hist.py         # Historical financials (10_Income_Statement, etc.)
 │   │       ├── render_fcst.py         # Forecast sheets (20_Operating_Model, schedules)
-│   │       ├── render_val.py          # Valuation sheets (WACC, DCF, Sensitivity grids)
+│   │       ├── render_val.py          # Valuation sheets (WACC, DCF, Comps, Football Field, Returns)
 │   │       ├── render_qa.py           # Documentation and dynamic QA checks
 │   │       └── styles.py              # Standardized IB/PE formatting & color tokens
 │   ├── forecast/                      # Driver-based forecast engine
@@ -158,6 +158,9 @@ Valence/
 │       ├── dcf.py                     # Unlevered FCFF & discounting timing engine
 │       ├── wacc.py                    # CAPM cost of equity & WACC capital weighting
 │       ├── reverse_dcf.py             # Closed-form implied terminal growth solver
+│       ├── comps.py                   # Public trading comparables & peer multiple benchmarks
+│       ├── football_field.py          # Multi-methodology valuation range chart synthesis
+│       ├── returns.py                 # PE / LBO exit returns & IRR waterfall engine
 │       └── sensitivity.py             # Multidimensional sensitivity matrices
 ├── .gitignore                         # Local dev caches, output workbooks, and database ignore
 └── README.md                          # Platform description and documentation
