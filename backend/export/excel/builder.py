@@ -55,6 +55,8 @@ def _ensure_formula_writer_patched() -> None:
         cached_val = CACHED_FORMULA_VALUES.get(key)
         if cell.data_type == 'f' and cached_val is not None:
             value, attributes = cw._set_attributes(cell, styled)
+            if isinstance(cached_val, str):
+                attributes['t'] = 'str'
             el = cw.Element("c", attributes)
             formula = cw.SubElement(el, 'f', {})
             formula.text = value[1:] if isinstance(value, str) else str(value)
@@ -69,6 +71,8 @@ def _ensure_formula_writer_patched() -> None:
         cached_val = CACHED_FORMULA_VALUES.get(key)
         if cell.data_type == 'f' and cached_val is not None:
             value, attributes = cw._set_attributes(cell, styled)
+            if isinstance(cached_val, str):
+                attributes['t'] = 'str'
             with xf.element('c', attributes):
                 with xf.element('f'):
                     xf.write(value[1:] if isinstance(value, str) else str(value))
@@ -105,6 +109,7 @@ def write_formula_cell(
     font: Optional[Any] = None,
     border: Optional[Any] = None,
     alignment: Optional[Any] = None,
+    fill: Optional[Any] = None,
 ) -> Any:
     """Write an interactive Excel formula with optional precomputed cached value and formatting."""
     cell = ws.cell(row=row, column=col, value=formula)
@@ -118,6 +123,8 @@ def write_formula_cell(
         cell.border = border
     if alignment:
         cell.alignment = alignment
+    if fill:
+        cell.fill = fill
     return cell
 
 

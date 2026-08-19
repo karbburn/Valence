@@ -351,42 +351,42 @@
     }
   },
   "infy_infy": {
-    "fetch_date": "2026-08-17",
+    "fetch_date": "2026-08-19",
     "data": {
       "company_id": "infy_infy",
       "ticker": "INFY",
       "market": "india",
       "price": {
-        "value": 1144.2,
+        "value": 1119.6,
         "source": "yfinance",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-19",
         "provenance_note": "yfinance live price for INFY.NS"
       },
       "shares_outstanding": {
         "value": 405.0124,
         "source": "yfinance",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-19",
         "provenance_note": "yfinance live shares outstanding (405.01 Cr)"
       },
       "beta": {
         "value": 0.79,
         "source": "registry",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-19",
         "provenance_note": "Per-company registry benchmark beta vs primary index (0.79)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-19",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-19",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-08-17T14:18:22.917614"
+      "timestamp": "2026-08-19T13:10:55.892572"
     }
   },
   "infy_us": {
@@ -468,120 +468,120 @@
     }
   },
   "msft_us": {
-    "fetch_date": "2026-08-17",
+    "fetch_date": "2026-08-19",
     "data": {
       "company_id": "msft_us",
       "ticker": "MSFT",
       "market": "us",
       "price": {
-        "value": 495.4,
+        "value": 483.79,
         "source": "yfinance",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-19",
         "provenance_note": "yfinance live price for MSFT"
       },
       "shares_outstanding": {
         "value": 7425.5455,
         "source": "yfinance",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-19",
         "provenance_note": "yfinance live shares outstanding (7425.55 M)"
       },
       "beta": {
         "value": 0.9,
         "source": "registry",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-19",
         "provenance_note": "Per-company registry benchmark beta vs primary index (0.9)"
       },
       "risk_free_rate": {
-        "value": 4.696,
+        "value": 4.654,
         "source": "yfinance",
-        "fetch_date": "2026-08-17",
-        "provenance_note": "yfinance live 10-Year US Treasury yield ^TNX (4.70%)"
+        "fetch_date": "2026-08-19",
+        "provenance_note": "yfinance live 10-Year US Treasury yield ^TNX (4.65%)"
       },
       "equity_risk_premium": {
         "value": 4.5,
         "source": "market_default",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-19",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-08-17T14:18:42.598091"
+      "timestamp": "2026-08-19T20:52:43.288085"
     }
   },
   "nvda_us": {
-    "fetch_date": "2026-08-17",
+    "fetch_date": "2026-08-19",
     "data": {
       "company_id": "nvda_us",
       "ticker": "NVDA",
       "market": "us",
       "price": {
-        "value": 225.16,
-        "source": "yfinance",
-        "fetch_date": "2026-08-17",
-        "provenance_note": "yfinance live price for NVDA"
+        "value": 100.0,
+        "source": "market_default",
+        "fetch_date": "2026-08-19",
+        "provenance_note": "US market default for price (USD/share)"
       },
       "shares_outstanding": {
-        "value": 24221.0,
-        "source": "yfinance",
-        "fetch_date": "2026-08-17",
-        "provenance_note": "yfinance live shares outstanding (24221.00 M)"
+        "value": 1000.0,
+        "source": "market_default",
+        "fetch_date": "2026-08-19",
+        "provenance_note": "US market default for shares (M shares)"
       },
       "beta": {
-        "value": 2.215,
-        "source": "yfinance",
-        "fetch_date": "2026-08-17",
-        "provenance_note": "yfinance 2Y weekly beta (2.21, domestic calibrated 2.21)"
+        "value": 1.0,
+        "source": "market_default",
+        "fetch_date": "2026-08-19",
+        "provenance_note": "US market default for beta (beta vs index)"
       },
       "risk_free_rate": {
-        "value": 4.696,
-        "source": "yfinance",
-        "fetch_date": "2026-08-17",
-        "provenance_note": "yfinance live 10-Year US Treasury yield ^TNX (4.70%)"
+        "value": 4.64,
+        "source": "market_default",
+        "fetch_date": "2026-08-19",
+        "provenance_note": "US market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 4.5,
         "source": "market_default",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-19",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-08-17T14:18:49.446698"
+      "timestamp": "2026-08-19T20:54:04.172148"
     }
   },
   "ongc_ongc": {
-    "fetch_date": "2026-08-17",
+    "fetch_date": "2026-08-19",
     "data": {
       "company_id": "ongc_ongc",
       "ticker": "ONGC",
       "market": "india",
       "price": {
-        "value": 239.15,
-        "source": "yfinance",
-        "fetch_date": "2026-08-17",
-        "provenance_note": "yfinance live price for ONGC.NS"
+        "value": 235.35,
+        "source": "registry",
+        "fetch_date": "2026-08-19",
+        "provenance_note": "Per-company registry benchmark for ongc_ongc (INR/share)"
       },
       "shares_outstanding": {
-        "value": 1258.0279,
-        "source": "yfinance",
-        "fetch_date": "2026-08-17",
-        "provenance_note": "yfinance live shares outstanding (1258.03 Cr)"
+        "value": 1258.0,
+        "source": "registry",
+        "fetch_date": "2026-08-19",
+        "provenance_note": "Per-company registry benchmark for ongc_ongc (Cr shares)"
       },
       "beta": {
         "value": 0.95,
         "source": "registry",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-19",
         "provenance_note": "Per-company registry benchmark beta vs primary index (0.95)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-19",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-19",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-08-17T14:18:55.641292"
+      "timestamp": "2026-08-19T20:54:50.239215"
     }
   },
   "reliance_reliance": {
@@ -741,42 +741,42 @@
     }
   },
   "tcs_tcs": {
-    "fetch_date": "2026-08-17",
+    "fetch_date": "2026-08-19",
     "data": {
       "company_id": "tcs_tcs",
       "ticker": "TCS",
       "market": "india",
       "price": {
-        "value": 2320.0,
-        "source": "yfinance",
-        "fetch_date": "2026-08-17",
-        "provenance_note": "yfinance live price for TCS.NS"
+        "value": 2370.0,
+        "source": "registry",
+        "fetch_date": "2026-08-19",
+        "provenance_note": "Per-company registry benchmark for tcs_tcs (INR/share)"
       },
       "shares_outstanding": {
-        "value": 361.8088,
-        "source": "yfinance",
-        "fetch_date": "2026-08-17",
-        "provenance_note": "yfinance live shares outstanding (361.81 Cr)"
+        "value": 361.8,
+        "source": "registry",
+        "fetch_date": "2026-08-19",
+        "provenance_note": "Per-company registry benchmark for tcs_tcs (Cr shares)"
       },
       "beta": {
         "value": 0.85,
         "source": "registry",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-19",
         "provenance_note": "Per-company registry benchmark beta vs primary index (0.85)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-19",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-19",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-08-17T14:19:26.382295"
+      "timestamp": "2026-08-19T20:55:06.711422"
     }
   },
   "wipro_wipro": {

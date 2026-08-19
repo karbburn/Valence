@@ -66,8 +66,8 @@ def render_historical_income_statement(wb: Workbook, spec: ModelSpecification) -
         ("canonical.is.pbt", "Profit Before Tax (PBT)", True, FMT_AMOUNT),
         ("canonical.is.tax", "Income Tax Expense", False, FMT_AMOUNT),
         ("canonical.is.net_profit", "Net Profit After Tax", True, FMT_AMOUNT),
-        ("canonical.is.eps_basic", "Basic EPS (INR)", False, FMT_PRICE),
-        ("canonical.is.eps_diluted", "Diluted EPS (INR)", False, FMT_PRICE),
+        ("canonical.is.eps_basic", f"Basic EPS ({spec.metadata.currency})", False, FMT_PRICE),
+        ("canonical.is.eps_diluted", f"Diluted EPS ({spec.metadata.currency})", False, FMT_PRICE),
     ]
 
     for idx, (ckey, label, is_tot, fmt) in enumerate(items_def):

@@ -7,8 +7,8 @@ Renders:
 - 30_WACC: WACC CAPM cost of equity & capital weighting with live formulas
 - 31_DCF: 5-year FCFF, discount factors, PV(FCFF), TV, EV -> Share Price bridge with live formulas
 - 32_Terminal_Value: Dual terminal value (Gordon Growth & Exit Multiple)
-- 33_Sensitivity: 2D sensitivity grids (WACC x Growth, WACC x Multiple)
-- 34_Reverse_DCF: Market implied perpetuity terminal growth rate
+- 33_Sensitivity: Dynamic 2D sensitivity formula grids (WACC x Growth, WACC x Multiple)
+- 34_Reverse_DCF: Market implied perpetuity terminal growth rate with live closed-form formula
 - 35_Scenario_Analysis: Base, Bull, Bear outputs side-by-side
 """
 
@@ -47,8 +47,7 @@ from backend.export.excel.styles import (
 from backend.models.spec.forecast import FORECAST_PERIODS
 from backend.models.spec.model_specification import ModelSpecification
 
-# Named fallbacks — used instead of truthy checks so a legitimate 0.0 value
-# (e.g. a 0% WACC or 0.0% terminal growth) is never silently masked.
+# Named fallbacks
 FALLBACK_WACC = 12.0
 FALLBACK_TERMINAL_GROWTH = 4.0
 FALLBACK_EXIT_MULTIPLE = 20.0
@@ -260,16 +259,23 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
             alignment=ALIGN_RIGHT,
         )
 
-    # Row 11: Less: Change in Working Capital
+    # Row 11: Less: Change in Working Capital (Clean Delta NWC Formula)
     ws.cell(row=11, column=2, value="Less: Change in Working Capital").font = FONT_SUBHEADER
     for idx, p_label in enumerate(FORECAST_PERIODS):
         c = 3 + idx
         col_let = chr(67 + idx)
         p = fcffs[idx] if idx < len(fcffs) else None
         c_val = p.delta_working_capital if p else None
+
+        if idx == 0:
+            form = f"=('23_Working_Capital'!C7-'23_Working_Capital'!C9)-('11_Balance_Sheet'!E10-'11_Balance_Sheet'!E17)"
+        else:
+            prev_col_let = chr(67 + idx - 1)
+            form = f"=('23_Working_Capital'!{col_let}7-'23_Working_Capital'!{col_let}9)-('23_Working_Capital'!{prev_col_let}7-'23_Working_Capital'!{prev_col_let}9)"
+
         write_formula_cell(
             ws, 11, c,
-            formula=f"='20_Operating_Model'!{col_let}16+'20_Operating_Model'!{col_let}10-'20_Operating_Model'!{col_let}23",
+            formula=form,
             cached_value=c_val,
             num_format=FMT_AMOUNT,
             font=FONT_FORMULA,
@@ -342,6 +348,8 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     min_int_val = ((b_obj.minority_interest or 0.0) + (b_obj.preferred_stock or 0.0)) if b_obj else 0.0
     net_debt = (b_obj.less_net_debt if b_obj and b_obj.less_net_debt is not None else 0.0)
 
+    unit_lbl = "M" if (spec.metadata.units == "millions" or spec.metadata.market == "us") else "Cr"
+
     bridge_rows = [
         ("Cumulative PV of FCFF (Mid-Year)", "=SUM(C14:G14)", b_obj.sum_pv_fcff if b_obj else 0, FMT_CURRENCY_INT),
         ("PV of Terminal Value", "='32_Terminal_Value'!C13", b_obj.pv_terminal_value if b_obj else 0, FMT_CURRENCY_INT),
@@ -353,7 +361,7 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         ("Less: Minority Interest & Preferred", min_int_val, min_int_val, FMT_CURRENCY_INT),
         ("Net Non-Operating Debt / (Cash)", "=(H23+H24)-(H20+H21+H22)", net_debt, FMT_CURRENCY_INT),
         ("EQUITY VALUE", "=H19-H25", b_obj.equity_value if b_obj else 0, FMT_CURRENCY_INT),
-        (f"Diluted Shares ({spec.metadata.units.capitalize()[:2]})", "='27_Share_Count'!E6", b_obj.shares_outstanding if b_obj else 0, FMT_AMOUNT),
+        (f"Diluted Shares ({unit_lbl})", "='27_Share_Count'!E6", b_obj.shares_outstanding if b_obj else 0, FMT_AMOUNT),
         (f"IMPLIED SHARE PRICE ({ccy})", "=H26/H27", b_obj.implied_share_price if b_obj else 0, FMT_PRICE),
     ]
 
@@ -361,13 +369,11 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         r = 17 + idx
         is_price = idx == len(bridge_rows) - 1
         
-        # Merge label columns B..G so there are no empty/unformatted cells between label and value column H
         ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=7)
         cell_lbl = ws.cell(row=r, column=2, value=lbl)
         cell_lbl.font = FONT_TOTAL if is_price else FONT_SUBHEADER
         cell_lbl.alignment = ALIGN_LEFT
         
-        # Apply borders across merged label cells B..G
         for col in range(2, 8):
             ws.cell(row=r, column=col).border = BORDER_TOTAL if is_price else BORDER_BOX
 
@@ -411,7 +417,6 @@ def render_terminal_value_tab(wb: Workbook, spec: ModelSpecification) -> Workshe
     roic_fmt = FMT_PERCENT if (tv and tv.implied_roic is not None) else "@"
     roic_val = (tv.implied_roic / 100.0) if (tv and tv.implied_roic is not None) else "-"
 
-    # Explicit None checks so legitimate 0.0 values (growth/multiple) are not masked
     tgr = tv.terminal_growth_rate if (tv and tv.terminal_growth_rate is not None) else FALLBACK_TERMINAL_GROWTH
     exit_mult = tv.exit_multiple if (tv and tv.exit_multiple is not None) else FALLBACK_EXIT_MULTIPLE
 
@@ -483,28 +488,38 @@ def render_sensitivity_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     wacc_rows = [w / 100.0 for w in t1.row_values] if t1 else [0.11, 0.12, 0.1295, 0.14, 0.15]
     grid1 = t1.results_grid if t1 else []
 
+    # Column headers for Grid 1
+    for idx, g in enumerate(g_cols):
+        col_letter = chr(67 + idx)
+        cell_g = ws.cell(row=5, column=3 + idx, value=g)
+        cell_g.font = FONT_HEADER
+        cell_g.fill = FILL_HEADER
+        cell_g.number_format = FMT_PERCENT
+        cell_g.alignment = ALIGN_CENTER
+
     for r_idx, w in enumerate(wacc_rows):
         r = 6 + r_idx
-        ws.cell(row=r, column=2, value=w).font = FONT_SUBHEADER
-        ws.cell(row=r, column=2).number_format = FMT_PERCENT_PRECISION
-        ws.cell(row=r, column=2).border = BORDER_BOX
-
-        # Set up header row labels
-        for idx, g in enumerate(g_cols):
-            cell_g = ws.cell(row=5, column=3 + idx, value=g)
-            cell_g.font = FONT_HEADER
-            cell_g.fill = FILL_HEADER
-            cell_g.number_format = FMT_PERCENT
-            cell_g.alignment = ALIGN_CENTER
+        cell_w = ws.cell(row=r, column=2, value=w)
+        cell_w.font = FONT_SUBHEADER
+        cell_w.number_format = FMT_PERCENT_PRECISION
+        cell_w.border = BORDER_BOX
 
         for c_idx, g in enumerate(g_cols):
             c = 3 + c_idx
+            col_letter = chr(67 + c_idx)
             p_val = grid1[r_idx][c_idx] if (r_idx < len(grid1) and c_idx < len(grid1[r_idx])) else None
-            cell = ws.cell(row=r, column=c, value=round(p_val, 2) if p_val else "-")
-            cell.font = FONT_FORMULA
-            cell.number_format = FMT_PRICE
-            cell.alignment = ALIGN_RIGHT
-            cell.border = BORDER_BOX
+            
+            # Live Dynamic Formula for Sensitivity Matrix
+            formula = f"=((('31_DCF'!H17+('31_DCF'!G12*(1+{col_letter}$5)/($B{r}-{col_letter}$5))/(1+$B{r})^5)-'31_DCF'!H25)/'31_DCF'!H27)"
+            write_formula_cell(
+                ws, r, c,
+                formula=formula,
+                cached_value=p_val,
+                num_format=FMT_PRICE,
+                font=FONT_FORMULA,
+                border=BORDER_BOX,
+                alignment=ALIGN_RIGHT,
+            )
 
     # Table 2: WACC % \\ Multiple
     ws["B13"] = "WACC % \\ Multiple"
@@ -516,28 +531,37 @@ def render_sensitivity_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     wacc_rows2 = [w / 100.0 for w in t2.row_values] if t2 else [0.11, 0.12, 0.1295, 0.14, 0.15]
     grid2 = t2.results_grid if t2 else []
 
+    # Column headers for Grid 2
+    for idx, m in enumerate(m_cols):
+        cell_m = ws.cell(row=13, column=3 + idx, value=m)
+        cell_m.font = FONT_HEADER
+        cell_m.fill = FILL_HEADER
+        cell_m.number_format = FMT_MULTIPLE
+        cell_m.alignment = ALIGN_CENTER
+
     for r_idx, w in enumerate(wacc_rows2):
         r = 14 + r_idx
-        ws.cell(row=r, column=2, value=w).font = FONT_SUBHEADER
-        ws.cell(row=r, column=2).number_format = FMT_PERCENT_PRECISION
-        ws.cell(row=r, column=2).border = BORDER_BOX
-
-        # Set up header row labels
-        for idx, m in enumerate(m_cols):
-            cell_m = ws.cell(row=13, column=3 + idx, value=m)
-            cell_m.font = FONT_HEADER
-            cell_m.fill = FILL_HEADER
-            cell_m.number_format = FMT_MULTIPLE
-            cell_m.alignment = ALIGN_CENTER
+        cell_w = ws.cell(row=r, column=2, value=w)
+        cell_w.font = FONT_SUBHEADER
+        cell_w.number_format = FMT_PERCENT_PRECISION
+        cell_w.border = BORDER_BOX
 
         for c_idx, m in enumerate(m_cols):
             c = 3 + c_idx
+            col_letter = chr(67 + c_idx)
             p_val = grid2[r_idx][c_idx] if (r_idx < len(grid2) and c_idx < len(grid2[r_idx])) else None
-            cell = ws.cell(row=r, column=c, value=round(p_val, 2) if p_val else "-")
-            cell.font = FONT_FORMULA
-            cell.number_format = FMT_PRICE
-            cell.alignment = ALIGN_RIGHT
-            cell.border = BORDER_BOX
+            
+            # Live Dynamic Formula for Multiple Matrix
+            formula = f"=((('31_DCF'!H17+('20_Operating_Model'!G9*{col_letter}$13)/(1+$B{r})^5)-'31_DCF'!H25)/'31_DCF'!H27)"
+            write_formula_cell(
+                ws, r, c,
+                formula=formula,
+                cached_value=p_val,
+                num_format=FMT_PRICE,
+                font=FONT_FORMULA,
+                border=BORDER_BOX,
+                alignment=ALIGN_RIGHT,
+            )
 
     return ws
 
@@ -571,12 +595,9 @@ def render_reverse_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     rows = [
         (f"Current Market Benchmark Price ({spec.metadata.currency})", mkt_price, None, FMT_PRICE, True, "Market price input"),
         (f"Market Implied Equity Value ({ccy})", "=C6*'27_Share_Count'!E6", eq_val_mkt, FMT_CURRENCY_INT, False, "Market Price * Diluted Shares"),
-        # Note: the net-debt value is intentionally baked into the formula string
-        # below (f"=C7{net_debt:+.2f}") rather than a cross-sheet reference — this
-        # is functionally correct and kept as-is.
         (f"Market Implied EV ({ccy})", f"=C7{net_debt:+.2f}", ev_mkt, FMT_CURRENCY_INT, False, "Implied Equity Value + Net Debt"),
         (f"Market Implied PV of TV ({ccy})", "=C8-'31_DCF'!H17", pv_tv_mkt, FMT_CURRENCY_INT, False, "Implied EV - Cumulative PV(FCFF)"),
-        ("MARKET IMPLIED TERMINAL GROWTH %", implied_g, None, FMT_PERCENT_PRECISION, False, rev_dcf.method_note if rev_dcf and rev_dcf.method_note else "Exact solved implied perpetuity growth rate"),
+        ("MARKET IMPLIED TERMINAL GROWTH %", "=((C9*(1+'30_WACC'!C15)^5*'30_WACC'!C15 - '31_DCF'!G12)/(C9*(1+'30_WACC'!C15)^5 + '31_DCF'!G12))", implied_g, FMT_PERCENT_PRECISION, False, rev_dcf.method_note if rev_dcf and rev_dcf.method_note else "Exact solved implied perpetuity growth rate"),
     ]
 
     for idx, (lbl, val, c_val, fmt, is_inp, note) in enumerate(rows):
