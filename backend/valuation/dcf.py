@@ -119,7 +119,17 @@ def compute_terminal_value(
     df5 = 1.0 / ((1.0 + wacc_frac) ** len(FORECAST_PERIODS))
 
     # 1. Gordon Growth
-    gg_undiscounted = (last_fcff * (1.0 + g_frac)) / (wacc_frac - g_frac)
+    # Standard Valuation Practice (McKinsey / Damodaran): If final year FCFF is non-positive due to
+    # heavy explicit expansion CapEx, normalize steady-state terminal FCFF as NOPAT * (1 - Reinvestment Rate)
+    # assuming CapEx fades to Maintenance CapEx (≈ D&A) in perpetuity.
+    if last_fcff <= 0 and last_ebit is not None and last_ebit > 0:
+        eff_tax = (terminal_tax_rate / 100.0) if terminal_tax_rate is not None else DEFAULT_TERMINAL_TAX_RATE
+        steady_nopat = last_ebit * (1.0 - eff_tax)
+        reinvest_rate = min(0.50, max(0.10, g_frac / max(0.01, wacc_frac)))
+        normalized_terminal_fcff = steady_nopat * (1.0 - reinvest_rate)
+        gg_undiscounted = (normalized_terminal_fcff * (1.0 + g_frac)) / (wacc_frac - g_frac)
+    else:
+        gg_undiscounted = (last_fcff * (1.0 + g_frac)) / (wacc_frac - g_frac)
     gg_pv = gg_undiscounted * df5
 
     # Quality & Reinvestment Check (ValueDriver formula: g = ROIC * Reinvestment Rate)
