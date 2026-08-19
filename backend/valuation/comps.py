@@ -84,6 +84,13 @@ SECTOR_PEERS: Dict[str, List[Dict[str, float]]] = {
         {"ticker": "WIPRO", "name": "Wipro Limited", "ev_rev": 2.2, "ev_ebitda": 11.8, "pe": 19.0, "fcf_yield": 5.1, "roic": 19.5},
         {"ticker": "ACN", "name": "Accenture plc", "ev_rev": 2.8, "ev_ebitda": 14.8, "pe": 26.0, "fcf_yield": 4.0, "roic": 29.5},
     ],
+    "capital_goods_epc": [
+        {"ticker": "SIEMENS", "name": "Siemens India", "ev_rev": 5.8, "ev_ebitda": 38.5, "pe": 55.0, "fcf_yield": 1.8, "roic": 22.0},
+        {"ticker": "ABB", "name": "ABB India", "ev_rev": 6.2, "ev_ebitda": 42.0, "pe": 62.0, "fcf_yield": 1.5, "roic": 24.5},
+        {"ticker": "BEL", "name": "Bharat Electronics", "ev_rev": 7.5, "ev_ebitda": 28.0, "pe": 40.0, "fcf_yield": 2.4, "roic": 28.0},
+        {"ticker": "KEC", "name": "KEC International", "ev_rev": 0.8, "ev_ebitda": 11.5, "pe": 22.0, "fcf_yield": 4.2, "roic": 14.0},
+        {"ticker": "CAT", "name": "Caterpillar Inc", "ev_rev": 2.4, "ev_ebitda": 13.8, "pe": 18.5, "fcf_yield": 4.8, "roic": 26.0},
+    ],
 }
 
 
@@ -121,13 +128,15 @@ def compute_trading_comps(
     """Compute trading comps analysis and derive implied peer valuations."""
     # Find matching peer group
     sector_key = "technology"
-    sec_lower = target_sector.lower() if target_sector else target_ticker.lower()
+    sec_lower = f"{target_sector} {target_ticker}".lower()
     if "auto" in sec_lower or "motor" in sec_lower:
         sector_key = "automotive"
     elif "energy" in sec_lower or "green" in sec_lower or "power" in sec_lower or "util" in sec_lower:
         sector_key = "energy_utilities"
-    elif "service" in sec_lower or "tcs" in sec_lower or "infy" in sec_lower:
+    elif "service" in sec_lower or "tcs" in sec_lower or "infy" in sec_lower or "hcl" in sec_lower or "wipro" in sec_lower:
         sector_key = "it_services"
+    elif "epc" in sec_lower or "lt" in sec_lower or "larsen" in sec_lower or "construct" in sec_lower or "capital" in sec_lower or "infra" in sec_lower:
+        sector_key = "capital_goods_epc"
 
     peers_data = SECTOR_PEERS.get(sector_key, SECTOR_PEERS["technology"])
 
