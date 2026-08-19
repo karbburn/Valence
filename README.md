@@ -4,19 +4,19 @@
   <img src="backend/api/static/icon.png" width="128" height="128" alt="Valence Logo">
 </p>
 
-Valence is a high-performance equity valuation and 3-statement financial modeling platform. It integrates financial data ingestion, taxonomy normalization, driver-based 5-year forecasting, WACC estimation via CAPM, dual terminal value methodologies, reverse DCF growth solvers, automated accounting QA validation, a 27-tab Excel model exporter with live formulas, and a real-time web dashboard.
+Valence is a high-performance equity valuation platform and 3-statement financial modeling workbench. It integrates multi-source financial data ingestion, taxonomy normalization, driver-based 5-year forecasting, WACC estimation via CAPM, dual terminal value methodologies, reverse DCF growth solvers, automated accounting QA validation, a 27-tab Excel model exporter with live dynamic formulas, and a real-time web dashboard.
 
 ---
 
 ## Key Features
 
 - **Driver-Based 5-Year Forecasting Engine**: Project Income Statement, Balance Sheet, and Cash Flow Statement across **Base**, **Bull**, and **Bear** scenarios driven by operational metrics (Revenue Growth, EBITDA/EBIT Margins, CapEx % Revenue, D&A %, DSO, DPO, Tax Rate).
-- **Institutional-Grade DCF & WACC Buildup**: Full Free Cash Flow to Firm (FCFF) calculation, dynamic WACC estimation (CAPM cost of equity + tax-shielded cost of debt), Gordon Growth & Exit EV/EBITDA Multiple terminal values, and Enterprise Value to Implied Share Price bridge.
-- **Reverse DCF & Sensitivity Analysis**: Solves for the implied terminal growth rate or revenue CAGR required to justify current market prices, paired with 2D sensitivity grids (WACC vs Terminal Growth).
-- **Multi-Market & Multi-Currency Support**: Support for both Indian equities (NSE/BSE in INR Crores) and US equities (NASDAQ/NYSE in USD Millions), including ADR adjustments.
-- **Automated Accounting & Model QA Engine**: Runs 9 rigorous validation checks (Balance Sheet balancing, Cash Flow reconciliation, Debt schedule ties, Share count consistency, DCF bridge tie-out, WACC bounds, and input completeness).
-- **27-Tab Excel Export**: Generates `.xlsx` workbooks featuring live Excel formulas (CAPM, FCFF sums, cross-sheet references) and cover page branding.
-- **Real-Time Web Workbench**: Single-Page Application (SPA) dashboard inspired by TradingView, Screener, and Bloomberg Terminal UI. Allows live driver overrides, instant recomputation, scenario switching, company search, and persistent model storage.
+- **Institutional DCF & WACC Buildup**: Full Free Cash Flow to Firm (FCFF) build with clean Non-Cash Operating Working Capital ($\Delta NWC$), dynamic WACC estimation (CAPM cost of equity + tax-shielded cost of debt), Gordon Growth & Exit EV/EBITDA Multiple terminal values, and Enterprise Value to Implied Share Price bridge.
+- **Dynamic Reverse DCF & 2D Sensitivity**: Solves for market-implied perpetuity growth rates via exact closed-form inversion formulas, paired with live 2D sensitivity formula grids (WACC vs. Terminal Growth & Exit Multiple).
+- **Multi-Market & Multi-Currency Support**: Native support for US equities (NASDAQ/NYSE in USD Millions) and Indian equities (NSE/BSE in INR Crores), with dynamic currency and unit localization across all financial statements.
+- **Automated Accounting & Model QA Engine**: Executes 9 rigorous validation checks (Balance Sheet balancing, Cash Flow reconciliation, Debt schedule ties, Share count consistency, DCF bridge tie-out, WACC bounds, and data quality).
+- **27-Tab Interactive Excel Exporter**: Generates 100% dynamic `.xlsx` workbooks where detail schedules drive the forecast operating model (`20_Operating_Model`), featuring live Excel formulas (CAPM, FCFF sums, cross-sheet references, 2D sensitivity grids, and live `=IF(...)` audit checks).
+- **Real-Time Web Workbench**: Single-Page Application (SPA) dashboard inspired by Bloomberg Terminal and TradingView UI. Supports live driver overrides, instant recomputation, scenario switching, company search, and persistent model scenario storage.
 
 ---
 
@@ -24,23 +24,23 @@ Valence is a high-performance equity valuation and 3-statement financial modelin
 
 ```mermaid
 graph TD
-    A[Raw Data Sources<br/>SEC EDGAR / Screener] --> B[Data Ingestion & In-Memory Store]
+    A[Raw Data Sources<br/>SEC EDGAR / Screener / yfinance] --> B[Data Ingestion & In-Memory Store]
     B --> C[Taxonomy Normalization & Canonical Mapping]
     C --> D[Historical 3-Statement Assembly]
     D --> E[5-Year Forecasting Engine]
     E --> F[WACC & DCF Valuation Engine]
     F --> G[QA Validation Engine]
     G --> H[FastAPI Service & Web Workbench]
-    G --> I[27-Tab OpenPyXL Excel Exporter]
+    G --> I[27-Tab OpenPyXL Live Formula Exporter]
 ```
 
 ---
 
 ## Tech Stack
 
-- **Core Logic & Engine**: Python 3.12, Pydantic v2
+- **Core Engine**: Python 3.12, Pydantic v2
 - **Web API**: FastAPI, Uvicorn, Requests
-- **Excel Generation**: OpenPyXL, Pillow (image branding)
+- **Excel Renderer**: OpenPyXL, Pillow (image branding & OpenXML formula patching)
 - **Database & Persistence**: SQLite (`valence.db`)
 - **Frontend Dashboard**: HTML5, Vanilla JavaScript (ES6+), Custom CSS (Dark Theme Design System)
 
@@ -56,6 +56,7 @@ Valence/
 │   │   └── main.py           # FastAPI app entry point
 │   ├── data/                 # Data ingestion pipelines, SEC/Screener parsers, universe store
 │   ├── export/               # OpenPyXL Excel exporter (27-tab workbook engine)
+│   │   └── excel/            # Tab-by-tab formula renderers & OpenXML patched builder
 │   ├── forecast/             # 5-year driver forecast engine, debt schedule, share count
 │   ├── models/               # Pydantic schemas, historical statement structures
 │   ├── normalization/        # Taxonomy mapping registry & canonical metric derivations
@@ -118,27 +119,31 @@ http://localhost:8000
 
 ### 2. Exporting Excel Workbooks via API
 
-You can generate and download a 27-tab financial model directly via HTTP:
+Generate and download a 27-tab financial model directly via HTTP:
 ```bash
-curl -O "http://localhost:8000/api/export/excel?company_id=infy_infy"
+curl -O "http://localhost:8000/api/export/excel?company_id=msft_us"
 ```
 
 ---
 
 ## Verification & Institutional Audit Suite
 
-Valence includes an automated **12-Point Institutional Financial Audit Suite** for post-export model verification across all generated `.xlsx` workbooks (`amzn_valuation_model.xlsx`, `nvda_valuation_model.xlsx`, `sunpharma_valuation_model.xlsx`, `infosys_valuation_model.xlsx`):
+Valence includes an automated **Institutional Financial Audit Suite** for post-export verification across generated `.xlsx` workbooks (`msft_valuation_model.xlsx`, `nvda_valuation_model.xlsx`, `ongc_valuation_model.xlsx`, `tcs_valuation_model.xlsx`):
 
 - **3-Statement Accounting Equality**: Verifies `Total Assets = Total Liabilities + Total Equity` for all historical and forecast periods (FY24–FY31) with zero balance sheet gap.
 - **Financial Math Tie-Outs**:
-  - **EV Tie-out**: `EV = Sum(PV FCFF) + PV(TV)` (Δ = 0.0000).
-  - **Net Debt Cash Bridge**: `Net Debt = Total Debt - Liquid Cash & Investments` (Δ = 0.0000).
-  - **Equity Value Tie-out**: `Equity Value = EV - Net Debt` (Δ = 0.0000).
-  - **Implied Share Price**: `Price = Equity Value / Diluted Shares` (Δ < 0.005).
+  - **EV Tie-out**: `EV = Sum(PV FCFF) + PV(TV)` ($\Delta = 0.0000$).
+  - **Net Debt Cash Bridge**: `Net Debt = Total Debt - Liquid Cash & Investments` ($\Delta = 0.0000$).
+  - **Equity Value Tie-out**: `Equity Value = EV - Net Debt` ($\Delta = 0.0000$).
+  - **Implied Share Price**: `Price = Equity Value / Diluted Shares` ($\Delta < 0.005$).
+- **Live Excel Formula Verification**:
+  - **Forward Operating Model**: `20_Operating_Model` is driven by live formulas linking to Schedules 21–26.
+  - **2D Sensitivity Grids**: `33_Sensitivity` grid cells evaluate live 2D Excel formulas for WACC $\times$ Growth and WACC $\times$ Multiple.
+  - **Reverse DCF Solver**: `34_Reverse_DCF` Row 10 uses a live closed-form algebraic formula.
+  - **Dynamic Model Checks**: `52_Model_Checks` evaluates live `=IF(...)` formulas returning `"PASS"` or `"FAIL"`.
 - **Institutional Visual Branding**:
-  - **`By Sourabh` Signature**: 14pt bold blue signature hyperlink on `00_Cover` cell `B20` hyperlinked to [https://sourabh08.vercel.app/](https://sourabh08.vercel.app/).
-  - **Consolas Formula Code Blocks**: `01_Model_Guide` Column C formulas styled in `Consolas 11pt Bold` with light blue tint background fill (`#EFF6FF`).
-  - **DCF Bridge Grid Formatting**: `31_DCF` Bridge labels merged across range `B:G` with clean double-underline accounting borders on final totals.
+  - **`By Sourabh` Signature**: 14pt bold blue signature hyperlink on `00_Cover` cell `B20` hyperlinked to [sourabh08.vercel.app](https://sourabh08.vercel.app/).
+  - **Consolas Formula Code Blocks**: `01_Model_Guide` Column C formulas styled in `Consolas 11pt Bold` with light blue tint fill (`#EFF6FF`).
 
 ```bash
 # Run Institutional Financial Audit & Excel Exporter Self-Check
