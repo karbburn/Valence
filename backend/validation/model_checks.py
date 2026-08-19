@@ -17,6 +17,10 @@ from backend.models.spec.model_specification import ModelSpecification
 from backend.models.spec.qa import ModelCheckResult
 
 
+# Full scenario set the V1 model runs for every company.
+ALL_SCENARIOS = ["base", "bull", "bear"]
+
+
 def check_dcf_bridge_reconciles(spec: ModelSpecification) -> ModelCheckResult:
     """Verify DCF bridge arithmetic (EV -> Equity Value -> Share Price) ties out exactly."""
     errors: List[str] = []
@@ -144,7 +148,7 @@ def check_no_missing_critical_inputs(spec: ModelSpecification) -> ModelCheckResu
     failing_scenarios: List[str] = []
 
     required_keys = {d.driver_key for d in V1_DRIVERS}
-    for scenario in ["base", "bull", "bear"]:
+    for scenario in ALL_SCENARIOS:
         scen_assumptions = [a for a in spec.assumptions if a.scenario == scenario]
         found_keys = {a.driver_key for a in scen_assumptions if a.value is not None}
         missing_keys = required_keys - found_keys
@@ -164,7 +168,7 @@ def check_no_missing_critical_inputs(spec: ModelSpecification) -> ModelCheckResu
         detail=detail,
         implicated_canonical_keys=sorted(list(set(failing_keys))),
         implicated_periods=[],
-        implicated_scenarios=failing_scenarios if failing_scenarios else ["base", "bull", "bear"],
+        implicated_scenarios=failing_scenarios,
     )
 
 

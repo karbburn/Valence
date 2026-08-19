@@ -38,13 +38,6 @@ from backend.export.excel.styles import (
     FONT_BRAND_SUBTITLE,
     FONT_BRAND_TITLE,
     FILL_CODE,
-    FMT_AMOUNT,
-    FMT_CURRENCY_INT,
-    FMT_PERCENT,
-    FMT_PRICE,
-    FONT_ALERT,
-    FONT_BRAND_SUBTITLE,
-    FONT_BRAND_TITLE,
     FONT_CODE,
     FONT_FORMULA,
     FONT_HEADER,
@@ -311,7 +304,7 @@ def render_executive_summary(wb: Workbook, spec: ModelSpecification) -> Workshee
     ws["B6"].number_format = FMT_PRICE
 
     write_formula_cell(ws, 6, 3, "='35_Scenario_Analysis'!C6", cached_value=base_price, num_format=FMT_PRICE)
-    write_formula_cell(ws, 6, 4, "=(C6-B6)/B6", cached_value=(upside_pct / 100.0), num_format=FMT_PERCENT)
+    write_formula_cell(ws, 6, 4, '=IF(B6=0,"N/A",(C6-B6)/B6)', cached_value=(upside_pct / 100.0), num_format=FMT_PERCENT)
     write_formula_cell(ws, 6, 5, "='30_WACC'!C15", cached_value=wacc_pct, num_format=FMT_PERCENT)
 
     ws["F6"] = spec.qa.summary_label if spec.qa else "MODEL VALID"
@@ -340,9 +333,9 @@ def render_executive_summary(wb: Workbook, spec: ModelSpecification) -> Workshee
     r_bull_pct = get_assumption_value(spec, "ebitda_margin", "FY31", "bull") / 100.0
     r_bear_pct = get_assumption_value(spec, "ebitda_margin", "FY31", "bear") / 100.0
 
-    ebitda_base = base_val.terminal_value.final_year_ebitda if base_val else 0.0
-    ebitda_bull = bull_val.terminal_value.final_year_ebitda if bull_val else 0.0
-    ebitda_bear = bear_val.terminal_value.final_year_ebitda if bear_val else 0.0
+    ebitda_base = (base_val.terminal_value.final_year_ebitda if (base_val and base_val.terminal_value.final_year_ebitda is not None) else 0.0)
+    ebitda_bull = (bull_val.terminal_value.final_year_ebitda if (bull_val and bull_val.terminal_value.final_year_ebitda is not None) else 0.0)
+    ebitda_bear = (bear_val.terminal_value.final_year_ebitda if (bear_val and bear_val.terminal_value.final_year_ebitda is not None) else 0.0)
 
     rev_base = (ebitda_base / r_base_pct) if r_base_pct > 0 else 0.0
     rev_bull = (ebitda_bull / r_bull_pct) if r_bull_pct > 0 else 0.0
@@ -351,11 +344,11 @@ def render_executive_summary(wb: Workbook, spec: ModelSpecification) -> Workshee
     val_rows = [
         (f"Implied Share Price ({curr})", "='35_Scenario_Analysis'!C6", "='35_Scenario_Analysis'!D6", "='35_Scenario_Analysis'!E6", base_price, bull_price, bear_price, FMT_PRICE),
         (f"Enterprise Value ({ccy})", "='35_Scenario_Analysis'!C7", "='35_Scenario_Analysis'!D7", "='35_Scenario_Analysis'!E7", base_val.dcf_bridge.enterprise_value if base_val else 0, bull_val.dcf_bridge.enterprise_value if bull_val else 0, bear_val.dcf_bridge.enterprise_value if bear_val else 0, FMT_CURRENCY_INT),
-        (f"Net Cash / (Debt) ({ccy})", "='35_Scenario_Analysis'!C8", "='35_Scenario_Analysis'!D8", "='35_Scenario_Analysis'!E8", -base_val.dcf_bridge.less_net_debt if base_val else 0, -bull_val.dcf_bridge.less_net_debt if bull_val else 0, -bear_val.dcf_bridge.less_net_debt if bear_val else 0, FMT_CURRENCY_INT),
+        (f"Net Cash / (Debt) ({ccy})", "='35_Scenario_Analysis'!C8", "='35_Scenario_Analysis'!D8", "='35_Scenario_Analysis'!E8", -base_val.dcf_bridge.less_net_debt if (base_val and base_val.dcf_bridge.less_net_debt is not None) else 0, -bull_val.dcf_bridge.less_net_debt if (bull_val and bull_val.dcf_bridge.less_net_debt is not None) else 0, -bear_val.dcf_bridge.less_net_debt if (bear_val and bear_val.dcf_bridge.less_net_debt is not None) else 0, FMT_CURRENCY_INT),
         (f"Equity Value ({ccy})", "='35_Scenario_Analysis'!C9", "='35_Scenario_Analysis'!D9", "='35_Scenario_Analysis'!E9", base_val.dcf_bridge.equity_value if base_val else 0, bull_val.dcf_bridge.equity_value if bull_val else 0, bear_val.dcf_bridge.equity_value if bear_val else 0, FMT_CURRENCY_INT),
         ("Diluted Shares", "='35_Scenario_Analysis'!C10", "='35_Scenario_Analysis'!D10", "='35_Scenario_Analysis'!E10", base_val.dcf_bridge.shares_outstanding if base_val else 0, bull_val.dcf_bridge.shares_outstanding if bull_val else 0, bear_val.dcf_bridge.shares_outstanding if bear_val else 0, FMT_AMOUNT),
-        ("Discount Rate (WACC %)", "='35_Scenario_Analysis'!C11", "='35_Scenario_Analysis'!D11", "='35_Scenario_Analysis'!E11", (base_val.wacc.wacc / 100.0) if base_val else 0, (bull_val.wacc.wacc / 100.0) if bull_val else 0, (bear_val.wacc.wacc / 100.0) if bear_val else 0, FMT_PERCENT),
-        ("Terminal Growth Rate %", "='35_Scenario_Analysis'!C12", "='35_Scenario_Analysis'!D12", "='35_Scenario_Analysis'!E12", (base_val.terminal_value.terminal_growth_rate / 100.0) if base_val else 0, (bull_val.terminal_value.terminal_growth_rate / 100.0) if bull_val else 0, (bear_val.terminal_value.terminal_growth_rate / 100.0) if bear_val else 0, FMT_PERCENT),
+        ("Discount Rate (WACC %)", "='35_Scenario_Analysis'!C11", "='35_Scenario_Analysis'!D11", "='35_Scenario_Analysis'!E11", (base_val.wacc.wacc / 100.0) if (base_val and base_val.wacc.wacc is not None) else 0, (bull_val.wacc.wacc / 100.0) if (bull_val and bull_val.wacc.wacc is not None) else 0, (bear_val.wacc.wacc / 100.0) if (bear_val and bear_val.wacc.wacc is not None) else 0, FMT_PERCENT),
+        ("Terminal Growth Rate %", "='35_Scenario_Analysis'!C12", "='35_Scenario_Analysis'!D12", "='35_Scenario_Analysis'!E12", (base_val.terminal_value.terminal_growth_rate / 100.0) if (base_val and base_val.terminal_value.terminal_growth_rate is not None) else 0, (bull_val.terminal_value.terminal_growth_rate / 100.0) if (bull_val and bull_val.terminal_value.terminal_growth_rate is not None) else 0, (bear_val.terminal_value.terminal_growth_rate / 100.0) if (bear_val and bear_val.terminal_value.terminal_growth_rate is not None) else 0, FMT_PERCENT),
         (f"FY31 Revenue ({ccy})", "='35_Scenario_Analysis'!C13", "='35_Scenario_Analysis'!D13", "='35_Scenario_Analysis'!E13", rev_base, rev_bull, rev_bear, FMT_CURRENCY_INT),
         ("FY31 EBITDA Margin %", "='35_Scenario_Analysis'!C14", "='35_Scenario_Analysis'!D14", "='35_Scenario_Analysis'!E14", r_base_pct, r_bull_pct, r_bear_pct, FMT_PERCENT),
     ]

@@ -20,6 +20,10 @@ from backend.models.spec.valuation import (
     WACCBreakdown,
 )
 
+# Default effective tax rate used ONLY for the implied-ROIC quality check when the
+# caller does not supply an explicit terminal tax rate (US statutory rate).
+DEFAULT_TERMINAL_TAX_RATE = 0.21
+
 
 def compute_fcff_periods(
     forecast: Forecast,
@@ -36,7 +40,12 @@ def compute_fcff_periods(
         ebit = forecast.get_value("canonical.is.operating_profit", p, scenario) or 0.0
         pbt = forecast.get_value("canonical.is.pbt", p, scenario) or ebit
         tax = forecast.get_value("canonical.is.tax", p, scenario) or 0.0
-        tax_rate = round((tax / pbt * 100.0), 4) if pbt and pbt > 0 else (0.0 if pbt and pbt < 0 else 25.17)
+        # Effective tax rate: only a positive PBT creates taxable income. A breakeven
+        # (PBT == 0) or loss-making (PBT < 0) period carries a 0% effective rate.
+        if pbt is not None and pbt > 0:
+            tax_rate = round((tax / pbt * 100.0), 4)
+        else:
+            tax_rate = 0.0
         nopat = ebit * (1.0 - tax_rate / 100.0)
         da = forecast.get_value("canonical.is.depreciation_amortization", p, scenario) or 0.0
 
@@ -101,8 +110,9 @@ def compute_terminal_value(
 
     wacc_frac = wacc_pct / 100.0
     g_frac = terminal_growth_rate / 100.0
-    # Standard Wall Street convention for terminal value discounting from Year 5
-    df5 = 1.0 / ((1.0 + wacc_frac) ** 5.0)
+    # Standard Wall Street convention: terminal value is discounted from the END of the
+    # final forecast year, so the exponent equals the number of forecast periods.
+    df5 = 1.0 / ((1.0 + wacc_frac) ** len(FORECAST_PERIODS))
 
     # 1. Gordon Growth
     gg_undiscounted = (last_fcff * (1.0 + g_frac)) / (wacc_frac - g_frac)
@@ -114,7 +124,7 @@ def compute_terminal_value(
     implied_roic: Optional[float] = None
 
     if last_ebit is not None and last_ebit > 0:
-        eff_tax = (terminal_tax_rate / 100.0) if terminal_tax_rate is not None else 0.21
+        eff_tax = (terminal_tax_rate / 100.0) if terminal_tax_rate is not None else DEFAULT_TERMINAL_TAX_RATE
         terminal_nopat = (last_ebit * (1.0 + g_frac)) * (1.0 - eff_tax)
         terminal_fcff = last_fcff * (1.0 + g_frac)
         reinvest = max(0.0, terminal_nopat - terminal_fcff)

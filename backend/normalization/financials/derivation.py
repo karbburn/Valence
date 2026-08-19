@@ -202,7 +202,9 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
             if tnca is not None and tca_dp is not None:
                 calculated_ta = tnca.value + tca_dp.value
                 existing_ta = lookup.get(ta_key)
-                if existing_ta is None or abs(existing_ta.value - calculated_ta) > 1.0:
+                # Reported Total Assets is authoritative — only derive a reconciled value
+                # when the company does NOT report it at all. Never overwrite a reported value.
+                if existing_ta is None:
                     ta_dp = _build_derived(
                         company_id=company_id,
                         canonical_key="canonical.bs.total_assets",
@@ -257,7 +259,8 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
             tle_key = (company_id, period, "canonical.bs.total_liabilities_and_equity")
             tl_dp = lookup.get((company_id, period, "canonical.bs.total_liabilities"))
             te_dp = lookup.get((company_id, period, "canonical.bs.total_equity"))
-            if tl_dp is not None and te_dp is not None:
+            # Reported TLE is authoritative — only derive when the company does not report it.
+            if tle_key not in lookup and tl_dp is not None and te_dp is not None:
                 calculated_tle = tl_dp.value + te_dp.value
                 tle_dp = _build_derived(
                     company_id=company_id,

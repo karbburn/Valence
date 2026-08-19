@@ -389,7 +389,11 @@ def render_share_count_schedule(wb: Workbook, spec: ModelSpecification) -> Works
     headers = ["Share Count Basis"] + periods
     write_table_header(ws, 5, headers, start_col=2)
 
-    shares_val = (spec.share_count.get_diluted("FY26") if spec.share_count else None) or spec.metadata.shares_outstanding or 400.0
+    shares_val = (
+        spec.metadata.shares_outstanding
+        or (spec.share_count.get_diluted("FY26") if spec.share_count else None)
+        or 0.0
+    )
     unit_label = "M" if (spec.metadata.units == "millions" or spec.metadata.market == "us") else "Cr"
 
     ws.cell(row=6, column=2, value=f"Diluted Shares Outstanding ({unit_label})").font = FONT_SUBHEADER
@@ -397,7 +401,7 @@ def render_share_count_schedule(wb: Workbook, spec: ModelSpecification) -> Works
         c = 3 + idx
         val = spec.share_count.get_diluted(p) if spec.share_count else shares_val
         cell = ws.cell(row=6, column=c, value=round(val, 4) if val else shares_val)
-        cell.font = FONT_INPUT if "FY27" in p or "FY28" in p or "FY29" in p or "FY30" in p or "FY31" in p else FONT_FORMULA
+        cell.font = FONT_INPUT if p in FORECAST_PERIODS else FONT_FORMULA
         cell.number_format = FMT_AMOUNT
         cell.alignment = ALIGN_RIGHT
         cell.border = BORDER_BOX

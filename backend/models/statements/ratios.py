@@ -68,6 +68,13 @@ def compute_historical_ratios(
         ("dpo_days", "Days Payables Outstanding (DPO)", "days", "trade_payables / cost_of_sales * 365"),
         ("da_pct_revenue", "D&A % of Revenue", "%", "depreciation_amortization / revenue * 100"),
         ("da_pct_ppe", "D&A % of PPE", "%", "depreciation_amortization / ppe * 100"),
+        ("roe_pct", "Return on Equity (ROE) %", "%", "net_profit / total_equity * 100"),
+        ("roce_pct", "Return on Capital Employed (ROCE) %", "%", "operating_profit / (total_assets - total_current_liabilities) * 100"),
+        ("de_ratio", "Debt-to-Equity", "x", "borrowings / total_equity"),
+        ("current_ratio", "Current Ratio", "x", "total_current_assets / total_current_liabilities"),
+        ("quick_ratio", "Quick Ratio", "x", "(total_current_assets - inventory) / total_current_liabilities"),
+        ("interest_coverage", "Interest Coverage", "x", "operating_profit / finance_cost"),
+        ("inventory_turnover", "Inventory Turnover", "x", "cost_of_sales / inventory"),
     ]
 
     ratios_dict: Dict[str, Dict[str, float]] = {m_key: {} for m_key, _, _, _ in series_defs}
@@ -87,6 +94,13 @@ def compute_historical_ratios(
         unbilled = balance_sheet.get_value("canonical.bs.unbilled_revenue", p) or 0.0
         payables = balance_sheet.get_value("canonical.bs.trade_payables", p)
         ppe = balance_sheet.get_value("canonical.bs.ppe", p)
+        total_equity = balance_sheet.get_value("canonical.bs.total_equity", p)
+        borrowings = balance_sheet.get_value("canonical.bs.borrowings", p)
+        total_current_assets = balance_sheet.get_value("canonical.bs.total_current_assets", p)
+        total_current_liab = balance_sheet.get_value("canonical.bs.total_current_liabilities", p)
+        total_assets = balance_sheet.get_value("canonical.bs.total_assets", p)
+        inventory = balance_sheet.get_value("canonical.bs.inventory", p)
+        finance_cost = income_statement.get_value("canonical.is.finance_cost", p)
 
         # 1. Margins
         if gp is None and rev is not None and cos is not None:
@@ -148,6 +162,47 @@ def compute_historical_ratios(
         val_da_ppe = pct(da, ppe)
         if val_da_ppe is not None:
             ratios_dict["da_pct_ppe"][p] = val_da_ppe
+
+        # 4. Returns, Leverage & Liquidity Ratios
+        # ROE / ROCE use period-end equity/capital employed (avg-2yr refinement not
+        # applied here to keep the series simple and consistent with other ratios).
+        val_roe = pct(np, total_equity)
+        if val_roe is not None:
+            ratios_dict["roe_pct"][p] = val_roe
+
+        capital_employed = (
+            (total_assets or 0.0) - (total_current_liab or 0.0)
+        ) if (total_assets is not None and total_current_liab is not None) else None
+        val_roce = pct(op, capital_employed)
+        if val_roce is not None:
+            ratios_dict["roce_pct"][p] = val_roce
+
+        val_de = None
+        if borrowings is not None and total_equity not in (None, 0):
+            val_de = round(borrowings / total_equity, 2)
+        if val_de is not None:
+            ratios_dict["de_ratio"][p] = val_de
+
+        val_current = None
+        if total_current_assets is not None and total_current_liab not in (None, 0):
+            val_current = round(total_current_assets / total_current_liab, 2)
+        if val_current is not None:
+            ratios_dict["current_ratio"][p] = val_current
+
+        val_quick = None
+        if total_current_assets is not None and total_current_liab not in (None, 0):
+            inv_val = inventory or 0.0
+            val_quick = round((total_current_assets - inv_val) / total_current_liab, 2)
+        if val_quick is not None:
+            ratios_dict["quick_ratio"][p] = val_quick
+
+        # Interest coverage only meaningful with real finance costs.
+        if op is not None and finance_cost not in (None, 0):
+            ratios_dict["interest_coverage"][p] = round(op / finance_cost, 2)
+
+        # Inventory turnover is meaningful only for companies that carry inventory.
+        if cos not in (None, 0) and inventory not in (None, 0):
+            ratios_dict["inventory_turnover"][p] = round(cos / inventory, 2)
 
     result_series: List[RatioSeries] = []
     for m_key, label, unit, ref in series_defs:

@@ -11,11 +11,14 @@ from typing import List, Optional
 
 from backend.forecast.debt import DebtSchedule
 from backend.forecast.share_count import ShareCountSchedule
-from backend.models.spec.forecast import Forecast
+from backend.models.spec.forecast import FORECAST_PERIODS, Forecast
 from backend.models.spec.valuation import (
     SensitivityTable,
     WACCBreakdown,
 )
+
+# Fallback used only if WACC is genuinely absent; keeps sensitivity grids computable.
+FALLBACK_SENSITIVITY_WACC = 13.0
 
 
 def compute_sensitivity_tables(
@@ -31,6 +34,7 @@ def compute_sensitivity_tables(
     scenario: str = "base",
     base_g: float = 4.0,
     base_exit_mult: float = 20.0,
+    terminal_tax_rate: Optional[float] = None,
     timing_convention: str = "mid_year",
 ) -> List[SensitivityTable]:
     """Generate two-variable sensitivity grids for WACC x Terminal Growth & WACC x Exit Multiple."""
@@ -40,7 +44,7 @@ def compute_sensitivity_tables(
         compute_terminal_value,
     )
 
-    base_wacc = wacc_breakdown.wacc or 13.0
+    base_wacc = wacc_breakdown.wacc if (wacc_breakdown.wacc is not None and wacc_breakdown.wacc != 0) else FALLBACK_SENSITIVITY_WACC
 
     # Grid 1: WACC vs Terminal Growth
     wacc_steps = [
@@ -63,7 +67,7 @@ def compute_sensitivity_tables(
         row: List[Optional[float]] = []
         fcffs = compute_fcff_periods(forecast, w, scenario, timing_convention=timing_convention)  # type: ignore
         last_fcff = fcffs[-1].fcff if fcffs and fcffs[-1].fcff else 0.0
-        last_ebitda = forecast.get_value("canonical.is.ebitda", "FY31", scenario) or 0.0
+        last_ebitda = forecast.get_value("canonical.is.ebitda", FORECAST_PERIODS[-1], scenario) or 0.0
 
         for g in g_steps:
             if g >= w:
@@ -76,6 +80,7 @@ def compute_sensitivity_tables(
                     g,
                     base_exit_mult,
                     "gordon_growth",
+                    terminal_tax_rate=terminal_tax_rate,
                     timing_convention=timing_convention,  # type: ignore
                 )
                 bridge, _ = compute_dcf_bridge(
@@ -114,7 +119,7 @@ def compute_sensitivity_tables(
         row: List[Optional[float]] = []
         fcffs = compute_fcff_periods(forecast, w, scenario, timing_convention=timing_convention)  # type: ignore
         last_fcff = fcffs[-1].fcff if fcffs and fcffs[-1].fcff else 0.0
-        last_ebitda = forecast.get_value("canonical.is.ebitda", "FY31", scenario) or 0.0
+        last_ebitda = forecast.get_value("canonical.is.ebitda", FORECAST_PERIODS[-1], scenario) or 0.0
 
         for m in mult_steps:
             tv = compute_terminal_value(
@@ -124,6 +129,7 @@ def compute_sensitivity_tables(
                 base_g,
                 m,
                 "exit_multiple",
+                terminal_tax_rate=terminal_tax_rate,
                 timing_convention=timing_convention,  # type: ignore
             )
             bridge, _ = compute_dcf_bridge(

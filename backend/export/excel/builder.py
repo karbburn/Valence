@@ -90,6 +90,11 @@ def register_formula_value(ws: Worksheet, row: int, col: int, cached_value: Any)
         CACHED_FORMULA_VALUES[(ws.title, row, col)] = cached_value
 
 
+def reset_formula_cache() -> None:
+    """Clear the cached formula-value registry between exports."""
+    CACHED_FORMULA_VALUES.clear()
+
+
 def write_formula_cell(
     ws: Worksheet,
     row: int,

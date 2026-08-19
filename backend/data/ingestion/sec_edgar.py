@@ -182,8 +182,12 @@ def resolve_cik(company_id: str) -> str:
     except Exception as e:
         logger.warning("Failed SEC CIK lookup for %s: %s", company_id, e)
 
-    # Default fallback to AAPL CIK if unresolved
-    return "0000320193"
+    # Never silently fall back to a different company's CIK — that would fetch the
+    # wrong company's financials. Fail loudly so the caller can fix the registry.
+    raise ValueError(
+        f"Could not resolve SEC CIK for '{company_id}' (ticker '{ticker}'). "
+        f"Add it to CIK_REGISTRY or verify the SEC company_tickers lookup."
+    )
 
 
 def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]:

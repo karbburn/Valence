@@ -110,8 +110,27 @@ def main() -> None:
     debt_cr = (base_ds.closing("FY26") if base_ds else 0.0) or (spec.historicals.get_value("canonical.bs.borrowings", "FY26") or 0.0)
     shares_cr = (spec.share_count.get_diluted("FY26") if spec.share_count else None) or spec.metadata.shares_outstanding or 412.45
 
+    # Reconstruct the FULL bridge inputs (must mirror what run_valuation passes to the
+    # reverse DCF). Omitting marketable/non-current investments or minority interest
+    # changes the net-debt bridge and breaks the round-trip equality for asset-heavy
+    # balance sheets (e.g. Infosys's INR ~21.9k Cr current + ~8.9k Cr non-current inv).
+    ms_cr = spec.historicals.get_value("canonical.bs.current_investments", "FY26") or 0.0
+    nci_cr = spec.historicals.get_value("canonical.bs.non_current_investments", "FY26") or 0.0
+    mi_cr = spec.historicals.get_value("canonical.bs.minority_interest", "FY26") or 0.0
+    ps_cr = spec.historicals.get_value("canonical.bs.preferred_stock", "FY26") or 0.0
+
     rt_tv = compute_terminal_value(last_fcff, last_ebitda, wacc_pct, rev_dcf.implied_terminal_growth)
-    rt_bridge, _ = compute_dcf_bridge(fcffs, rt_tv, cash_cr, debt_cr, shares_cr)
+    rt_bridge, _ = compute_dcf_bridge(
+        fcffs,
+        rt_tv,
+        cash_cr,
+        debt_cr,
+        shares_cr,
+        marketable_securities_cr=ms_cr,
+        non_current_investments_cr=nci_cr,
+        minority_interest_cr=mi_cr,
+        preferred_stock_cr=ps_cr,
+    )
     _assert(
         abs(rt_bridge.implied_share_price - rev_dcf.market_price) < 0.05,
         f"Reverse DCF round-trip exact match ({rt_bridge.implied_share_price:.2f} vs {rev_dcf.market_price:.2f})",

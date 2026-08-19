@@ -11,6 +11,7 @@ Market-aware and free of Infosys-specific share/cash constant fallbacks.
 from typing import List, Optional
 
 from backend.data.providers.market_data import get_company_market_data
+from backend.models.spec.forecast import FORECAST_PERIODS
 from backend.models.spec.model_specification import ModelSpecification
 from backend.models.spec.valuation import ValuationOutput
 from backend.valuation.dcf import (
@@ -20,7 +21,7 @@ from backend.valuation.dcf import (
 )
 from backend.valuation.reverse_dcf import compute_reverse_dcf
 from backend.valuation.sensitivity import compute_sensitivity_tables
-from backend.valuation.wacc import DEFAULT_CURRENT_PRICE, compute_wacc
+from backend.valuation.wacc import compute_wacc
 
 
 def run_valuation(
@@ -46,7 +47,6 @@ def run_valuation(
     if current_share_price is None or current_share_price <= 0:
         current_share_price = mdata.price.value
 
-    # 2. Sourced cash from latest historicals (FY26), falling back to 0.0 (never constant Infosys 22201.0)
     # 2. Sourced cash & investments from latest historicals (FY26), falling back to 0.0
     latest_hist = spec.historicals.periods[-1] if spec.historicals.periods else "FY26"
     cash_and_bank = spec.historicals.get_value("canonical.bs.cash_and_bank", latest_hist) or 0.0
@@ -61,7 +61,7 @@ def run_valuation(
     # 3. Sourced diluted share count, resolving dynamically per company
     shares_cr: Optional[float] = None
     if spec.share_count:
-        shares_cr = spec.share_count.get_diluted(latest_hist) or spec.share_count.get_diluted("FY27")
+        shares_cr = spec.share_count.get_diluted(latest_hist) or spec.share_count.get_diluted(FORECAST_PERIODS[0])
     if not shares_cr or shares_cr <= 0:
         if spec.metadata.shares_outstanding and spec.metadata.shares_outstanding > 0:
             shares_cr = spec.metadata.shares_outstanding
@@ -98,15 +98,20 @@ def run_valuation(
             company_id=company_id,
             market=market,
         )
-        wacc_pct = wacc_breakdown.wacc or 12.0
+        wacc_pct = wacc_breakdown.wacc
+        if wacc_pct is None or wacc_pct <= 0:
+            raise ValueError(
+                f"Invalid WACC ({wacc_breakdown.wacc}) for scenario '{scenario}': "
+                "WACC must be positive to compute DCF."
+            )
 
         # 5. Compute FCFF Periods (using mid-year discounting)
         fcff_periods = compute_fcff_periods(spec.forecast, wacc_pct, scenario, timing_convention="mid_year")
 
         # 6. Compute Terminal Value (Gordon Growth default)
         last_fcff = fcff_periods[-1].fcff if fcff_periods and fcff_periods[-1].fcff else 0.0
-        last_ebitda = spec.forecast.get_value("canonical.is.ebitda", "FY31", scenario) or 0.0
-        last_ebit = spec.forecast.get_value("canonical.is.operating_profit", "FY31", scenario) or 0.0
+        last_ebitda = spec.forecast.get_value("canonical.is.ebitda", FORECAST_PERIODS[-1], scenario) or 0.0
+        last_ebit = spec.forecast.get_value("canonical.is.operating_profit", FORECAST_PERIODS[-1], scenario) or 0.0
 
         # Drivers for terminal value
         term_g = 4.0
@@ -117,7 +122,7 @@ def run_valuation(
                 term_g = a.value
             elif a.driver_key == "exit_ev_multiple" and a.scenario == scenario:
                 exit_mult = a.value
-            elif a.driver_key == "tax_rate" and a.period == "FY31" and a.scenario == scenario:
+            elif a.driver_key == "tax_rate" and a.period == FORECAST_PERIODS[-1] and a.scenario == scenario:
                 term_tax = a.value
 
         terminal_val = compute_terminal_value(
@@ -186,6 +191,7 @@ def run_valuation(
             scenario=scenario,
             base_g=term_g,
             base_exit_mult=exit_mult,
+            terminal_tax_rate=term_tax,
             timing_convention="mid_year",
         )
 

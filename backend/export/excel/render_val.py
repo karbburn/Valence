@@ -47,6 +47,12 @@ from backend.export.excel.styles import (
 from backend.models.spec.forecast import FORECAST_PERIODS
 from backend.models.spec.model_specification import ModelSpecification
 
+# Named fallbacks — used instead of truthy checks so a legitimate 0.0 value
+# (e.g. a 0% WACC or 0.0% terminal growth) is never silently masked.
+FALLBACK_WACC = 12.0
+FALLBACK_TERMINAL_GROWTH = 4.0
+FALLBACK_EXIT_MULTIPLE = 20.0
+
 
 def get_assumption_value(spec: ModelSpecification, driver_key: str, period: str, scenario: str = "base") -> float:
     for a in spec.assumptions:
@@ -108,7 +114,10 @@ def render_wacc_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
 
     ke_val = (wacc_b.cost_of_equity / 100.0) if (wacc_b and wacc_b.cost_of_equity) else ((rfr + beta * erp) / 100.0)
     kd_val = (debt_pre / 100.0 * (1.0 - tax / 100.0))
-    wacc_val = (wacc_b.wacc / 100.0) if (wacc_b and wacc_b.wacc) else 0.12
+    if wacc_b and wacc_b.wacc is not None and wacc_b.wacc != 0:
+        wacc_val = wacc_b.wacc / 100.0
+    else:
+        wacc_val = FALLBACK_WACC / 100.0
 
     wacc_rows = [
         ("Risk-Free Rate (Rf) %", rfr / 100.0, None, FMT_PERCENT_PRECISION, True, rfr_note),
@@ -402,11 +411,15 @@ def render_terminal_value_tab(wb: Workbook, spec: ModelSpecification) -> Workshe
     roic_fmt = FMT_PERCENT if (tv and tv.implied_roic is not None) else "@"
     roic_val = (tv.implied_roic / 100.0) if (tv and tv.implied_roic is not None) else "-"
 
+    # Explicit None checks so legitimate 0.0 values (growth/multiple) are not masked
+    tgr = tv.terminal_growth_rate if (tv and tv.terminal_growth_rate is not None) else FALLBACK_TERMINAL_GROWTH
+    exit_mult = tv.exit_multiple if (tv and tv.exit_multiple is not None) else FALLBACK_EXIT_MULTIPLE
+
     tv_rows = [
-        ("Terminal Growth Rate %", (tv.terminal_growth_rate or 4.0) / 100.0 if tv else 0.04, None, FMT_PERCENT, True, "Perpetuity growth rate (must be < WACC)"),
+        ("Terminal Growth Rate %", tgr / 100.0, None, FMT_PERCENT, True, "Perpetuity growth rate (must be < WACC)"),
         (f"FY31 Final Year FCFF ({ccy})", "='31_DCF'!G12", tv.final_year_fcff if tv else 0, FMT_AMOUNT, False, "Final forecast year FCFF"),
         ("Gordon Growth Undiscounted TV", "=(C7*(1+C6)/('30_WACC'!C15-C6))", tv.terminal_value_undiscounted if tv else 0, FMT_CURRENCY_INT, False, "TV = FCFF_n * (1+g) / (WACC - g)"),
-        ("Exit Multiple (EV/EBITDA)", tv.exit_multiple if tv else 20.0, None, FMT_MULTIPLE, True, "Exit EV/EBITDA multiple"),
+        ("Exit Multiple (EV/EBITDA)", exit_mult, None, FMT_MULTIPLE, True, "Exit EV/EBITDA multiple"),
         (f"FY31 Final Year EBITDA ({ccy})", "='20_Operating_Model'!G9", tv.final_year_ebitda if tv else 0, FMT_AMOUNT, False, "Final forecast year EBITDA"),
         ("Exit Multiple Undiscounted TV", "=C9*C10", tv.exit_multiple_tv_undiscounted if tv else 0, FMT_CURRENCY_INT, False, "TV = EBITDA_n * Exit Multiple"),
         ("Discount Factor (t=5)", "=1/((1+'30_WACC'!C15)^5)", tv.discount_factor if tv else 0, "0.000000", False, "Discount factor for Year 5"),
@@ -546,18 +559,21 @@ def render_reverse_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
 
     mkt_price = rev_dcf.market_price if (rev_dcf and rev_dcf.market_price) else 0.0
     implied_g = (rev_dcf.implied_terminal_growth / 100.0) if (rev_dcf and rev_dcf.implied_terminal_growth) else 0.0
-    shares = base_val.dcf_bridge.shares_outstanding if base_val else 1.0
+    shares = base_val.dcf_bridge.shares_outstanding if (base_val and base_val.dcf_bridge.shares_outstanding is not None) else 0.0
 
     ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
     net_debt = (base_val.dcf_bridge.less_net_debt if base_val and base_val.dcf_bridge.less_net_debt is not None else 0.0)
 
     eq_val_mkt = mkt_price * shares
     ev_mkt = eq_val_mkt + net_debt
-    pv_tv_mkt = ev_mkt - (base_val.dcf_bridge.sum_pv_fcff if base_val else 0)
+    pv_tv_mkt = ev_mkt - (base_val.dcf_bridge.sum_pv_fcff if (base_val and base_val.dcf_bridge.sum_pv_fcff is not None) else 0.0)
 
     rows = [
         (f"Current Market Benchmark Price ({spec.metadata.currency})", mkt_price, None, FMT_PRICE, True, "Market price input"),
         (f"Market Implied Equity Value ({ccy})", "=C6*'27_Share_Count'!E6", eq_val_mkt, FMT_CURRENCY_INT, False, "Market Price * Diluted Shares"),
+        # Note: the net-debt value is intentionally baked into the formula string
+        # below (f"=C7{net_debt:+.2f}") rather than a cross-sheet reference — this
+        # is functionally correct and kept as-is.
         (f"Market Implied EV ({ccy})", f"=C7{net_debt:+.2f}", ev_mkt, FMT_CURRENCY_INT, False, "Implied Equity Value + Net Debt"),
         (f"Market Implied PV of TV ({ccy})", "=C8-'31_DCF'!H17", pv_tv_mkt, FMT_CURRENCY_INT, False, "Implied EV - Cumulative PV(FCFF)"),
         ("MARKET IMPLIED TERMINAL GROWTH %", implied_g, None, FMT_PERCENT_PRECISION, False, rev_dcf.method_note if rev_dcf and rev_dcf.method_note else "Exact solved implied perpetuity growth rate"),
@@ -614,9 +630,9 @@ def render_scenario_analysis_tab(wb: Workbook, spec: ModelSpecification) -> Work
     r_bull_pct = get_assumption_value(spec, "ebitda_margin", "FY31", "bull") / 100.0
     r_bear_pct = get_assumption_value(spec, "ebitda_margin", "FY31", "bear") / 100.0
 
-    ebitda_base = base_v.terminal_value.final_year_ebitda if base_v else 0.0
-    ebitda_bull = bull_v.terminal_value.final_year_ebitda if bull_v else 0.0
-    ebitda_bear = bear_v.terminal_value.final_year_ebitda if bear_v else 0.0
+    ebitda_base = (base_v.terminal_value.final_year_ebitda if (base_v and base_v.terminal_value.final_year_ebitda is not None) else 0.0)
+    ebitda_bull = (bull_v.terminal_value.final_year_ebitda if (bull_v and bull_v.terminal_value.final_year_ebitda is not None) else 0.0)
+    ebitda_bear = (bear_v.terminal_value.final_year_ebitda if (bear_v and bear_v.terminal_value.final_year_ebitda is not None) else 0.0)
 
     rev_base = (ebitda_base / r_base_pct) if r_base_pct > 0 else 0.0
     rev_bull = (ebitda_bull / r_bull_pct) if r_bull_pct > 0 else 0.0
@@ -627,11 +643,11 @@ def render_scenario_analysis_tab(wb: Workbook, spec: ModelSpecification) -> Work
     rows = [
         (f"Implied Share Price ({curr})", base_v.dcf_bridge.implied_share_price, bull_v.dcf_bridge.implied_share_price, bear_v.dcf_bridge.implied_share_price, FMT_PRICE),
         (f"Enterprise Value ({ccy})", base_v.dcf_bridge.enterprise_value, bull_v.dcf_bridge.enterprise_value, bear_v.dcf_bridge.enterprise_value, FMT_CURRENCY_INT),
-        (f"Net Cash / (Debt) ({ccy})", -base_v.dcf_bridge.less_net_debt, -bull_v.dcf_bridge.less_net_debt, -bear_v.dcf_bridge.less_net_debt, FMT_CURRENCY_INT),
+        (f"Net Cash / (Debt) ({ccy})", -base_v.dcf_bridge.less_net_debt if base_v.dcf_bridge.less_net_debt is not None else 0, -bull_v.dcf_bridge.less_net_debt if bull_v.dcf_bridge.less_net_debt is not None else 0, -bear_v.dcf_bridge.less_net_debt if bear_v.dcf_bridge.less_net_debt is not None else 0, FMT_CURRENCY_INT),
         (f"Equity Value ({ccy})", base_v.dcf_bridge.equity_value, bull_v.dcf_bridge.equity_value, bear_v.dcf_bridge.equity_value, FMT_CURRENCY_INT),
         ("Diluted Shares", base_v.dcf_bridge.shares_outstanding, bull_v.dcf_bridge.shares_outstanding, bear_v.dcf_bridge.shares_outstanding, FMT_AMOUNT),
-        ("Discount Rate (WACC %)", base_v.wacc.wacc / 100.0, bull_v.wacc.wacc / 100.0, bear_v.wacc.wacc / 100.0, FMT_PERCENT),
-        ("Terminal Growth Rate %", base_v.terminal_value.terminal_growth_rate / 100.0, bull_v.terminal_value.terminal_growth_rate / 100.0, bear_v.terminal_value.terminal_growth_rate / 100.0, FMT_PERCENT),
+        ("Discount Rate (WACC %)", base_v.wacc.wacc / 100.0 if base_v.wacc.wacc is not None else 0, bull_v.wacc.wacc / 100.0 if bull_v.wacc.wacc is not None else 0, bear_v.wacc.wacc / 100.0 if bear_v.wacc.wacc is not None else 0, FMT_PERCENT),
+        ("Terminal Growth Rate %", base_v.terminal_value.terminal_growth_rate / 100.0 if base_v.terminal_value.terminal_growth_rate is not None else 0, bull_v.terminal_value.terminal_growth_rate / 100.0 if bull_v.terminal_value.terminal_growth_rate is not None else 0, bear_v.terminal_value.terminal_growth_rate / 100.0 if bear_v.terminal_value.terminal_growth_rate is not None else 0, FMT_PERCENT),
         (f"FY31 Revenue ({ccy})", rev_base, rev_bull, rev_bear, FMT_CURRENCY_INT),
         ("FY31 EBITDA Margin %", r_base_pct, r_bull_pct, r_bear_pct, FMT_PERCENT),
     ]

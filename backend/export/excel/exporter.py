@@ -10,6 +10,7 @@ Enforces openpyxl live formulas and IB/PE visual formatting standards.
 from pathlib import Path
 from openpyxl import Workbook
 
+from backend.export.excel.builder import reset_formula_cache
 from backend.export.excel.render_fcst import (
     render_capex_da,
     render_cost_build,
@@ -52,11 +53,22 @@ from backend.models.spec.model_specification import ModelSpecification
 
 def export_model_to_excel(
     spec: ModelSpecification,
-    output_path: str | Path = "backend/export/output/infosys_valuation_model.xlsx",
+    output_path: str | Path | None = None,
+    *,
+    out_path: str | Path | None = None,
 ) -> Path:
     """Export ModelSpecification to a 23-tab openpyxl live-formula workbook."""
-    out_file = Path(output_path)
+    if out_path is not None:
+        output_path = out_path
+    if output_path is None:
+        out_dir = Path("backend/export/output")
+        out_file = out_dir / f"{spec.metadata.ticker.lower()}_valuation_model.xlsx"
+    else:
+        out_file = Path(output_path)
     out_file.parent.mkdir(parents=True, exist_ok=True)
+
+    # Clear any cached formula values from a previous export (keyed by sheet/row/col)
+    reset_formula_cache()
 
     wb = Workbook()
     # Remove default sheet
@@ -101,6 +113,7 @@ def export_model_to_excel(
     render_methodology_tab(wb, spec)
 
     wb.save(str(out_file))
+    wb.close()  # release the in-memory workbook after save
 
     print(
         f"Excel Export Complete:\n"

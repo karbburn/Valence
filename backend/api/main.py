@@ -6,6 +6,7 @@ FastAPI Server Entrypoint for Valence.
 Serves live REST API endpoints under /api/ and mounts static web UI frontend assets at /.
 """
 
+import os
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,16 +18,26 @@ HERE = Path(__file__).resolve().parent
 STATIC_DIR = HERE / "static"
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
+is_prod = os.getenv("VALENCE_ENV") == "production"
+
+# Disable interactive API docs in production
 app = FastAPI(
     title="Valence — Modern Financial Modeling Platform",
     description="Engine API serving ModelSpecification contracts, live driver recomputation, and Excel export.",
     version="1.0.0",
+    docs_url=None if is_prod else "/docs",
+    redoc_url=None if is_prod else "/redoc",
 )
 
 # Enable CORS for frontend development (credentials mode requires specific origins)
+# In production, restrict origins via the CORS_ORIGINS env var (comma-separated).
+CORS_ORIGINS = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:3000,http://localhost:5173,http://localhost:8000",
+).split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

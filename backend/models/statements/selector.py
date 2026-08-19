@@ -20,8 +20,10 @@ def select_primary_datapoints(
 
     def _score(dp: CanonicalDatapoint) -> int:
         score = 0
-        if dp.status == "derived":
-            score += 200
+        # NOTE: No boost for 'derived' status — reported values are authoritative.
+        # Derived line items exist only when a company does not report the metric, so
+        # they win by being the sole candidate for that (canonical_key, period). When a
+        # reported AND derived value coexist (e.g. legacy DB rows), the reported wins.
 
         if raw_datapoints_map:
             locs = [raw_datapoints_map[rid].source_location for rid in dp.source_datapoint_ids if rid in raw_datapoints_map]

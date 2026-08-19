@@ -13,7 +13,7 @@ from backend.forecast.engine import run_forecast
 from backend.forecast.scenarios import build_scenario_assumptions
 from backend.forecast.share_count import build_share_count
 from backend.models.spec.forecast import FORECAST_PERIODS
-from backend.models.spec.metadata import INFOSYS_METADATA, ModelMetadata
+from backend.models.spec.metadata import ModelMetadata, get_metadata_for_company
 from backend.models.spec.model_specification import ModelSpecification
 from backend.models.spec.qa import QAResults
 from backend.models.spec.scenarios import V1_SCENARIOS
@@ -27,18 +27,31 @@ WORKSPACE_ROOT = HERE.parent.parent
 DB_PATH = WORKSPACE_ROOT / "backend" / "data" / "valence.db"
 
 
-from backend.models.spec.metadata import get_metadata_for_company, ModelMetadata
-
 def run(
     historical_model: HistoricalModel | None = None,
     metadata: ModelMetadata | None = None,
 ) -> ModelSpecification:
     """Build a fully populated ModelSpecification including forecast for all scenarios."""
     if historical_model is None:
-        historical_model = run_historical(target_periods=["FY24", "FY25", "FY26"])
+        # Never silently default to the Infosys historicals when metadata names a
+        # different company — that would build a model labeled with the requested
+        # company's metadata but filled with another company's figures.
+        if metadata is not None:
+            historical_model = run_historical(
+                target_periods=["FY24", "FY25", "FY26"],
+                company_id=metadata.company_id,
+            )
+        else:
+            historical_model = run_historical(target_periods=["FY24", "FY25", "FY26"])
 
     if metadata is None:
         metadata = get_metadata_for_company(historical_model.company_id)
+    elif metadata.company_id != historical_model.company_id:
+        raise ValueError(
+            f"metadata.company_id ({metadata.company_id}) does not match "
+            f"historical_model.company_id ({historical_model.company_id}). "
+            "Forecast must be built on the same company's historicals as its metadata."
+        )
 
     # Compute historical ratios used for assumption suggestions
     ratios = compute_historical_ratios(
@@ -85,7 +98,9 @@ def run(
         None,
     )
     opening_debt = borrowings_item.values_by_period.get(last_period, 0.0) if borrowings_item else 0.0
-    interest_rate = 7.5 if opening_debt > 0 else 0.0
+    # Market-aware cost of debt (carrying rate when a balance exists). No hardcoded single rate.
+    is_us = historical_model.company_id.endswith("_us")
+    interest_rate = (5.5 if is_us else 7.5) if opening_debt > 0 else 0.0
 
     # Build debt schedules for each scenario
     debt_schedules = [

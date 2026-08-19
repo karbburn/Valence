@@ -45,11 +45,13 @@ def _get(assumptions: List[AssumptionObject], driver_key: str, period: str, scen
     return None
 
 
-def _item(canonical_key: str, period: str, value: float, scenario: str, driver_key: Optional[str] = None) -> ForecastLineItem:
+def _item(
+    canonical_key: str, period: str, value: float, scenario: str, driver_key: Optional[str] = None, fiscal_end_month: int = 3
+) -> ForecastLineItem:
     return ForecastLineItem(
         canonical_key=canonical_key,
         period_label=period,
-        period_end_date=date(_yr(period), 3, 31),
+        period_end_date=date(_yr(period), fiscal_end_month, 31),
         value=round(value, 2),
         scenario=scenario,
         driver_key=driver_key,
@@ -79,6 +81,7 @@ def run_forecast(
         (hist_bs.get_value("canonical.bs.unbilled_revenue", last_p) or 0.0)
     )
     prior_trade_pay = hist_bs.get_value("canonical.bs.trade_payables", last_p) or 0.0
+    prior_inventory = hist_bs.get_value("canonical.bs.inventory", last_p) or 0.0
     prior_ppe = hist_bs.get_value("canonical.bs.ppe", last_p) or 0.0
     prior_cash = hist_bs.get_value("canonical.bs.cash_and_bank", last_p) or 0.0
 
@@ -100,6 +103,9 @@ def run_forecast(
 
     is_us = historical_model.company_id.endswith("_us")
     default_tax_rate = 21.0 if is_us else 25.17
+    # Forecast period-end dates follow the company's actual fiscal year end
+    # (December for US filers, March for Indian filers) — never a hardcoded month.
+    fiscal_end_month = 12 if is_us else 3
 
     for period in FORECAST_PERIODS:
         # --- Driver lookups ---
@@ -117,7 +123,9 @@ def run_forecast(
         revenue = prior_rev * (1.0 + rev_growth / 100.0)
         ebitda = revenue * ebitda_margin / 100.0
         da = revenue * da_pct_rev / 100.0
-        ebit = revenue * ebit_margin / 100.0       # operating_profit
+        # Guard: EBIT = EBITDA − D&A can never exceed EBITDA. Clamp so an inconsistent
+        # ebit_margin assumption cannot produce an impossible income statement.
+        ebit = min(revenue * ebit_margin / 100.0, ebitda)       # operating_profit
 
         # PBT = EBIT + other_income − finance_cost (Infosys structure)
         # Grow other_income and finance_cost as % of revenue (not held flat)
@@ -134,17 +142,17 @@ def run_forecast(
         cost_of_sales = revenue * (1.0 - gross_margin_hist / 100.0)
         gross_profit = revenue - cost_of_sales
 
-        items.append(_item("canonical.is.revenue", period, revenue, scenario, "revenue_growth"))
-        items.append(_item("canonical.is.ebitda", period, ebitda, scenario, "ebitda_margin"))
-        items.append(_item("canonical.is.operating_profit", period, ebit, scenario, "ebit_margin"))
-        items.append(_item("canonical.is.depreciation_amortization", period, da, scenario, "da_pct_revenue"))
-        items.append(_item("canonical.is.cost_of_sales", period, cost_of_sales, scenario, None))
-        items.append(_item("canonical.is.gross_profit", period, gross_profit, scenario, None))
-        items.append(_item("canonical.is.other_income", period, period_other_income, scenario, None))
-        items.append(_item("canonical.is.finance_cost", period, period_finance_cost, scenario, None))
-        items.append(_item("canonical.is.pbt", period, pbt, scenario, None))
-        items.append(_item("canonical.is.tax", period, tax, scenario, "tax_rate"))
-        items.append(_item("canonical.is.net_profit", period, net_profit, scenario, None))
+        items.append(_item("canonical.is.revenue", period, revenue, scenario, "revenue_growth", fiscal_end_month=fiscal_end_month))
+        items.append(_item("canonical.is.ebitda", period, ebitda, scenario, "ebitda_margin", fiscal_end_month=fiscal_end_month))
+        items.append(_item("canonical.is.operating_profit", period, ebit, scenario, "ebit_margin", fiscal_end_month=fiscal_end_month))
+        items.append(_item("canonical.is.depreciation_amortization", period, da, scenario, "da_pct_revenue", fiscal_end_month=fiscal_end_month))
+        items.append(_item("canonical.is.cost_of_sales", period, cost_of_sales, scenario, None, fiscal_end_month=fiscal_end_month))
+        items.append(_item("canonical.is.gross_profit", period, gross_profit, scenario, None, fiscal_end_month=fiscal_end_month))
+        items.append(_item("canonical.is.other_income", period, period_other_income, scenario, None, fiscal_end_month=fiscal_end_month))
+        items.append(_item("canonical.is.finance_cost", period, period_finance_cost, scenario, None, fiscal_end_month=fiscal_end_month))
+        items.append(_item("canonical.is.pbt", period, pbt, scenario, None, fiscal_end_month=fiscal_end_month))
+        items.append(_item("canonical.is.tax", period, tax, scenario, "tax_rate", fiscal_end_month=fiscal_end_month))
+        items.append(_item("canonical.is.net_profit", period, net_profit, scenario, None, fiscal_end_month=fiscal_end_month))
 
         # --- Working Capital (Balance Sheet) ---
         trade_receivables = revenue * dso / 365.0
@@ -155,13 +163,12 @@ def run_forecast(
         capex = revenue * capex_pct / 100.0
         ppe = max(0.0, prior_ppe + capex - da)
 
-        items.append(_item("canonical.bs.trade_receivables", period, trade_receivables, scenario, "dso_days"))
-        items.append(_item("canonical.bs.inventory", period, inventory, scenario, "dio_days"))
-        items.append(_item("canonical.bs.trade_payables", period, trade_payables, scenario, "dpo_days"))
-        items.append(_item("canonical.bs.ppe", period, ppe, scenario, None))
+        items.append(_item("canonical.bs.trade_receivables", period, trade_receivables, scenario, "dso_days", fiscal_end_month=fiscal_end_month))
+        items.append(_item("canonical.bs.inventory", period, inventory, scenario, "dio_days", fiscal_end_month=fiscal_end_month))
+        items.append(_item("canonical.bs.trade_payables", period, trade_payables, scenario, "dpo_days", fiscal_end_month=fiscal_end_month))
+        items.append(_item("canonical.bs.ppe", period, ppe, scenario, None, fiscal_end_month=fiscal_end_month))
 
         # --- Cash Flow ---
-        prior_inventory = 0.0  # FY26 inventory not tracked in prior anchors; use 0 for services companies
         delta_wc = (
             (trade_receivables - prior_trade_rec)
             + (inventory - prior_inventory)
@@ -170,9 +177,9 @@ def run_forecast(
         operating_cf = net_profit + da - delta_wc
         investing_cf = -capex  # capex outflow
 
-        items.append(_item("canonical.cf.operating_activities", period, operating_cf, scenario, None))
-        items.append(_item("canonical.cf.capex", period, -capex, scenario, "capex_pct_revenue"))  # Negative = outflow
-        items.append(_item("canonical.cf.investing_activities", period, investing_cf, scenario, "capex_pct_revenue"))
+        items.append(_item("canonical.cf.operating_activities", period, operating_cf, scenario, None, fiscal_end_month=fiscal_end_month))
+        items.append(_item("canonical.cf.capex", period, -capex, scenario, "capex_pct_revenue", fiscal_end_month=fiscal_end_month))  # Negative = outflow
+        items.append(_item("canonical.cf.investing_activities", period, investing_cf, scenario, "capex_pct_revenue", fiscal_end_month=fiscal_end_month))
 
         # --- Balance Sheet Closure ---
         # Equity grows by retained profit (net_profit − estimated dividends)
@@ -203,10 +210,10 @@ def run_forecast(
         total_equity_and_liab = total_equity + total_liabilities
         total_assets = non_cash_assets + cash
 
-        items.append(_item("canonical.bs.cash_and_bank", period, cash, scenario, None))
-        items.append(_item("canonical.bs.total_equity", period, total_equity, scenario, None))
-        items.append(_item("canonical.bs.total_assets", period, total_assets, scenario, None))
-        items.append(_item("canonical.bs.total_liabilities_and_equity", period, total_equity_and_liab, scenario, None))
+        items.append(_item("canonical.bs.cash_and_bank", period, cash, scenario, None, fiscal_end_month=fiscal_end_month))
+        items.append(_item("canonical.bs.total_equity", period, total_equity, scenario, None, fiscal_end_month=fiscal_end_month))
+        items.append(_item("canonical.bs.total_assets", period, total_assets, scenario, None, fiscal_end_month=fiscal_end_month))
+        items.append(_item("canonical.bs.total_liabilities_and_equity", period, total_equity_and_liab, scenario, None, fiscal_end_month=fiscal_end_month))
 
         # Update prior-period anchors for next iteration
         prior_rev = revenue
@@ -214,6 +221,7 @@ def run_forecast(
         prior_total_equity = total_equity
         prior_trade_rec = trade_receivables
         prior_trade_pay = trade_payables
+        prior_inventory = inventory
         prior_ppe = ppe
         prior_cash = cash
 

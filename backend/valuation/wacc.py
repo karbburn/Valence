@@ -24,17 +24,6 @@ from backend.models.spec.valuation import WACCBreakdown
 DEFAULT_RFR = 6.78       # India 10-Year G-Sec yield (%)
 DEFAULT_BETA = 0.79      # Historical Infosys benchmark beta
 DEFAULT_ERP = 7.08       # India Equity Risk Premium (%)
-DEFAULT_CURRENT_PRICE = 1080.0  # INR per share
-
-MARKET_PRICE_BY_COMPANY: dict[str, float] = {
-    "infy_infy": 1080.0,
-    "tcs_tcs": 2370.0,
-    "tatamotors_tatamotors": 480.0,
-    "tatasteel_tatasteel": 184.0,
-    "aapl_us": 305.54,
-    "msft_us": 497.0,
-    "infy_us": 12.4,
-}
 
 
 def _get_assumption_val(
@@ -89,7 +78,12 @@ def compute_wacc(
     if pre_tax_cost_of_debt is None:
         pre_tax_cost_of_debt = 0.0
 
-    tax_rate = _get_assumption_val(assumptions, "tax_rate", scenario, 25.17) or 25.17
+    # Effective tax rate: use the model's assumption when present; otherwise fall back
+    # to the market-aware default. The explicit None check (not `or 25.17`) preserves a
+    # legitimate 0% tax rate instead of silently overriding it.
+    tax_rate = _get_assumption_val(assumptions, "tax_rate", scenario, 25.17)
+    if tax_rate is None:
+        tax_rate = 25.17
     cost_of_debt_after_tax = pre_tax_cost_of_debt * (1.0 - tax_rate / 100.0)
 
     # 3. Capital Weighting
