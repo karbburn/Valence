@@ -103,7 +103,10 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
             ebitda_key = (company_id, period, "canonical.is.ebitda")
             if ebitda_key not in lookup:
                 op_profit = lookup.get((company_id, period, "canonical.is.operating_profit"))
-                da = lookup.get((company_id, period, "canonical.is.depreciation_amortization"))
+                da = (
+                    lookup.get((company_id, period, "canonical.is.depreciation_amortization"))
+                    or lookup.get((company_id, period, "canonical.cf.depreciation_amortization"))
+                )
                 pbt = lookup.get((company_id, period, "canonical.is.pbt"))
                 finance_cost = lookup.get((company_id, period, "canonical.is.finance_cost"))
 

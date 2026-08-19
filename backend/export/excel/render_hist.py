@@ -77,6 +77,21 @@ def render_historical_income_statement(wb: Workbook, spec: ModelSpecification) -
         for p_idx, p in enumerate(periods):
             c = 3 + p_idx
             val = spec.historicals.get_value(ckey, p)
+            if val is None and ckey == "canonical.is.ebitda":
+                op_v = spec.historicals.income_statement.get_value("canonical.is.operating_profit", p)
+                da_v = (
+                    spec.historicals.income_statement.get_value("canonical.is.depreciation_amortization", p)
+                    or spec.historicals.cash_flow_statement.get_value("canonical.cf.depreciation_amortization", p)
+                    or spec.historicals.cash_flow_statement.get_value("canonical.cf.depreciation", p)
+                )
+                if op_v is not None and da_v is not None:
+                    val = op_v + abs(da_v)
+            elif val is None and ckey in ("canonical.is.eps_basic", "canonical.is.eps_diluted"):
+                np_v = spec.historicals.get_value("canonical.is.net_profit", p)
+                sh_v = spec.share_count.get_diluted(p) if spec.share_count else None
+                if np_v is not None and sh_v is not None and sh_v > 0:
+                    val = np_v / sh_v
+
             cell = ws.cell(row=r, column=c, value=round(val, 2) if val is not None else "-")
             cell.font = FONT_TOTAL if is_tot else FONT_FORMULA
             cell.number_format = fmt
