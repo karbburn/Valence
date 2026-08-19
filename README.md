@@ -69,11 +69,11 @@ flowchart TB
         API --> Excel
     end
 
-    classDef ing fill:#EFF6FF,stroke:#2563EB,stroke-width:1px;
-    classDef norm fill:#F5F3FF,stroke:#7C3AED,stroke-width:1px;
-    classDef core fill:#ECFDF5,stroke:#059669,stroke-width:1px;
-    classDef val fill:#FFFBEB,stroke:#D97706,stroke-width:1px;
-    classDef del fill:#FFF5F5,stroke:#DC2626,stroke-width:1px;
+    classDef ing fill:#EFF6FF,stroke:#2563EB,stroke-width:1px,color:#0f172a;
+    classDef norm fill:#F5F3FF,stroke:#7C3AED,stroke-width:1px,color:#0f172a;
+    classDef core fill:#ECFDF5,stroke:#059669,stroke-width:1px,color:#0f172a;
+    classDef val fill:#FFFBEB,stroke:#D97706,stroke-width:1px,color:#0f172a;
+    classDef del fill:#FFF5F5,stroke:#DC2626,stroke-width:1px,color:#0f172a;
     class A1,A2,A3,Store ing;
     class Mapping,Canonical,Derivation norm;
     class Hist,Fcst,Schedules core;
