@@ -91,10 +91,10 @@ V1_DRIVERS: List[DriverDefinition] = [
     DriverDefinition(
         driver_key="capex_pct_revenue",
         display_name="Capex % of Revenue",
-        feeds_canonical_keys=["canonical.cf.investing_activities"],
+        feeds_canonical_keys=["canonical.cf.capex", "canonical.cf.investing_activities"],
         applicable_periods=FORECAST_PERIODS,
         unit="%",
-        description="Capital expenditure as % of revenue.",
+        description="Capital expenditure as % of revenue. Drives the canonical.cf.capex line item (the investing-activities line also reflects net other investing flows).",
     ),
     DriverDefinition(
         driver_key="debt_repayment",

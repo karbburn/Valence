@@ -91,6 +91,14 @@ def _connect(db_path: str | Path) -> sqlite3.Connection:
     return conn
 
 
+def connect(db_path: str | Path) -> sqlite3.Connection:
+    """Open a connection for callers that need to batch multiple writes atomically.
+
+    The caller owns commit()/rollback()/close().
+    """
+    return _connect(db_path)
+
+
 def save_datapoints(db_path: str | Path, datapoints: list[RawDatapoint], clear_existing: bool = True) -> None:
     conn = _connect(db_path)
     if clear_existing:
@@ -146,27 +154,43 @@ def query_datapoints(
     return result
 
 
-def save_canonical_datapoints(db_path: str | Path, datapoints: list[CanonicalDatapoint], clear_existing: bool = True) -> None:
-    conn = _connect(db_path)
-    if clear_existing:
-        company_ids = set(d.company_id for d in datapoints)
-        for cid in company_ids:
-            conn.execute("DELETE FROM canonical_datapoints WHERE company_id = ?", (cid,))
-    rows = [
-        (
-            d.id, d.company_id, d.canonical_key, d.metric_raw, d.period_label,
-            d.period_end_date.isoformat(), d.value, d.currency, d.units,
-            d.status, json.dumps(d.source_datapoint_ids), d.derivation_rule,
-            d.update_date.isoformat(),
+def save_canonical_datapoints(
+    db_path: str | Path,
+    datapoints: list[CanonicalDatapoint],
+    clear_existing: bool = True,
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    """Persist canonical datapoints.
+
+    Pass `conn` (from ``backend.data.store.connect``) to participate in a caller-managed
+    transaction; otherwise a dedicated connection is opened, committed and closed.
+    """
+    own = conn is None
+    if own:
+        conn = _connect(db_path)
+    try:
+        if clear_existing:
+            company_ids = set(d.company_id for d in datapoints)
+            for cid in company_ids:
+                conn.execute("DELETE FROM canonical_datapoints WHERE company_id = ?", (cid,))
+        rows = [
+            (
+                d.id, d.company_id, d.canonical_key, d.metric_raw, d.period_label,
+                d.period_end_date.isoformat(), d.value, d.currency, d.units,
+                d.status, json.dumps(d.source_datapoint_ids), d.derivation_rule,
+                d.update_date.isoformat(),
+            )
+            for d in datapoints
+        ]
+        conn.executemany(
+            "INSERT OR REPLACE INTO canonical_datapoints VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            rows,
         )
-        for d in datapoints
-    ]
-    conn.executemany(
-        "INSERT OR REPLACE INTO canonical_datapoints VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        rows,
-    )
-    conn.commit()
-    conn.close()
+        if own:
+            conn.commit()
+    finally:
+        if own:
+            conn.close()
 
 
 def query_canonical_datapoints(
@@ -198,21 +222,36 @@ def query_canonical_datapoints(
     return result
 
 
-def save_taxonomy_mappings(db_path: str | Path, mappings: list[TaxonomyMapping]) -> None:
-    conn = _connect(db_path)
-    rows = [
-        (
-            m.id, m.company_id, m.canonical_key, m.metric_raw, m.statement,
-            m.source, 1 if m.human_confirmed else 0, m.update_date.isoformat(),
+def save_taxonomy_mappings(
+    db_path: str | Path,
+    mappings: list[TaxonomyMapping],
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    """Persist taxonomy mappings.
+
+    Pass `conn` (from ``backend.data.store.connect``) to participate in a caller-managed
+    transaction; otherwise a dedicated connection is opened, committed and closed.
+    """
+    own = conn is None
+    if own:
+        conn = _connect(db_path)
+    try:
+        rows = [
+            (
+                m.id, m.company_id, m.canonical_key, m.metric_raw, m.statement,
+                m.source, 1 if m.human_confirmed else 0, m.update_date.isoformat(),
+            )
+            for m in mappings
+        ]
+        conn.executemany(
+            "INSERT OR REPLACE INTO taxonomy_mappings VALUES (?,?,?,?,?,?,?,?)",
+            rows,
         )
-        for m in mappings
-    ]
-    conn.executemany(
-        "INSERT OR REPLACE INTO taxonomy_mappings VALUES (?,?,?,?,?,?,?,?)",
-        rows,
-    )
-    conn.commit()
-    conn.close()
+        if own:
+            conn.commit()
+    finally:
+        if own:
+            conn.close()
 
 
 def get_taxonomy_mappings(db_path: str | Path, company_id: str) -> list[TaxonomyMapping]:

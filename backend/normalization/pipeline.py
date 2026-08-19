@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from backend.data.store import (
+    connect,
     query_datapoints,
     save_canonical_datapoints,
     save_taxonomy_mappings,
@@ -52,9 +53,19 @@ def run(company_id: str = "infy_infy") -> dict:
     if not period_val["is_aligned"]:
         raise ValueError(f"Fiscal period alignment failed: {period_val['misaligned_datapoints']}")
 
-    # Save canonical datapoints and taxonomy mappings to valence.db
-    save_canonical_datapoints(DB_PATH, all_canonical_dps)
-    save_taxonomy_mappings(DB_PATH, taxonomy_mappings)
+    # Save canonical datapoints and taxonomy mappings atomically: a failure in either
+    # write rolls back both so the DB never ends up with canonical data without its
+    # mappings (or vice-versa).
+    conn = connect(DB_PATH)
+    try:
+        save_canonical_datapoints(DB_PATH, all_canonical_dps, conn=conn)
+        save_taxonomy_mappings(DB_PATH, taxonomy_mappings, conn=conn)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
     summary = {
         "raw_winning_count": len(winning_raw_dps),

@@ -47,13 +47,17 @@ def render_data_sources(wb: Workbook, spec: ModelSpecification) -> Worksheet:
 
     write_table_header(ws, 5, ["Canonical Key / Line Item", "Period", "Status", "Source / Derivation Lineage"], start_col=2)
 
+    hist_periods = spec.historicals.periods
+    period_range = f"{hist_periods[0]}-{hist_periods[-1]}" if hist_periods else "-"
+    audited_src = f"{spec.metadata.name} Audited Financial Statements ({spec.metadata.market.upper()} regulatory filing)"
+
     rows = [
-        ("canonical.is.revenue", "FY24-FY26", "Reported", "Infosys Audited Financial Statements (BSE/NSE Filing)"),
-        ("canonical.is.cost_of_sales", "FY24-FY26", "Reported", "Infosys Audited Financial Statements"),
-        ("canonical.is.ebitda", "FY24-FY26", "Derived", "Derived formula: Operating Profit + Depreciation & Amortization"),
-        ("canonical.bs.cash_and_bank", "FY24-FY26", "Reported", "Infosys Consolidated Balance Sheet"),
-        ("canonical.bs.total_assets", "FY24-FY26", "Reported", "Infosys Consolidated Balance Sheet"),
-        ("canonical.cf.operating_activities", "FY24-FY26", "Reported", "Infosys Consolidated Cash Flow Statement"),
+        ("canonical.is.revenue", period_range, "Reported", audited_src),
+        ("canonical.is.cost_of_sales", period_range, "Reported", audited_src),
+        ("canonical.is.ebitda", period_range, "Derived", "Derived formula: Operating Profit + Depreciation & Amortization"),
+        ("canonical.bs.cash_and_bank", period_range, "Reported", f"{spec.metadata.name} Consolidated Balance Sheet"),
+        ("canonical.bs.total_assets", period_range, "Reported", f"{spec.metadata.name} Consolidated Balance Sheet"),
+        ("canonical.cf.operating_activities", period_range, "Reported", f"{spec.metadata.name} Consolidated Cash Flow Statement"),
     ]
 
     for idx, (ckey, p, status, src) in enumerate(rows):

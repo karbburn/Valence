@@ -8,3 +8,5 @@ services:
     envVars:
       - key: TWELVEDATA_API_KEY
         sync: false
+      - key: VALENCE_ENV
+        value: production

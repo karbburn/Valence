@@ -26,6 +26,7 @@ Acceptance criteria:
 """
 
 from pathlib import Path
+import shutil
 
 from fastapi.testclient import TestClient
 
@@ -54,6 +55,22 @@ def _assert(cond: bool, msg: str) -> None:
 
 
 def main() -> None:
+    """Run the US-expansion self-check against a DB snapshot.
+
+    This self-check re-ingests companies from source files with clear_existing=True,
+    which permanently wipes unrelated production data. Snapshot the DB before the run
+    and restore it afterwards so the self-check can never mutate production state.
+    """
+    backup = DB_PATH.with_suffix(".sc_backup")
+    shutil.copy2(DB_PATH, backup)
+    try:
+        _main_body()
+    finally:
+        shutil.copy2(backup, DB_PATH)
+        backup.unlink(missing_ok=True)
+
+
+def _main_body() -> None:
     print("Running US Expansion (SEC EDGAR & Multi-Market Platform) validation self-check...")
 
     us_companies = {

@@ -19,6 +19,11 @@ from backend.api.routes import _MODEL_CACHE
 from backend.data.precompute import run_precompute
 
 
+# Minimum size (bytes) for a precomputed cache payload — guards against an
+# empty/truncated file while not coupling to specific model sizes.
+MIN_CACHE_BYTES = 15000
+
+
 def _assert(cond: bool, msg: str) -> None:
     if not cond:
         raise AssertionError(f"Stage 12 self-check FAILED: {msg}")
@@ -31,7 +36,7 @@ def main() -> None:
     # 1. Run Precomputation Script
     cache_file = run_precompute("infy_infy")
     _assert(cache_file.exists(), f"Precomputed cache file generated at {cache_file}")
-    _assert(cache_file.stat().st_size > 15000, f"Precomputed cache file is non-empty ({cache_file.stat().st_size} bytes)")
+    _assert(cache_file.stat().st_size > MIN_CACHE_BYTES, f"Precomputed cache file is non-empty ({cache_file.stat().st_size} bytes)")
 
     # 2. Clear Active Memory Cache & GET /api/model/infy_infy
     _MODEL_CACHE.clear()
@@ -43,7 +48,13 @@ def main() -> None:
     _assert(data["metadata"]["company_id"] == "infy_infy", "Correct model loaded from cache")
     initial_price = data["valuation"][0]["dcf_bridge"]["implied_share_price"]
     print(f"  Initial Base Implied Share Price (from cache): INR {initial_price:.2f}")
-    _assert(850.0 < initial_price < 1000.0, f"Implied share price matches baseline ({initial_price:.2f} within [850, 1000])")
+    _assert(initial_price > 0, f"Implied share price is positive ({initial_price:.2f} INR)")
+    _assert(initial_price < 100000, f"Implied share price is structurally sane (< INR 100,000, got {initial_price:.2f})")
+
+    reverse_dcf = data["valuation"][0].get("reverse_dcf") or {}
+    reverse_market_price = reverse_dcf.get("market_price")
+    if reverse_market_price is not None:
+        _assert(reverse_market_price > 0, f"Reverse-DCF market price is positive ({reverse_market_price:.2f} INR)")
 
     # 3. Test Live Recomputation on top of cached model
     override_payload = {

@@ -78,7 +78,9 @@ def compute_reverse_dcf(
     target_pv_tv = target_ev - sum_pv_fcff
 
     wacc_frac = wacc_pct / 100.0
-    df5 = 1.0 / ((1.0 + wacc_frac) ** 5.0)
+    # Terminal value discounting: exponent equals the number of forecast periods
+    # (end-of-final-year convention, matching compute_terminal_value).
+    df5 = 1.0 / ((1.0 + wacc_frac) ** len(FORECAST_PERIODS))
 
     # Undiscounted target TV
     target_tv_undiscounted = target_pv_tv / df5 if df5 > 0 else 0.0
@@ -171,7 +173,7 @@ def _solve_implied_revenue_cagr(
             return 0.0
 
         last_fcff = fcffs[-1].fcff or 0.0
-        last_ebitda = trial_forecast.get_value("canonical.is.ebitda", "FY31", "base") or 0.0
+        last_ebitda = trial_forecast.get_value("canonical.is.ebitda", FORECAST_PERIODS[-1], "base") or 0.0
 
         # Compute DCF
         tv = compute_terminal_value(

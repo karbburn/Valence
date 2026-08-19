@@ -10,7 +10,9 @@ Provides API endpoints for:
 - GET /api/export/excel: Trigger openpyxl exporter and download 27-tab .xlsx workbook
 """
 
+import logging
 import re
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -32,17 +34,49 @@ import re
 
 router = APIRouter()
 
+logger = logging.getLogger("valence.api")
+
 API_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = API_DIR.parent.parent
+
+
+# ------------------------------------------------------------------ #
+# Historical window / override period defaults.
+# NOTE: these are hardcoded for now; they should be derived from the
+# ingested financial data in the future.
+# ------------------------------------------------------------------ #
+DEFAULT_HIST_PERIODS = ["FY24", "FY25", "FY26"]
+DEFAULT_OVERRIDE_PERIOD = "FY27"
 
 
 @router.get("/health")
 async def health() -> Dict[str, str]:
     return {"status": "ok"}
 
-# In-memory session model cache for fast live recomputation
-_MODEL_CACHE: Dict[str, ModelSpecification] = {}
-_HIST_MODEL_CACHE: Dict[str, HistoricalModel] = {}
+# Bounded in-memory session model cache for fast live recomputation
+# (simple LRU via OrderedDict to avoid unbounded memory growth).
+MAX_CACHE_SIZE = 50
+
+
+def _lru_get(cache: OrderedDict, key: str) -> Any:
+    """Return cached value for key, marking it most-recently-used."""
+    if key not in cache:
+        return None
+    cache.move_to_end(key)
+    return cache[key]
+
+
+def _lru_put(cache: OrderedDict, key: str, value: Any) -> None:
+    """Store value under key, evicting the oldest entry when over capacity."""
+    if key in cache:
+        cache.move_to_end(key)
+    cache[key] = value
+    while len(cache) > MAX_CACHE_SIZE:
+        cache.popitem(last=False)
+
+
+_MODEL_CACHE: "OrderedDict[str, ModelSpecification]" = OrderedDict()
+_HIST_MODEL_CACHE: "OrderedDict[str, HistoricalModel]" = OrderedDict()
 _UNIVERSE_SEEDED: bool = False
 
 
@@ -64,11 +98,15 @@ def _get_hist_model(company_id: str = "infy_infy") -> HistoricalModel:
     global _HIST_MODEL_CACHE
     if company_id not in _HIST_MODEL_CACHE:
         ensure_company_ingested(company_id)
-        _HIST_MODEL_CACHE[company_id] = run_historical(
-            target_periods=["FY24", "FY25", "FY26"],
-            company_id=company_id,
+        _lru_put(
+            _HIST_MODEL_CACHE,
+            company_id,
+            run_historical(
+                target_periods=DEFAULT_HIST_PERIODS,
+                company_id=company_id,
+            ),
         )
-    return _HIST_MODEL_CACHE[company_id]
+    return _lru_get(_HIST_MODEL_CACHE, company_id)
 
 
 def _get_or_build_spec(company_id: str = "infy_infy") -> ModelSpecification:
@@ -78,50 +116,50 @@ def _get_or_build_spec(company_id: str = "infy_infy") -> ModelSpecification:
             try:
                 with open(cache_path, "r", encoding="utf-8") as f:
                     raw_str = f.read()
-                _MODEL_CACHE[company_id] = ModelSpecification.deserialize(raw_str)
-                print(f"Loaded {company_id} ModelSpecification from precomputed cache.")
+                _lru_put(_MODEL_CACHE, company_id, ModelSpecification.deserialize(raw_str))
+                logger.info("Loaded %s ModelSpecification from precomputed cache.", company_id)
             except Exception as e:
-                print(f"Failed to load cache for {company_id}, compiling live: {e}")
+                logger.warning("Failed to load cache for %s, compiling live: %s", company_id, e)
                 ensure_company_ingested(company_id)
                 hist_m = _get_hist_model(company_id)
                 f_spec = run_forecast_pipeline(hist_m)
                 v_spec = run_valuation(f_spec)
-                _MODEL_CACHE[company_id] = run_qa(v_spec)
+                _lru_put(_MODEL_CACHE, company_id, run_qa(v_spec))
         else:
-            print(f"No precomputed cache for {company_id}. Ingesting & compiling live...")
+            logger.info("No precomputed cache for %s. Ingesting & compiling live...", company_id)
             ensure_company_ingested(company_id)
             hist_m = _get_hist_model(company_id)
             f_spec = run_forecast_pipeline(hist_m)
             v_spec = run_valuation(f_spec)
             q_spec = run_qa(v_spec)
-            _MODEL_CACHE[company_id] = q_spec
+            _lru_put(_MODEL_CACHE, company_id, q_spec)
 
             try:
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(cache_path, "w", encoding="utf-8") as f:
                     f.write(q_spec.serialize())
-                print(f"Wrote compiled cache for {company_id}.")
+                logger.info("Wrote compiled cache for %s.", company_id)
             except Exception as e:
-                print(f"Warning: could not write cache for {company_id}: {e}")
+                logger.warning("Warning: could not write cache for %s: %s", company_id, e)
 
             try:
                 update_onboarding_status(company_id, "onboarded", notes="On-demand live ingestion")
             except Exception:
                 pass
 
-    return _MODEL_CACHE[company_id]
+    return _lru_get(_MODEL_CACHE, company_id)
 
 
 class OverrideRequest(BaseModel):
     driver_key: str
     value: float
-    period: str = "FY27"
+    period: str = DEFAULT_OVERRIDE_PERIOD
     scenario: str = "base"
 
 
 class RevertRequest(BaseModel):
     driver_key: str
-    period: str = "FY27"
+    period: str = DEFAULT_OVERRIDE_PERIOD
     scenario: str = "base"
 
 
@@ -132,11 +170,11 @@ def get_model_spec(company_id: str = "infy_infy") -> Dict[str, Any]:
         spec = _get_or_build_spec(company_id)
         return spec.model_dump(mode="json")
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Failed to build valuation model for '%s'", company_id)
+        status_code = 422 if "No canonical" in str(e) or "unmapped" in str(e) else 500
         raise HTTPException(
-            status_code=422 if "No canonical" in str(e) or "unmapped" in str(e) else 500,
-            detail=f"Could not build valuation model for '{company_id}': {str(e)}"
+            status_code=status_code,
+            detail="Failed to build model. See server logs for details.",
         )
 
 
@@ -186,7 +224,7 @@ def recompute_model(req: OverrideRequest, company_id: str = "infy_infy") -> Dict
     # 4. Re-run QA validation engine
     spec = run_qa(spec)
 
-    _MODEL_CACHE[company_id] = spec
+    _lru_put(_MODEL_CACHE, company_id, spec)
     return spec.model_dump(mode="json")
 
 
@@ -215,7 +253,7 @@ def revert_driver_override(req: RevertRequest, company_id: str = "infy_infy") ->
     spec = run_valuation(spec)
     spec = run_qa(spec)
 
-    _MODEL_CACHE[company_id] = spec
+    _lru_put(_MODEL_CACHE, company_id, spec)
     return spec.model_dump(mode="json")
 
 
