@@ -23,15 +23,62 @@ Valence is a high-performance equity valuation platform and 3-statement financia
 ## System Architecture
 
 ```mermaid
-graph TD
-    A[Raw Data Sources<br/>SEC EDGAR / Screener / yfinance] --> B[Data Ingestion & In-Memory Store]
-    B --> C[Taxonomy Normalization & Canonical Mapping]
-    C --> D[Historical 3-Statement Assembly]
-    D --> E[5-Year Forecasting Engine]
-    E --> F[WACC & DCF Valuation Engine]
-    F --> G[QA Validation Engine]
-    G --> H[FastAPI Service & Web Workbench]
-    G --> I[27-Tab OpenPyXL Live Formula Exporter]
+flowchart TB
+    subgraph Ingestion["1. Ingestion & Storage"]
+        A1[SEC EDGAR XBRL]
+        A2[Screener.in Excel]
+        A3[yfinance Live Market Feed]
+        Store[(SQLite Coverage Store)]
+        A1 & A2 & A3 --> Store
+    end
+
+    subgraph Normalization["2. Taxonomy & Normalization"]
+        Mapping[Unified Taxonomy Mapper]
+        Canonical[Canonical Mapping Registry]
+        Derivation[Derived Financial Metrics]
+        Store --> Mapping
+        Mapping --> Canonical
+        Canonical --> Derivation
+    end
+
+    subgraph CoreEngine["3. 3-Statement & Forecast Engine"]
+        Hist[Historical 3-Statement Assembly]
+        Fcst[5-Year Driver Roll-forward]
+        Schedules[Schedules: Capex, D&A, NWC, Debt, Tax, Shares]
+        Derivation --> Hist
+        Hist --> Fcst
+        Fcst --> Schedules
+    end
+
+    subgraph ValuationQA["4. Valuation & QA Core"]
+        WACC[CAPM WACC Module]
+        DCF[Unlevered FCFF Engine]
+        Reverse[Reverse DCF Solver]
+        QA[9-Point QA Validation Engine]
+        Schedules --> WACC & DCF
+        DCF --> Reverse
+        WACC & DCF & Reverse --> QA
+    end
+
+    subgraph Delivery["5. Delivery Layer"]
+        API[FastAPI Router & Controller]
+        Web[SPA Web Dashboard]
+        Excel[27-Tab Interactive Excel Exporter]
+        QA --> API
+        API --> Web
+        API --> Excel
+    end
+
+    classDef ing fill:#EFF6FF,stroke:#2563EB,stroke-width:1px;
+    classDef norm fill:#F5F3FF,stroke:#7C3AED,stroke-width:1px;
+    classDef core fill:#ECFDF5,stroke:#059669,stroke-width:1px;
+    classDef val fill:#FFFBEB,stroke:#D97706,stroke-width:1px;
+    classDef del fill:#FFF5F5,stroke:#DC2626,stroke-width:1px;
+    class A1,A2,A3,Store ing;
+    class Mapping,Canonical,Derivation norm;
+    class Hist,Fcst,Schedules core;
+    class WACC,DCF,Reverse,QA val;
+    class API,Web,Excel del;
 ```
 
 ---
@@ -170,16 +217,16 @@ http://localhost:8000
 
 ### 2. Exporting Excel Workbooks via API
 
-Generate and download a 27-tab financial model directly via HTTP:
+Generate and download a 27-tab financial model for any onboarded company directly via HTTP:
 ```bash
-curl -O "http://localhost:8000/api/export/excel?company_id=msft_us"
+curl -O "http://localhost:8000/api/export/excel?company_id=[company_id]"
 ```
 
 ---
 
 ## Verification & Institutional Audit Suite
 
-Valence includes an automated **Institutional Financial Audit Suite** for post-export verification across generated `.xlsx` workbooks (`msft_valuation_model.xlsx`, `nvda_valuation_model.xlsx`, `ongc_valuation_model.xlsx`, `tcs_valuation_model.xlsx`):
+Valence includes an automated **Institutional Financial Audit Suite** for post-export verification across any generated `.xlsx` workbook (e.g. `[ticker]_valuation_model.xlsx`):
 
 - **3-Statement Accounting Equality**: Verifies `Total Assets = Total Liabilities + Total Equity` for all historical and forecast periods (FY24–FY31) with zero balance sheet gap.
 - **Financial Math Tie-Outs**:
