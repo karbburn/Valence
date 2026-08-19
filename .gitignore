@@ -14,3 +14,4 @@ backend/data/user_models/
 AGENTS.md
 valence.egg-info/
 backend/data/cache/
+backend/export/excel/regenerate_target_models.py
