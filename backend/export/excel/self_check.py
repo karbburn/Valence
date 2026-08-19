@@ -56,7 +56,7 @@ def main() -> None:
     # 2. Reload workbook for structural and financial audit
     wb = load_workbook(str(out_file), data_only=False)
     sheet_names = wb.sheetnames
-    _assert(len(sheet_names) == 27, f"27 total institutional sheets rendered cleanly (got {len(sheet_names)})")
+    _assert(len(sheet_names) == 30, f"30 total institutional sheets rendered cleanly (got {len(sheet_names)})")
 
     expected_key_tabs = [
         "00_Cover", "01_Model_Guide", "02_Executive_Summary", "03_Model_Control",
@@ -64,6 +64,7 @@ def main() -> None:
         "20_Operating_Model", "21_Revenue_Build", "22_Cost_Build", "23_Working_Capital",
         "24_Capex_D&A", "25_Debt_Schedule", "26_Tax_Schedule", "27_Share_Count",
         "30_WACC", "31_DCF", "32_Terminal_Value", "33_Sensitivity", "34_Reverse_DCF", "35_Scenario_Analysis",
+        "40_Trading_Comps", "41_Valuation_Comparison", "42_Investment_Returns",
         "50_Data_Sources", "51_Assumption_Log", "52_Model_Checks", "53_Methodology",
     ]
 

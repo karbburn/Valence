@@ -42,10 +42,13 @@ from backend.export.excel.render_qa import (
 )
 from backend.export.excel.render_val import (
     render_dcf_tab,
+    render_investment_returns,
     render_reverse_dcf_tab,
     render_scenario_analysis_tab,
     render_sensitivity_tab,
     render_terminal_value_tab,
+    render_trading_comps,
+    render_valuation_comparison,
     render_wacc_tab,
 )
 from backend.models.spec.model_specification import ModelSpecification
@@ -57,14 +60,12 @@ def export_model_to_excel(
     *,
     out_path: str | Path | None = None,
 ) -> Path:
-    """Export ModelSpecification to a 23-tab openpyxl live-formula workbook."""
-    if out_path is not None:
-        output_path = out_path
-    if output_path is None:
-        out_dir = Path("backend/export/output")
-        out_file = out_dir / f"{spec.metadata.ticker.lower()}_valuation_model.xlsx"
-    else:
-        out_file = Path(output_path)
+    """Export ModelSpecification to an institutional live-formula workbook."""
+    target_path = output_path or out_path
+    if target_path is None:
+        raise ValueError("Must provide output_path or out_path to export_model_to_excel")
+
+    out_file = Path(target_path)
     out_file.parent.mkdir(parents=True, exist_ok=True)
 
     # Clear any cached formula values from a previous export (keyed by sheet/row/col)
@@ -106,7 +107,12 @@ def export_model_to_excel(
     render_reverse_dcf_tab(wb, spec)
     render_scenario_analysis_tab(wb, spec)
 
-    # 5. QA & Documentation Tabs
+    # 5. Supporting & Institutional Analysis Tabs
+    render_trading_comps(wb, spec)
+    render_valuation_comparison(wb, spec)
+    render_investment_returns(wb, spec)
+
+    # 6. QA & Documentation Tabs
     render_data_sources(wb, spec)
     render_assumption_log(wb, spec)
     render_model_checks_tab(wb, spec)
