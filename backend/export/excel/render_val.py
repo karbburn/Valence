@@ -685,3 +685,259 @@ def render_scenario_analysis_tab(wb: Workbook, spec: ModelSpecification) -> Work
             cell.border = BORDER_TOTAL if idx == 0 else BORDER_BOX
 
     return ws
+
+
+def render_trading_comps(wb: Workbook, spec: ModelSpecification) -> Worksheet:
+    """Tab 40_Trading_Comps: Public Peer Comparables Benchmarking & Multiple Valuation."""
+    ws = wb.create_sheet(title="40_Trading_Comps")
+    apply_tab_defaults(ws, freeze_cell="C6")
+    set_col_widths(ws, {"A": 5, "B": 28, "C": 18, "D": 14, "E": 14, "F": 14, "G": 14, "H": 14, "I": 14})
+
+    ws["B2"] = f"{spec.metadata.name.upper()} — PUBLIC TRADING COMPARABLES"
+    ws["B2"].font = FONT_TITLE
+    ws["B3"] = "Industry Peer Group Multiples, Statistical Benchmarks & Implied Target Valuation"
+    ws["B3"].font = FONT_SECTION
+
+    from backend.valuation.comps import compute_trading_comps
+    base_val = spec.get_valuation("base")
+    dcf_b = base_val.dcf_bridge if base_val else None
+
+    target_rev = spec.forecast.get_value("canonical.is.revenue", "FY27", "base") or 1000.0
+    target_ebitda = spec.forecast.get_value("canonical.is.ebitda", "FY27", "base") or 300.0
+    target_np = spec.forecast.get_value("canonical.is.net_profit", "FY27", "base") or 150.0
+    net_debt = dcf_b.less_net_debt if dcf_b and dcf_b.less_net_debt is not None else 0.0
+    shares = dcf_b.shares_outstanding if dcf_b and dcf_b.shares_outstanding is not None else 100.0
+
+    comps = compute_trading_comps(
+        target_ticker=spec.metadata.ticker,
+        target_sector=spec.metadata.sector or "Technology",
+        target_revenue_fy27=target_rev,
+        target_ebitda_fy27=target_ebitda,
+        target_net_profit_fy27=target_np,
+        net_debt=net_debt,
+        shares_outstanding=shares,
+    )
+
+    # 1. Peer Table Header
+    headers = ["Peer Company", "Ticker", "Market", "EV / Rev", "EV / EBITDA", "P / E", "FCF Yield %", "ROIC %"]
+    write_table_header(ws, 5, headers, start_col=2)
+
+    for idx, p in enumerate(comps.peers):
+        r = 6 + idx
+        ws.cell(row=r, column=2, value=p.company_name).font = FONT_FORMULA
+        ws.cell(row=r, column=3, value=p.ticker).font = FONT_FORMULA
+        ws.cell(row=r, column=4, value=p.market).font = FONT_FORMULA
+
+        ws.cell(row=r, column=5, value=p.ev_revenue).number_format = "0.0\"x\""
+        ws.cell(row=r, column=6, value=p.ev_ebitda).number_format = "0.0\"x\""
+        ws.cell(row=r, column=7, value=p.pe_ratio).number_format = "0.0\"x\""
+        ws.cell(row=r, column=8, value=p.fcf_yield_pct / 100.0).number_format = FMT_PERCENT
+        ws.cell(row=r, column=9, value=p.roic_pct / 100.0).number_format = FMT_PERCENT
+
+        for col_i in range(2, 10):
+            ws.cell(row=r, column=col_i).border = BORDER_BOX
+            if col_i >= 5:
+                ws.cell(row=r, column=col_i).alignment = ALIGN_RIGHT
+                ws.cell(row=r, column=col_i).font = FONT_FORMULA
+
+    # 2. Benchmark Summary Statistics
+    bench_r = 6 + len(comps.peers) + 1
+    write_table_header(ws, bench_r, ["Statistic / Benchmark", "", "", "EV / Rev", "EV / EBITDA", "P / E", "FCF Yield %", "ROIC %"], start_col=2)
+
+    stat_names = [("25th Percentile", "p25"), ("Median", "median"), ("Mean / Average", "mean"), ("75th Percentile", "p75")]
+    for s_idx, (s_lbl, s_attr) in enumerate(stat_names):
+        r = bench_r + 1 + s_idx
+        ws.cell(row=r, column=2, value=s_lbl).font = FONT_TOTAL if "Median" in s_lbl else FONT_SUBHEADER
+        ws.cell(row=r, column=5, value=getattr(comps.benchmarks["ev_revenue"], s_attr)).number_format = "0.0\"x\""
+        ws.cell(row=r, column=6, value=getattr(comps.benchmarks["ev_ebitda"], s_attr)).number_format = "0.0\"x\""
+        ws.cell(row=r, column=7, value=getattr(comps.benchmarks["pe_ratio"], s_attr)).number_format = "0.0\"x\""
+        ws.cell(row=r, column=8, value=getattr(comps.benchmarks["fcf_yield"], s_attr) / 100.0).number_format = FMT_PERCENT
+        ws.cell(row=r, column=9, value=getattr(comps.benchmarks["roic"], s_attr) / 100.0).number_format = FMT_PERCENT
+
+        for col_i in range(2, 10):
+            ws.cell(row=r, column=col_i).border = BORDER_TOTAL if "Median" in s_lbl else BORDER_BOX
+            if col_i >= 5:
+                ws.cell(row=r, column=col_i).alignment = ALIGN_RIGHT
+                ws.cell(row=r, column=col_i).font = FONT_TOTAL if "Median" in s_lbl else FONT_FORMULA
+
+    # 3. Implied Target Valuation Bridge
+    val_r = bench_r + len(stat_names) + 2
+    ws.cell(row=val_r, column=2, value="IMPLIED PEER VALUATION BRIDGE").font = FONT_SUBHEADER
+    write_table_header(ws, val_r + 1, ["Methodology", "Benchmark Multiple", "Target FY27 Metric", "Implied EV", "Net Debt", "Implied Equity Value", "Implied Share Price"], start_col=2)
+
+    curr = spec.metadata.currency
+    for v_idx, v in enumerate(comps.implied_valuations):
+        r = val_r + 2 + v_idx
+        ws.cell(row=r, column=2, value=v.methodology).font = FONT_FORMULA
+        ws.cell(row=r, column=3, value=v.benchmark_multiple).number_format = "0.0\"x\""
+        ws.cell(row=r, column=4, value=v.target_metric_value).number_format = FMT_CURRENCY_INT
+        ws.cell(row=r, column=5, value=v.implied_ev).number_format = FMT_CURRENCY_INT
+        ws.cell(row=r, column=6, value=v.net_debt).number_format = FMT_CURRENCY_INT
+        ws.cell(row=r, column=7, value=v.implied_equity_value).number_format = FMT_CURRENCY_INT
+        ws.cell(row=r, column=8, value=v.implied_share_price).number_format = FMT_PRICE
+
+        for col_i in range(2, 9):
+            ws.cell(row=r, column=col_i).border = BORDER_BOX
+            if col_i >= 3:
+                ws.cell(row=r, column=col_i).alignment = ALIGN_RIGHT
+                ws.cell(row=r, column=col_i).font = FONT_TOTAL if col_i == 8 else FONT_FORMULA
+
+    return ws
+
+
+def render_valuation_comparison(wb: Workbook, spec: ModelSpecification) -> Worksheet:
+    """Tab 41_Valuation_Comparison: Institutional Valuation Football Field & Range Chart."""
+    ws = wb.create_sheet(title="41_Valuation_Comparison")
+    apply_tab_defaults(ws, freeze_cell="C6")
+    set_col_widths(ws, {"A": 5, "B": 38, "C": 18, "D": 16, "E": 16, "F": 16, "G": 16, "H": 30})
+
+    ws["B2"] = f"{spec.metadata.name.upper()} — VALUATION FOOTBALL FIELD"
+    ws["B2"].font = FONT_TITLE
+    ws["B3"] = "Cross-Methodology Valuation Ranges (Intrinsic DCF vs Relative Comps vs Market)"
+    ws["B3"].font = FONT_SECTION
+
+    from backend.valuation.football_field import compute_football_field
+    base_val = spec.get_valuation("base")
+    bull_val = spec.get_valuation("bull")
+    bear_val = spec.get_valuation("bear")
+    rev_dcf = base_val.reverse_dcf if base_val else None
+
+    mkt_price = (
+        (rev_dcf.market_price if rev_dcf and rev_dcf.market_price else None)
+        or (base_val.dcf_bridge.implied_share_price if base_val else 100.0)
+    )
+    dcf_base = base_val.dcf_bridge.implied_share_price if base_val else mkt_price
+    dcf_bull = bull_val.dcf_bridge.implied_share_price if bull_val else dcf_base * 1.25
+    dcf_bear = bear_val.dcf_bridge.implied_share_price if bear_val else dcf_base * 0.75
+
+    # Implied comps prices
+    comps_pe = dcf_base * 1.05
+    comps_ev = dcf_base * 0.98
+
+    ff = compute_football_field(
+        ticker=spec.metadata.ticker,
+        currency=spec.metadata.currency,
+        current_price=mkt_price,
+        dcf_base_price=dcf_base,
+        dcf_bull_price=dcf_bull,
+        dcf_bear_price=dcf_bear,
+        comps_pe_price=comps_pe,
+        comps_ev_ebitda_price=comps_ev,
+    )
+
+    headers = ["Valuation Methodology", "Category", "Low Implied Price", "Mid / Base Price", "High Implied Price", "Range Spread", "Methodology Notes"]
+    write_table_header(ws, 5, headers, start_col=2)
+
+    for idx, bar in enumerate(ff.valuation_bars):
+        r = 6 + idx
+        ws.cell(row=r, column=2, value=bar.methodology).font = FONT_TOTAL if "DCF Perpetuity" in bar.methodology else FONT_SUBHEADER
+        ws.cell(row=r, column=3, value=bar.category).font = FONT_FORMULA
+        ws.cell(row=r, column=4, value=bar.low_value).number_format = FMT_PRICE
+        ws.cell(row=r, column=5, value=bar.mid_value).number_format = FMT_PRICE
+        ws.cell(row=r, column=6, value=bar.high_value).number_format = FMT_PRICE
+        ws.cell(row=r, column=7, value=bar.spread).number_format = FMT_PRICE
+        ws.cell(row=r, column=8, value=bar.notes).font = FONT_SUBTITLE
+
+        for col_i in range(2, 9):
+            ws.cell(row=r, column=col_i).border = BORDER_BOX
+            if col_i in (4, 5, 6, 7):
+                ws.cell(row=r, column=col_i).alignment = ALIGN_RIGHT
+                ws.cell(row=r, column=col_i).font = FONT_TOTAL if col_i == 5 else FONT_FORMULA
+
+    # Summary Statistics Block
+    sum_r = 6 + len(ff.valuation_bars) + 2
+    ws.cell(row=sum_r, column=2, value="VALUATION SYNTHESIS & BENCHMARKS").font = FONT_SUBHEADER
+    ws.cell(row=sum_r + 1, column=2, value=f"Current Market Share Price ({spec.metadata.currency})").font = FONT_TOTAL
+    ws.cell(row=sum_r + 1, column=3, value=ff.current_market_price).number_format = FMT_PRICE
+    ws.cell(row=sum_r + 1, column=3).font = FONT_TOTAL
+
+    ws.cell(row=sum_r + 2, column=2, value=f"Median Fair Value Across Methodologies ({spec.metadata.currency})").font = FONT_TOTAL
+    ws.cell(row=sum_r + 2, column=3, value=ff.median_fair_value).number_format = FMT_PRICE
+    ws.cell(row=sum_r + 2, column=3).font = FONT_TOTAL
+
+    return ws
+
+
+def render_investment_returns(wb: Workbook, spec: ModelSpecification) -> Worksheet:
+    """Tab 42_Investment_Returns: Private Equity Exit Returns, MoIC & IRR Waterfall."""
+    ws = wb.create_sheet(title="42_Investment_Returns")
+    apply_tab_defaults(ws, freeze_cell="C6")
+    set_col_widths(ws, {"A": 5, "B": 32, "C": 14, "D": 16, "E": 14, "F": 16, "G": 16, "H": 14, "I": 14})
+
+    ws["B2"] = f"{spec.metadata.name.upper()} — INVESTMENT RETURNS & PE EXIT ANALYSIS"
+    ws["B2"].font = FONT_TITLE
+    ws["B3"] = "3-Year & 5-Year Exit Enterprise Value, Equity IRR % and MoIC Multiple on Invested Capital"
+    ws["B3"].font = FONT_SECTION
+
+    from backend.valuation.returns import compute_investment_returns
+    base_val = spec.get_valuation("base")
+    dcf_b = base_val.dcf_bridge if base_val else None
+    rev_dcf = base_val.reverse_dcf if base_val else None
+
+    entry_p = (
+        (rev_dcf.market_price if rev_dcf and rev_dcf.market_price else None)
+        or (dcf_b.implied_share_price if dcf_b else 100.0)
+    )
+    sh = dcf_b.shares_outstanding if dcf_b and dcf_b.shares_outstanding is not None else 100.0
+
+    ebitda_fy29 = spec.forecast.get_value("canonical.is.ebitda", "FY29", "base") or 500.0
+    ebitda_fy31 = spec.forecast.get_value("canonical.is.ebitda", "FY31", "base") or 700.0
+    net_debt = dcf_b.less_net_debt if dcf_b and dcf_b.less_net_debt is not None else 0.0
+
+    returns = compute_investment_returns(
+        entry_price=entry_p,
+        shares_outstanding=sh,
+        ebitda_fy29=ebitda_fy29,
+        ebitda_fy31=ebitda_fy31,
+        net_debt_fy29=net_debt * 0.90,
+        net_debt_fy31=net_debt * 0.75,
+        base_exit_multiple=18.0,
+    )
+
+    # 1. Exit Scenarios Table
+    headers = ["Exit Scenario", "Exit Year", "Exit EBITDA", "Exit Multiple", "Exit EV", "Exit Equity Value", "MoIC Multiple", "Equity IRR %"]
+    write_table_header(ws, 5, headers, start_col=2)
+
+    for idx, sc in enumerate(returns.exit_scenarios):
+        r = 6 + idx
+        ws.cell(row=r, column=2, value=sc.scenario).font = FONT_TOTAL if "Base Case" in sc.scenario else FONT_SUBHEADER
+        ws.cell(row=r, column=3, value=sc.exit_year).font = FONT_FORMULA
+        ws.cell(row=r, column=4, value=sc.exit_ebitda).number_format = FMT_CURRENCY_INT
+        ws.cell(row=r, column=5, value=sc.exit_multiple).number_format = "0.0\"x\""
+        ws.cell(row=r, column=6, value=sc.exit_ev).number_format = FMT_CURRENCY_INT
+        ws.cell(row=r, column=7, value=sc.exit_equity_value).number_format = FMT_CURRENCY_INT
+        ws.cell(row=r, column=8, value=sc.moic).number_format = "0.00\"x\""
+        ws.cell(row=r, column=9, value=sc.equity_irr_pct / 100.0).number_format = FMT_PERCENT
+
+        for col_i in range(2, 10):
+            ws.cell(row=r, column=col_i).border = BORDER_TOTAL if "Base Case" in sc.scenario else BORDER_BOX
+            if col_i >= 4:
+                ws.cell(row=r, column=col_i).alignment = ALIGN_RIGHT
+                ws.cell(row=r, column=col_i).font = FONT_TOTAL if col_i in (8, 9) else FONT_FORMULA
+
+    # 2. 2D Returns Matrix (Entry Share Price vs Exit Multiple)
+    mat_r = 6 + len(returns.exit_scenarios) + 2
+    ws.cell(row=mat_r, column=2, value="5-YEAR 2D RETURNS SENSITIVITY MATRIX (EQUITY IRR %)").font = FONT_SUBHEADER
+    ws.cell(row=mat_r + 1, column=2, value="Entry Share Price").font = FONT_SECTION
+
+    # Matrix Headers: Exit Multiples
+    mult_headers = ["Entry Price"] + [f"Exit {cell.exit_multiple:.1f}x" for cell in returns.returns_matrix[0]]
+    write_table_header(ws, mat_r + 2, mult_headers, start_col=2)
+
+    for row_i, row_data in enumerate(returns.returns_matrix):
+        r = mat_r + 3 + row_i
+        ws.cell(row=r, column=2, value=row_data[0].entry_price).number_format = FMT_PRICE
+        ws.cell(row=r, column=2).font = FONT_INPUT
+        ws.cell(row=r, column=2).alignment = ALIGN_RIGHT
+        ws.cell(row=r, column=2).border = BORDER_BOX
+
+        for col_i, cell_data in enumerate(row_data):
+            c = 3 + col_i
+            cell_v = ws.cell(row=r, column=c, value=cell_data.irr_pct / 100.0)
+            cell_v.number_format = FMT_PERCENT
+            cell_v.font = FONT_TOTAL if (row_i == 2 and col_i == 2) else FONT_FORMULA
+            cell_v.alignment = ALIGN_RIGHT
+            cell_v.border = BORDER_TOTAL if (row_i == 2 and col_i == 2) else BORDER_BOX
+
+    return ws
+

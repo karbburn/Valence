@@ -23,6 +23,7 @@ class ModelMetadata(BaseModel):
     units: str = "crores"                    # reporting units for financial values
     fiscal_year_end: str                     # e.g. "March 31" — human-readable
     shares_outstanding: Optional[float] = None # in Crores
+    sector: Optional[str] = None             # Industry sector, e.g. "Technology", "Automotive"
     model_version: str = MODEL_SPEC_VERSION  # schema version, semver — NOT data refresh
     generation_date: datetime = Field(default_factory=datetime.now)
 
