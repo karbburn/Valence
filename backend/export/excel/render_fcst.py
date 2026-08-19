@@ -5,11 +5,11 @@ Forecast & Supporting Schedules Tabs Renderer.
 
 Renders:
 - 20_Operating_Model: Combined 3-statement forecast model (FY27-FY31) with live formulas
-- 21_Revenue_Build: Segment revenue forecast & growth
+- 21_Revenue_Build: Segment revenue forecast & growth (forward driver)
 - 22_Cost_Build: Cost structure & EBITDA forecast
 - 23_Working_Capital: Receivables & payables forecast (DSO/DPO)
 - 24_Capex_D&A: Capex % revenue & D&A schedule
-- 25_Debt_Schedule: Generic debt schedule (thin for zero debt)
+- 25_Debt_Schedule: Generic debt schedule with live interest and closing debt formulas
 - 26_Tax_Schedule: Effective tax rate forecast
 - 27_Share_Count: Diluted share count schedule
 """
@@ -66,39 +66,54 @@ def render_operating_model(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     write_table_header(ws, 5, headers, start_col=2)
 
     fcst_items = [
-        ("canonical.is.revenue", "Revenue from Operations", True, FMT_AMOUNT),
-        ("canonical.is.cost_of_sales", "Cost of Sales", False, FMT_AMOUNT),
-        ("canonical.is.gross_profit", "Gross Profit", True, FMT_AMOUNT),
-        ("canonical.is.ebitda", "EBITDA", True, FMT_AMOUNT),
-        ("canonical.is.depreciation_amortization", "Depreciation & Amortization", False, FMT_AMOUNT),
-        ("canonical.is.operating_profit", "Operating Profit (EBIT)", True, FMT_AMOUNT),
-        ("canonical.is.other_income", "Other Income", False, FMT_AMOUNT),
-        ("canonical.is.finance_cost", "Finance Cost", False, FMT_AMOUNT),
-        ("canonical.is.pbt", "Profit Before Tax (PBT)", True, FMT_AMOUNT),
-        ("canonical.is.tax", "Tax Expense", False, FMT_AMOUNT),
-        ("canonical.is.net_profit", "Net Profit After Tax", True, FMT_AMOUNT),
-        ("canonical.bs.trade_receivables", "Trade Receivables", False, FMT_AMOUNT),
-        ("canonical.bs.trade_payables", "Trade Payables", False, FMT_AMOUNT),
-        ("canonical.bs.cash_and_bank", "Cash & Cash Equivalents", False, FMT_AMOUNT),
-        ("canonical.bs.total_assets", "Total Assets", True, FMT_AMOUNT),
-        ("canonical.bs.total_equity", "Total Equity", True, FMT_AMOUNT),
-        ("canonical.bs.total_liabilities_and_equity", "Total Liabilities & Equity", True, FMT_AMOUNT),
-        ("canonical.cf.operating_activities", "Operating Cash Flow", True, FMT_AMOUNT),
-        ("canonical.cf.investing_activities", "Investing Cash Flow (Capex)", True, FMT_AMOUNT),
+        ("canonical.is.revenue", "Revenue from Operations", True, FMT_AMOUNT, "='21_Revenue_Build'!{col}7"),
+        ("canonical.is.cost_of_sales", "Cost of Sales", False, FMT_AMOUNT, "={col}6-{col}8"),
+        ("canonical.is.gross_profit", "Gross Profit", True, FMT_AMOUNT, None),
+        ("canonical.is.ebitda", "EBITDA", True, FMT_AMOUNT, "='22_Cost_Build'!{col}7"),
+        ("canonical.is.depreciation_amortization", "Depreciation & Amortization", False, FMT_AMOUNT, "='24_Capex_D&A'!{col}9"),
+        ("canonical.is.operating_profit", "Operating Profit (EBIT)", True, FMT_AMOUNT, "={col}9-{col}10"),
+        ("canonical.is.other_income", "Other Income", False, FMT_AMOUNT, None),
+        ("canonical.is.finance_cost", "Finance Cost", False, FMT_AMOUNT, "='25_Debt_Schedule'!{col}11"),
+        ("canonical.is.pbt", "Profit Before Tax (PBT)", True, FMT_AMOUNT, "={col}11+{col}12-{col}13"),
+        ("canonical.is.tax", "Tax Expense", False, FMT_AMOUNT, "={col}14*'26_Tax_Schedule'!{col}6"),
+        ("canonical.is.net_profit", "Net Profit After Tax", True, FMT_AMOUNT, "={col}14-{col}15"),
+        ("canonical.bs.trade_receivables", "Trade Receivables", False, FMT_AMOUNT, "='23_Working_Capital'!{col}7"),
+        ("canonical.bs.trade_payables", "Trade Payables", False, FMT_AMOUNT, "='23_Working_Capital'!{col}9"),
+        ("canonical.bs.cash_and_bank", "Cash & Cash Equivalents", False, FMT_AMOUNT, None),
+        ("canonical.bs.total_assets", "Total Assets", True, FMT_AMOUNT, None),
+        ("canonical.bs.total_equity", "Total Equity", True, FMT_AMOUNT, None),
+        ("canonical.bs.total_liabilities_and_equity", "Total Liabilities & Equity", True, FMT_AMOUNT, "={col}20"),
+        ("canonical.cf.operating_activities", "Operating Cash Flow", True, FMT_AMOUNT, None),
+        ("canonical.cf.investing_activities", "Investing Cash Flow (Capex)", True, FMT_AMOUNT, "='24_Capex_D&A'!{col}7"),
     ]
 
-    for idx, (ckey, label, is_tot, fmt) in enumerate(fcst_items):
+    for idx, (ckey, label, is_tot, fmt, formula_template) in enumerate(fcst_items):
         r = 6 + idx
         ws.cell(row=r, column=2, value=label).font = FONT_TOTAL if is_tot else FONT_SUBHEADER
 
         for p_idx, p in enumerate(FORECAST_PERIODS):
             c = 3 + p_idx
+            col_letter = chr(67 + p_idx)
             val = spec.forecast.get_value(ckey, p, "base")
-            cell = ws.cell(row=r, column=c, value=round(val, 2) if val is not None else "-")
-            cell.font = FONT_TOTAL if is_tot else FONT_FORMULA
-            cell.number_format = fmt
-            cell.alignment = ALIGN_RIGHT
-            cell.border = BORDER_TOTAL if is_tot else BORDER_BOX
+            c_val = round(val, 2) if val is not None else 0.0
+
+            if formula_template is not None:
+                formula_str = formula_template.format(col=col_letter)
+                write_formula_cell(
+                    ws, r, c,
+                    formula=formula_str,
+                    cached_value=c_val,
+                    num_format=fmt,
+                    font=FONT_TOTAL if is_tot else FONT_FORMULA,
+                    border=BORDER_TOTAL if is_tot else BORDER_BOX,
+                    alignment=ALIGN_RIGHT,
+                )
+            else:
+                cell = ws.cell(row=r, column=c, value=c_val)
+                cell.font = FONT_TOTAL if is_tot else FONT_FORMULA
+                cell.number_format = fmt
+                cell.alignment = ALIGN_RIGHT
+                cell.border = BORDER_TOTAL if is_tot else BORDER_BOX
 
     return ws
 
@@ -116,33 +131,39 @@ def render_revenue_build(wb: Workbook, spec: ModelSpecification) -> Worksheet:
 
     ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
 
-    rev_rows = [
-        ("Assumed Revenue Growth Rate %", FMT_PERCENT, True, [get_assumption_value(spec, "revenue_growth", p) / 100.0 for p in FORECAST_PERIODS], None),
-        (f"Consolidated Revenue ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C6", "='20_Operating_Model'!D6", "='20_Operating_Model'!E6", "='20_Operating_Model'!F6", "='20_Operating_Model'!G6"], [spec.forecast.get_value("canonical.is.revenue", p, "base") for p in FORECAST_PERIODS]),
-    ]
+    growth_rates = [get_assumption_value(spec, "revenue_growth", p) / 100.0 for p in FORECAST_PERIODS]
+    rev_c_vals = [spec.forecast.get_value("canonical.is.revenue", p, "base") for p in FORECAST_PERIODS]
 
-    for idx, (label, fmt, is_inp, vals, c_vals) in enumerate(rev_rows):
-        r = 6 + idx
-        ws.cell(row=r, column=2, value=label).font = FONT_SUBHEADER
-        for p_idx, val in enumerate(vals):
-            c = 3 + p_idx
-            c_val = c_vals[p_idx] if c_vals else None
-            if str(val).startswith("="):
-                write_formula_cell(
-                    ws, r, c,
-                    formula=val,
-                    cached_value=c_val,
-                    num_format=fmt,
-                    font=FONT_INPUT if is_inp else FONT_FORMULA,
-                    border=BORDER_BOX,
-                    alignment=ALIGN_RIGHT,
-                )
-            else:
-                cell = ws.cell(row=r, column=c, value=val)
-                cell.font = FONT_INPUT if is_inp else FONT_FORMULA
-                cell.number_format = fmt
-                cell.alignment = ALIGN_RIGHT
-                cell.border = BORDER_BOX
+    # Row 6: Growth Rate %
+    ws.cell(row=6, column=2, value="Assumed Revenue Growth Rate %").font = FONT_SUBHEADER
+    for p_idx, g in enumerate(growth_rates):
+        c = 3 + p_idx
+        cell = ws.cell(row=6, column=c, value=g)
+        cell.font = FONT_INPUT
+        cell.number_format = FMT_PERCENT
+        cell.alignment = ALIGN_RIGHT
+        cell.border = BORDER_BOX
+
+    # Row 7: Consolidated Revenue (Dynamic Forward Formula)
+    ws.cell(row=7, column=2, value=f"Consolidated Revenue ({ccy})").font = FONT_TOTAL
+    for p_idx, c_val in enumerate(rev_c_vals):
+        c = 3 + p_idx
+        col_let = chr(67 + p_idx)
+        if p_idx == 0:
+            form = f"='10_Income_Statement'!E6*(1+{col_let}6)"
+        else:
+            prev_col = chr(67 + p_idx - 1)
+            form = f"={prev_col}7*(1+{col_let}6)"
+
+        write_formula_cell(
+            ws, 7, c,
+            formula=form,
+            cached_value=c_val,
+            num_format=FMT_AMOUNT,
+            font=FONT_TOTAL,
+            border=BORDER_TOTAL,
+            alignment=ALIGN_RIGHT,
+        )
 
     return ws
 
@@ -160,35 +181,60 @@ def render_cost_build(wb: Workbook, spec: ModelSpecification) -> Worksheet:
 
     ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
 
-    cost_rows = [
-        ("EBITDA Margin %", FMT_PERCENT, True, [get_assumption_value(spec, "ebitda_margin", p) / 100.0 for p in FORECAST_PERIODS], None),
-        (f"EBITDA ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C9", "='20_Operating_Model'!D9", "='20_Operating_Model'!E9", "='20_Operating_Model'!F9", "='20_Operating_Model'!G9"], [spec.forecast.get_value("canonical.is.ebitda", p, "base") for p in FORECAST_PERIODS]),
-        ("Operating Profit Margin %", FMT_PERCENT, True, [get_assumption_value(spec, "ebit_margin", p) / 100.0 for p in FORECAST_PERIODS], None),
-        (f"Operating Profit ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C11", "='20_Operating_Model'!D11", "='20_Operating_Model'!E11", "='20_Operating_Model'!F11", "='20_Operating_Model'!G11"], [spec.forecast.get_value("canonical.is.operating_profit", p, "base") for p in FORECAST_PERIODS]),
-    ]
+    ebitda_margins = [get_assumption_value(spec, "ebitda_margin", p) / 100.0 for p in FORECAST_PERIODS]
+    ebitda_c_vals = [spec.forecast.get_value("canonical.is.ebitda", p, "base") for p in FORECAST_PERIODS]
+    ebit_margins = [get_assumption_value(spec, "ebit_margin", p) / 100.0 for p in FORECAST_PERIODS]
+    ebit_c_vals = [spec.forecast.get_value("canonical.is.operating_profit", p, "base") for p in FORECAST_PERIODS]
 
-    for idx, (label, fmt, is_inp, vals, c_vals) in enumerate(cost_rows):
-        r = 6 + idx
-        ws.cell(row=r, column=2, value=label).font = FONT_SUBHEADER
-        for p_idx, val in enumerate(vals):
-            c = 3 + p_idx
-            c_val = c_vals[p_idx] if c_vals else None
-            if str(val).startswith("="):
-                write_formula_cell(
-                    ws, r, c,
-                    formula=val,
-                    cached_value=c_val,
-                    num_format=fmt,
-                    font=FONT_INPUT if is_inp else FONT_FORMULA,
-                    border=BORDER_BOX,
-                    alignment=ALIGN_RIGHT,
-                )
-            else:
-                cell = ws.cell(row=r, column=c, value=val)
-                cell.font = FONT_INPUT if is_inp else FONT_FORMULA
-                cell.number_format = fmt
-                cell.alignment = ALIGN_RIGHT
-                cell.border = BORDER_BOX
+    # Row 6: EBITDA Margin %
+    ws.cell(row=6, column=2, value="EBITDA Margin %").font = FONT_SUBHEADER
+    for p_idx, m in enumerate(ebitda_margins):
+        c = 3 + p_idx
+        cell = ws.cell(row=6, column=c, value=m)
+        cell.font = FONT_INPUT
+        cell.number_format = FMT_PERCENT
+        cell.alignment = ALIGN_RIGHT
+        cell.border = BORDER_BOX
+
+    # Row 7: EBITDA
+    ws.cell(row=7, column=2, value=f"EBITDA ({ccy})").font = FONT_TOTAL
+    for p_idx, c_val in enumerate(ebitda_c_vals):
+        c = 3 + p_idx
+        col_let = chr(67 + p_idx)
+        write_formula_cell(
+            ws, 7, c,
+            formula=f"='21_Revenue_Build'!{col_let}7*{col_let}6",
+            cached_value=c_val,
+            num_format=FMT_AMOUNT,
+            font=FONT_TOTAL,
+            border=BORDER_TOTAL,
+            alignment=ALIGN_RIGHT,
+        )
+
+    # Row 8: Operating Profit Margin %
+    ws.cell(row=8, column=2, value="Operating Profit Margin %").font = FONT_SUBHEADER
+    for p_idx, m in enumerate(ebit_margins):
+        c = 3 + p_idx
+        cell = ws.cell(row=8, column=c, value=m)
+        cell.font = FONT_INPUT
+        cell.number_format = FMT_PERCENT
+        cell.alignment = ALIGN_RIGHT
+        cell.border = BORDER_BOX
+
+    # Row 9: Operating Profit (EBIT)
+    ws.cell(row=9, column=2, value=f"Operating Profit ({ccy})").font = FONT_TOTAL
+    for p_idx, c_val in enumerate(ebit_c_vals):
+        c = 3 + p_idx
+        col_let = chr(67 + p_idx)
+        write_formula_cell(
+            ws, 9, c,
+            formula=f"='21_Revenue_Build'!{col_let}7*{col_let}8",
+            cached_value=c_val,
+            num_format=FMT_AMOUNT,
+            font=FONT_TOTAL,
+            border=BORDER_TOTAL,
+            alignment=ALIGN_RIGHT,
+        )
 
     return ws
 
@@ -206,35 +252,60 @@ def render_working_capital(wb: Workbook, spec: ModelSpecification) -> Worksheet:
 
     ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
 
-    wc_rows = [
-        ("Days Sales Outstanding (DSO)", FMT_DAYS, True, [get_assumption_value(spec, "dso_days", p) for p in FORECAST_PERIODS], None),
-        (f"Trade Receivables ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C17", "='20_Operating_Model'!D17", "='20_Operating_Model'!E17", "='20_Operating_Model'!F17", "='20_Operating_Model'!G17"], [spec.forecast.get_value("canonical.bs.trade_receivables", p, "base") for p in FORECAST_PERIODS]),
-        ("Days Payables Outstanding (DPO)", FMT_DAYS, True, [get_assumption_value(spec, "dpo_days", p) for p in FORECAST_PERIODS], None),
-        (f"Trade Payables ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C18", "='20_Operating_Model'!D18", "='20_Operating_Model'!E18", "='20_Operating_Model'!F18", "='20_Operating_Model'!G18"], [spec.forecast.get_value("canonical.bs.trade_payables", p, "base") for p in FORECAST_PERIODS]),
-    ]
+    dso_vals = [get_assumption_value(spec, "dso_days", p) for p in FORECAST_PERIODS]
+    rec_c_vals = [spec.forecast.get_value("canonical.bs.trade_receivables", p, "base") for p in FORECAST_PERIODS]
+    dpo_vals = [get_assumption_value(spec, "dpo_days", p) for p in FORECAST_PERIODS]
+    pay_c_vals = [spec.forecast.get_value("canonical.bs.trade_payables", p, "base") for p in FORECAST_PERIODS]
 
-    for idx, (label, fmt, is_inp, vals, c_vals) in enumerate(wc_rows):
-        r = 6 + idx
-        ws.cell(row=r, column=2, value=label).font = FONT_SUBHEADER
-        for p_idx, val in enumerate(vals):
-            c = 3 + p_idx
-            c_val = c_vals[p_idx] if c_vals else None
-            if str(val).startswith("="):
-                write_formula_cell(
-                    ws, r, c,
-                    formula=val,
-                    cached_value=c_val,
-                    num_format=fmt,
-                    font=FONT_INPUT if is_inp else FONT_FORMULA,
-                    border=BORDER_BOX,
-                    alignment=ALIGN_RIGHT,
-                )
-            else:
-                cell = ws.cell(row=r, column=c, value=val)
-                cell.font = FONT_INPUT if is_inp else FONT_FORMULA
-                cell.number_format = fmt
-                cell.alignment = ALIGN_RIGHT
-                cell.border = BORDER_BOX
+    # Row 6: DSO
+    ws.cell(row=6, column=2, value="Days Sales Outstanding (DSO)").font = FONT_SUBHEADER
+    for p_idx, v in enumerate(dso_vals):
+        c = 3 + p_idx
+        cell = ws.cell(row=6, column=c, value=v)
+        cell.font = FONT_INPUT
+        cell.number_format = FMT_DAYS
+        cell.alignment = ALIGN_RIGHT
+        cell.border = BORDER_BOX
+
+    # Row 7: Trade Receivables
+    ws.cell(row=7, column=2, value=f"Trade Receivables ({ccy})").font = FONT_FORMULA
+    for p_idx, c_val in enumerate(rec_c_vals):
+        c = 3 + p_idx
+        col_let = chr(67 + p_idx)
+        write_formula_cell(
+            ws, 7, c,
+            formula=f"='21_Revenue_Build'!{col_let}7*{col_let}6/365",
+            cached_value=c_val,
+            num_format=FMT_AMOUNT,
+            font=FONT_FORMULA,
+            border=BORDER_BOX,
+            alignment=ALIGN_RIGHT,
+        )
+
+    # Row 8: DPO
+    ws.cell(row=8, column=2, value="Days Payables Outstanding (DPO)").font = FONT_SUBHEADER
+    for p_idx, v in enumerate(dpo_vals):
+        c = 3 + p_idx
+        cell = ws.cell(row=8, column=c, value=v)
+        cell.font = FONT_INPUT
+        cell.number_format = FMT_DAYS
+        cell.alignment = ALIGN_RIGHT
+        cell.border = BORDER_BOX
+
+    # Row 9: Trade Payables
+    ws.cell(row=9, column=2, value=f"Trade Payables ({ccy})").font = FONT_FORMULA
+    for p_idx, c_val in enumerate(pay_c_vals):
+        c = 3 + p_idx
+        col_let = chr(67 + p_idx)
+        write_formula_cell(
+            ws, 9, c,
+            formula=f"='20_Operating_Model'!{col_let}7*{col_let}8/365",
+            cached_value=c_val,
+            num_format=FMT_AMOUNT,
+            font=FONT_FORMULA,
+            border=BORDER_BOX,
+            alignment=ALIGN_RIGHT,
+        )
 
     return ws
 
@@ -252,35 +323,60 @@ def render_capex_da(wb: Workbook, spec: ModelSpecification) -> Worksheet:
 
     ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
 
-    rows = [
-        ("Capex % Revenue", FMT_PERCENT, True, [get_assumption_value(spec, "capex_pct_revenue", p) / 100.0 for p in FORECAST_PERIODS], None),
-        (f"Capex Outflow ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C24", "='20_Operating_Model'!D24", "='20_Operating_Model'!E24", "='20_Operating_Model'!F24", "='20_Operating_Model'!G24"], [spec.forecast.get_value("canonical.cf.investing_activities", p, "base") for p in FORECAST_PERIODS]),
-        ("D&A % Revenue", FMT_PERCENT, True, [get_assumption_value(spec, "da_pct_revenue", p) / 100.0 for p in FORECAST_PERIODS], None),
-        (f"D&A Expense ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C10", "='20_Operating_Model'!D10", "='20_Operating_Model'!E10", "='20_Operating_Model'!F10", "='20_Operating_Model'!G10"], [spec.forecast.get_value("canonical.is.depreciation_amortization", p, "base") for p in FORECAST_PERIODS]),
-    ]
+    capex_pcts = [get_assumption_value(spec, "capex_pct_revenue", p) / 100.0 for p in FORECAST_PERIODS]
+    capex_c_vals = [spec.forecast.get_value("canonical.cf.investing_activities", p, "base") for p in FORECAST_PERIODS]
+    da_pcts = [get_assumption_value(spec, "da_pct_revenue", p) / 100.0 for p in FORECAST_PERIODS]
+    da_c_vals = [spec.forecast.get_value("canonical.is.depreciation_amortization", p, "base") for p in FORECAST_PERIODS]
 
-    for idx, (label, fmt, is_inp, vals, c_vals) in enumerate(rows):
-        r = 6 + idx
-        ws.cell(row=r, column=2, value=label).font = FONT_SUBHEADER
-        for p_idx, val in enumerate(vals):
-            c = 3 + p_idx
-            c_val = c_vals[p_idx] if c_vals else None
-            if str(val).startswith("="):
-                write_formula_cell(
-                    ws, r, c,
-                    formula=val,
-                    cached_value=c_val,
-                    num_format=fmt,
-                    font=FONT_INPUT if is_inp else FONT_FORMULA,
-                    border=BORDER_BOX,
-                    alignment=ALIGN_RIGHT,
-                )
-            else:
-                cell = ws.cell(row=r, column=c, value=val)
-                cell.font = FONT_INPUT if is_inp else FONT_FORMULA
-                cell.number_format = fmt
-                cell.alignment = ALIGN_RIGHT
-                cell.border = BORDER_BOX
+    # Row 6: Capex %
+    ws.cell(row=6, column=2, value="Capex % Revenue").font = FONT_SUBHEADER
+    for p_idx, v in enumerate(capex_pcts):
+        c = 3 + p_idx
+        cell = ws.cell(row=6, column=c, value=v)
+        cell.font = FONT_INPUT
+        cell.number_format = FMT_PERCENT
+        cell.alignment = ALIGN_RIGHT
+        cell.border = BORDER_BOX
+
+    # Row 7: Capex Outflow
+    ws.cell(row=7, column=2, value=f"Capex Outflow ({ccy})").font = FONT_FORMULA
+    for p_idx, c_val in enumerate(capex_c_vals):
+        c = 3 + p_idx
+        col_let = chr(67 + p_idx)
+        write_formula_cell(
+            ws, 7, c,
+            formula=f"=-'21_Revenue_Build'!{col_let}7*{col_let}6",
+            cached_value=c_val,
+            num_format=FMT_AMOUNT,
+            font=FONT_FORMULA,
+            border=BORDER_BOX,
+            alignment=ALIGN_RIGHT,
+        )
+
+    # Row 8: D&A %
+    ws.cell(row=8, column=2, value="D&A % Revenue").font = FONT_SUBHEADER
+    for p_idx, v in enumerate(da_pcts):
+        c = 3 + p_idx
+        cell = ws.cell(row=8, column=c, value=v)
+        cell.font = FONT_INPUT
+        cell.number_format = FMT_PERCENT
+        cell.alignment = ALIGN_RIGHT
+        cell.border = BORDER_BOX
+
+    # Row 9: D&A Expense
+    ws.cell(row=9, column=2, value=f"D&A Expense ({ccy})").font = FONT_FORMULA
+    for p_idx, c_val in enumerate(da_c_vals):
+        c = 3 + p_idx
+        col_let = chr(67 + p_idx)
+        write_formula_cell(
+            ws, 9, c,
+            formula=f"='21_Revenue_Build'!{col_let}7*{col_let}8",
+            cached_value=c_val,
+            num_format=FMT_AMOUNT,
+            font=FONT_FORMULA,
+            border=BORDER_BOX,
+            alignment=ALIGN_RIGHT,
+        )
 
     return ws
 
@@ -309,25 +405,91 @@ def render_debt_schedule(wb: Workbook, spec: ModelSpecification) -> Worksheet:
                 return getattr(dp, attr)
         return 0.0
 
-    debt_rows = [
-        (f"Opening Debt Balance ({ccy})", FMT_AMOUNT, [_period_val("opening_balance", p) for p in FORECAST_PERIODS]),
-        (f"Debt Drawdowns ({ccy})", FMT_AMOUNT, [_period_val("draws", p) for p in FORECAST_PERIODS]),
-        (f"Scheduled Repayments ({ccy})", FMT_AMOUNT, [_period_val("scheduled_repayment", p) for p in FORECAST_PERIODS]),
-        (f"Optional Repayments ({ccy})", FMT_AMOUNT, [_period_val("optional_repayment", p) for p in FORECAST_PERIODS]),
-        (f"Closing Debt Balance ({ccy})", FMT_AMOUNT, [_period_val("closing_balance", p) for p in FORECAST_PERIODS]),
-        (f"Interest Expense ({ccy})", FMT_AMOUNT, [_period_val("interest_expense", p) for p in FORECAST_PERIODS]),
-    ]
-
-    for idx, (label, fmt, vals) in enumerate(debt_rows):
-        r = 6 + idx
-        ws.cell(row=r, column=2, value=label).font = FONT_SUBHEADER
-        for p_idx, val in enumerate(vals):
-            c = 3 + p_idx
-            cell = ws.cell(row=r, column=c, value=val)
-            cell.font = FONT_FORMULA
-            cell.number_format = fmt
+    # Row 6: Opening Debt
+    ws.cell(row=6, column=2, value=f"Opening Debt Balance ({ccy})").font = FONT_SUBHEADER
+    for p_idx, p in enumerate(FORECAST_PERIODS):
+        c = 3 + p_idx
+        col_let = chr(67 + p_idx)
+        val = _period_val("opening_balance", p)
+        if p_idx == 0:
+            cell = ws.cell(row=6, column=c, value=val)
+            cell.font = FONT_INPUT
+            cell.number_format = FMT_AMOUNT
             cell.alignment = ALIGN_RIGHT
             cell.border = BORDER_BOX
+        else:
+            prev_col = chr(67 + p_idx - 1)
+            write_formula_cell(
+                ws, 6, c,
+                formula=f"={prev_col}10",
+                cached_value=val,
+                num_format=FMT_AMOUNT,
+                font=FONT_FORMULA,
+                border=BORDER_BOX,
+                alignment=ALIGN_RIGHT,
+            )
+
+    # Row 7: Debt Draws
+    ws.cell(row=7, column=2, value=f"Debt Drawdowns ({ccy})").font = FONT_SUBHEADER
+    for p_idx, p in enumerate(FORECAST_PERIODS):
+        c = 3 + p_idx
+        cell = ws.cell(row=7, column=c, value=_period_val("draws", p))
+        cell.font = FONT_INPUT
+        cell.number_format = FMT_AMOUNT
+        cell.alignment = ALIGN_RIGHT
+        cell.border = BORDER_BOX
+
+    # Row 8: Scheduled Repayments
+    ws.cell(row=8, column=2, value=f"Scheduled Repayments ({ccy})").font = FONT_SUBHEADER
+    for p_idx, p in enumerate(FORECAST_PERIODS):
+        c = 3 + p_idx
+        cell = ws.cell(row=8, column=c, value=_period_val("scheduled_repayment", p))
+        cell.font = FONT_INPUT
+        cell.number_format = FMT_AMOUNT
+        cell.alignment = ALIGN_RIGHT
+        cell.border = BORDER_BOX
+
+    # Row 9: Optional Repayments
+    ws.cell(row=9, column=2, value=f"Optional Repayments ({ccy})").font = FONT_SUBHEADER
+    for p_idx, p in enumerate(FORECAST_PERIODS):
+        c = 3 + p_idx
+        cell = ws.cell(row=9, column=c, value=_period_val("optional_repayment", p))
+        cell.font = FONT_INPUT
+        cell.number_format = FMT_AMOUNT
+        cell.alignment = ALIGN_RIGHT
+        cell.border = BORDER_BOX
+
+    # Row 10: Closing Debt Balance
+    ws.cell(row=10, column=2, value=f"Closing Debt Balance ({ccy})").font = FONT_TOTAL
+    for p_idx, p in enumerate(FORECAST_PERIODS):
+        c = 3 + p_idx
+        col_let = chr(67 + p_idx)
+        val = _period_val("closing_balance", p)
+        write_formula_cell(
+            ws, 10, c,
+            formula=f"={col_let}6+{col_let}7-{col_let}8-{col_let}9",
+            cached_value=val,
+            num_format=FMT_AMOUNT,
+            font=FONT_TOTAL,
+            border=BORDER_TOTAL,
+            alignment=ALIGN_RIGHT,
+        )
+
+    # Row 11: Interest Expense
+    ws.cell(row=11, column=2, value=f"Interest Expense ({ccy})").font = FONT_FORMULA
+    for p_idx, p in enumerate(FORECAST_PERIODS):
+        c = 3 + p_idx
+        col_let = chr(67 + p_idx)
+        val = _period_val("interest_expense", p)
+        write_formula_cell(
+            ws, 11, c,
+            formula=f"=AVERAGE({col_let}6,{col_let}10)*'30_WACC'!C10",
+            cached_value=val,
+            num_format=FMT_AMOUNT,
+            font=FONT_FORMULA,
+            border=BORDER_BOX,
+            alignment=ALIGN_RIGHT,
+        )
 
     return ws
 
@@ -345,34 +507,49 @@ def render_tax_schedule(wb: Workbook, spec: ModelSpecification) -> Worksheet:
 
     ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
 
-    tax_rows = [
-        ("Effective Tax Rate %", FMT_PERCENT, True, [get_assumption_value(spec, "tax_rate", p) / 100.0 for p in FORECAST_PERIODS], None),
-        (f"PBT ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C14", "='20_Operating_Model'!D14", "='20_Operating_Model'!E14", "='20_Operating_Model'!F14", "='20_Operating_Model'!G14"], [spec.forecast.get_value("canonical.is.pbt", p, "base") for p in FORECAST_PERIODS]),
-        (f"Tax Expense ({ccy})", FMT_AMOUNT, False, ["='20_Operating_Model'!C15", "='20_Operating_Model'!D15", "='20_Operating_Model'!E15", "='20_Operating_Model'!F15", "='20_Operating_Model'!G15"], [spec.forecast.get_value("canonical.is.tax", p, "base") for p in FORECAST_PERIODS]),
-    ]
+    tax_rates = [get_assumption_value(spec, "tax_rate", p) / 100.0 for p in FORECAST_PERIODS]
+    pbt_c_vals = [spec.forecast.get_value("canonical.is.pbt", p, "base") for p in FORECAST_PERIODS]
+    tax_c_vals = [spec.forecast.get_value("canonical.is.tax", p, "base") for p in FORECAST_PERIODS]
 
-    for idx, (label, fmt, is_inp, vals, c_vals) in enumerate(tax_rows):
-        r = 6 + idx
-        ws.cell(row=r, column=2, value=label).font = FONT_SUBHEADER
-        for p_idx, val in enumerate(vals):
-            c = 3 + p_idx
-            c_val = c_vals[p_idx] if c_vals else None
-            if str(val).startswith("="):
-                write_formula_cell(
-                    ws, r, c,
-                    formula=val,
-                    cached_value=c_val,
-                    num_format=fmt,
-                    font=FONT_INPUT if is_inp else FONT_FORMULA,
-                    border=BORDER_BOX,
-                    alignment=ALIGN_RIGHT,
-                )
-            else:
-                cell = ws.cell(row=r, column=c, value=val)
-                cell.font = FONT_INPUT if is_inp else FONT_FORMULA
-                cell.number_format = fmt
-                cell.alignment = ALIGN_RIGHT
-                cell.border = BORDER_BOX
+    # Row 6: Effective Tax Rate %
+    ws.cell(row=6, column=2, value="Effective Tax Rate %").font = FONT_SUBHEADER
+    for p_idx, v in enumerate(tax_rates):
+        c = 3 + p_idx
+        cell = ws.cell(row=6, column=c, value=v)
+        cell.font = FONT_INPUT
+        cell.number_format = FMT_PERCENT
+        cell.alignment = ALIGN_RIGHT
+        cell.border = BORDER_BOX
+
+    # Row 7: PBT
+    ws.cell(row=7, column=2, value=f"PBT ({ccy})").font = FONT_FORMULA
+    for p_idx, c_val in enumerate(pbt_c_vals):
+        c = 3 + p_idx
+        col_let = chr(67 + p_idx)
+        write_formula_cell(
+            ws, 7, c,
+            formula=f"='20_Operating_Model'!{col_let}14",
+            cached_value=c_val,
+            num_format=FMT_AMOUNT,
+            font=FONT_FORMULA,
+            border=BORDER_BOX,
+            alignment=ALIGN_RIGHT,
+        )
+
+    # Row 8: Tax Expense
+    ws.cell(row=8, column=2, value=f"Tax Expense ({ccy})").font = FONT_TOTAL
+    for p_idx, c_val in enumerate(tax_c_vals):
+        c = 3 + p_idx
+        col_let = chr(67 + p_idx)
+        write_formula_cell(
+            ws, 8, c,
+            formula=f"={col_let}7*{col_let}6",
+            cached_value=c_val,
+            num_format=FMT_AMOUNT,
+            font=FONT_TOTAL,
+            border=BORDER_TOTAL,
+            alignment=ALIGN_RIGHT,
+        )
 
     return ws
 

@@ -58,10 +58,14 @@ def compute_fcff_periods(
             # Conservative fallback: maintenance capex ≈ D&A (standard assumption for large-cap tech)
             capex = abs(da)
 
-        # Working Capital delta: Operating CF = Net Profit + DA - delta_WC
-        np_val = forecast.get_value("canonical.is.net_profit", p, scenario) or 0.0
-        cfo_val = forecast.get_value("canonical.cf.operating_activities", p, scenario) or (np_val + da)
-        delta_wc = np_val + da - cfo_val
+        # Working Capital delta: use explicit non-cash operating working capital change
+        delta_wc_val = forecast.get_value("canonical.cf.delta_working_capital", p, scenario)
+        if delta_wc_val is not None:
+            delta_wc = delta_wc_val
+        else:
+            np_val = forecast.get_value("canonical.is.net_profit", p, scenario) or 0.0
+            cfo_val = forecast.get_value("canonical.cf.operating_activities", p, scenario) or (np_val + da)
+            delta_wc = np_val + da - cfo_val
 
         fcff = nopat + da - capex - delta_wc
         discount_factor = 1.0 / ((1.0 + wacc_frac) ** t)

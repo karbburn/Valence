@@ -6,14 +6,19 @@ QA & Documentation Tabs Renderer.
 Renders:
 - 50_Data_Sources: Data provenance, status, and filing lineage
 - 51_Assumption_Log: Model-generated and analyst override assumption log
-- 52_Model_Checks: QA model checks rollup table with status
+- 52_Model_Checks: QA model checks rollup table with dynamic live formulas
 - 53_Methodology: System derivation rules and methodology notes
 """
 
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
-from backend.export.excel.builder import apply_tab_defaults, set_col_widths, write_table_header
+from backend.export.excel.builder import (
+    apply_tab_defaults,
+    set_col_widths,
+    write_formula_cell,
+    write_table_header,
+)
 from backend.export.excel.styles import (
     ALIGN_CENTER,
     ALIGN_LEFT,
@@ -119,19 +124,43 @@ def render_model_checks_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet
 
     checks = spec.qa.checks if (spec.qa and spec.qa.checks) else []
 
+    formula_map = {
+        "balance_sheet_balances": '=IF(ABS(\'11_Balance_Sheet\'!E14-\'11_Balance_Sheet\'!E22)<1.0,"PASS","FAIL")',
+        "cash_flow_reconciles": '=IF(ABS(\'12_Cash_Flow\'!E12-(\'11_Balance_Sheet\'!E11-\'11_Balance_Sheet\'!D11))<1.0,"PASS","FAIL")',
+        "debt_schedule_reconciles": '=IF(ABS(\'25_Debt_Schedule\'!C10-\'11_Balance_Sheet\'!E16)<1.0,"PASS","FAIL")',
+        "share_count_consistent": '=IF(\'27_Share_Count\'!E6>0,"PASS","FAIL")',
+        "dcf_bridge_reconciles": '=IF(ABS(\'31_DCF\'!H19-(\'31_DCF\'!H17+\'31_DCF\'!H18))<1.0,"PASS","FAIL")',
+        "wacc_valid": '=IF(AND(\'30_WACC\'!C15>0.03,\'30_WACC\'!C15<0.30),"PASS","FAIL")',
+        "terminal_growth_lt_wacc": '=IF(\'32_Terminal_Value\'!C6<\'30_WACC\'!C15,"PASS","FAIL")',
+        "no_missing_critical_inputs": '=IF(\'31_DCF\'!H28>0,"PASS","FAIL")',
+        "data_provenance_quality": '=IF(COUNTA(\'50_Data_Sources\'!B6:B11)>0,"PASS","FAIL")',
+    }
+
     for idx, c in enumerate(checks):
         r = 6 + idx
         ws.cell(row=r, column=2, value=c.check_name).font = FONT_SUBHEADER
         ws.cell(row=r, column=3, value=c.category).font = FONT_FORMULA
 
-        res_cell = ws.cell(row=r, column=4, value="PASS" if c.passed else "FAIL")
-        res_cell.alignment = ALIGN_CENTER
-        if c.passed:
-            res_cell.font = FONT_PASS
-            res_cell.fill = FILL_PASS
+        cached_res = "PASS" if c.passed else "FAIL"
+        formula_expr = formula_map.get(c.check_name, None)
+
+        if formula_expr:
+            write_formula_cell(
+                ws, r, 4,
+                formula=formula_expr,
+                cached_value=cached_res,
+                num_format="@",
+                font=FONT_PASS if c.passed else FONT_ALERT,
+                fill=FILL_PASS if c.passed else FILL_FAIL,
+                border=BORDER_BOX,
+                alignment=ALIGN_CENTER,
+            )
         else:
-            res_cell.font = FONT_ALERT
-            res_cell.fill = FILL_FAIL
+            res_cell = ws.cell(row=r, column=4, value=cached_res)
+            res_cell.alignment = ALIGN_CENTER
+            res_cell.font = FONT_PASS if c.passed else FONT_ALERT
+            res_cell.fill = FILL_PASS if c.passed else FILL_FAIL
+            res_cell.border = BORDER_BOX
 
         ws.cell(row=r, column=5, value=c.detail if not c.passed else "Verified OK").font = FONT_FORMULA
 
