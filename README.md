@@ -51,18 +51,69 @@ graph TD
 ```
 Valence/
 ├── backend/
-│   ├── api/                  # FastAPI routes, auth, persistence, static files
-│   │   ├── static/           # SPA Web Dashboard (index.html, styles.css, app.js, icons)
-│   │   └── main.py           # FastAPI app entry point
-│   ├── data/                 # Data ingestion pipelines, SEC/Screener parsers, universe store
-│   ├── export/               # OpenPyXL Excel exporter (27-tab workbook engine)
-│   │   └── excel/            # Tab-by-tab formula renderers & OpenXML patched builder
-│   ├── forecast/             # 5-year driver forecast engine, debt schedule, share count
-│   ├── models/               # Pydantic schemas, historical statement structures
-│   ├── normalization/        # Taxonomy mapping registry & canonical metric derivations
-│   ├── validation/           # QA model validation checks & diagnostic pipeline
-│   └── valuation/            # DCF, WACC (CAPM), Reverse DCF, and Sensitivity analysis
-└── README.md
+│   ├── api/                           # FastAPI web service layer
+│   │   ├── static/                    # SPA Web Dashboard (TradingView-style UI)
+│   │   │   ├── index.html             # Main HTML5 entry point
+│   │   │   ├── styles.css             # Glassmorphism dark-theme styling
+│   │   │   ├── app.js                 # Vanilla JS dashboard state & chart controller
+│   │   │   └── icon.png               # Brand icon resource
+│   │   ├── main.py                    # FastAPI server initialization
+│   │   ├── routes.py                  # API endpoints (recompute, revert, export, list)
+│   │   └── self_check.py              # API integration test suite
+│   ├── data/                          # Data ingestion, parsing & persistence
+│   │   ├── ingestion/                 # Source-specific parsers
+│   │   │   ├── sec_edgar.py           # US SEC EDGAR XBRL company facts parser
+│   │   │   ├── screener.py            # India Screener.in Excel parser
+│   │   │   ├── india_live.py          # Live India market data ingestion
+│   │   │   └── us_live.py             # Live US market data ingestion
+│   │   ├── universe/                  # Core coverage universe store
+│   │   │   ├── models.py              # Raw database schemas
+│   │   │   ├── store.py               # SQLite raw datapoint writer/reader
+│   │   │   └── master_list.py         # Onboarded tickers and markets registry
+│   │   ├── pipeline.py                # Ingestion pipeline orchestration
+│   │   └── precompute.py              # Cache precomputation manager
+│   ├── export/                        # Excel exporting layer
+│   │   └── excel/                     # openpyxl workbook renderer
+│   │       ├── builder.py             # Low-level openpyxl utilities & OpenXML string patcher
+│   │       ├── exporter.py            # Main export runner (27-tab orchestrator)
+│   │       ├── render_front.py        # Covers, guides, executive summary sheets
+│   │       ├── render_hist.py         # Historical financials (10_Income_Statement, etc.)
+│   │       ├── render_fcst.py         # Forecast sheets (20_Operating_Model, schedules)
+│   │       ├── render_val.py          # Valuation sheets (WACC, DCF, Sensitivity grids)
+│   │       ├── render_qa.py           # Documentation and dynamic QA checks
+│   │       └── styles.py              # Standardized IB/PE formatting & color tokens
+│   ├── forecast/                      # Driver-based forecast engine
+│   │   ├── engine.py                  # 3-statement period roll-forward calculation
+│   │   ├── assumptions.py             # Scenario growth & margin parameters loader
+│   │   ├── debt.py                    # Generic debt schedule calculator
+│   │   └── share_count.py             # Basic and diluted share series builder
+│   ├── models/                        # Pydantic contract specifications
+│   │   ├── spec/                      # Valuation model metadata & schemas
+│   │   │   ├── model_specification.py # Top-level ModelSpecification schema
+│   │   │   ├── forecast.py            # Forecast output contracts
+│   │   │   ├── valuation.py           # WACC, TV, DCF, and reverse DCF schemas
+│   │   │   └── qa.py                  # Model audit check contract
+│   │   └── statements/                # Financial statement structure contracts
+│   │       ├── historical_model.py    # Historical database parser
+│   │       ├── income_statement.py    # Income statement mapping schema
+│   │       ├── balance_sheet.py       # Balance sheet mapping schema
+│   │       └── cash_flow.py           # Cash flow statement mapping schema
+│   ├── normalization/                 # Taxonomy normalization & derivation
+│   │   ├── taxonomy/                  # Standardized accounting classifications
+│   │   │   ├── mapping_engine.py      # Raw-to-canonical label mapper
+│   │   │   └── registry.py            # India & US taxonomy definitions
+│   │   └── financials/                # Derived metric calculation logic
+│   │       └── derivation.py          # Derivations (EBITDA, Net NWC, etc.)
+│   ├── validation/                    # QA model verification checks
+│   │   ├── accounting_checks.py       # Double-entry balance sheet checks
+│   │   └── pipeline.py                # QA audit execution & validation rollup
+│   └── valuation/                     # Valuation engines
+│       ├── dcf.py                     # Unlevered FCFF & discounting timing engine
+│       ├── wacc.py                    # CAPM cost of equity & WACC capital weighting
+│       ├── reverse_dcf.py             # Closed-form implied terminal growth solver
+│       └── sensitivity.py             # Multidimensional sensitivity matrices
+├── .gitignore                         # Local dev caches, output workbooks, and database ignore
+└── README.md                          # Platform description and documentation
 ```
 
 ---
