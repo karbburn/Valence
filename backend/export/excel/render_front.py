@@ -145,7 +145,7 @@ def render_model_guide(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     for q_idx, (t_name, label, desc) in enumerate(quick_jumps):
         r = 6 + q_idx
         ws.cell(row=r, column=2, value=f"Jump to {label}").font = FONT_SUBHEADER
-        cell_q = ws.cell(row=r, column=3, value=f"Go to '{t_name}' →")
+        cell_q = ws.cell(row=r, column=3, value=f"Open '{t_name}'")
         cell_q.font = FONT_HYPERLINK
         cell_q.hyperlink = f"#'{t_name}'!A1"
         ws.cell(row=r, column=4, value=desc).font = FONT_FORMULA
@@ -163,41 +163,41 @@ def render_model_guide(wb: Workbook, spec: ModelSpecification) -> Worksheet:
 
     guide_items = [
         # Front Matter
-        ("📌 Front Matter", "00_Cover", "Company cover page, metadata, and branding slot"),
-        ("📌 Front Matter", "01_Model_Guide", "Workbook structure and tab navigation reference"),
-        ("📌 Front Matter", "02_Executive_Summary", "60-second valuation overview & scenario outputs"),
-        ("📌 Front Matter", "03_Model_Control", "Scenario selector and global model controls"),
+        ("Front Matter", "00_Cover", "Company cover page, metadata, and branding slot"),
+        ("Front Matter", "01_Model_Guide", "Workbook structure and tab navigation reference"),
+        ("Front Matter", "02_Executive_Summary", "60-second valuation overview & scenario outputs"),
+        ("Front Matter", "03_Model_Control", "Scenario selector and global model controls"),
         # Historical Financials
-        ("📊 Historical Financials", "10_Income_Statement", "Historical Income Statement (FY24-FY26)"),
-        ("📊 Historical Financials", "11_Balance_Sheet", "Historical Balance Sheet (FY24-FY26)"),
-        ("📊 Historical Financials", "12_Cash_Flow", "Historical Cash Flow Statement (FY24-FY26)"),
-        ("📊 Historical Financials", "13_Financial_Ratios", "Historical margins, growth rates & working capital"),
-        ("📊 Historical Financials", "14_Historical_Drivers", "Historical financial driver series"),
+        ("Historical Financials", "10_Income_Statement", "Historical Income Statement (FY24-FY26)"),
+        ("Historical Financials", "11_Balance_Sheet", "Historical Balance Sheet (FY24-FY26)"),
+        ("Historical Financials", "12_Cash_Flow", "Historical Cash Flow Statement (FY24-FY26)"),
+        ("Historical Financials", "13_Financial_Ratios", "Historical margins, growth rates & working capital"),
+        ("Historical Financials", "14_Historical_Drivers", "Historical financial driver series"),
         # Forecast & Schedules
-        ("🔮 Forecast & Schedules", "20_Operating_Model", "Combined 3-statement forecast model (FY27-FY31)"),
-        ("🔮 Forecast & Schedules", "21_Revenue_Build", "Segment revenue forecast & YoY growth"),
-        ("🔮 Forecast & Schedules", "22_Cost_Build", "EBITDA & operating cost structure forecast"),
-        ("🔮 Forecast & Schedules", "23_Working_Capital", "DSO & DPO driven working capital forecast"),
-        ("🔮 Forecast & Schedules", "24_Capex_D&A", "Capex % revenue & D&A schedule"),
-        ("🔮 Forecast & Schedules", "25_Debt_Schedule", "Generic debt schedule (thin for zero debt)"),
-        ("🔮 Forecast & Schedules", "26_Tax_Schedule", "Effective tax rate & PBT tax forecast"),
-        ("🔮 Forecast & Schedules", "27_Share_Count", "Diluted share count schedule"),
+        ("Forecast & Schedules", "20_Operating_Model", "Combined 3-statement forecast model (FY27-FY31)"),
+        ("Forecast & Schedules", "21_Revenue_Build", "Segment revenue forecast & YoY growth"),
+        ("Forecast & Schedules", "22_Cost_Build", "EBITDA & operating cost structure forecast"),
+        ("Forecast & Schedules", "23_Working_Capital", "DSO & DPO driven working capital forecast"),
+        ("Forecast & Schedules", "24_Capex_D&A", "Capex % revenue & D&A schedule"),
+        ("Forecast & Schedules", "25_Debt_Schedule", "Generic debt schedule (thin for zero debt)"),
+        ("Forecast & Schedules", "26_Tax_Schedule", "Effective tax rate & PBT tax forecast"),
+        ("Forecast & Schedules", "27_Share_Count", "Diluted share count schedule"),
         # Valuation
-        ("🎯 Valuation", "30_WACC", "WACC CAPM cost of equity & capital weighting"),
-        ("🎯 Valuation", "31_DCF", "5-year FCFF, PV discounting, and EV -> Price bridge"),
-        ("🎯 Valuation", "32_Terminal_Value", "Dual terminal value: Gordon Growth & Exit Multiple"),
-        ("🎯 Valuation", "33_Sensitivity", "2D sensitivity grids (WACC x Growth, WACC x Multiple)"),
-        ("🎯 Valuation", "34_Reverse_DCF", "Market implied perpetuity terminal growth rate"),
-        ("🎯 Valuation", "35_Scenario_Analysis", "Base, Bull, Bear outputs side-by-side"),
+        ("Valuation", "30_WACC", "WACC CAPM cost of equity & capital weighting"),
+        ("Valuation", "31_DCF", "5-year FCFF, PV discounting, and EV -> Price bridge"),
+        ("Valuation", "32_Terminal_Value", "Dual terminal value: Gordon Growth & Exit Multiple"),
+        ("Valuation", "33_Sensitivity", "2D sensitivity grids (WACC x Growth, WACC x Multiple)"),
+        ("Valuation", "34_Reverse_DCF", "Market implied perpetuity terminal growth rate"),
+        ("Valuation", "35_Scenario_Analysis", "Base, Bull, Bear outputs side-by-side"),
         # Supporting Analysis
-        ("📈 Supporting Analysis", "40_Trading_Comps", "Public peer group trading multiples & implied target valuation"),
-        ("📈 Supporting Analysis", "41_Valuation_Comparison", "Institutional valuation Football Field multi-methodology range chart"),
-        ("📈 Supporting Analysis", "42_Investment_Returns", "Private Equity exit returns, 3Y/5Y MoIC and Equity IRR waterfall"),
+        ("Supporting Analysis", "40_Trading_Comps", "Public peer group trading multiples & implied target valuation"),
+        ("Supporting Analysis", "41_Valuation_Comparison", "Institutional valuation Football Field multi-methodology range chart"),
+        ("Supporting Analysis", "42_Investment_Returns", "Private Equity exit returns, 3Y/5Y MoIC and Equity IRR waterfall"),
         # QA / Documentation
-        ("🛡️ QA & Documentation", "50_Data_Sources", "Line item status, source filings & lineage"),
-        ("🛡️ QA & Documentation", "51_Assumption_Log", "Model-generated & analyst override assumptions"),
-        ("🛡️ QA & Documentation", "52_Model_Checks", "QA model checks rollup table and status"),
-        ("🛡️ QA & Documentation", "53_Methodology", "System derivation and valuation methodology notes"),
+        ("QA / Documentation", "50_Data_Sources", "Line item status, source filings & lineage"),
+        ("QA / Documentation", "51_Assumption_Log", "Model-generated & analyst override assumptions"),
+        ("QA / Documentation", "52_Model_Checks", "QA model checks rollup table and status"),
+        ("QA / Documentation", "53_Methodology", "System derivation and valuation methodology notes"),
     ]
 
     curr_group = ""

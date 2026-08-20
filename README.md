@@ -4,7 +4,7 @@
   <img src="backend/api/static/icon.png" width="128" height="128" alt="Valence Logo">
 </p>
 
-Valence is a high-performance equity valuation platform and 3-statement financial modeling workbench. It integrates multi-source financial data ingestion, taxonomy normalization, driver-based 5-year forecasting, WACC estimation via CAPM, dual terminal value methodologies, reverse DCF growth solvers, automated accounting QA validation, a 27-tab Excel model exporter with live dynamic formulas, and a real-time web dashboard.
+Valence is a high-performance equity valuation platform and 3-statement financial modeling workbench. It integrates multi-source financial data ingestion, taxonomy normalization, driver-based 5-year forecasting, WACC estimation via CAPM, dual terminal value methodologies, reverse DCF growth solvers, public trading comps benchmarking, football field valuation range synthesis, PE exit return waterfalls, automated accounting QA validation, a 30-tab Excel model exporter with live dynamic formulas, and a real-time web dashboard.
 
 ---
 
@@ -13,9 +13,11 @@ Valence is a high-performance equity valuation platform and 3-statement financia
 - **Driver-Based 5-Year Forecasting Engine**: Project Income Statement, Balance Sheet, and Cash Flow Statement across **Base**, **Bull**, and **Bear** scenarios driven by operational metrics (Revenue Growth, EBITDA/EBIT Margins, CapEx % Revenue, D&A %, DSO, DPO, Tax Rate).
 - **Institutional DCF & WACC Buildup**: Full Free Cash Flow to Firm (FCFF) build with clean Non-Cash Operating Working Capital ($\Delta NWC$), dynamic WACC estimation (CAPM cost of equity + tax-shielded cost of debt), Gordon Growth & Exit EV/EBITDA Multiple terminal values, and Enterprise Value to Implied Share Price bridge.
 - **Dynamic Reverse DCF & 2D Sensitivity**: Solves for market-implied perpetuity growth rates via exact closed-form inversion formulas, paired with live 2D sensitivity formula grids (WACC vs. Terminal Growth & Exit Multiple).
+- **Public Trading Comps & Football Field Synthesis**: Benchmarks target company against sector peers (EV/Sales, EV/EBITDA, P/E, FCF Yield %, ROIC %) and synthesizes cross-methodology valuation range bars (52-Week Range, DCF Perpetuity, DCF Multiple, Comps P/E, Comps EV/EBITDA, Analyst Consensus).
+- **Private Equity Exit Returns & IRR Waterfall**: Calculates 3-year and 5-year prospective **Exit Equity Value**, **MoIC (Multiple on Invested Capital)**, and **Equity IRR (%)** under Base, Bull, and Bear exit scenarios with entry price sensitivity grids.
 - **Multi-Market & Multi-Currency Support**: Native support for US equities (NASDAQ/NYSE in USD Millions) and Indian equities (NSE/BSE in INR Crores), with dynamic currency and unit localization across all financial statements.
 - **Automated Accounting & Model QA Engine**: Executes 9 rigorous validation checks (Balance Sheet balancing, Cash Flow reconciliation, Debt schedule ties, Share count consistency, DCF bridge tie-out, WACC bounds, and data quality).
-- **27-Tab Interactive Excel Exporter**: Generates 100% dynamic `.xlsx` workbooks where detail schedules drive the forecast operating model (`20_Operating_Model`), featuring live Excel formulas (CAPM, FCFF sums, cross-sheet references, 2D sensitivity grids, and live `=IF(...)` audit checks).
+- **30-Tab Interactive Excel Exporter**: Generates 100% dynamic `.xlsx` workbooks where detail schedules drive the forecast operating model (`20_Operating_Model`), featuring live Excel formulas (CAPM, FCFF sums, cross-sheet references, 2D sensitivity grids, and live `=IF(...)` audit checks).
 - **Real-Time Web Workbench**: Single-Page Application (SPA) dashboard inspired by Bloomberg Terminal and TradingView UI. Supports live driver overrides, instant recomputation, scenario switching, company search, and persistent model scenario storage.
 
 ---
@@ -54,16 +56,18 @@ flowchart TB
         WACC[CAPM WACC Module]
         DCF[Unlevered FCFF Engine]
         Reverse[Reverse DCF Solver]
+        Comps[Public Comps & Football Field]
+        Returns[PE Returns & IRR Waterfall]
         QA[9-Point QA Validation Engine]
         Schedules --> WACC & DCF
-        DCF --> Reverse
-        WACC & DCF & Reverse --> QA
+        DCF --> Reverse & Comps & Returns
+        WACC & DCF & Reverse & Comps & Returns --> QA
     end
 
     subgraph Delivery["5. Delivery Layer"]
         API[FastAPI Router & Controller]
         Web[SPA Web Dashboard]
-        Excel[27-Tab Interactive Excel Exporter]
+        Excel[30-Tab Interactive Excel Exporter]
         QA --> API
         API --> Web
         API --> Excel
