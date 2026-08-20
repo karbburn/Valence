@@ -49,19 +49,19 @@ export function WACCBreakdown({ spec, scenario }: WACCBreakdownProps) {
       <div className="bg-[#0d1220] border border-[#1e283d] rounded-[4px] divide-y divide-[#1e283d] overflow-hidden text-[12px]">
         {/* Risk-Free Rate */}
         <div className="flex items-center justify-between px-[8px] py-[6px]">
-          <span className="text-[#64748b]">Risk-Free Rate (Rf)</span>
+          <span className="text-[#94a3b8]">Risk-Free Rate (Rf)</span>
           <span className="font-mono text-[#f8fafc]">{fmtPct(rf, 2)}</span>
         </div>
 
         {/* Beta */}
         <div className="flex items-center justify-between px-[8px] py-[6px]">
-          <span className="text-[#64748b]">Beta (β)</span>
+          <span className="text-[#94a3b8]">Beta (β)</span>
           <span className="font-mono text-[#f8fafc]">{beta != null ? beta.toFixed(2) : '—'}</span>
         </div>
 
         {/* Equity Risk Premium */}
         <div className="flex items-center justify-between px-[8px] py-[6px]">
-          <span className="text-[#64748b]">Equity Risk Premium (ERP)</span>
+          <span className="text-[#94a3b8]">Equity Risk Premium (ERP)</span>
           <span className="font-mono text-[#f8fafc]">{fmtPct(erp, 2)}</span>
         </div>
 
@@ -73,25 +73,25 @@ export function WACCBreakdown({ spec, scenario }: WACCBreakdownProps) {
 
         {/* Pre-Tax Cost of Debt */}
         <div className="flex items-center justify-between px-[8px] py-[6px]">
-          <span className="text-[#64748b]">Pre-Tax Cost of Debt (Kd)</span>
+          <span className="text-[#94a3b8]">Pre-Tax Cost of Debt (Kd)</span>
           <span className="font-mono text-[#f8fafc]">{fmtPct(preTaxKd, 2)}</span>
         </div>
 
         {/* Marginal Tax Rate */}
         <div className="flex items-center justify-between px-[8px] py-[6px]">
-          <span className="text-[#64748b]">Effective Tax Rate (t)</span>
+          <span className="text-[#94a3b8]">Effective Tax Rate (t)</span>
           <span className="font-mono text-[#f8fafc]">{fmtPct(taxRate, 2)}</span>
         </div>
 
         {/* After-Tax Cost of Debt */}
         <div className="flex items-center justify-between px-[8px] py-[6px]">
-          <span className="text-[#64748b]">After-Tax Cost of Debt</span>
+          <span className="text-[#94a3b8]">After-Tax Cost of Debt</span>
           <span className="font-mono text-[#f8fafc]">{fmtPct(postTaxKd, 2)}</span>
         </div>
 
         {/* Capital Weights */}
         <div className="flex items-center justify-between px-[8px] py-[6px]">
-          <span className="text-[#64748b]">Weights (Equity / Debt)</span>
+          <span className="text-[#94a3b8]">Weights (Equity / Debt)</span>
           <span className="font-mono text-[#94a3b8]">
             {fmtPct(eqWeight, 1)} / {fmtPct(debtWeight, 1)}
           </span>
