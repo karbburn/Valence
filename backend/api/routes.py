@@ -248,45 +248,16 @@ def recompute_model(req: OverrideRequest, company_id: str = "infy_infy") -> Dict
 
 @router.post("/model/revert")
 def revert_driver_override(req: RevertRequest, company_id: str = "infy_infy") -> Dict[str, Any]:
-    """Revert driver override back to model-generated state and re-run engine."""
+    """Revert driver override back to model-generated state and re-run engine.
+    
+    Supports bulk revert if driver_key is 'all'.
+    """
     spec = _get_or_build_spec(company_id)
 
     new_assumptions = []
     for a in spec.assumptions:
-        if a.driver_key == req.driver_key and a.scenario == req.scenario and (a.period in (req.period, "all") or req.period == "all"):
-            new_assumptions.append(a.reverted())
-        else:
-            new_assumptions.append(a)
-
-    hist_m = _get_hist_model(company_id)
-    scenarios = ["base", "bull", "bear"]
-    merged_items = []
-    for s in scenarios:
-        s_assumptions = [a for a in new_assumptions if a.scenario == s]
-        f_out = run_forecast(s_assumptions, hist_m, s)
-        merged_items.extend(f_out.line_items)
-
-    spec.assumptions = new_assumptions
-    spec.forecast = Forecast(line_items=merged_items)
-    spec = run_valuation(spec)
-    spec = run_qa(spec)
-
-    _lru_put(_MODEL_CACHE, company_id, spec)
-    return spec.model_dump(mode="json")
-
-
-class RevertAllRequest(BaseModel):
-    scenario: str = "base"
-
-
-@router.post("/model/revert_all")
-def revert_all_driver_overrides(req: RevertAllRequest, company_id: str = "infy_infy") -> Dict[str, Any]:
-    """Revert all driver overrides for a scenario back to model-generated state and re-run engine."""
-    spec = _get_or_build_spec(company_id)
-
-    new_assumptions = []
-    for a in spec.assumptions:
-        if a.scenario == req.scenario and a.type == "user_override":
+        is_match = (req.driver_key == "all" or a.driver_key == req.driver_key)
+        if is_match and a.scenario == req.scenario and (a.period in (req.period, "all") or req.period == "all"):
             new_assumptions.append(a.reverted())
         else:
             new_assumptions.append(a)
