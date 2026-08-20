@@ -75,7 +75,7 @@ export function CompanySearch({ onSelectCompany }: CompanySearchProps) {
   }
 
   return (
-    <div className="relative w-64 select-none">
+    <div className="relative w-36 sm:w-44 md:w-52 lg:w-56">
       {/* Search Input */}
       <div className="relative">
         {searching ? (
