@@ -69,7 +69,11 @@ def compute_wacc(
     b = round(0.67 * raw_b + 0.33, 3) if (raw_b > 1.8 and beta is None) else raw_b
     erp = equity_risk_premium if equity_risk_premium is not None else mdata.equity_risk_premium.value
 
-    cost_of_equity = rfr + (b * erp)
+    ke_override = _get_assumption_val(assumptions, "wacc.cost_of_equity", scenario, None)
+    if ke_override is not None:
+        cost_of_equity = ke_override
+    else:
+        cost_of_equity = rfr + (b * erp)
 
     # 2. Cost of Debt
     pre_tax_cost_of_debt = _get_assumption_val(assumptions, "wacc.cost_of_debt", scenario, None)

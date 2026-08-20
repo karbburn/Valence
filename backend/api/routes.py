@@ -201,11 +201,11 @@ def recompute_model(req: OverrideRequest, company_id: str = "infy_infy") -> Dict
     """Apply driver override, re-run forecast -> valuation -> QA engine, and return updated spec."""
     spec = _get_or_build_spec(company_id)
 
-    # 1. Update assumption list with override
+    # 1. Update assumption list with override across all forecast periods
     new_assumptions = []
     found = False
     for a in spec.assumptions:
-        if a.driver_key == req.driver_key and a.scenario == req.scenario and (a.period in (req.period, "all") or req.period == "all"):
+        if a.driver_key == req.driver_key and a.scenario == req.scenario:
             new_assumptions.append(a.with_override(req.value))
             found = True
         else:
@@ -217,7 +217,7 @@ def recompute_model(req: OverrideRequest, company_id: str = "infy_infy") -> Dict
         new_ass = AssumptionObject(
             driver_key=req.driver_key,
             value=req.value,
-            period=req.period,
+            period="all",
             scenario=req.scenario,  # type: ignore
             type="user_override",
             source="Analyst Override",
