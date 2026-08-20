@@ -273,42 +273,42 @@
     }
   },
   "hcltech_hcltech": {
-    "fetch_date": "2026-08-17",
+    "fetch_date": "2026-08-20",
     "data": {
       "company_id": "hcltech_hcltech",
       "ticker": "HCLTECH",
       "market": "india",
       "price": {
-        "value": 1330.8,
+        "value": 1318.4,
         "source": "yfinance",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-20",
         "provenance_note": "yfinance live price for HCLTECH.NS"
       },
       "shares_outstanding": {
         "value": 270.5767,
         "source": "yfinance",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-20",
         "provenance_note": "yfinance live shares outstanding (270.58 Cr)"
       },
       "beta": {
         "value": 0.95,
         "source": "yfinance",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-20",
         "provenance_note": "yfinance 2Y weekly beta (0.01, domestic calibrated 0.95)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-20",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-20",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-08-17T14:18:11.240646"
+      "timestamp": "2026-08-20T21:27:37.447017"
     }
   },
   "idea_idea": {
@@ -429,42 +429,42 @@
     }
   },
   "lt_lt": {
-    "fetch_date": "2026-08-17",
+    "fetch_date": "2026-08-20",
     "data": {
       "company_id": "lt_lt",
       "ticker": "LT",
       "market": "india",
       "price": {
-        "value": 4060.3,
+        "value": 4081.0,
         "source": "yfinance",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-20",
         "provenance_note": "yfinance live price for LT.NS"
       },
       "shares_outstanding": {
         "value": 137.5866,
         "source": "yfinance",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-20",
         "provenance_note": "yfinance live shares outstanding (137.59 Cr)"
       },
       "beta": {
         "value": 0.95,
         "source": "yfinance",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-20",
         "provenance_note": "yfinance 2Y weekly beta (0.51, domestic calibrated 0.95)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-20",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-20",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-08-17T14:18:35.657311"
+      "timestamp": "2026-08-20T21:27:40.484681"
     }
   },
   "msft_us": {
