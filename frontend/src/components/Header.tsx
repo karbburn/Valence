@@ -44,7 +44,7 @@ export function Header({
       : 'failed'
 
   return (
-    <header className="sticky top-0 z-40 h-[48px] w-full bg-[#111622]/95 backdrop-blur-md border-b border-[#1e283d] px-2.5 sm:px-3 md:px-4 flex items-center justify-between text-sans select-none gap-2 md:gap-3 overflow-x-auto no-scrollbar">
+    <header className="sticky top-0 z-40 h-[48px] w-full bg-[#111622]/95 backdrop-blur-md border-b border-[#1e283d] px-2.5 sm:px-3 md:px-4 flex items-center justify-between text-sans select-none gap-2 md:gap-3 overflow-visible">
       {/* Left section: Logo, Search, Company Badge */}
       <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
         {/* Brand Logo */}
@@ -66,7 +66,7 @@ export function Header({
 
         {/* Active Company Badge */}
         {metadata && (
-          <div className="hidden md:flex items-center space-x-1.5 bg-[#0d1220] border border-[#1e283d] rounded-[4px] px-2 py-1 max-w-[150px] lg:max-w-[190px]">
+          <div className="hidden lg:flex items-center space-x-1.5 bg-[#0d1220] border border-[#1e283d] rounded-[4px] px-2 py-1 max-w-[150px] lg:max-w-[190px]">
             <span className="font-bold text-[10.5px] uppercase tracking-[0.03em] text-[#f8fafc] truncate">
               {metadata.name}
             </span>
