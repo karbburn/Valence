@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { ModelSpecification } from '@/lib/types'
-import { fetchModelSpec, recomputeModel, revertDriver } from '@/lib/api'
+import { fetchModelSpec, recomputeModel, revertDriver, revertAll } from '@/lib/api'
 
 interface UseModelSpecReturn {
   spec: ModelSpecification | null
@@ -13,6 +13,7 @@ interface UseModelSpecReturn {
   applySpec: (spec: ModelSpecification) => void
   recompute: (driverKey: string, value: number, scenario?: string) => Promise<void>
   revert: (driverKey: string, scenario?: string, period?: string) => Promise<void>
+  resetAll: (scenario?: string) => Promise<void>
 }
 
 export function useModelSpec(initialCompanyId = 'infy_infy'): UseModelSpecReturn {
@@ -86,5 +87,17 @@ export function useModelSpec(initialCompanyId = 'infy_infy'): UseModelSpecReturn
     []
   )
 
-  return { spec, loading, error, companyId, loadModel, applySpec, recompute, revert }
+  const resetAll = useCallback(
+    async (scenario = 'base') => {
+      try {
+        const updated = await revertAll(companyIdRef.current, scenario)
+        setSpec(updated)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Reset all failed')
+      }
+    },
+    []
+  )
+
+  return { spec, loading, error, companyId, loadModel, applySpec, recompute, revert, resetAll }
 }
