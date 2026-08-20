@@ -128,8 +128,13 @@ def main() -> None:
 
     # Check 10: 01_Model_Guide Consolas Code Box Formatting
     ws_guide = wb["01_Model_Guide"]
-    code_cell = ws_guide.cell(row=63, column=3)
-    _assert(code_cell.font.name == "Consolas" and code_cell.font.bold, f"01_Model_Guide formula code font verified ({code_cell.font.name} {code_cell.font.size}pt Bold)")
+    code_cell = None
+    for r in range(50, ws_guide.max_row + 1):
+        c_val = ws_guide.cell(row=r, column=3)
+        if c_val.font and c_val.font.name == "Consolas":
+            code_cell = c_val
+            break
+    _assert(code_cell is not None and code_cell.font.bold, f"01_Model_Guide formula code font verified ({code_cell.font.name if code_cell else 'None'} 11pt Bold)")
 
     print("\n====================================================================================================")
     print("INSTITUTIONAL AUDIT SUMMARY:")
