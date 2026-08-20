@@ -11,5 +11,9 @@ frontend
 assets
 test_*
 scratch_metrics.json
-backend/data/cache/
+# NOTE: backend/data/cache/ is intentionally shipped in the image. These are the
+# precomputed ModelSpecification JSONs (~3.5 MB total) that let the first
+# /api/model request load instantly from disk instead of triggering a heavy live
+# build (ingest -> forecast -> valuation -> QA), which risks OOM/timeout on
+# Render's free tier (512 MB). The runtime still writes new caches on demand.
 backend/data/user_models/
