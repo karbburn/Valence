@@ -1,0 +1,19 @@
+# Valence
+
+> Valence is a free, browser-based equity-valuation and 3-statement financial-modeling workbench for US (NASDAQ/NYSE) and Indian (NSE/BSE) equities, with DCF/WACC, trading comps, PE returns, and a 30-tab Excel exporter.
+
+## Overview
+- [Valence Home](https://valence-valuation.vercel.app/): Interactive valuation dashboard, company search, and scenario modeling.
+- [About Valence](https://valence-valuation.vercel.app/about): What Valence is, who it is for, the tech stack, and how it is built.
+- [Methodology](https://valence-valuation.vercel.app/methodology): DCF, WACC (CAPM), trading comps, football-field synthesis, PE returns, and QA math.
+
+## Capabilities
+- [DCF & WACC Engine](https://valence-valuation.vercel.app/methodology): Unlevered FCFF discounted at a CAPM-based WACC with Gordon-growth and exit-multiple terminal values.
+- [Trading Comps & Football Field](https://valence-valuation.vercel.app/methodology): Peer benchmarking (EV/Sales, EV/EBITDA, P/E, FCF yield, ROIC) and cross-method valuation ranges.
+- [PE Returns & IRR](https://valence-valuation.vercel.app/methodology): 3- and 5-year exit equity value, MoIC, and IRR across Base/Bull/Bear scenarios.
+- [Excel Exporter](https://valence-valuation.vercel.app/): 30-tab .xlsx workbook with live, dynamic Excel formulas.
+- [9-Point QA Engine](https://valence-valuation.vercel.app/methodology): Automated balance-sheet, cash-flow, debt, and DCF bridge validation checks.
+
+## Optional
+- [GitHub](https://github.com/karbburn): Source code and documentation.
+- [Author — Sourabh](https://sourabh08.vercel.app/): Creator of Valence.
