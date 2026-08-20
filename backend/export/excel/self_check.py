@@ -128,13 +128,13 @@ def main() -> None:
 
     # Check 10: 01_Model_Guide Consolas Code Box Formatting
     ws_guide = wb["01_Model_Guide"]
-    code_cell = ws_guide.cell(row=60, column=3)
+    code_cell = ws_guide.cell(row=63, column=3)
     _assert(code_cell.font.name == "Consolas" and code_cell.font.bold, f"01_Model_Guide formula code font verified ({code_cell.font.name} {code_cell.font.size}pt Bold)")
 
     print("\n====================================================================================================")
     print("INSTITUTIONAL AUDIT SUMMARY:")
     print(f"  Company Name        : {spec.metadata.name} ({spec.metadata.ticker})")
-    print(f"  Workbook Size       : {file_size_kb:.1f} KB (27 tabs)")
+    print(f"  Workbook Size       : {file_size_kb:.1f} KB (30 tabs)")
     print(f"  Implied Share Price : {spec.metadata.currency} {bridge.implied_share_price:.2f}")
     print(f"  WACC %              : {wacc.wacc:.2f}%")
     print(f"  QA Audit Status     : {spec.qa.summary_label} (9/9 Checks Passed)")
