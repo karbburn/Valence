@@ -16,8 +16,13 @@ RUN adduser --disabled-password --gecos "" appuser \
 
 USER appuser
 
-EXPOSE 8000
+# Render's Docker runtime routes traffic to the $PORT env var (default 10000).
+# Bind to it explicitly (falling back to 8000 for local `docker run`) so the
+# platform's health check and load balancer can actually reach the server.
+# Hardcoding 8000 here previously caused `hibernate-wake-error` 503s because
+# Render expected the app on $PORT (10000) and the health check could not connect.
+EXPOSE 10000
 
-HEALTHCHECK CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')" || exit 1
+HEALTHCHECK CMD ["python", "-c", "import os,urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\",\"8000\")}/api/health')"]
 
-CMD ["uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn backend.api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

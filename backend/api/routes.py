@@ -116,8 +116,26 @@ def _get_or_build_spec(company_id: str = "infy_infy") -> ModelSpecification:
             try:
                 with open(cache_path, "r", encoding="utf-8") as f:
                     raw_str = f.read()
-                _lru_put(_MODEL_CACHE, company_id, ModelSpecification.deserialize(raw_str))
+                spec = ModelSpecification.deserialize(raw_str)
                 logger.info("Loaded %s ModelSpecification from precomputed cache.", company_id)
+                # The cache holds a build-time SNAPSHOT of market data (price, shares,
+                # beta, risk-free rate, ERP). Re-run valuation against live providers so
+                # the served model reflects current market prices. The forecast itself
+                # is reused from the cache, so this is a light valuation recompute, not
+                # a full rebuild. If the live fetch fails (e.g. provider/network down),
+                # fall back to the snapshot rather than triggering a heavy on-demand
+                # ingestion that could OOM the free tier.
+                try:
+                    spec = run_valuation(spec)
+                    spec = run_qa(spec)
+                    logger.info("Refreshed live market data for %s.", company_id)
+                except Exception as refresh_err:
+                    logger.warning(
+                        "Market-data refresh failed for %s; serving cached snapshot: %s",
+                        company_id,
+                        refresh_err,
+                    )
+                _lru_put(_MODEL_CACHE, company_id, spec)
             except Exception as e:
                 logger.warning("Failed to load cache for %s, compiling live: %s", company_id, e)
                 ensure_company_ingested(company_id)
