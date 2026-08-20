@@ -72,6 +72,19 @@ export async function revertDriver(
   return res.json()
 }
 
+export async function revertAll(
+  companyId: string,
+  scenario = 'base'
+): Promise<ModelSpecification> {
+  const res = await fetch(`${BASE}/api/model/revert_all?company_id=${companyId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ scenario }),
+  })
+  if (!res.ok) throw new Error('Revert all failed')
+  return res.json()
+}
+
 export async function fetchCompanies(): Promise<CompanySummary[]> {
   const res = await fetch(`${BASE}/api/companies`)
   if (!res.ok) throw new Error('Failed to load companies')

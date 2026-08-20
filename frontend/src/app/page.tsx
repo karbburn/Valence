@@ -25,7 +25,7 @@ import { saveModel, loadSavedModel } from '@/lib/api'
 import { fmtPrice } from '@/lib/formatters'
 
 export default function HomePage() {
-  const { spec, loading, error, companyId, loadModel, applySpec, recompute, revert } =
+  const { spec, loading, error, companyId, loadModel, applySpec, recompute, revert, resetAll } =
     useModelSpec('infy_infy')
 
   const [mode, setMode] = useState<'analyst' | 'quick' | 'full'>('analyst')
@@ -121,10 +121,7 @@ export default function HomePage() {
 
   const handleResetAll = async () => {
     if (!spec) return
-    const scenarioAssumptions = (spec.assumptions || []).filter((a) => a.scenario === scenario && a.type === 'user_override')
-    for (const a of scenarioAssumptions) {
-      await revert(a.driver_key, scenario, a.period)
-    }
+    await resetAll(scenario)
     setToastType('info')
     setToastMessage('All valuation drivers restored to baseline defaults')
   }
