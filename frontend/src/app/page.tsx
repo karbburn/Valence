@@ -115,6 +115,18 @@ export default function HomePage() {
 
   const handleExportExcel = () => {
     window.location.href = `/api/export/excel?company_id=${companyId}`
+    setToastType('success')
+    setToastMessage(`30-Tab Institutional Model generated for ${spec?.metadata?.ticker || 'Company'}!`)
+  }
+
+  const handleResetAll = async () => {
+    if (!spec) return
+    const scenarioAssumptions = (spec.assumptions || []).filter((a) => a.scenario === scenario && a.type === 'user_override')
+    for (const a of scenarioAssumptions) {
+      await revert(a.driver_key, scenario, a.period)
+    }
+    setToastType('info')
+    setToastMessage('All valuation drivers restored to baseline defaults')
   }
 
   const handleCopySummary = () => {
@@ -189,6 +201,7 @@ export default function HomePage() {
                 scenario={scenario}
                 onDriverChange={handleDriverChange}
                 onDriverRevert={handleDriverRevert}
+                onResetAll={handleResetAll}
               />
               <WACCBreakdown spec={spec} scenario={scenario} />
               <FinancialRatios spec={spec} scenario={scenario} />
