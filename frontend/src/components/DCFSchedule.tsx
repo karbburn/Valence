@@ -169,12 +169,15 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
                       <span>{r.label}</span>
                       {ROW_TOOLTIPS[r.label] && (
                         <>
-                          <Info className="w-3 h-3 text-[#64748b] group-hover:text-[#0ea5e9] transition-colors shrink-0" />
-                          <div className="pointer-events-none absolute left-0 bottom-full mb-1.5 hidden group-hover:block w-72 p-2.5 bg-[#0d1220] border border-[#2a3652] rounded-[4px] shadow-2xl z-50 text-[11px] font-sans text-[#f8fafc] leading-tight">
-                            <div className="font-semibold text-[#7dd3fc] mb-1">{r.label}</div>
-                            <div className="text-[#94a3b8] mb-1.5">{ROW_TOOLTIPS[r.label].desc}</div>
-                            <div className="font-mono text-[10px] text-[#38bdf8] bg-[#080c14] border border-[#1e283d] px-1.5 py-0.5 rounded-[3px]">
-                              {ROW_TOOLTIPS[r.label].formula}
+                          <Info className="w-3 h-3 text-[#0ea5e9] group-hover:text-[#38bdf8] transition-colors shrink-0" />
+                          <div className="pointer-events-none absolute left-0 top-full mt-1.5 hidden group-hover:block w-80 p-3 bg-[#192030] border border-[#0ea5e9]/50 rounded-[4px] shadow-[0_10px_30px_rgba(0,0,0,0.8)] z-50 text-[11.5px] font-sans text-[#f8fafc] leading-normal">
+                            <div className="font-bold text-[12px] text-[#38bdf8] mb-1 flex items-center justify-between">
+                              <span>{r.label}</span>
+                              <span className="text-[9px] font-mono uppercase bg-[#0ea5e9]/20 text-[#7dd3fc] border border-[#0ea5e9]/30 px-1.5 py-0.5 rounded-[2px]">Definition</span>
+                            </div>
+                            <div className="text-[#cbd5e1] font-normal mb-2 leading-snug">{ROW_TOOLTIPS[r.label].desc}</div>
+                            <div className="font-mono text-[10.5px] font-semibold text-[#38bdf8] bg-[#0d1220] border border-[#2a3652] px-2 py-1 rounded-[3px]">
+                              <span className="text-[#94a3b8] mr-1 font-sans font-normal">Formula:</span> {ROW_TOOLTIPS[r.label].formula}
                             </div>
                           </div>
                         </>
