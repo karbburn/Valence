@@ -87,7 +87,9 @@ export function DriverPanel({
       {/* Driver List */}
       <div className="space-y-2 max-h-[calc(100vh-340px)] overflow-y-auto pr-1">
         {DRIVER_CONFIGS.map((cfg) => {
-          const matched = scenarioAssumptions.find((a) => a.driver_key === cfg.key)
+          const matched = scenarioAssumptions.find(
+            (a) => a.driver_key === cfg.key && (a.period === 'FY27' || a.period === 'all')
+          )
           const val = matched?.value ?? 0
           const isOverride = matched?.type === 'user_override'
 
