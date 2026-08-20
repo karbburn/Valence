@@ -30,6 +30,45 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
   const tv = valuation.terminal_value || {}
   const wacc = valuation.wacc || {}
 
+  const ROW_TOOLTIPS: Record<string, { desc: string; formula: string }> = {
+    'EBIT (Operating Profit)': {
+      desc: 'Earnings Before Interest and Taxes — core operating profitability before capital structure and taxes.',
+      formula: 'Revenue - COGS - Operating Expenses - D&A',
+    },
+    'Tax Rate %': {
+      desc: 'Effective corporate tax rate applied to operating earnings for NOPAT calculation.',
+      formula: 'Taxes / PBT',
+    },
+    'NOPAT': {
+      desc: 'Net Operating Profit After Tax — un-levered profit generated purely by core operations.',
+      formula: 'EBIT × (1 - Effective Tax Rate)',
+    },
+    '+ D&A': {
+      desc: 'Depreciation & Amortization added back because it is a non-cash accounting expense.',
+      formula: 'Cash Flow Statement D&A Add-back',
+    },
+    '− CapEx': {
+      desc: 'Capital Expenditures — net cash spent on property, plant, equipment, and intangible assets.',
+      formula: 'Cash Flow Statement Capital Investments',
+    },
+    '± ΔNWC': {
+      desc: 'Change in Non-Cash Operating Working Capital — cash invested or freed up in working capital.',
+      formula: '− (Δ Receivables + Δ Inventory − Δ Payables)',
+    },
+    '= FCFF (Free Cash Flow)': {
+      desc: 'Free Cash Flow to Firm — unlevered cash flow available to all debt and equity capital providers.',
+      formula: 'NOPAT + D&A − CapEx − ΔNWC',
+    },
+    'Discount Factor (Mid-Year)': {
+      desc: 'Mid-year discount factor assuming cash flows arrive continuously throughout the year.',
+      formula: '1 / (1 + WACC)^(t - 0.5)',
+    },
+    'PV(FCFF)': {
+      desc: 'Present Value of Free Cash Flow discounted back to current fiscal year.',
+      formula: 'FCFF × Mid-Year Discount Factor',
+    },
+  }
+
   const rows = [
     { label: 'EBIT (Operating Profit)', fn: (p: typeof fcffs[0]) => fmtNum(p.ebit), bold: false, total: false },
     { label: 'Tax Rate %', fn: (p: typeof fcffs[0]) => fmtPct(p.tax_rate, 1), bold: false, total: false },
@@ -126,7 +165,21 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
                       r.bold ? 'text-[#f8fafc]' : 'text-[#cbd5e1]'
                     }`}
                   >
-                    {r.label}
+                    <div className="group relative inline-flex items-center space-x-1.5 cursor-help">
+                      <span>{r.label}</span>
+                      {ROW_TOOLTIPS[r.label] && (
+                        <>
+                          <Info className="w-3 h-3 text-[#64748b] group-hover:text-[#0ea5e9] transition-colors shrink-0" />
+                          <div className="pointer-events-none absolute left-0 bottom-full mb-1.5 hidden group-hover:block w-72 p-2.5 bg-[#0d1220] border border-[#2a3652] rounded-[4px] shadow-2xl z-50 text-[11px] font-sans text-[#f8fafc] leading-tight">
+                            <div className="font-semibold text-[#7dd3fc] mb-1">{r.label}</div>
+                            <div className="text-[#94a3b8] mb-1.5">{ROW_TOOLTIPS[r.label].desc}</div>
+                            <div className="font-mono text-[10px] text-[#38bdf8] bg-[#080c14] border border-[#1e283d] px-1.5 py-0.5 rounded-[3px]">
+                              {ROW_TOOLTIPS[r.label].formula}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </td>
                   {fcffs.map((p) => (
                     <td

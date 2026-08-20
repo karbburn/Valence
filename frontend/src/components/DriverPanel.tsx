@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { Sliders } from 'lucide-react'
+import { Sliders, RotateCcw } from 'lucide-react'
 import { ModelSpecification, ScenarioLabel } from '@/lib/types'
 import { DriverSlider } from './DriverSlider'
 
@@ -33,6 +33,7 @@ export interface DriverPanelProps {
   scenario: ScenarioLabel
   onDriverChange: (driverKey: string, value: number) => void
   onDriverRevert: (driverKey: string, period?: string) => void
+  onResetAll?: () => void
 }
 
 export function DriverPanel({
@@ -40,23 +41,47 @@ export function DriverPanel({
   scenario,
   onDriverChange,
   onDriverRevert,
+  onResetAll,
 }: DriverPanelProps) {
   const assumptions = spec?.assumptions || []
   const scenarioAssumptions = assumptions.filter((a) => a.scenario === scenario)
+  const hasOverrides = scenarioAssumptions.some((a) => a.type === 'user_override')
+
+  const handleResetAll = () => {
+    if (onResetAll) {
+      onResetAll()
+    } else {
+      scenarioAssumptions
+        .filter((a) => a.type === 'user_override')
+        .forEach((a) => onDriverRevert(a.driver_key, a.period || 'FY27'))
+    }
+  }
 
   return (
-    <div className="bg-surface border border-border rounded-[4px] p-3.5 flex flex-col shadow-sm select-none">
+    <div className="bg-surface border border-[#1e283d] rounded-[4px] p-3.5 flex flex-col shadow-sm select-none">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border pb-2.5 mb-2.5">
+      <div className="flex items-center justify-between border-b border-[#1e283d] pb-2.5 mb-2.5">
         <div className="flex items-center space-x-2">
           <Sliders className="w-4 h-4 text-[#0ea5e9]" />
           <h2 className="font-bold text-[15px] text-text-main">
             Valuation Drivers
           </h2>
         </div>
-        <span className="font-mono text-[10px] text-[#7dd3fc] bg-[#0ea5e9]/10 border border-[#0ea5e9]/20 rounded-[3px] px-2 py-0.5 uppercase">
-          {scenario} Scenario
-        </span>
+        <div className="flex items-center space-x-2">
+          {hasOverrides && (
+            <button
+              onClick={handleResetAll}
+              title="Reset all driver overrides to baseline defaults"
+              className="flex items-center space-x-1 text-[10.5px] font-semibold text-[#f43f5e] bg-[#f43f5e]/10 border border-[#f43f5e]/30 hover:bg-[#f43f5e]/20 rounded-[3px] px-2 py-0.5 transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Reset All</span>
+            </button>
+          )}
+          <span className="font-mono text-[10px] text-[#7dd3fc] bg-[#0ea5e9]/10 border border-[#0ea5e9]/20 rounded-[3px] px-2 py-0.5 uppercase">
+            {scenario} Scenario
+          </span>
+        </div>
       </div>
 
       {/* Driver List */}
