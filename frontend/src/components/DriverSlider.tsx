@@ -74,8 +74,8 @@ export function DriverSlider({
             {label}
           </span>
           {isOverride && (
-            <span className="font-bold text-[9px] uppercase tracking-[0.04em] bg-[#0ea5e9]/15 text-[#7dd3fc] border border-[#0ea5e9]/30 px-1.5 py-0.2 rounded-[3px] shrink-0">
-              Override
+            <span className="font-bold text-[8.5px] uppercase tracking-[0.04em] bg-[#0ea5e9]/15 text-[#7dd3fc] border border-[#0ea5e9]/30 px-1.5 py-0.5 rounded-[3px] shrink-0">
+              ANALYST OVERRIDE
             </span>
           )}
         </div>
