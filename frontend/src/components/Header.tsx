@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useRef } from 'react'
+import Image from 'next/image'
 import { Save, Bookmark, FileSpreadsheet, CheckCircle2, AlertTriangle, Copy } from 'lucide-react'
 import { ModelSpecification, ScenarioLabel, CompanySummary } from '@/lib/types'
 import { fmtPct } from '@/lib/formatters'
@@ -84,7 +85,7 @@ export function Header({
       <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
         <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
           <div className="h-8 px-1.5 bg-white rounded-sm flex items-center justify-center shadow-pop overflow-hidden">
-            <img src="/logo.png" alt="" className="h-6 w-auto object-contain" />
+            <Image src="/logo.png" alt="" width={28} height={28} priority className="h-6 w-auto object-contain" />
           </div>
           <span className="font-bold text-[16px] sm:text-[17px] tracking-[0.05em] text-text-main">
             Valence

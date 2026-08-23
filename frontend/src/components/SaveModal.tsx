@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { Save } from 'lucide-react'
 import { Modal } from './Modal'
 
@@ -19,18 +19,10 @@ export function SaveModal({
   scenario,
   onSave,
 }: SaveModalProps) {
-  const [name, setName] = useState('')
+  const defaultName = `${companyName || 'Model'} – ${scenario.toUpperCase()} – ${new Date().toISOString().slice(0, 10)}`
+  const [name, setName] = useState(defaultName)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (open) {
-      const defaultName = `${companyName || 'Model'} – ${scenario.toUpperCase()} – ${new Date().toISOString().slice(0, 10)}`
-      setName(defaultName)
-      setError(null)
-      setSaving(false)
-    }
-  }, [open, companyName, scenario])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

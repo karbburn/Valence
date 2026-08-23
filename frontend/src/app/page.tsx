@@ -316,19 +316,23 @@ export default function HomePage() {
         qa={spec?.qa || null}
       />
 
-      <SaveModal
-        open={saveOpen}
-        onClose={() => setSaveOpen(false)}
-        companyName={spec?.metadata?.name || 'Valuation Model'}
-        scenario={scenario}
-        onSave={handleSaveSubmit}
-      />
+      {saveOpen && (
+        <SaveModal
+          open
+          onClose={() => setSaveOpen(false)}
+          companyName={spec?.metadata?.name || 'Valuation Model'}
+          scenario={scenario}
+          onSave={handleSaveSubmit}
+        />
+      )}
 
-      <SavedModelsModal
-        open={savedModelsOpen}
-        onClose={() => setSavedModelsOpen(false)}
-        onLoadModel={handleLoadSavedModel}
-      />
+      {savedModelsOpen && (
+        <SavedModelsModal
+          open
+          onClose={() => setSavedModelsOpen(false)}
+          onLoadModel={handleLoadSavedModel}
+        />
+      )}
 
       <MethodologyModal
         open={methodologyOpen}

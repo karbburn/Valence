@@ -62,7 +62,7 @@ export function ForecastTable({ spec, scenario }: ForecastTableProps) {
         <table className="w-full text-[11px] border-collapse">
           <thead>
             <tr className="bg-[#0d1220] border-b border-[#1e283d] h-8">
-              <th className="px-3 py-1.5 text-left font-semibold text-[#94a3b8] uppercase tracking-[0.04em]">
+              <th scope="col" className="px-3 py-1.5 text-left font-semibold text-[#94a3b8] uppercase tracking-[0.04em]">
                 Line Item
               </th>
               {periods.map((p) => (
