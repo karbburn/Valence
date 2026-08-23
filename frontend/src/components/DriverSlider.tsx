@@ -1,8 +1,8 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { RotateCcw } from 'lucide-react'
-import { fmtNum, fmtPct } from '@/lib/formatters'
+import { fmtNum } from '@/lib/formatters'
 
 export interface DriverSliderProps {
   driverKey: string
@@ -17,6 +17,8 @@ export interface DriverSliderProps {
   onRevert: (key: string) => void
 }
 
+const inputId = (key: string) => `driver-${key.replace(/\./g, '-')}`
+
 export function DriverSlider({
   driverKey,
   label,
@@ -30,82 +32,114 @@ export function DriverSlider({
   onRevert,
 }: DriverSliderProps) {
   const [localVal, setLocalVal] = useState<number>(value)
+  const [draftText, setDraftText] = useState<string | null>(null)
   const isDragging = useRef(false)
+  const id = inputId(driverKey)
 
   useEffect(() => {
     if (!isDragging.current) {
       setLocalVal(value)
+      setDraftText(null)
     }
   }, [value])
 
   const formatReadout = (v: number) => {
-    if (unit === '%') return fmtPct(v, 1)
+    if (unit === '%') return `${fmtNum(v, 1)}%`
     if (unit === 'x') return `${fmtNum(v, 1)}x`
     return `${fmtNum(v, 0)} d`
   }
 
-  // Handle immediate visual readout scrubbing
+  const clamp = (v: number) => Math.min(max, Math.max(min, v))
+
+  // Immediate visual readout while scrubbing; recompute fires on release.
   const handleInput = (e: React.FormEvent<HTMLInputElement>) => {
-    const val = parseFloat((e.target as HTMLInputElement).value)
     isDragging.current = true
-    setLocalVal(val)
+    setLocalVal(parseFloat((e.target as HTMLInputElement).value))
   }
 
-  // Trigger debounced recompute callback on change release
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseFloat(e.target.value)
     isDragging.current = false
+    const val = parseFloat(e.target.value)
     setLocalVal(val)
+    setDraftText(null)
     onChange(driverKey, val)
+  }
+
+  // Precise numeric entry: commit on Enter or blur, reject invalid drafts.
+  const commitDraft = () => {
+    if (draftText == null) return
+    const parsed = parseFloat(draftText.replace(/[^0-9.\-]/g, ''))
+    if (!Number.isNaN(parsed)) {
+      const clamped = clamp(parsed)
+      setLocalVal(clamped)
+      onChange(driverKey, clamped)
+    }
+    setDraftText(null)
   }
 
   return (
     <div
-      className={`rounded-[4px] px-[8px] py-[6px] transition-all select-none border ${
+      className={`rounded-sm px-2 py-1.5 transition-colors border ${
         isOverride
-          ? 'bg-[#0d1220] border-[#0ea5e9]/40 ring-1 ring-[#0ea5e9]/20'
-          : 'bg-[#0d1220] border-[#1e283d] hover:border-[#2a3652]'
+          ? 'bg-surface-3 border-accent-border'
+          : 'bg-surface-3 border-border hover:border-border-interactive'
       }`}
     >
-      {/* Top row: Label, Override badge, Value readout, Revert button */}
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <div className="flex items-center space-x-1.5 min-w-0">
-          <span className="font-semibold text-[12px] text-[#e2e8f0] truncate">
-            {label}
-          </span>
-          {isOverride && (
-            <span className="font-bold text-[8.5px] uppercase tracking-[0.04em] bg-[#0ea5e9]/15 text-[#7dd3fc] border border-[#0ea5e9]/30 px-1.5 py-0.5 rounded-[3px] shrink-0">
-              ANALYST OVERRIDE
-            </span>
-          )}
-        </div>
+      <div className="flex items-center justify-between gap-2 mb-0.5">
+        <label
+          htmlFor={id}
+          className="font-semibold text-[12px] text-[#e2e8f0] truncate cursor-pointer"
+        >
+          {label}
+        </label>
 
-        <div className="flex items-center space-x-1.5 shrink-0">
-          <span className="font-mono text-[12px] font-semibold text-[#f8fafc] w-14 text-right">
-            {formatReadout(localVal)}
-          </span>
+        <div className="flex items-center gap-1.5 shrink-0">
           {isOverride && (
             <button
+              type="button"
               onClick={() => onRevert(driverKey)}
+              aria-label={`Revert ${label} to model baseline`}
               title="Revert to baseline assumption"
-              className="text-[#94a3b8] hover:text-[#7dd3fc] transition-colors p-0.5 rounded hover:bg-[#192030]"
+              className="flex items-center gap-1 font-bold text-[10px] text-text-faint hover:text-accent-hover bg-surface-2 hover:bg-surface border border-border rounded-sm px-1 py-0.5 transition-colors cursor-pointer"
             >
-              <RotateCcw className="w-3 h-3" />
+              <RotateCcw className="w-3 h-3" aria-hidden />
+              <span>override</span>
             </button>
           )}
+
+          <input
+            type="text"
+            inputMode="decimal"
+            aria-label={`${label} — exact value`}
+            value={draftText ?? formatReadout(localVal)}
+            onChange={(e) => setDraftText(e.target.value)}
+            onBlur={commitDraft}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                ;(e.target as HTMLInputElement).blur()
+              }
+              if (e.key === 'Escape') {
+                setDraftText(null)
+                ;(e.target as HTMLInputElement).blur()
+              }
+            }}
+            className="w-[4.25rem] text-right font-mono text-[12px] font-semibold text-text-main bg-transparent border border-transparent hover:border-border rounded-sm px-1 py-0.5 focus:border-accent-border focus:bg-canvas transition-colors cursor-text"
+          />
         </div>
       </div>
 
-      {/* Slider Track */}
       <input
+        id={id}
         type="range"
+        className="driver-range"
         min={min}
         max={max}
         step={step}
         value={localVal}
+        aria-valuetext={formatReadout(localVal)}
         onInput={handleInput}
         onChange={handleChange}
-        className="w-full h-1 bg-[#192030] rounded-lg appearance-none cursor-pointer accent-[#0ea5e9]"
       />
     </div>
   )
