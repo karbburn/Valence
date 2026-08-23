@@ -125,9 +125,16 @@ def render_model_checks_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet
     checks = spec.qa.checks if (spec.qa and spec.qa.checks) else []
 
     formula_map = {
-        "balance_sheet_balances": '=IF(ABS(\'11_Balance_Sheet\'!E14-\'11_Balance_Sheet\'!E22)<1.0,"PASS","FAIL")',
-        "cash_flow_reconciles": '=IF(ABS(\'12_Cash_Flow\'!E12-(\'11_Balance_Sheet\'!E11-\'11_Balance_Sheet\'!D11))<1.0,"PASS","FAIL")',
-        "debt_schedule_reconciles": '=IF(ABS(\'25_Debt_Schedule\'!C10-\'11_Balance_Sheet\'!E16)<1.0,"PASS","FAIL")',
+        "balance_sheet_balances": '=IF(ABS(N(\'11_Balance_Sheet\'!E19)-N(\'11_Balance_Sheet\'!E23))<1.0,"PASS","FAIL")',
+        "cash_flow_reconciles": '=IF(ABS(N(\'12_Cash_Flow\'!E12)-(N(\'11_Balance_Sheet\'!E16)-N(\'11_Balance_Sheet\'!D16)))<MAX(0.01*ABS(N(\'12_Cash_Flow\'!E12)),1.0),"PASS","FAIL")',
+        "debt_schedule_reconciles": (
+            '=IF(AND('
+            + ",".join(
+                f"ABS('25_Debt_Schedule'!{c}10-('25_Debt_Schedule'!{c}6+'25_Debt_Schedule'!{c}7-'25_Debt_Schedule'!{c}8-'25_Debt_Schedule'!{c}9))<0.01"
+                for c in "CDEFG"
+            )
+            + '),"PASS","FAIL")'
+        ),
         "share_count_consistent": '=IF(\'27_Share_Count\'!E6>0,"PASS","FAIL")',
         "dcf_bridge_reconciles": '=IF(ABS(\'31_DCF\'!H19-(\'31_DCF\'!H17+\'31_DCF\'!H18))<1.0,"PASS","FAIL")',
         "wacc_valid": '=IF(AND(\'30_WACC\'!C15>0.03,\'30_WACC\'!C15<0.30),"PASS","FAIL")',

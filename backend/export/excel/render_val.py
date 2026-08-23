@@ -268,7 +268,11 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         c_val = p.delta_working_capital if p else None
 
         if idx == 0:
-            form = f"=('23_Working_Capital'!C7-'23_Working_Capital'!C9)-('11_Balance_Sheet'!E10-'11_Balance_Sheet'!E17)"
+            form = (
+                f"=('23_Working_Capital'!C7-'23_Working_Capital'!C9)"
+                f"-(N('11_Balance_Sheet'!E13)+N('11_Balance_Sheet'!E14)"
+                f"+N('11_Balance_Sheet'!E15)-N('11_Balance_Sheet'!E22))"
+            )
         else:
             prev_col_let = chr(67 + idx - 1)
             form = f"=('23_Working_Capital'!{col_let}7-'23_Working_Capital'!{col_let}9)-('23_Working_Capital'!{prev_col_let}7-'23_Working_Capital'!{prev_col_let}9)"
