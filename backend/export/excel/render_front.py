@@ -301,10 +301,12 @@ def render_model_guide(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     
     formula_guide = [
         ("Free Cash Flow to Firm (FCFF)", "NOPAT + D&A - CapEx - ΔNWC", "The actual cash left over for all capital providers after paying operating expenses, taxes, and capital investments."),
+        ("Stock-Based Compensation Deduction", "FCFF less Stock Comp (memo row)", "SBC is a real economic cost even though non-cash under accounting rules; deducting it prevents overstating value at dilution's expense."),
         ("Mid-Year Discount Factor", "1 / ((1 + WACC) ^ (t - 0.5))", "Discounts future cash flows assuming cash is received evenly throughout the year (exponent t - 0.5 for t=1..5)."),
-        ("Terminal Value (Gordon Growth)", "FCFF_5 * (1 + g) / (WACC - g)", "Estimates the value of all cash flows beyond Year 5 assuming the company grows forever at a steady rate g."),
+        ("Terminal Value (Gordon Growth)", "FCFF_5 * (1 + g) / (WACC - g)", "Estimates the value of all cash flows beyond Year 5 assuming the company grows forever at a steady rate g. Terminal growth anchors to each market's long-run nominal GDP (US ~2.25%, India ~4.0%)."),
         ("Equity Value Bridge", "EV + Cash + MktSec + NonCurrInv - Debt", "Converts Enterprise Value (business operations) to Equity Value (shareholders' wealth) by adding cash and subtracting debt."),
         ("Implied Share Price", "Equity Value / Diluted Shares", "Calculates the fair value price per share to compare directly against live market stock price."),
+        ("Reverse DCF Implied Growth", "Solve g such that value equals market price", "Inverts the model to reveal what growth the market is pricing in; notes flag implied perpetuity growth outside a plausible -2% to +5% band."),
     ]
     for idx, (metric, form_str, desc) in enumerate(formula_guide):
         row_i = r_fm + 1 + idx
