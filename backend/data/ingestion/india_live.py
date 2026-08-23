@@ -65,6 +65,7 @@ YF_CASHFLOW_MAP = [
     ("Capital Expenditure", ["Capital Expenditure", "Purchase Of PPE", "PaymentsToAcquirePropertyPlantAndEquipment"]),
     ("Cash from Investing Activity", ["Investing Cash Flow", "Cash Flowsfromusedin Investing Activities"]),
     ("Cash from Financing Activity", ["Financing Cash Flow", "Cash Flowsfromusedin Financing Activities"]),
+    ("Stock Based Compensation", ["Stock Based Compensation", "Share Based Compensation"]),
 ]
 
 

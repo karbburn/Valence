@@ -152,9 +152,13 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
         "NetCashProvidedByUsedInFinancingActivitiesContinuingOperations"
     ], "CASH FLOW:"),
     ("PaymentsToAcquirePropertyPlantAndEquipment", [
-        "PaymentsToAcquirePropertyPlantAndEquipment", 
+        "PaymentsToAcquirePropertyPlantAndEquipment",
         "PaymentsToAcquireProductiveAssets",
         "PaymentsToAcquirePropertyPlantEquipment"
+    ], "CASH FLOW:"),
+    ("Stock Based Compensation", [
+        "ShareBasedCompensation",
+        "AllocatedShareBasedCompensationExpense"
     ], "CASH FLOW:"),
     ("Basic (in shares)", [
         "CommonStockSharesOutstanding", 

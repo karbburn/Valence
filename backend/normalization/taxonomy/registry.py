@@ -112,7 +112,11 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Cash from Financing Activity": ("canonical.cf.financing_activities", "cf"),
     "Dividend Amount": ("canonical.cf.dividends_paid", "cf"),
     "Other adjustments": ("canonical.cf.other_adjustments", "cf"),
-    "Stock compensation expense": ("canonical.cf.other_adjustments", "cf"),
+    "Stock compensation expense": ("canonical.cf.stock_compensation", "cf"),
+    "Stock Based Compensation": ("canonical.cf.stock_compensation", "cf"),
+    "Share Based Compensation": ("canonical.cf.stock_compensation", "cf"),
+    "Share-based compensation expense": ("canonical.cf.stock_compensation", "cf"),
+    "Stock-based compensation expense": ("canonical.cf.stock_compensation", "cf"),
     "Net Cash Flow": ("canonical.cf.net_change_in_cash", "cf"),
 
     "No. of Equity Shares": ("canonical.meta.share_count", "meta"),
