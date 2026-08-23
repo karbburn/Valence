@@ -283,7 +283,7 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
             alignment=ALIGN_RIGHT,
         )
 
-    # Row 12: Free Cash Flow to Firm (FCFF)
+    # Row 12: Free Cash Flow to Firm (FCFF) — memo SBC deduction lives on row 15 below
     ws.cell(row=12, column=2, value="FREE CASH FLOW TO FIRM (FCFF)").font = FONT_TOTAL
     for idx, p_label in enumerate(FORECAST_PERIODS):
         c = 3 + idx
@@ -292,7 +292,7 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         c_val = p.fcff if p else None
         write_formula_cell(
             ws, 12, c,
-            formula=f"={col_let}8+{col_let}9-{col_let}10-{col_let}11",
+            formula=f"={col_let}8+{col_let}9-{col_let}10-{col_let}11-{col_let}15",
             cached_value=c_val,
             num_format=FMT_AMOUNT,
             font=FONT_TOTAL,
@@ -333,6 +333,18 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
             border=BORDER_TOTAL,
             alignment=ALIGN_RIGHT,
         )
+
+    # Row 15: Less: Stock-Based Compensation (memo deduction feeding the FCFF row above)
+    ws.cell(row=15, column=2, value="Less: Stock-Based Comp (Memo)").font = FONT_SUBHEADER
+    for idx, p_label in enumerate(FORECAST_PERIODS):
+        c = 3 + idx
+        p = fcffs[idx] if idx < len(fcffs) else None
+        c_val = (p.stock_compensation or 0.0) if p else 0.0
+        cell_sbc = ws.cell(row=15, column=c, value=c_val)
+        cell_sbc.font = FONT_FORMULA
+        cell_sbc.number_format = FMT_AMOUNT
+        cell_sbc.alignment = ALIGN_RIGHT
+        cell_sbc.border = BORDER_BOX
 
     # DCF Bridge Block (rows 17-28, Column B = labels, Column H = values)
     ws["B16"] = "DCF BRIDGE — EV TO EQUITY VALUE"

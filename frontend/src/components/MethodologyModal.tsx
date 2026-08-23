@@ -127,6 +127,9 @@ export function MethodologyModal({
           <p className="text-[#94a3b8] text-[11px] leading-relaxed">
             Net income does not represent total cash available to investors because companies must spend real cash on Capital Expenditures (CapEx) to maintain operations and tie up capital in inventory and receivables (ΔNWC). FCFF accounts for these reinvestment requirements.
           </p>
+          <p className="text-[#94a3b8] text-[11px] leading-relaxed">
+            Stock-based compensation is deducted from FCFF as a real economic cost. Although non-cash under accounting rules, it transfers value to employees and dilutes shareholders, so treating it as free cash would overstate intrinsic value.
+          </p>
         </div>
 
         {/* Modal Footer */}

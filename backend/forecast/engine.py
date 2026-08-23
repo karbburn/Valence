@@ -100,6 +100,11 @@ def run_forecast(
     hist_np = hist_is.get_value("canonical.is.net_profit", last_p)
     dividend_payout_pct = abs(hist_div / hist_np) if (hist_div and hist_np and hist_np > 0) else 0.40
 
+    # Stock-based compensation is projected at its last historical % of revenue
+    # (unlike other income it scales with the operating business).
+    hist_sbc = hist_cf.get_value("canonical.cf.stock_compensation", last_p) if hasattr(hist_cf, 'get_value') else None
+    sbc_pct_rev = (abs(hist_sbc) / prior_rev * 100.0) if (hist_sbc and prior_rev > 0) else 0.0
+
     is_us = historical_model.company_id.endswith("_us")
     default_tax_rate = 21.0 if is_us else 25.17
     # Forecast period-end dates follow the company's actual fiscal year end
@@ -180,6 +185,8 @@ def run_forecast(
         items.append(_item("canonical.cf.delta_working_capital", period, delta_wc, scenario, None, fiscal_end_month=fiscal_end_month))
         items.append(_item("canonical.cf.capex", period, -capex, scenario, "capex_pct_revenue", fiscal_end_month=fiscal_end_month))  # Negative = outflow
         items.append(_item("canonical.cf.investing_activities", period, investing_cf, scenario, "capex_pct_revenue", fiscal_end_month=fiscal_end_month))
+        if sbc_pct_rev > 0:
+            items.append(_item("canonical.cf.stock_compensation", period, revenue * sbc_pct_rev / 100.0, scenario, None, fiscal_end_month=fiscal_end_month))
 
         # --- Balance Sheet Closure ---
         # Equity grows by retained profit (net_profit − estimated dividends)

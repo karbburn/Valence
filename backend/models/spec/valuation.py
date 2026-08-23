@@ -32,7 +32,7 @@ class FCFFPeriod(BaseModel):
 
     Formula:
     NOPAT = EBIT × (1 − tax_rate)
-    FCFF  = NOPAT + D&A − Capex − ΔWorking Capital
+    FCFF  = NOPAT + D&A − Capex − ΔWorking Capital − Stock Compensation
 
     Each field is a distinct Excel cell in the DCF tab.
     """
@@ -43,6 +43,7 @@ class FCFFPeriod(BaseModel):
     da: Optional[float] = None
     capex: Optional[float] = None
     delta_working_capital: Optional[float] = None   # increase in WC = cash outflow
+    stock_compensation: Optional[float] = None      # SBC treated as a cash operating cost
     fcff: Optional[float] = None                    # free cash flow to firm
     discount_factor: Optional[float] = None         # 1 / (1 + WACC)^(t - 0.5) for mid-year
     pv_fcff: Optional[float] = None                 # FCFF × discount_factor

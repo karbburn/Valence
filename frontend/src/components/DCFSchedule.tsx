@@ -55,9 +55,13 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
       desc: 'Change in Non-Cash Operating Working Capital — cash invested or freed up in working capital.',
       formula: '− (Δ Receivables + Δ Inventory − Δ Payables)',
     },
+    '− Stock Comp': {
+      desc: 'Stock-based compensation deducted as a real economic cost even though non-cash under accounting rules.',
+      formula: 'Cash Flow Statement SBC (when reported)',
+    },
     '= FCFF (Free Cash Flow)': {
       desc: 'Free Cash Flow to Firm — unlevered cash flow available to all debt and equity capital providers.',
-      formula: 'NOPAT + D&A − CapEx − ΔNWC',
+      formula: 'NOPAT + D&A − CapEx − ΔNWC − Stock Comp',
     },
     'Discount Factor (Mid-Year)': {
       desc: 'Mid-year discount factor assuming cash flows arrive continuously throughout the year.',
@@ -76,6 +80,9 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
     { label: '+ D&A', fn: (p: typeof fcffs[0]) => fmtNum(p.da), bold: false, total: false },
     { label: '− CapEx', fn: (p: typeof fcffs[0]) => p.capex != null ? `(${fmtNum(Math.abs(p.capex))})` : '—', bold: false, total: false },
     { label: '± ΔNWC', fn: (p: typeof fcffs[0]) => fmtNum(-(p.delta_working_capital || 0)), bold: false, total: false },
+    ...fcffs.some((p) => (p.stock_compensation || 0) > 0)
+      ? [{ label: '− Stock Comp', fn: (p: typeof fcffs[0]) => (p.stock_compensation || 0) > 0 ? `(${fmtNum(p.stock_compensation!)})` : '—', bold: false, total: false }]
+      : [],
     { label: '= FCFF (Free Cash Flow)', fn: (p: typeof fcffs[0]) => fmtNum(p.fcff), bold: true, total: true },
     { label: 'Discount Factor (Mid-Year)', fn: (p: typeof fcffs[0]) => (p.discount_factor || 0).toFixed(4), bold: false, total: false },
     { label: 'PV(FCFF)', fn: (p: typeof fcffs[0]) => fmtNum(p.pv_fcff), bold: true, total: false },

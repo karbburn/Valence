@@ -97,6 +97,7 @@ export interface FCFFPeriod {
   da: number | null
   capex: number | null
   delta_working_capital: number | null
+  stock_compensation?: number | null
   fcff: number | null
   discount_factor: number | null
   pv_fcff: number | null
