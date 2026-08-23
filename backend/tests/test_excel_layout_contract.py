@@ -12,6 +12,7 @@ from backend.export.excel.render_hist import (
     render_historical_cash_flow,
 )
 from backend.export.excel.render_qa import render_model_checks_tab
+from backend.export.excel.render_val import render_sensitivity_tab
 from backend.models.spec.historicals import HistoricalLineItem, Historicals
 from backend.models.spec.metadata import ModelMetadata
 from backend.models.spec.model_specification import ModelSpecification
@@ -115,6 +116,20 @@ def test_debt_schedule_rows_support_internal_reconciliation_formula():
     assert _row_of(ws, "Optional Repayments (INR Cr)") == 9
     closing_formula = ws.cell(row=10, column=3).value
     assert closing_formula == "=C6+C7-C8-C9"
+
+
+def test_sensitivity_formulas_rediscount_the_full_fcff_stream():
+    ws = render_sensitivity_tab(Workbook(), _spec_with_historicals([], []))
+
+    growth_cell = ws.cell(row=6, column=3).value  # first WACC row x first growth col
+    assert isinstance(growth_cell, str) and growth_cell.startswith("=IF(")
+    for t in ("0.5", "1.5", "2.5", "3.5", "4.5"):
+        assert f"(1+$B6)^{t}" in growth_cell, f"missing trial-WACC exponent {t}"
+    assert "'31_DCF'!C12" in growth_cell and "'31_DCF'!G12/(1+$B6)^4.5" in growth_cell
+
+    multiple_cell = ws.cell(row=14, column=3).value
+    assert isinstance(multiple_cell, str) and multiple_cell.startswith("=(")
+    assert "(1+$B14)^0.5" in multiple_cell and "'20_Operating_Model'!G9*C$13" in multiple_cell
 
 
 def test_model_check_formulas_point_at_rendered_cells():
