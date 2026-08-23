@@ -152,17 +152,20 @@ def suggest_base_assumptions(
         result.append(_make("dpo_days", dpo, p, "base", source_dpo))
 
     # ------------------------------------------------------------------ #
-    # 7b. DIO — Dynamic Hardware/Inventory vs Services Detection
+    # 7b. DIO — historical ratio series first, raw fallback for sparse data
     # ------------------------------------------------------------------ #
-    inv_val = historical_model.balance_sheet.get_value("canonical.bs.inventory", last_p) or 0.0
-    cogs_val = historical_model.income_statement.get_value("canonical.is.cost_of_sales", last_p) or 0.0
-
-    if inv_val > 0 and cogs_val > 0:
-        dio = round((inv_val / cogs_val) * 365.0, 1)
-        source_dio = f"Computed from historical inventory ({inv_val:.0f}) and COGS ({cogs_val:.0f})"
+    dio = ratios.get_value("dio_days", last_p)
+    if dio is not None:
+        source_dio = f"most recent period DIO ({last_p})"
     else:
-        dio = 0.0
-        source_dio = "zero — asset-light services/software company"
+        inv_val = historical_model.balance_sheet.get_value("canonical.bs.inventory", last_p) or 0.0
+        cogs_val = historical_model.income_statement.get_value("canonical.is.cost_of_sales", last_p) or 0.0
+        if inv_val > 0 and cogs_val > 0:
+            dio = round((inv_val / cogs_val) * 365.0, 1)
+            source_dio = f"Computed from historical inventory ({inv_val:.0f}) and COGS ({cogs_val:.0f})"
+        else:
+            dio = 0.0
+            source_dio = "zero — asset-light services/software company"
 
     for p in FORECAST_PERIODS:
         result.append(_make("dio_days", dio, p, "base", source_dio))
@@ -218,8 +221,13 @@ def suggest_base_assumptions(
     # ------------------------------------------------------------------ #
     # 11. Terminal Value inputs — structural placeholders
     # ------------------------------------------------------------------ #
-    source_terminal = "structural placeholder"
-    result.append(_make("terminal_growth_rate", 4.0, "terminal", "base", source_terminal))
+    # Perpetuity growth anchors to long-run nominal GDP of the reporting economy:
+    # developed-market (US) filers carry materially lower nominal growth than India.
+    is_us_filer = historical_model.company_id.endswith("_us")
+    default_terminal_growth = 2.25 if is_us_filer else 4.0
+    basis = "US long-run nominal GDP" if is_us_filer else "India long-run nominal GDP"
+    source_terminal = f"structural placeholder — anchored to {basis}"
+    result.append(_make("terminal_growth_rate", default_terminal_growth, "terminal", "base", source_terminal))
     result.append(_make("exit_ev_multiple", 20.0, "terminal", "base", source_terminal))
 
     return result
