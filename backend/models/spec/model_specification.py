@@ -12,7 +12,7 @@ from backend.models.spec.assumptions import AssumptionObject
 from backend.models.spec.drivers import DriverDefinition, V1_DRIVERS
 from backend.models.spec.forecast import Forecast
 from backend.models.spec.historicals import HistoricalLineItem, Historicals
-from backend.models.spec.metadata import MODEL_SPEC_VERSION, ModelMetadata
+from backend.models.spec.metadata import MODEL_SPEC_VERSION, ModelMetadata, parse_fiscal_year_end
 from backend.models.spec.qa import QAResults
 from backend.models.spec.scenarios import ScenarioDefinition, V1_SCENARIOS
 from backend.models.spec.valuation import ValuationOutput
@@ -118,6 +118,8 @@ class ModelSpecification(BaseModel):
         h_items: List[HistoricalLineItem] = []
         all_periods: set[str] = set()
 
+        fy_month, fy_day = parse_fiscal_year_end(metadata.fiscal_year_end)
+
         def _yr(period_label: str) -> int:
             yr = period_label[2:]
             return 2000 + int(yr) if len(yr) == 2 else int(yr)
@@ -141,7 +143,7 @@ class ModelSpecification(BaseModel):
                         HistoricalLineItem(
                             canonical_key=li.canonical_key,
                             period_label=period,
-                            period_end_date=date(_yr(period), 3, 31),
+                            period_end_date=date(_yr(period), fy_month, fy_day),
                             value=value,
                             currency=li.currency,
                             units=li.units,
