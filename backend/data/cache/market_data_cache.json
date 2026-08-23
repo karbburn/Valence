@@ -351,42 +351,42 @@
     }
   },
   "infy_infy": {
-    "fetch_date": "2026-08-20",
+    "fetch_date": "2026-08-23",
     "data": {
       "company_id": "infy_infy",
       "ticker": "INFY",
       "market": "india",
       "price": {
-        "value": 1119.8,
+        "value": 1121.0,
         "source": "yfinance",
-        "fetch_date": "2026-08-20",
+        "fetch_date": "2026-08-23",
         "provenance_note": "yfinance live price for INFY.NS"
       },
       "shares_outstanding": {
         "value": 405.0124,
         "source": "yfinance",
-        "fetch_date": "2026-08-20",
+        "fetch_date": "2026-08-23",
         "provenance_note": "yfinance live shares outstanding (405.01 Cr)"
       },
       "beta": {
         "value": 0.79,
         "source": "registry",
-        "fetch_date": "2026-08-20",
+        "fetch_date": "2026-08-23",
         "provenance_note": "Per-company registry benchmark beta vs primary index (0.79)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-08-20",
+        "fetch_date": "2026-08-23",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-08-20",
+        "fetch_date": "2026-08-23",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-08-20T00:26:17.334837"
+      "timestamp": "2026-08-23T15:05:33.329827"
     }
   },
   "infy_us": {
@@ -663,7 +663,7 @@
     }
   },
   "tatamotors_tatamotors": {
-    "fetch_date": "2026-08-20",
+    "fetch_date": "2026-08-23",
     "data": {
       "company_id": "tatamotors_tatamotors",
       "ticker": "TATAMOTORS",
@@ -671,112 +671,112 @@
       "price": {
         "value": 480.0,
         "source": "registry",
-        "fetch_date": "2026-08-20",
+        "fetch_date": "2026-08-23",
         "provenance_note": "Per-company registry benchmark for tatamotors_tatamotors (INR/share)"
       },
       "shares_outstanding": {
         "value": 367.0,
         "source": "registry",
-        "fetch_date": "2026-08-20",
+        "fetch_date": "2026-08-23",
         "provenance_note": "Per-company registry benchmark for tatamotors_tatamotors (Cr shares)"
       },
       "beta": {
         "value": 1.15,
         "source": "registry",
-        "fetch_date": "2026-08-20",
+        "fetch_date": "2026-08-23",
         "provenance_note": "Per-company registry benchmark beta vs primary index (1.15)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-08-20",
+        "fetch_date": "2026-08-23",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-08-20",
+        "fetch_date": "2026-08-23",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-08-20T00:23:57.886162"
+      "timestamp": "2026-08-23T15:44:32.499374"
     }
   },
   "tatasteel_tatasteel": {
-    "fetch_date": "2026-08-17",
+    "fetch_date": "2026-08-23",
     "data": {
       "company_id": "tatasteel_tatasteel",
       "ticker": "TATASTEEL",
       "market": "india",
       "price": {
-        "value": 186.0,
+        "value": 183.0,
         "source": "yfinance",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-23",
         "provenance_note": "yfinance live price for TATASTEEL.NS"
       },
       "shares_outstanding": {
         "value": 1247.4316,
         "source": "yfinance",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-23",
         "provenance_note": "yfinance live shares outstanding (1247.43 Cr)"
       },
       "beta": {
         "value": 1.25,
         "source": "registry",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-23",
         "provenance_note": "Per-company registry benchmark beta vs primary index (1.25)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-23",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-08-17",
+        "fetch_date": "2026-08-23",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-08-17T14:19:20.876444"
+      "timestamp": "2026-08-23T15:44:34.307460"
     }
   },
   "tcs_tcs": {
-    "fetch_date": "2026-08-19",
+    "fetch_date": "2026-08-23",
     "data": {
       "company_id": "tcs_tcs",
       "ticker": "TCS",
       "market": "india",
       "price": {
-        "value": 2370.0,
-        "source": "registry",
-        "fetch_date": "2026-08-19",
-        "provenance_note": "Per-company registry benchmark for tcs_tcs (INR/share)"
+        "value": 2302.0,
+        "source": "yfinance",
+        "fetch_date": "2026-08-23",
+        "provenance_note": "yfinance live price for TCS.NS"
       },
       "shares_outstanding": {
-        "value": 361.8,
-        "source": "registry",
-        "fetch_date": "2026-08-19",
-        "provenance_note": "Per-company registry benchmark for tcs_tcs (Cr shares)"
+        "value": 361.8088,
+        "source": "yfinance",
+        "fetch_date": "2026-08-23",
+        "provenance_note": "yfinance live shares outstanding (361.81 Cr)"
       },
       "beta": {
         "value": 0.85,
         "source": "registry",
-        "fetch_date": "2026-08-19",
+        "fetch_date": "2026-08-23",
         "provenance_note": "Per-company registry benchmark beta vs primary index (0.85)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-08-19",
+        "fetch_date": "2026-08-23",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-08-19",
+        "fetch_date": "2026-08-23",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-08-19T20:55:06.711422"
+      "timestamp": "2026-08-23T15:44:29.732686"
     }
   },
   "wipro_wipro": {
