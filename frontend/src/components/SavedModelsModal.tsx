@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
 import { FolderOpen, Trash2, Clock, Building2, AlertCircle } from 'lucide-react'
 import { SavedModelHeader } from '@/lib/types'
 import { fetchSavedModels, deleteSavedModel } from '@/lib/api'
@@ -17,37 +17,33 @@ export function SavedModelsModal({
   onClose,
   onLoadModel,
 }: SavedModelsModalProps) {
-  const [models, setModels] = useState<SavedModelHeader[]>([])
-  const [loading, setLoading] = useState(false)
+  const [models, setModels] = useState<SavedModelHeader[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
-  const loadList = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await fetchSavedModels()
-      setModels(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch saved models')
-    } finally {
-      setLoading(false)
+  // The modal mounts only while open, so a mount-effect is the natural load point.
+  // All state updates happen after the async boundary, never synchronously.
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        const data = await fetchSavedModels()
+        if (alive) setModels(data)
+      } catch (err) {
+        if (alive) setError(err instanceof Error ? err.message : 'Failed to fetch saved models')
+      }
+    })()
+    return () => {
+      alive = false
     }
   }, [])
-
-  useEffect(() => {
-    if (open) {
-      loadList()
-      setConfirmDeleteId(null)
-    }
-  }, [open, loadList])
 
   const handleDelete = async (modelId: string) => {
     setDeletingId(modelId)
     try {
       await deleteSavedModel(modelId)
-      setModels((prev) => prev.filter((m) => m.model_id !== modelId))
+      setModels((prev) => (prev ? prev.filter((m) => m.model_id !== modelId) : prev))
       setConfirmDeleteId(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Delete failed')
@@ -81,14 +77,17 @@ export function SavedModelsModal({
         )}
 
         {/* Model List */}
-        <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
-          {loading ? (
-            <div className="text-center py-8 text-[12px] text-[#94a3b8]">
-              Loading saved models...
+        <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1" role="status" aria-busy={models === null}>
+          {models === null ? (
+            <div className="text-center py-8 text-[12px] text-text-muted">
+              Loading saved models…
             </div>
           ) : models.length === 0 ? (
-            <div className="text-center py-8 text-[12px] text-[#64748b]">
-              No saved models found. Save your current model to access it here.
+            <div className="text-center py-8 text-[12px] text-text-dim space-y-1.5">
+              <p>No saved models yet.</p>
+              <p className="text-text-faint">
+                Press <kbd>Ctrl S</kbd> to save the current view and find it here.
+              </p>
             </div>
           ) : (
             models.map((m) => (

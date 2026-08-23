@@ -13,7 +13,6 @@ export interface FinancialRatiosProps {
 export function FinancialRatios({ spec, scenario }: FinancialRatiosProps) {
   const valuation =
     spec?.valuation?.find((v) => v.scenario === scenario) || spec?.valuation?.[0]
-  const forecast = spec?.forecast
 
   if (!valuation) return null
 

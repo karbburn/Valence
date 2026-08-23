@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { ModelSpecification, ScenarioLabel } from '@/lib/types'
-import { fmtMoney, fmtNum, fmtPct, fmtPrice, getCurrencySymbol } from '@/lib/formatters'
+import { fmtMoney, fmtPct, fmtPrice } from '@/lib/formatters'
 
 export interface KPIBarProps {
   spec: ModelSpecification | null
@@ -13,7 +13,6 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
   if (!spec) return null
 
   const currency = spec.metadata?.currency || 'INR'
-  const currencySym = getCurrencySymbol(currency)
 
   // Find valuation output for active scenario
   const valuation =

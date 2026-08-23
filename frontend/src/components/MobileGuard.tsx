@@ -13,13 +13,11 @@ export function MobileGuard() {
 
         <div className="space-y-1.5">
           <h2 className="font-bold text-[16px] text-[#f8fafc]">
-            Screen Too Narrow
+            A wider screen is needed
           </h2>
           <p className="text-[12px] text-[#94a3b8] leading-relaxed">
-            Valence is a multi-column financial modeling terminal requiring a minimum 900px viewport for financial schedules.
-          </p>
-          <p className="text-[11px] text-[#64748b]">
-            Please enlarge your browser window or switch to a desktop workstation.
+            Valence lays out financial schedules across multiple columns. Open it on a
+            viewport at least 900px wide to work with the model.
           </p>
         </div>
 
