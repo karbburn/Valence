@@ -7,7 +7,7 @@ Provides API endpoints for:
 - GET /api/model/{company_id}: Fetch current ModelSpecification
 - POST /api/model/recompute: Apply driver override, re-run engine, return updated spec
 - POST /api/model/revert: Revert driver override back to model-generated state
-- GET /api/export/excel: Trigger openpyxl exporter and download 27-tab .xlsx workbook
+- GET /api/export/excel: Trigger openpyxl exporter and download 30-tab .xlsx workbook
 """
 
 import logging
@@ -30,14 +30,23 @@ from backend.models.spec.model_specification import ModelSpecification
 from backend.validation.pipeline import run_qa
 from backend.valuation.pipeline import run_valuation
 
-import re
-
 router = APIRouter()
 
 logger = logging.getLogger("valence.api")
 
 API_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = API_DIR.parent.parent
+
+# Company identifiers are slug-shaped ("infy_infy", "aapl_us"). Enforcing the shape at
+# every entry point keeps untrusted input away from cache paths, DB lookups, and the
+# ingestion triggers.
+COMPANY_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_]{1,62}[a-z0-9]$")
+
+
+def _require_valid_company_id(company_id: str) -> str:
+    if not COMPANY_ID_PATTERN.match(company_id):
+        raise HTTPException(status_code=400, detail="Invalid company identifier.")
+    return company_id
 
 
 # ------------------------------------------------------------------ #
@@ -184,9 +193,12 @@ class RevertRequest(BaseModel):
 @router.get("/model/{company_id}")
 def get_model_spec(company_id: str = "infy_infy") -> Dict[str, Any]:
     """Fetch complete ModelSpecification JSON for company."""
+    _require_valid_company_id(company_id)
     try:
         spec = _get_or_build_spec(company_id)
         return spec.model_dump(mode="json")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Failed to build valuation model for '%s'", company_id)
         status_code = 422 if "No canonical" in str(e) or "unmapped" in str(e) else 500
@@ -199,6 +211,7 @@ def get_model_spec(company_id: str = "infy_infy") -> Dict[str, Any]:
 @router.post("/model/recompute")
 def recompute_model(req: OverrideRequest, company_id: str = "infy_infy") -> Dict[str, Any]:
     """Apply driver override, re-run forecast -> valuation -> QA engine, and return updated spec."""
+    _require_valid_company_id(company_id)
     spec = _get_or_build_spec(company_id)
 
     # 1. Update assumption list with override across all forecast periods
@@ -252,6 +265,7 @@ def revert_driver_override(req: RevertRequest, company_id: str = "infy_infy") ->
     
     Supports bulk revert if driver_key is 'all'.
     """
+    _require_valid_company_id(company_id)
     spec = _get_or_build_spec(company_id)
 
     new_assumptions = []
@@ -281,7 +295,8 @@ def revert_driver_override(req: RevertRequest, company_id: str = "infy_infy") ->
 
 @router.get("/export/excel")
 def export_excel(company_id: str = "infy_infy") -> FileResponse:
-    """Trigger 27-tab openpyxl export and return .xlsx file download."""
+    """Trigger the 30-tab openpyxl export and return .xlsx file download."""
+    _require_valid_company_id(company_id)
     spec = _get_or_build_spec(company_id)
     out_dir = PROJECT_ROOT / "backend" / "export" / "output"
     out_dir.mkdir(parents=True, exist_ok=True)
