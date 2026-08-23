@@ -9,6 +9,22 @@ MarketType = Literal["india", "us"]
 
 MODEL_SPEC_VERSION = "1.0.0"
 
+_MONTH_STARTERS = {
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+}
+
+
+def parse_fiscal_year_end(fiscal_year_end: str) -> tuple[int, int]:
+    """Return (month, day) for strings like 'March 31', 'Sep 30', 'Dec 31'."""
+    parts = fiscal_year_end.strip().split()
+    if len(parts) != 2:
+        raise ValueError(f"Unparseable fiscal year end: {fiscal_year_end!r}")
+    month = _MONTH_STARTERS.get(parts[0][:3].lower())
+    if month is None:
+        raise ValueError(f"Unknown month in fiscal year end: {fiscal_year_end!r}")
+    return month, int(parts[1])
+
 
 class ModelMetadata(BaseModel):
     """Presentation-independent metadata identifying the company and schema version."""
