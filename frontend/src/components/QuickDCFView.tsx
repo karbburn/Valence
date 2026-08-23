@@ -66,106 +66,120 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
       {/* Hero 3-Column Valuation Strip */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Intrinsic Value Hero */}
-        <div className="bg-surface border border-[#0ea5e9]/40 rounded-[4px] p-5 text-center flex flex-col justify-center items-center shadow-sm relative">
-          <div className="flex items-center space-x-1.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-[#94a3b8] mb-1">
-            <Sparkles className="w-3.5 h-3.5 text-[#0ea5e9]" />
+        <div className="bg-surface border border-accent-border rounded-sm p-5 text-center flex flex-col justify-center items-center shadow-pop relative">
+          <div className="flex items-center space-x-1.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-text-muted mb-1">
             <span>DCF Intrinsic Value</span>
             {onOpenMethodology && (
               <button
+                type="button"
                 onClick={onOpenMethodology}
-                className="text-[#0ea5e9] hover:text-[#7dd3fc] transition-colors p-0.5 ml-1 cursor-pointer"
+                aria-label="Open methodology breakdown"
+                className="text-accent hover:text-accent-hover transition-colors p-0.5 ml-1 cursor-pointer"
                 title="Methodology breakdown: FCFF at WACC"
               >
-                <Info className="w-3.5 h-3.5" />
+                <Info className="w-3.5 h-3.5" aria-hidden />
               </button>
             )}
           </div>
-          <div className="font-mono font-bold text-[30px] text-[#7dd3fc]">
+          <div className="font-mono font-bold text-[30px] text-accent-hover">
             {impliedPrice != null ? fmtPrice(impliedPrice, currency, 2) : '—'}
           </div>
-          <div className="text-[11px] text-[#64748b] mt-1 font-mono">
+          <div className="text-[11px] text-text-dim mt-1 font-mono">
             Per Share ({currency}) · FCFF @ WACC
           </div>
         </div>
 
         {/* Current Market Price */}
-        <div className="bg-surface border border-border rounded-[4px] p-5 text-center flex flex-col justify-center items-center shadow-sm">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.04em] text-[#94a3b8] mb-1">
+        <div className="bg-surface border border-border rounded-sm p-5 text-center flex flex-col justify-center items-center">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.04em] text-text-muted mb-1">
             Current Market Price
           </div>
-          <div className="font-mono font-bold text-[26px] text-[#f8fafc]">
+          <div className="font-mono font-bold text-[26px] text-text-main">
             {marketPrice != null ? fmtPrice(marketPrice, currency, 2) : '—'}
           </div>
-          <div className="text-[11px] text-[#64748b] mt-1">
-            Benchmark Quote
-          </div>
+          <div className="text-[11px] text-text-dim mt-1">Benchmark quote</div>
         </div>
 
         {/* Implied Upside / Downside */}
-        <div className="bg-surface border border-border rounded-[4px] p-5 text-center flex flex-col justify-center items-center shadow-sm">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.04em] text-[#94a3b8] mb-1">
+        <div className="bg-surface border border-border rounded-sm p-5 text-center flex flex-col justify-center items-center">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.04em] text-text-muted mb-1">
             Implied Upside / Downside
           </div>
           <div
             className={`font-mono font-bold text-[30px] flex items-center space-x-1 ${
               upsidePct != null && upsidePct >= 0
-                ? 'text-[#10b981]'
-                : 'text-[#ef4444]'
+                ? 'text-positive'
+                : 'text-negative'
             }`}
           >
             {upsidePct != null ? (
               <>
                 {upsidePct >= 0 ? (
-                  <ArrowUpRight className="w-6 h-6 text-[#10b981]" />
+                  <ArrowUpRight className="w-6 h-6" aria-hidden />
                 ) : (
-                  <ArrowDownRight className="w-6 h-6 text-[#ef4444]" />
+                  <ArrowDownRight className="w-6 h-6" aria-hidden />
                 )}
-                <span>
+                <span aria-hidden>
                   {upsidePct >= 0 ? '+' : ''}
                   {fmtPct(upsidePct, 1)}
+                </span>
+                <span className="sr-only">
+                  {upsidePct >= 0 ? 'upside' : 'downside'} of {fmtPct(Math.abs(upsidePct), 1)}
                 </span>
               </>
             ) : (
               '—'
             )}
           </div>
-          <div className="text-[11px] text-[#64748b] mt-1">
-            vs Current Market Quote
-          </div>
+          <div className="text-[11px] text-text-dim mt-1">vs current market quote</div>
         </div>
       </div>
 
       {/* Side-by-Side Scenario Comparison Matrix */}
-      <div className="bg-surface border border-border rounded-[4px] p-4 space-y-3 shadow-sm">
+      <div className="bg-surface border border-border rounded-sm p-4 space-y-3">
         <div className="flex items-center justify-between border-b border-border pb-2">
           <div className="font-semibold text-[13px] text-text-main flex items-center space-x-2">
-            <GitCompare className="w-4 h-4 text-[#0ea5e9]" />
-            <span>Valuation Scenario Matrix (Base / Bull / Bear)</span>
+            <GitCompare className="w-4 h-4 text-accent" aria-hidden />
+            <span>Scenario matrix</span>
           </div>
           {asymmetryRatio != null && (
-            <div className="font-mono text-[10px] text-[#7dd3fc] bg-[#0ea5e9]/10 border border-[#0ea5e9]/20 px-2 py-0.5 rounded-[3px]">
-              Risk/Reward Asymmetry: {asymmetryRatio.toFixed(1)}x
+            <div
+              className="font-mono text-[10px] text-accent-hover bg-accent-subtle border border-accent-border px-2 py-0.5 rounded-sm"
+              title="Ratio of bull-case upside to bear-case downside"
+            >
+              Risk/reward asymmetry: {asymmetryRatio.toFixed(1)}x
             </div>
           )}
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-[11px] font-mono border-collapse">
+            <caption className="sr-only">Valuation outputs across base, bull and bear scenarios</caption>
             <thead>
-              <tr className="bg-[#0d1220] border-b border-[#1e283d] text-[#94a3b8]">
-                <th className="p-2.5 font-semibold">Metric / Scenario</th>
-                <th className="p-2.5 font-bold text-[#f8fafc] w-1/4">Base Case</th>
-                <th className="p-2.5 font-bold text-[#10b981] w-1/4">Bull Case</th>
-                <th className="p-2.5 font-bold text-[#ef4444] w-1/4">Bear Case</th>
+              <tr className="bg-surface-3 border-b border-border text-text-muted">
+                <th scope="col" className="p-2.5 font-semibold text-left">Metric</th>
+                <th scope="col" className="p-2.5 font-bold text-text-main w-1/4 text-right">Base</th>
+                <th scope="col" className="p-2.5 font-bold w-1/4 text-right">
+                  <span className="inline-flex items-center gap-1.5 justify-end">
+                    <span className="w-1.5 h-1.5 rounded-full bg-positive" aria-hidden />
+                    Bull
+                  </span>
+                </th>
+                <th scope="col" className="p-2.5 font-bold w-1/4 text-right">
+                  <span className="inline-flex items-center gap-1.5 justify-end">
+                    <span className="w-1.5 h-1.5 rounded-full bg-negative" aria-hidden />
+                    Bear
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#1e283d]/60">
               <tr>
                 <td className="p-2.5 font-semibold text-[#cbd5e1]">DCF Share Price</td>
-                <td className="p-2.5 font-bold text-[#f8fafc]">
+                <td className="p-2.5 font-bold text-text-main text-right">
                   {fmtPrice(baseVal?.dcf_bridge?.implied_share_price, currency, 2)}
                 </td>
-                <td className="p-2.5 font-bold text-[#10b981]">
+                <td className="p-2.5 font-bold text-positive text-right">
                   {fmtPrice(bullVal?.dcf_bridge?.implied_share_price, currency, 2)}
                 </td>
                 <td className="p-2.5 font-bold text-[#ef4444]">
@@ -174,27 +188,27 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
               </tr>
               <tr>
                 <td className="p-2.5 font-semibold text-[#cbd5e1]">Implied Upside / Downside</td>
-                <td className="p-2.5 font-semibold text-[#94a3b8]">
+                <td className="p-2.5 font-semibold text-text-muted text-right">
                   {getUpside(baseVal) != null ? `${getUpside(baseVal)! >= 0 ? '+' : ''}${fmtPct(getUpside(baseVal), 1)}` : '—'}
                 </td>
-                <td className="p-2.5 font-semibold text-[#10b981]">
+                <td className="p-2.5 font-semibold text-positive text-right">
                   {getUpside(bullVal) != null ? `+${fmtPct(getUpside(bullVal), 1)}` : '—'}
                 </td>
-                <td className="p-2.5 font-semibold text-[#ef4444]">
+                <td className="p-2.5 font-semibold text-negative text-right">
                   {getUpside(bearVal) != null ? `${fmtPct(getUpside(bearVal), 1)}` : '—'}
                 </td>
               </tr>
               <tr>
                 <td className="p-2.5 font-semibold text-[#cbd5e1]">Enterprise Value</td>
-                <td className="p-2.5 text-[#94a3b8]">{fmtMoney(baseVal?.dcf_bridge?.enterprise_value, currency)}</td>
-                <td className="p-2.5 text-[#94a3b8]">{fmtMoney(bullVal?.dcf_bridge?.enterprise_value, currency)}</td>
-                <td className="p-2.5 text-[#94a3b8]">{fmtMoney(bearVal?.dcf_bridge?.enterprise_value, currency)}</td>
+                <td className="p-2.5 text-text-muted text-right">{fmtMoney(baseVal?.dcf_bridge?.enterprise_value, currency)}</td>
+                <td className="p-2.5 text-text-muted text-right">{fmtMoney(bullVal?.dcf_bridge?.enterprise_value, currency)}</td>
+                <td className="p-2.5 text-text-muted text-right">{fmtMoney(bearVal?.dcf_bridge?.enterprise_value, currency)}</td>
               </tr>
               <tr>
                 <td className="p-2.5 font-semibold text-[#cbd5e1]">WACC (Discount Rate)</td>
-                <td className="p-2.5 text-[#94a3b8]">{fmtPct(baseVal?.wacc?.wacc, 2)}</td>
-                <td className="p-2.5 text-[#94a3b8]">{fmtPct(bullVal?.wacc?.wacc, 2)}</td>
-                <td className="p-2.5 text-[#94a3b8]">{fmtPct(bearVal?.wacc?.wacc, 2)}</td>
+                <td className="p-2.5 text-text-muted text-right">{fmtPct(baseVal?.wacc?.wacc, 2)}</td>
+                <td className="p-2.5 text-text-muted text-right">{fmtPct(bullVal?.wacc?.wacc, 2)}</td>
+                <td className="p-2.5 text-text-muted text-right">{fmtPct(bearVal?.wacc?.wacc, 2)}</td>
               </tr>
             </tbody>
           </table>
@@ -249,12 +263,14 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
             </div>
           </div>
 
-          <div className="bg-[#0d1220] border border-[#1e283d] rounded-[4px] p-2.5">
-            <div className="text-[10px] text-[#64748b] uppercase tracking-[0.04em]">
-              Model Template
+          <div className="bg-surface-3 border border-border rounded-sm p-2.5">
+            <div className="text-[10px] text-text-dim uppercase tracking-[0.04em]">
+              Implied Revenue CAGR
             </div>
-            <div className="font-bold text-[#10b981] mt-0.5">
-              Unlevered FCFF
+            <div className="font-bold text-text-main mt-0.5">
+              {reverseDcf.implied_revenue_cagr != null
+                ? fmtPct(reverseDcf.implied_revenue_cagr, 1)
+                : '—'}
             </div>
           </div>
         </div>
@@ -279,15 +295,19 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
 
           <div className="overflow-x-auto">
             <table className="w-full text-center text-[11px] font-mono border-collapse">
+              <caption className="sr-only">
+                Implied share price sensitivity across WACC rows and terminal growth columns
+              </caption>
               <thead>
-                <tr className="bg-[#0d1220]">
-                  <th className="p-2 border border-[#1e283d] text-left text-[#64748b]">
-                    WACC \ g
+                <tr className="bg-surface-3">
+                  <th scope="col" className="p-2 border border-border text-left text-text-dim font-semibold">
+                    WACC \ Growth
                   </th>
                   {sensTable.col_values?.map((gVal) => (
                     <th
                       key={gVal}
-                      className="p-2 border border-[#1e283d] text-[#94a3b8]"
+                      scope="col"
+                      className="p-2 border border-border text-text-muted"
                     >
                       {gVal.toFixed(1)}%
                     </th>
@@ -297,9 +317,12 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
               <tbody>
                 {sensTable.row_values?.map((waccVal, rIdx) => (
                   <tr key={waccVal}>
-                    <td className="p-2 border border-[#1e283d] font-bold text-left bg-[#0d1220] text-[#94a3b8]">
+                    <th
+                      scope="row"
+                      className="p-2 border border-border font-bold text-left bg-surface-3 text-text-muted"
+                    >
                       {waccVal.toFixed(1)}%
-                    </td>
+                    </th>
                     {grid[rIdx]?.map((val, cIdx) => {
                       const isBase =
                         Math.abs(waccVal - (wacc.wacc || 0)) < 0.6 &&
@@ -327,6 +350,22 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* Legend — color never carries meaning alone */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-text-dim">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-sm bg-positive-subtle border border-positive/40" aria-hidden />
+              Above market price
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-sm bg-negative-subtle border border-negative/40" aria-hidden />
+              Below market price
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-sm bg-accent-subtle border-2 border-accent" aria-hidden />
+              Current base case
+            </span>
           </div>
         </div>
       )}
