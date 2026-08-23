@@ -96,15 +96,6 @@
             <span id="qa-label">MODEL VALID</span>
         </div>
 
-        <!-- Save / Saved -->
-        <button onclick="saveCurrentModel()" class="btn-action btn-primary text-xs">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
-            Save
-        </button>
-        <button onclick="openSavedModelsModal()" class="btn-action btn-secondary text-xs">
-            <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-            Saved
-        </button>
         <!-- Excel Export -->
         <a id="excel-export-btn" href="/api/export/excel?company_id=infy_infy" download
            class="btn-action btn-excel text-xs">
@@ -124,20 +115,6 @@
         <div id="qa-checks-list" class="space-y-2 max-h-96 overflow-y-auto pr-1 text-xs mt-3"></div>
         <div class="flex justify-end pt-3 border-t border-slate-800 mt-3">
             <button onclick="closeQAModal()" class="btn-action btn-secondary text-xs">Close</button>
-        </div>
-    </div>
-</div>
-
-<!-- ── Saved Models Modal ─────────────────────────────────────────────────── -->
-<div id="saved-models-modal" class="modal-backdrop hidden">
-    <div class="modal-box max-w-md">
-        <div class="modal-header">
-            <h3 class="font-outfit font-bold text-base text-slate-100">Saved Models</h3>
-            <button onclick="closeSavedModelsModal()" class="modal-close">✕</button>
-        </div>
-        <div id="saved-models-list" class="space-y-2.5 max-h-80 overflow-y-auto pr-1 mt-3"></div>
-        <div class="flex justify-end pt-3 border-t border-slate-800 mt-3">
-            <button onclick="closeSavedModelsModal()" class="btn-action btn-secondary text-xs">Close</button>
         </div>
     </div>
 </div>
