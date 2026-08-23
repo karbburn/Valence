@@ -125,6 +125,7 @@ def render_historical_balance_sheet(wb: Workbook, spec: ModelSpecification) -> W
         ("canonical.bs.total_non_current_assets", "Total Non-Current Assets", True),
         ("canonical.bs.trade_receivables", "Trade Receivables", False),
         ("canonical.bs.unbilled_revenue", "Unbilled Revenue", False),
+        ("canonical.bs.inventory", "Inventory", False),
         ("canonical.bs.cash_and_bank", "Cash & Cash Equivalents", False),
         ("canonical.bs.current_investments", "Current Investments", False),
         ("canonical.bs.total_current_assets", "Total Current Assets", True),
@@ -173,6 +174,7 @@ def render_historical_cash_flow(wb: Workbook, spec: ModelSpecification) -> Works
         ("canonical.cf.financing_activities", "Net Cash used in Financing Activities", True),
         ("canonical.cf.dividends_paid", "Dividends Paid", False),
         ("canonical.cf.net_change_in_cash", "NET CHANGE IN CASH & CASH EQUIVALENTS", True),
+        ("canonical.cf.stock_compensation", "Memo: Stock-Based Compensation", False),
     ]
 
     for idx, (ckey, label, is_tot) in enumerate(cf_items):
