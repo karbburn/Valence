@@ -51,17 +51,18 @@ export function SaveModal({
     <Modal open={open} onClose={onClose} title="Save Valuation Model">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-[12px] font-semibold text-[#94a3b8] mb-1.5">
+          <label htmlFor="save-model-name" className="block text-[12px] font-semibold text-text-muted mb-1.5">
             Model Name
           </label>
           <input
+            id="save-model-name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             disabled={saving}
-            className="w-full h-9 bg-[#0d1220] border border-[#2a3652] rounded-[4px] px-3 text-[13px] text-[#f8fafc] placeholder-[#475569] focus:outline-none focus:border-[#0ea5e9] focus:ring-1 focus:ring-[#0ea5e9]/30 transition-colors"
-            placeholder="Enter a descriptive model name..."
-            autoFocus
+            data-autofocus
+            className="w-full h-9 bg-surface-3 border border-border-interactive rounded-sm px-3 text-[13px] text-text-main placeholder:text-text-faint transition-colors"
+            placeholder="e.g. Infosys — bull case, higher margins"
           />
         </div>
 

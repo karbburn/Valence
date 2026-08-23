@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect } from 'react'
+import React, { useEffect, useId, useRef } from 'react'
 import { X } from 'lucide-react'
 
 export interface ModalProps {
@@ -11,6 +11,9 @@ export interface ModalProps {
   maxWidth?: string
 }
 
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+
 export function Modal({
   open,
   onClose,
@@ -18,15 +21,47 @@ export function Modal({
   children,
   maxWidth = 'max-w-lg',
 }: ModalProps) {
+  const titleId = useId()
+  const boxRef = useRef<HTMLDivElement>(null)
+  const restoreFocusRef = useRef<HTMLElement | null>(null)
+
+  // Focus moves into the dialog on open and returns to the trigger on close.
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && open) {
-        onClose()
-      }
+    if (!open) return
+    restoreFocusRef.current = document.activeElement as HTMLElement | null
+
+    const box = boxRef.current
+    const preferred =
+      box?.querySelector<HTMLElement>('[data-autofocus]') ??
+      box?.querySelector<HTMLElement>(FOCUSABLE)
+    ;(preferred ?? box)?.focus()
+
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      document.body.style.overflow = prevOverflow
+      restoreFocusRef.current?.focus?.()
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [open, onClose])
+  }, [open])
+
+  // Minimal focus containment: Tab cycles inside the dialog.
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== 'Tab' || !boxRef.current) return
+    const items = Array.from(
+      boxRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)
+    ).filter((el) => el.offsetParent !== null)
+    if (items.length === 0) return
+    const first = items[0]
+    const last = items[items.length - 1]
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault()
+      last.focus()
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault()
+      first.focus()
+    }
+  }
 
   if (!open) return null
 
@@ -34,29 +69,35 @@ export function Modal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-[#04070d]/85 backdrop-blur-md transition-opacity"
+        className="fixed inset-0 bg-[#04070d]/85 backdrop-blur-sm transition-opacity"
         onClick={onClose}
+        aria-hidden
       />
 
-      {/* Modal Box */}
+      {/* Dialog */}
       <div
-        className={`relative z-10 w-full ${maxWidth} bg-surface border border-[#2a3652] rounded-[6px] shadow-2xl overflow-hidden`}
-        onClick={(e) => e.stopPropagation()}
+        ref={boxRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleKeyDown}
+        className={`relative z-10 w-full ${maxWidth} bg-surface border border-border-interactive rounded-md shadow-overlay overflow-hidden outline-none`}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#1e283d] px-5 py-3.5 bg-[#0d1220]">
-          <h3 className="font-bold text-[16px] text-text-main font-sans">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3.5 bg-surface-3">
+          <h2 id={titleId} className="font-bold text-[15px] text-text-main font-sans">
             {title}
-          </h3>
+          </h2>
           <button
+            type="button"
             onClick={onClose}
-            className="text-[#94a3b8] hover:text-[#f8fafc] transition-colors p-1 rounded-[3px] hover:bg-[#192030]"
+            aria-label="Close dialog"
+            className="text-text-muted hover:text-text-main transition-colors p-1 rounded-sm hover:bg-surface-2 cursor-pointer"
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4" aria-hidden />
           </button>
         </div>
 
-        {/* Content Body */}
         <div className="p-5 font-sans">{children}</div>
       </div>
     </div>
