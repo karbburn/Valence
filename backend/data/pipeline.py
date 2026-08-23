@@ -50,7 +50,9 @@ def _get_secondary_filing_datapoints(company_id: str) -> list[RawDatapoint]:
         pdf_files = sorted(company_filings_dir.glob("*.pdf"))
         for pdf in pdf_files:
             try:
-                page_dps = parse_predicted_statement_page(pdf, 99, "BALANCE SHEET", "nse_filing", annual_only=False)
+                page_dps = parse_predicted_statement_page(
+                    pdf, 99, "BALANCE SHEET", "nse_filing", annual_only=False, company_id=company_id
+                )
                 filing_dps.extend(page_dps)
             except Exception:
                 pass
@@ -60,14 +62,14 @@ def _get_secondary_filing_datapoints(company_id: str) -> list[RawDatapoint]:
         fy25_pdf = FILINGS / "infosys-fy25-q4-outcome.pdf"
         if fy26_pdf.exists() and fy25_pdf.exists():
             fy26 = [
-                parse_predicted_statement_page(fy26_pdf, 99, "BALANCE SHEET", "nse_filing", annual_only=False),
-                parse_predicted_statement_page(fy26_pdf, 100, "PROFIT & LOSS", "nse_filing", annual_only=True),
-                parse_predicted_statement_page(fy26_pdf, 103, "CASH FLOW", "nse_filing", annual_only=False),
+                parse_predicted_statement_page(fy26_pdf, 99, "BALANCE SHEET", "nse_filing", annual_only=False, company_id=company_id),
+                parse_predicted_statement_page(fy26_pdf, 100, "PROFIT & LOSS", "nse_filing", annual_only=True, company_id=company_id),
+                parse_predicted_statement_page(fy26_pdf, 103, "CASH FLOW", "nse_filing", annual_only=False, company_id=company_id),
             ]
             fy25 = [
-                parse_predicted_statement_page(fy25_pdf, 105, "BALANCE SHEET", "nse_filing", annual_only=False),
-                parse_predicted_statement_page(fy25_pdf, 106, "PROFIT & LOSS", "nse_filing", annual_only=True),
-                parse_predicted_statement_page(fy25_pdf, 109, "CASH FLOW", "nse_filing", annual_only=False),
+                parse_predicted_statement_page(fy25_pdf, 105, "BALANCE SHEET", "nse_filing", annual_only=False, company_id=company_id),
+                parse_predicted_statement_page(fy25_pdf, 106, "PROFIT & LOSS", "nse_filing", annual_only=True, company_id=company_id),
+                parse_predicted_statement_page(fy25_pdf, 109, "CASH FLOW", "nse_filing", annual_only=False, company_id=company_id),
             ]
             filing_dps = [d for page in (fy26 + fy25) for d in page]
 
