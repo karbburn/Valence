@@ -19,6 +19,7 @@ CF_LINE_ITEM_CONFIG: List[tuple[str, str, CFCategoryType]] = [
     ("canonical.cf.dividends_paid", "Dividends Paid", "financing"),
     ("canonical.cf.other_adjustments", "Other Operating / Non-Cash Adjustments", "adjustments"),
     ("canonical.cf.net_change_in_cash", "Net Change in Cash & Cash Equivalents", "summary"),
+    ("canonical.cf.stock_compensation", "Memo: Stock-Based Compensation", "adjustments"),
 ]
 
 
