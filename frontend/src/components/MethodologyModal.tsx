@@ -79,7 +79,7 @@ export function MethodologyModal({
               </tr>
 
               <tr>
-                <td className="p-2.5 font-semibold text-text-main align-top">Discount Rate</th>
+                <th scope="row" className="p-2.5 font-semibold text-text-main align-top">Discount Rate</th>
                 <td className="p-2.5 border-l-2 border-l-accent/60 border-r border-border text-text-main">
                   <strong>WACC ({fmtPct(waccVal, 2)})</strong> (Equity + Debt Capital Cost)
                 </td>
@@ -89,7 +89,7 @@ export function MethodologyModal({
               </tr>
 
               <tr>
-                <td className="p-2.5 font-semibold text-text-main align-top">Reinvestment Drag</th>
+                <th scope="row" className="p-2.5 font-semibold text-text-main align-top">Reinvestment Drag</th>
                 <td className="p-2.5 border-l-2 border-l-accent/60 border-r border-border text-text-main">
                   Explicit CapEx & Working Capital deducted
                 </td>
@@ -99,7 +99,7 @@ export function MethodologyModal({
               </tr>
 
               <tr>
-                <td className="p-2.5 font-semibold text-text-main align-top">Capital Structure</th>
+                <th scope="row" className="p-2.5 font-semibold text-text-main align-top">Capital Structure</th>
                 <td className="p-2.5 border-l-2 border-l-accent/60 border-r border-border text-text-main">
                   Enterprise Value → Net Cash/Debt → Equity Value
                 </td>
