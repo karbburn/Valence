@@ -524,9 +524,17 @@ def render_sensitivity_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
             c = 3 + c_idx
             col_letter = chr(67 + c_idx)
             p_val = grid1[r_idx][c_idx] if (r_idx < len(grid1) and c_idx < len(grid1[r_idx])) else None
-            
-            # Live Dynamic Formula for Sensitivity Matrix
-            formula = f"=((('31_DCF'!H17+('31_DCF'!G12*(1+{col_letter}$5)/($B{r}-{col_letter}$5))/(1+$B{r})^5)-'31_DCF'!H25)/'31_DCF'!H27)"
+
+            # Live dynamic formula: re-discount the explicit FCFF stream AND the Gordon
+            # terminal value at the trial WACC in column B, then complete the bridge.
+            pv_stream = (
+                "'31_DCF'!C12/(1+$B{r})^0.5+'31_DCF'!D12/(1+$B{r})^1.5"
+                "+'31_DCF'!E12/(1+$B{r})^2.5+'31_DCF'!F12/(1+$B{r})^3.5"
+                "+'31_DCF'!G12/(1+$B{r})^4.5"
+            ).format(r=r)
+            tv_term = f"('31_DCF'!G12*(1+{col_letter}$5)/($B{r}-{col_letter}$5))"
+            core = f"(({pv_stream}+{tv_term}/(1+$B{r})^5)-'31_DCF'!H25)/'31_DCF'!H27"
+            formula = f'=IF({col_letter}$5>=$B{r},"",{core})'
             write_formula_cell(
                 ws, r, c,
                 formula=formula,
@@ -566,9 +574,16 @@ def render_sensitivity_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
             c = 3 + c_idx
             col_letter = chr(67 + c_idx)
             p_val = grid2[r_idx][c_idx] if (r_idx < len(grid2) and c_idx < len(grid2[r_idx])) else None
-            
-            # Live Dynamic Formula for Multiple Matrix
-            formula = f"=((('31_DCF'!H17+('20_Operating_Model'!G9*{col_letter}$13)/(1+$B{r})^5)-'31_DCF'!H25)/'31_DCF'!H27)"
+
+            # Live dynamic formula: trial-WACC PV of the explicit FCFF stream plus an
+            # exit-multiple terminal value on FY31 EBITDA, completed through the bridge.
+            pv_stream = (
+                "'31_DCF'!C12/(1+$B{r})^0.5+'31_DCF'!D12/(1+$B{r})^1.5"
+                "+'31_DCF'!E12/(1+$B{r})^2.5+'31_DCF'!F12/(1+$B{r})^3.5"
+                "+'31_DCF'!G12/(1+$B{r})^4.5"
+            ).format(r=r)
+            tv_term = f"('20_Operating_Model'!G9*{col_letter}$13)"
+            formula = f"=(({pv_stream}+{tv_term}/(1+$B{r})^5)-'31_DCF'!H25)/'31_DCF'!H27"
             write_formula_cell(
                 ws, r, c,
                 formula=formula,
