@@ -91,9 +91,9 @@ flowchart TB
 
 - **Core Engine**: Python 3.12, Pydantic v2
 - **Web API**: FastAPI, Uvicorn, Requests
-- **Excel Renderer**: OpenPyXL, Pillow (image branding & OpenXML formula patching)
-- **Database & Persistence**: SQLite (`valence.db`)
-- **Frontend Dashboard**: HTML5, Vanilla JavaScript (ES6+), Custom CSS (Dark Theme Design System)
+- **Excel Renderer**: OpenPyXL (live formulas via OpenXML value patching)
+- **Database & Persistence**: SQLite (`backend/data/valence.db`), precomputed model cache
+- **Frontend Dashboard**: Next.js 16, React 19, Tailwind CSS v4, TypeScript (Bloomberg-terminal design system)
 
 ---
 
@@ -166,8 +166,15 @@ Valence/
 │       ├── football_field.py          # Multi-methodology valuation range chart synthesis
 │       ├── returns.py                 # PE / LBO exit returns & IRR waterfall engine
 │       └── sensitivity.py             # Multidimensional sensitivity matrices
-├── .gitignore                         # Local dev caches, output workbooks, and database ignore
-└── README.md                          # Platform description and documentation
+│   └── tests/                          # Pytest suite: engines, exports, layout contracts
+├── frontend/                            # Next.js dashboard (primary web UI)
+│   ├── src/app/                         # App Router entry, SEO metadata, PWA manifest
+│   ├── src/components/                  # Analyst / Quick DCF / 3-Statement views & modals
+│   ├── src/hooks/                       # Model state machine, company search, shortcuts
+│   ├── src/lib/                         # Typed API client, formatters, design tokens
+│   └── public/                          # LLM discovery files, icons, verification assets
+├── .gitignore                           # Local dev caches, output workbooks, and database ignore
+└── README.md                            # Platform description and documentation
 ```
 
 ---
@@ -211,20 +218,27 @@ Valence/
 
 ## Running the Platform
 
-### 1. Launch the Web Dashboard & API
+### 1. Launch the Web Dashboard (Next.js) & API
 
 Start the FastAPI application server:
 ```bash
 python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+In a second terminal, start the Next.js dashboard (proxies `/api/*` to the backend):
+```bash
+cd frontend
+npm install
+npm run dev
+```
 Open your browser and navigate to:
 ```
-http://localhost:8000
+http://localhost:3000
 ```
 
 ### 2. Exporting Excel Workbooks via API
 
-Generate and download a 27-tab financial model for any onboarded company directly via HTTP:
+Generate and download a 30-tab financial model for any onboarded company directly via HTTP:
 ```bash
 curl -O "http://localhost:8000/api/export/excel?company_id=[company_id]"
 ```
@@ -251,6 +265,9 @@ Valence includes an automated **Institutional Financial Audit Suite** for post-e
   - **Consolas Formula Code Blocks**: `01_Model_Guide` Column C formulas styled in `Consolas 11pt Bold` with light blue tint fill (`#EFF6FF`).
 
 ```bash
+# Run engine, export, and layout-contract test suite
+python -m pytest backend/tests -q
+
 # Run Institutional Financial Audit & Excel Exporter Self-Check
 python -m backend.export.excel.self_check
 
@@ -267,8 +284,8 @@ python -m backend.api.self_check
 | `GET` | `/api/model/{company_id}` | Fetch full ModelSpecification JSON for a company |
 | `POST` | `/api/model/recompute` | Apply analyst driver overrides and return updated model |
 | `POST` | `/api/model/revert` | Revert driver override back to baseline model state |
-| `GET` | `/api/export/excel` | Download fully-formatted 27-tab `.xlsx` workbook |
+| `GET` | `/api/export/excel` | Download fully-formatted 30-tab `.xlsx` workbook |
 | `GET` | `/api/companies` | List all available onboarded companies |
 | `GET` | `/api/companies/search` | Real-time ticker and company name autocomplete |
-| `POST` | `/api/models/save` | Persist user's model scenario overrides |
-| `GET` | `/api/models` | List user's saved model scenarios |
+
+Saved-model persistence lives in the browser (localStorage) — no server-side model storage.
