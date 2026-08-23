@@ -22,7 +22,17 @@ import { useModelSpec } from '@/hooks/useModelSpec'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { ScenarioLabel, CompanySummary } from '@/lib/types'
 import { saveModel, loadSavedModel } from '@/lib/api'
-import { fmtPrice } from '@/lib/formatters'
+import { fmtPrice, fmtNum } from '@/lib/formatters'
+import { DRIVER_CONFIGS } from '@/components/DriverPanel'
+
+const driverLabel = (key: string) => DRIVER_CONFIGS.find((c) => c.key === key)
+
+const formatDriverValue = (key: string, value: number): string => {
+  const unit = driverLabel(key)?.unit ?? '%'
+  if (unit === 'x') return `${fmtNum(value, 1)}x`
+  if (unit === 'days') return `${fmtNum(value, 0)} days`
+  return `${fmtNum(value, 1)}%`
+}
 
 export default function HomePage() {
   const { spec, loading, error, companyId, loadModel, applySpec, recompute, revert, resetAll } =
@@ -39,6 +49,8 @@ export default function HomePage() {
   const [loadingSubtitle, setLoadingSubtitle] = useState(
     'Ingesting live financial statements, normalizing taxonomy, and solving DCF & WACC matrices...'
   )
+
+  const [exporting, setExporting] = useState(false)
 
   // Modal visibility states
   const [qaOpen, setQaOpen] = useState(false)
@@ -86,14 +98,16 @@ export default function HomePage() {
 
   const handleDriverChange = async (driverKey: string, value: number) => {
     await recompute(driverKey, value, scenario)
+    const label = driverLabel(driverKey)?.label ?? driverKey
     setToastType('info')
-    setToastMessage(`${driverKey} → ${value}`)
+    setToastMessage(`${label} set to ${formatDriverValue(driverKey, value)}`)
   }
 
   const handleDriverRevert = async (driverKey: string, period?: string) => {
     await revert(driverKey, scenario, period)
+    const label = driverLabel(driverKey)?.label ?? driverKey
     setToastType('info')
-    setToastMessage(`${driverKey} reverted`)
+    setToastMessage(`${label} reverted to baseline`)
   }
 
   const handleSaveSubmit = async (name: string) => {
@@ -113,10 +127,28 @@ export default function HomePage() {
     setToastMessage(`Loaded saved model`)
   }
 
-  const handleExportExcel = () => {
-    window.location.href = `/api/export/excel?company_id=${companyId}`
-    setToastType('success')
-    setToastMessage(`30-Tab Institutional Model generated for ${spec?.metadata?.ticker || 'Company'}!`)
+  const handleExportExcel = async () => {
+    if (!companyId || exporting) return
+    setExporting(true)
+    try {
+      const res = await fetch(`/api/export/excel?company_id=${companyId}`)
+      if (!res.ok) throw new Error(`Export failed (${res.status})`)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${spec?.metadata?.ticker?.toLowerCase() || companyId}_valuation_model.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      setToastType('success')
+      setToastMessage(`Excel workbook downloaded — 30 tabs, live formulas`)
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : 'Excel export failed')
+    } finally {
+      setExporting(false)
+    }
   }
 
   const handleResetAll = async () => {
@@ -126,7 +158,7 @@ export default function HomePage() {
     setToastMessage('All valuation drivers restored to baseline defaults')
   }
 
-  const handleCopySummary = () => {
+  const handleCopySummary = async () => {
     if (!spec) return
     const ticker = spec.metadata?.ticker || 'MODEL'
     const name = spec.metadata?.name || 'Company'
@@ -139,9 +171,14 @@ export default function HomePage() {
 
     const text = `${name} (${ticker}) DCF Valuation [${scenario.toUpperCase()} SCENARIO]\nDCF Implied Price: ${price} | Market Price: ${mkt}\nWACC: ${waccVal} | Model: Unlevered FCFF @ WACC`
 
-    navigator.clipboard.writeText(text)
-    setToastType('success')
-    setToastMessage('Valuation memo summary copied to clipboard!')
+    try {
+      await navigator.clipboard.writeText(text)
+      setToastType('success')
+      setToastMessage('Valuation memo copied to clipboard')
+    } catch {
+      setToastType('error')
+      setToastMessage('Clipboard unavailable — copy blocked by the browser')
+    }
   }
 
   return (
@@ -167,6 +204,7 @@ export default function HomePage() {
         spec={spec}
         mode={mode}
         scenario={scenario}
+        exporting={exporting}
         onModeChange={setMode}
         onScenarioChange={setScenario}
         onSelectCompany={handleSelectCompany}
@@ -181,52 +219,95 @@ export default function HomePage() {
       <KPIBar spec={spec} scenario={scenario} />
 
       {/* Main Workspace Layout */}
-      <main className="flex-1 w-full max-w-[1680px] mx-auto p-4 sm:p-5">
+      <main id="main" className="flex-1 w-full max-w-[1680px] mx-auto p-4 sm:p-5">
         {!spec && !loading && (
-          <div className="bg-surface border border-border rounded-[4px] p-8 text-center text-[#64748b] text-[13px]">
+          <div className="bg-surface border border-border rounded-sm p-8 text-center text-text-dim text-[13px]">
             No valuation model loaded. Use the search bar in the header to select a company.
           </div>
         )}
 
-        {spec && mode === 'analyst' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-            {/* Left Column: Driver Sliders, WACC Breakdown & Return Ratios */}
-            <div className="lg:col-span-4 space-y-4">
-              <DriverPanel
-                spec={spec}
-                scenario={scenario}
-                onDriverChange={handleDriverChange}
-                onDriverRevert={handleDriverRevert}
-                onResetAll={handleResetAll}
-              />
-              <WACCBreakdown spec={spec} scenario={scenario} />
-              <FinancialRatios spec={spec} scenario={scenario} />
+        <div
+          id="panel-analyst"
+          role="tabpanel"
+          aria-labelledby="tab-analyst"
+          hidden={mode !== 'analyst'}
+        >
+          {spec && mode === 'analyst' && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+              {/* Left Column: Driver Sliders, WACC Breakdown & Return Ratios */}
+              <div className="lg:col-span-4 space-y-4">
+                <DriverPanel
+                  spec={spec}
+                  scenario={scenario}
+                  onDriverChange={handleDriverChange}
+                  onDriverRevert={handleDriverRevert}
+                  onResetAll={handleResetAll}
+                />
+                <WACCBreakdown spec={spec} scenario={scenario} />
+                <FinancialRatios spec={spec} scenario={scenario} />
+              </div>
+
+              {/* Right Column: DCF Valuation Schedule & Forecast Summary */}
+              <div className="lg:col-span-8 space-y-4">
+                <DCFSchedule
+                  spec={spec}
+                  scenario={scenario}
+                  onOpenMethodology={() => setMethodologyOpen(true)}
+                />
+                <ForecastTable spec={spec} scenario={scenario} />
+              </div>
             </div>
+          )}
+        </div>
 
-            {/* Right Column: DCF Valuation Schedule & Forecast Summary */}
-            <div className="lg:col-span-8 space-y-4">
-              <DCFSchedule
-                spec={spec}
-                scenario={scenario}
-                onOpenMethodology={() => setMethodologyOpen(true)}
-              />
-              <ForecastTable spec={spec} scenario={scenario} />
-            </div>
-          </div>
-        )}
+        <div
+          id="panel-quick"
+          role="tabpanel"
+          aria-labelledby="tab-quick"
+          hidden={mode !== 'quick'}
+        >
+          {spec && mode === 'quick' && (
+            <QuickDCFView
+              spec={spec}
+              scenario={scenario}
+              onOpenMethodology={() => setMethodologyOpen(true)}
+            />
+          )}
+        </div>
 
-        {spec && mode === 'quick' && (
-          <QuickDCFView
-            spec={spec}
-            scenario={scenario}
-            onOpenMethodology={() => setMethodologyOpen(true)}
-          />
-        )}
-
-        {spec && mode === 'full' && (
-          <FullModelView spec={spec} scenario={scenario} />
-        )}
+        <div
+          id="panel-full"
+          role="tabpanel"
+          aria-labelledby="tab-full"
+          hidden={mode !== 'full'}
+        >
+          {spec && mode === 'full' && <FullModelView spec={spec} scenario={scenario} />}
+        </div>
       </main>
+
+      {/* Shortcut reference — persistent, quiet */}
+      <footer className="w-full max-w-[1680px] mx-auto px-4 pb-3 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[10px] text-text-dim">
+        <span className="text-text-faint">Shortcuts</span>
+        <span>
+          <kbd>1</kbd> analyst
+        </span>
+        <span>
+          <kbd>2</kbd> quick DCF
+        </span>
+        <span>
+          <kbd>3</kbd> 3-statement
+        </span>
+        <span>
+          <kbd>←</kbd>
+          <kbd>→</kbd> scenario
+        </span>
+        <span>
+          <kbd>Ctrl S</kbd> save
+        </span>
+        <span>
+          <kbd>Esc</kbd> close dialogs
+        </span>
+      </footer>
 
       {/* Modals */}
       <QAModal

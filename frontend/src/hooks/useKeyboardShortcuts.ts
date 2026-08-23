@@ -48,6 +48,15 @@ export function useKeyboardShortcuts({
       // If typing inside an input field, do not trigger single-key navigation shortcuts
       if (isInput) return
 
+      // Arrow keys inside a radiogroup/tablist belong to that widget's own pattern
+      const target = e.target as HTMLElement | null
+      if (
+        target?.closest?.('[role="radiogroup"], [role="tablist"]') &&
+        (e.key === 'ArrowLeft' || e.key === 'ArrowRight')
+      ) {
+        return
+      }
+
       // Mode Switching: 1, 2, 3
       if (e.key === '1') {
         e.preventDefault()

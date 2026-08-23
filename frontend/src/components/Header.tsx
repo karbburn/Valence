@@ -1,14 +1,16 @@
 'use client'
 
-import React from 'react'
+import React, { useRef } from 'react'
 import { Save, Bookmark, FileSpreadsheet, CheckCircle2, AlertTriangle, Copy } from 'lucide-react'
 import { ModelSpecification, ScenarioLabel, CompanySummary } from '@/lib/types'
+import { fmtPct } from '@/lib/formatters'
 import { CompanySearch } from './CompanySearch'
 
 export interface HeaderProps {
   spec: ModelSpecification | null
   mode: 'analyst' | 'quick' | 'full'
   scenario: ScenarioLabel
+  exporting?: boolean
   onModeChange: (mode: 'analyst' | 'quick' | 'full') => void
   onScenarioChange: (scenario: ScenarioLabel) => void
   onSelectCompany: (company: CompanySummary) => void
@@ -19,10 +21,19 @@ export interface HeaderProps {
   onCopySummary?: () => void
 }
 
+const MODES: Array<{ id: 'analyst' | 'quick' | 'full'; label: string }> = [
+  { id: 'analyst', label: 'Analyst' },
+  { id: 'quick', label: 'Quick DCF' },
+  { id: 'full', label: '3-Statement' },
+]
+
+const SCENARIOS: ScenarioLabel[] = ['base', 'bull', 'bear']
+
 export function Header({
   spec,
   mode,
   scenario,
+  exporting = false,
   onModeChange,
   onScenarioChange,
   onSelectCompany,
@@ -36,40 +47,58 @@ export function Header({
   const qaChecks = spec?.qa?.checks || []
   const failedChecks = qaChecks.filter((c) => !c.passed)
   const qaStatus =
-    qaChecks.length === 0
-      ? 'not_run'
-      : failedChecks.length === 0
-      ? 'passed'
-      : 'failed'
+    qaChecks.length === 0 ? 'not_run' : failedChecks.length === 0 ? 'passed' : 'failed'
+
+  // Live delta per scenario vs the current market quote — glanceable without switching.
+  const marketPrice =
+    spec?.valuation?.find((v) => v.scenario === scenario)?.reverse_dcf?.market_price ?? null
+
+  const scenarioDelta = (sc: ScenarioLabel): string | null => {
+    const price = spec?.valuation?.find((v) => v.scenario === sc)?.dcf_bridge?.implied_share_price
+    if (price == null || marketPrice == null || marketPrice <= 0) return null
+    const delta = ((price - marketPrice) / marketPrice) * 100
+    return `${delta >= 0 ? '+' : ''}${fmtPct(delta, 0)}`
+  }
+
+  const modeListRef = useRef<HTMLDivElement>(null)
+
+  // Roving-tabindex tab pattern: arrows move focus and selection inside the list.
+  const handleModeKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+    e.preventDefault()
+    e.stopPropagation()
+    const idx = MODES.findIndex((m) => m.id === mode)
+    const next =
+      MODES[(idx + (e.key === 'ArrowRight' ? 1 : MODES.length - 1)) % MODES.length].id
+    onModeChange(next)
+    requestAnimationFrame(() => {
+      modeListRef.current
+        ?.querySelector<HTMLButtonElement>(`#tab-${next}`)
+        ?.focus()
+    })
+  }
 
   return (
-    <header className="sticky top-0 z-40 h-[48px] w-full bg-[#111622]/95 backdrop-blur-md border-b border-[#1e283d] px-2.5 sm:px-3 md:px-4 flex items-center justify-between text-sans select-none gap-2 md:gap-3 overflow-visible">
+    <header className="sticky top-0 z-40 h-[48px] w-full bg-surface/95 backdrop-blur-md border-b border-border px-2.5 sm:px-3 md:px-4 flex items-center justify-between text-sans select-none gap-2 md:gap-3 overflow-visible">
       {/* Left section: Logo, Search, Company Badge */}
       <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
-        {/* Brand Logo */}
         <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
-          <div className="h-8 px-1.5 bg-white rounded-[4px] flex items-center justify-center shadow-sm overflow-hidden border border-white/20">
-            <img
-              src="/logo.png"
-              alt="Valence Logo"
-              className="h-6 w-auto object-contain"
-            />
+          <div className="h-8 px-1.5 bg-white rounded-sm flex items-center justify-center shadow-pop overflow-hidden">
+            <img src="/logo.png" alt="" className="h-6 w-auto object-contain" />
           </div>
-          <span className="font-bold text-[16px] sm:text-[17px] tracking-[0.05em] text-[#f8fafc]">
-            VALENCE
+          <span className="font-bold text-[16px] sm:text-[17px] tracking-[0.05em] text-text-main">
+            Valence
           </span>
         </div>
 
-        {/* Company Search Component */}
         <CompanySearch onSelectCompany={onSelectCompany} />
 
-        {/* Active Company Badge */}
         {metadata && (
-          <div className="hidden lg:flex items-center space-x-1.5 bg-[#0d1220] border border-[#1e283d] rounded-[4px] px-2 py-1 max-w-[150px] lg:max-w-[190px]">
-            <span className="font-bold text-[10.5px] uppercase tracking-[0.03em] text-[#f8fafc] truncate">
+          <div className="hidden lg:flex items-center space-x-1.5 bg-surface-3 border border-border rounded-sm px-2 py-1 max-w-[150px] lg:max-w-[190px]">
+            <span className="font-bold text-[11px] uppercase tracking-[0.03em] text-text-main truncate">
               {metadata.name}
             </span>
-            <span className="font-mono font-bold text-[9.5px] text-[#7dd3fc] bg-[#0ea5e9]/10 border border-[#0ea5e9]/20 rounded-[3px] px-1 py-0.5 shrink-0">
+            <span className="font-mono font-bold text-[10px] text-accent-hover bg-accent-subtle border border-accent-border rounded-sm px-1 py-0.5 shrink-0">
               {metadata.ticker}
             </span>
           </div>
@@ -78,134 +107,158 @@ export function Header({
 
       {/* Center section: Mode Tabs */}
       <div
+        ref={modeListRef}
         role="tablist"
-        aria-label="View Mode Navigation"
-        className="flex items-center bg-[#111622] border border-[#1e283d] rounded-[6px] p-0.5 space-x-0.5 shrink-0"
+        aria-label="Workspace view"
+        onKeyDown={handleModeKeyDown}
+        className="flex items-center bg-surface border border-border rounded-md p-0.5 space-x-0.5 shrink-0"
       >
-        <button
-          role="tab"
-          aria-selected={mode === 'analyst'}
-          onClick={() => onModeChange('analyst')}
-          className={`px-2.5 sm:px-3 py-1 text-[11px] sm:text-[12px] font-medium rounded-[4px] whitespace-nowrap transition-colors ${
-            mode === 'analyst'
-              ? 'bg-[#0ea5e9] text-white font-semibold shadow-sm'
-              : 'text-[#64748b] hover:text-[#f8fafc]'
-          }`}
-        >
-          Analyst Mode
-        </button>
-        <button
-          role="tab"
-          aria-selected={mode === 'quick'}
-          onClick={() => onModeChange('quick')}
-          className={`px-2.5 sm:px-3 py-1 text-[11px] sm:text-[12px] font-medium rounded-[4px] whitespace-nowrap transition-colors ${
-            mode === 'quick'
-              ? 'bg-[#0ea5e9] text-white font-semibold shadow-sm'
-              : 'text-[#64748b] hover:text-[#f8fafc]'
-          }`}
-        >
-          Quick DCF
-        </button>
-        <button
-          role="tab"
-          aria-selected={mode === 'full'}
-          onClick={() => onModeChange('full')}
-          className={`px-2.5 sm:px-3 py-1 text-[11px] sm:text-[12px] font-medium rounded-[4px] whitespace-nowrap transition-colors ${
-            mode === 'full'
-              ? 'bg-[#0ea5e9] text-white font-semibold shadow-sm'
-              : 'text-[#64748b] hover:text-[#f8fafc]'
-          }`}
-        >
-          3-Statement
-        </button>
+        {MODES.map((m) => {
+          const active = mode === m.id
+          return (
+            <button
+              key={m.id}
+              id={`tab-${m.id}`}
+              role="tab"
+              type="button"
+              aria-selected={active}
+              aria-controls={`panel-${m.id}`}
+              tabIndex={active ? 0 : -1}
+              onClick={() => onModeChange(m.id)}
+              className={`px-2.5 sm:px-3 py-1 text-[12px] rounded-sm whitespace-nowrap transition-colors cursor-pointer ${
+                active
+                  ? 'bg-surface-2 text-text-main font-semibold'
+                  : 'text-text-dim hover:text-text-main'
+              }`}
+            >
+              {m.label}
+            </button>
+          )
+        })}
       </div>
 
       {/* Right section: Scenario Toggle, QA Badge, Action Buttons */}
       <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0 pr-1">
-        {/* Scenario Control */}
+        {/* Scenario control — a single-select radio group, not tabs */}
         <div
-          role="tablist"
-          aria-label="Valuation Scenario"
-          className="flex items-center bg-[#111622] border border-[#1e283d] rounded-[6px] p-0.5 space-x-0.5 shrink-0"
+          role="radiogroup"
+          aria-label="Valuation scenario"
+          data-scenario-nav=""
+          className="flex items-center bg-surface border border-border rounded-md p-0.5 shrink-0"
         >
-          {(['base', 'bull', 'bear'] as ScenarioLabel[]).map((sc) => (
-            <button
-              key={sc}
-              role="tab"
-              aria-selected={scenario === sc}
-              onClick={() => onScenarioChange(sc)}
-              className={`px-2 py-0.5 text-[10.5px] sm:text-[11px] font-medium capitalize rounded-[4px] whitespace-nowrap transition-colors ${
-                scenario === sc
-                  ? 'bg-[#2a3652] text-[#f8fafc] font-bold'
-                  : 'text-[#64748b] hover:text-[#94a3b8]'
-              }`}
-            >
-              {sc}
-            </button>
-          ))}
+          {SCENARIOS.map((sc) => {
+            const active = scenario === sc
+            const delta = scenarioDelta(sc)
+            return (
+              <button
+                key={sc}
+                role="radio"
+                type="button"
+                aria-checked={active}
+                tabIndex={active ? 0 : -1}
+                onClick={() => onScenarioChange(sc)}
+                title={
+                  delta
+                    ? `Implied price ${delta} vs market under ${sc} assumptions`
+                    : undefined
+                }
+                className={`px-2 py-0.5 text-[11px] capitalize rounded-sm whitespace-nowrap transition-colors cursor-pointer ${
+                  active
+                    ? 'bg-surface-2 text-text-main font-semibold'
+                    : 'text-text-dim hover:text-text-muted'
+                }`}
+              >
+                {sc}
+                {delta && active && (
+                  <span
+                    className={`ml-1 font-mono text-[10px] ${
+                      delta.startsWith('+') ? 'text-positive' : 'text-negative'
+                    }`}
+                  >
+                    {delta}
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
 
-        {/* QA Status Badge */}
+        {/* QA Status — opens the audit report */}
         <button
+          type="button"
           onClick={onOpenQA}
-          className={`flex items-center space-x-1 px-2 py-1 rounded-[4px] text-[9px] sm:text-[9.5px] font-bold tracking-[0.03em] uppercase border whitespace-nowrap shrink-0 transition-colors ${
+          aria-label={
             qaStatus === 'passed'
-              ? 'bg-[#10b981]/10 text-[#10b981] border-[#10b981]/30 hover:bg-[#10b981]/20'
+              ? 'QA report: all model checks passed'
               : qaStatus === 'failed'
-              ? 'bg-[#ef4444]/10 text-[#ef4444] border-[#ef4444]/30 animate-pulse hover:bg-[#ef4444]/20'
-              : 'bg-[#192030] text-[#64748b] border-[#1e283d] hover:text-[#94a3b8]'
+              ? `QA report: ${failedChecks.length} of ${qaChecks.length} checks failed`
+              : 'QA report: checks have not run yet'
+          }
+          title="Open the automated model audit report"
+          className={`flex items-center space-x-1 px-2 py-1 rounded-sm text-[10px] font-semibold uppercase tracking-[0.03em] border whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
+            qaStatus === 'passed'
+              ? 'bg-positive-subtle text-positive border-positive/30 hover:bg-positive/20'
+              : qaStatus === 'failed'
+              ? 'bg-negative-subtle text-negative border-negative/40 hover:bg-negative/20'
+              : 'bg-surface-2 text-text-dim border-border hover:text-text-muted'
           }`}
         >
           {qaStatus === 'passed' ? (
             <>
-              <CheckCircle2 className="w-3 h-3 text-[#10b981] shrink-0" />
-              <span>MODEL VALID</span>
+              <CheckCircle2 className="w-3 h-3 shrink-0" aria-hidden />
+              <span>Model valid</span>
             </>
           ) : qaStatus === 'failed' ? (
             <>
-              <AlertTriangle className="w-3 h-3 text-[#ef4444] shrink-0" />
+              <AlertTriangle className="w-3 h-3 shrink-0" aria-hidden />
               <span>
-                {failedChecks.length} {failedChecks.length === 1 ? 'CHECK' : 'CHECKS'} FAILED
+                {failedChecks.length} check{failedChecks.length === 1 ? '' : 's'} failed
               </span>
             </>
           ) : (
-            <span>QA NOT RUN</span>
+            <span>QA pending</span>
           )}
         </button>
 
-        {/* Action Buttons */}
+        {/* Action buttons — Excel is the primary export; the rest are quiet */}
         <div className="flex items-center space-x-1 sm:space-x-1.5 shrink-0">
           <button
+            type="button"
             onClick={onCopySummary}
-            title="Copy valuation memo summary to clipboard"
-            className="flex items-center space-x-1 px-2 py-1 bg-[#192030] hover:bg-[#2a3652] text-[#7dd3fc] border border-[#0ea5e9]/30 text-[11px] font-semibold rounded-[4px] transition-colors cursor-pointer shrink-0"
+            title="Copy valuation memo to clipboard"
+            className="flex items-center space-x-1 px-2 py-1 bg-surface-2 hover:bg-surface text-text-muted hover:text-text-main border border-border text-[11px] font-medium rounded-sm transition-colors cursor-pointer shrink-0"
           >
-            <Copy className="w-3.5 h-3.5 shrink-0" />
+            <Copy className="w-3.5 h-3.5 shrink-0" aria-hidden />
             <span>Copy</span>
           </button>
 
           <button
+            type="button"
             onClick={onSave}
-            className="flex items-center space-x-1 px-2 py-1 bg-[#0ea5e9] hover:bg-[#38bdf8] text-white text-[11px] font-semibold rounded-[4px] transition-colors cursor-pointer shrink-0"
+            className="flex items-center space-x-1 px-2 py-1 bg-transparent hover:bg-accent-subtle text-accent hover:text-accent-hover border border-accent-border text-[11px] font-medium rounded-sm transition-colors cursor-pointer shrink-0"
           >
-            <Save className="w-3.5 h-3.5 shrink-0" />
+            <Save className="w-3.5 h-3.5 shrink-0" aria-hidden />
             <span>Save</span>
           </button>
 
           <button
+            type="button"
             onClick={onOpenSaved}
-            className="flex items-center space-x-1 px-2 py-1 bg-[#192030] hover:bg-[#2a3652] text-[#94a3b8] hover:text-[#f8fafc] border border-[#1e283d] text-[11px] font-semibold rounded-[4px] transition-colors cursor-pointer shrink-0"
+            title="Open saved models"
+            className="hidden sm:flex items-center space-x-1 px-2 py-1 bg-surface-2 hover:bg-surface text-text-muted hover:text-text-main border border-border text-[11px] font-medium rounded-sm transition-colors cursor-pointer shrink-0"
           >
-            <Bookmark className="w-3.5 h-3.5 shrink-0" />
+            <Bookmark className="w-3.5 h-3.5 shrink-0" aria-hidden />
             <span>Saved</span>
           </button>
 
           <button
+            type="button"
             onClick={onExportExcel}
-            className="flex items-center space-x-1 px-2.5 py-1 bg-[#065f46] hover:bg-[#047857] text-[#6ee7b7] border border-[#047857] text-[11.5px] font-bold rounded-[4px] transition-colors cursor-pointer shrink-0 shadow-sm"
+            disabled={exporting}
+            className="flex items-center space-x-1 px-2.5 py-1 bg-excel-bg hover:bg-excel-border disabled:opacity-60 text-excel-text border border-excel-border text-[11px] font-semibold rounded-sm transition-colors cursor-pointer disabled:cursor-wait shrink-0"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
-            <span>Excel</span>
+            <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" aria-hidden />
+            <span>{exporting ? 'Exporting…' : 'Excel'}</span>
           </button>
         </div>
       </div>
