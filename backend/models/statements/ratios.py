@@ -66,6 +66,7 @@ def compute_historical_ratios(
         ("net_profit_growth_yoy", "Net Profit Growth YoY %", "%", "(net_profit[t] - net_profit[t-1]) / net_profit[t-1] * 100"),
         ("dso_days", "Days Sales Outstanding (DSO)", "days", "(trade_receivables + unbilled_revenue) / revenue * 365"),
         ("dpo_days", "Days Payables Outstanding (DPO)", "days", "trade_payables / cost_of_sales * 365"),
+        ("dio_days", "Days Inventory Outstanding (DIO)", "days", "inventory / cost_of_sales * 365"),
         ("da_pct_revenue", "D&A % of Revenue", "%", "depreciation_amortization / revenue * 100"),
         ("da_pct_ppe", "D&A % of PPE", "%", "depreciation_amortization / ppe * 100"),
         ("roe_pct", "Return on Equity (ROE) %", "%", "net_profit / total_equity * 100"),
@@ -154,6 +155,11 @@ def compute_historical_ratios(
             val_dpo = ratio_days(payables, cos)
             if val_dpo is not None:
                 ratios_dict["dpo_days"][p] = val_dpo
+
+        if inventory is not None and inventory > 0:
+            val_dio = ratio_days(inventory, cos)
+            if val_dio is not None:
+                ratios_dict["dio_days"][p] = val_dio
 
         val_da_rev = pct(da, rev)
         if val_da_rev is not None:
