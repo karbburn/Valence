@@ -861,6 +861,10 @@ def render_valuation_comparison(wb: Workbook, spec: ModelSpecification) -> Works
 
     comps_ev = comps_res.implied_valuations[0].implied_share_price
     comps_pe = comps_res.implied_valuations[1].implied_share_price
+    q = getattr(comps_res, "quartile_implied_prices", {}) or {
+        "pe_ratio": {"p25": None, "p75": None},
+        "ev_ebitda": {"p25": None, "p75": None},
+    }
 
     ff = compute_football_field(
         ticker=spec.metadata.ticker,
@@ -871,6 +875,11 @@ def render_valuation_comparison(wb: Workbook, spec: ModelSpecification) -> Works
         dcf_bear_price=dcf_bear,
         comps_pe_price=comps_pe,
         comps_ev_ebitda_price=comps_ev,
+        base_valuation_output=base_val,
+        comps_pe_low=q["pe_ratio"]["p25"],
+        comps_pe_high=q["pe_ratio"]["p75"],
+        comps_ev_ebitda_low=q["ev_ebitda"]["p25"],
+        comps_ev_ebitda_high=q["ev_ebitda"]["p75"],
     )
 
     headers = ["Valuation Methodology", "Category", "Low Implied Price", "Mid / Base Price", "High Implied Price", "Range Spread", "Methodology Notes"]
@@ -899,8 +908,8 @@ def render_valuation_comparison(wb: Workbook, spec: ModelSpecification) -> Works
     ws.cell(row=sum_r + 1, column=3, value=ff.current_market_price).number_format = FMT_PRICE
     ws.cell(row=sum_r + 1, column=3).font = FONT_TOTAL
 
-    ws.cell(row=sum_r + 2, column=2, value=f"Median Fair Value Across Methodologies ({spec.metadata.currency})").font = FONT_TOTAL
-    ws.cell(row=sum_r + 2, column=3, value=ff.median_fair_value).number_format = FMT_PRICE
+    ws.cell(row=sum_r + 2, column=2, value=f"Mean Fair Value Across Methodologies ({spec.metadata.currency})").font = FONT_TOTAL
+    ws.cell(row=sum_r + 2, column=3, value=ff.mean_fair_value).number_format = FMT_PRICE
     ws.cell(row=sum_r + 2, column=3).font = FONT_TOTAL
 
     return ws
