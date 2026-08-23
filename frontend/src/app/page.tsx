@@ -167,7 +167,6 @@ export default function HomePage() {
         spec={spec}
         mode={mode}
         scenario={scenario}
-        companyId={companyId}
         onModeChange={setMode}
         onScenarioChange={setScenario}
         onSelectCompany={handleSelectCompany}

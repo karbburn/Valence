@@ -80,10 +80,6 @@ export const metadata: Metadata = {
     shortcut: '/icon.png',
     apple: '/icon.png',
   },
-  verification: {
-    google: 'googlefa35136e185ed8bc.html',
-    other: { 'msvalidate.01': 'REPLACE_WITH_BING_CODE' },
-  },
 }
 
 export default function RootLayout({

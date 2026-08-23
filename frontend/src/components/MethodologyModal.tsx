@@ -81,7 +81,7 @@ export function MethodologyModal({
                   <strong>WACC ({fmtPct(waccVal, 2)})</strong> (Equity + Debt Capital Cost)
                 </td>
                 <td className="p-2.5 text-[#94a3b8]">
-                  Cost of Equity ($K_e \approx 10.9\%$)
+                  Cost of Equity ≈ {fmtPct(waccVal, 1)} (live)
                 </td>
               </tr>
 
@@ -98,7 +98,7 @@ export function MethodologyModal({
               <tr>
                 <td className="p-2.5 font-semibold text-[#f8fafc]">Capital Structure</td>
                 <td className="p-2.5 bg-[#0ea5e9]/5 border-r border-[#1e283d] text-[#7dd3fc]">
-                  Enterprise Value $\rightarrow$ Net Cash/Debt $\rightarrow$ Equity Value
+                  Enterprise Value → Net Cash/Debt → Equity Value
                 </td>
                 <td className="p-2.5 text-[#94a3b8]">
                   Direct Equity Value shortcut
