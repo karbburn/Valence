@@ -72,14 +72,14 @@ export function DriverPanel({
             <button
               onClick={handleResetAll}
               title="Reset all driver overrides to baseline defaults"
-              className="flex items-center space-x-1 text-[10.5px] font-semibold text-[#f43f5e] bg-[#f43f5e]/10 border border-[#f43f5e]/30 hover:bg-[#f43f5e]/20 rounded-[3px] px-2 py-0.5 transition-colors cursor-pointer"
+              className="flex items-center space-x-1 text-[11px] font-semibold text-negative bg-negative-subtle border border-negative/30 hover:bg-negative/20 rounded-sm px-2 py-0.5 transition-colors cursor-pointer"
             >
               <RotateCcw className="w-3 h-3" />
-              <span>Reset All</span>
+              <span>Reset all</span>
             </button>
           )}
-          <span className="font-mono text-[10px] text-[#7dd3fc] bg-[#0ea5e9]/10 border border-[#0ea5e9]/20 rounded-[3px] px-2 py-0.5 uppercase">
-            {scenario} Scenario
+          <span className="font-mono text-[10px] text-accent-hover bg-accent-subtle border border-accent-border rounded-sm px-2 py-0.5 capitalize">
+            {scenario} scenario
           </span>
         </div>
       </div>
