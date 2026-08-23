@@ -3,7 +3,7 @@ from __future__ import annotations
 """
 Top-Level Excel Exporter Module.
 
-Generates a 23-tab financial model workbook (.xlsx) from a ModelSpecification.
+Generates a 30-tab financial model workbook (.xlsx) from a ModelSpecification.
 Enforces openpyxl live formulas and IB/PE visual formatting standards.
 """
 

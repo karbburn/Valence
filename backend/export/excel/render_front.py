@@ -444,7 +444,7 @@ def render_model_control(wb: Workbook, spec: ModelSpecification) -> Worksheet:
 
     controls = [
         ("Active Scenario", "base", "Primary scenario driving live model sheets (base / bull / bear)"),
-        ("Model Mode", "Analyst Mode", "Full financial modeling mode with 23 detail tabs"),
+        ("Model Mode", "Analyst Mode", "Full financial modeling mode with all supporting tabs"),
         ("Taxonomy Mapping", f"{spec.metadata.market.upper()} Normalized Taxonomy v1.0", "Normalized financial taxonomy registry"),
         ("Model Schema Version", spec.metadata.model_version, "Pydantic contract schema version"),
         ("Reporting Currency", spec.metadata.currency, "Company financial statement currency"),
