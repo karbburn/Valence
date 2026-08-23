@@ -20,11 +20,6 @@ from backend.forecast.share_count import ShareCountSchedule
 from backend.models.spec.assumptions import AssumptionObject
 from backend.models.spec.valuation import WACCBreakdown
 
-# Legacy fallback constants retained for backward compatibility where explicit values are omitted.
-DEFAULT_RFR = 6.78       # India 10-Year G-Sec yield (%)
-DEFAULT_BETA = 0.79      # Historical Infosys benchmark beta
-DEFAULT_ERP = 7.08       # India Equity Risk Premium (%)
-
 
 def _get_assumption_val(
     assumptions: List[AssumptionObject],
@@ -62,11 +57,13 @@ def compute_wacc(
     # Fetch market data for company
     mdata = get_company_market_data(company_id, market=market)  # type: ignore
 
-    # 1. Cost of Equity (CAPM) with Blume's Adjusted Beta for mega-caps
+    # 1. Cost of Equity (CAPM) with Blume's Adjusted Beta
     rfr = risk_free_rate if risk_free_rate is not None else mdata.risk_free_rate.value
     raw_b = beta if beta is not None else mdata.beta.value
-    # Apply Blume's Adjusted Beta (0.67 * raw + 0.33 * 1.0) if raw beta > 1.8 to normalize extreme short-term beta spikes
-    b = round(0.67 * raw_b + 0.33, 3) if (raw_b > 1.8 and beta is None) else raw_b
+    # Raw betas are systematically biased high (Blume 1971); shrink toward 1.0 whenever
+    # the beta is provider-sourced. An explicit analyst override passes through untouched.
+    blume_applied = beta is None
+    b = round(0.67 * raw_b + 0.33, 3) if blume_applied else raw_b
     erp = equity_risk_premium if equity_risk_premium is not None else mdata.equity_risk_premium.value
 
     ke_override = _get_assumption_val(assumptions, "wacc.cost_of_equity", scenario, None)
@@ -119,8 +116,9 @@ def compute_wacc(
 
     source_notes = (
         f"CAPM: Rfr={rfr:.2f}% ({mdata.risk_free_rate.provenance_note}), "
-        f"Beta={b:.2f} ({mdata.beta.provenance_note}), "
-        f"ERP={erp:.2f}% ({mdata.equity_risk_premium.provenance_note}). "
+        f"Beta={b:.2f} ({mdata.beta.provenance_note}"
+        + (", Blume-adjusted" if blume_applied else ", analyst override")
+        + f"), ERP={erp:.2f}% ({mdata.equity_risk_premium.provenance_note}). "
         f"Pre-tax Cost of Debt={pre_tax_cost_of_debt:.2f}% (after-tax {cost_of_debt_after_tax:.2f}%). "
         f"Capital Weights: Equity={equity_weight*100:.1f}%, Debt={debt_weight*100:.1f}%."
     )
