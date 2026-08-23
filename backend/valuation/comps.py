@@ -55,6 +55,7 @@ class TradingCompsAnalysis(BaseModel):
     peers: List[PeerComp]
     benchmarks: Dict[str, CompsBenchmark]
     implied_valuations: List[ImpliedCompsValuation]
+    quartile_implied_prices: Dict[str, Dict[str, float]] = {}
 
 
 # Pre-configured peer universe by sector / industry
@@ -241,8 +242,23 @@ def compute_trading_comps(
         )
     )
 
+    # Quartile-implied share prices feed the football field's relative ranges.
+    sh_safe = max(1.0, shares_outstanding)
+    ebitda_prices = {}
+    for tag in ("p25", "median", "p75"):
+        eq = target_ebitda_fy27 * getattr(benchmarks["ev_ebitda"], tag) - net_debt
+        ebitda_prices[tag] = max(0.0, eq / sh_safe)
+    pe_prices = {
+        tag: max(0.0, target_net_profit_fy27 * getattr(benchmarks["pe_ratio"], tag) / sh_safe)
+        for tag in ("p25", "median", "p75")
+    }
+
     return TradingCompsAnalysis(
         peers=peers,
         benchmarks=benchmarks,
         implied_valuations=implied_vals,
+        quartile_implied_prices={
+            "ev_ebitda": {k: round(v, 2) for k, v in ebitda_prices.items()},
+            "pe_ratio": {k: round(v, 2) for k, v in pe_prices.items()},
+        },
     )
