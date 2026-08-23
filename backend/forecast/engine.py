@@ -1,12 +1,11 @@
-from __future__ import annotations
-
+# -*- coding: utf-8 -*-
 """
 Forecast Engine: period-by-period 3-statement roll-forward.
 
 Build order per period (each column is independent given prior-period actuals):
   1. Revenue
   2. EBITDA, EBIT (operating_profit), D&A
-  3. Other income, Finance cost (carried forward from last historical)
+  3. Other income, Finance cost (held flat from last historical)
   4. PBT = EBIT + other_income − finance_cost
   5. Tax = PBT × tax_rate
   6. Net Profit = PBT − Tax
@@ -86,10 +85,10 @@ def run_forecast(
     prior_cash = hist_bs.get_value("canonical.bs.cash_and_bank", last_p) or 0.0
 
     # Carry forward quasi-stable items from last historical period (no hardcoded Infosys 4000/416 fallbacks)
+    # Non-operating items are held flat in absolute terms: other income does not compound
+    # with trading revenue, and finance cost tracks the (flat) debt schedule balance.
     other_income = hist_is.get_value("canonical.is.other_income", last_p) or 0.0
     finance_cost = hist_is.get_value("canonical.is.finance_cost", last_p) or 0.0
-    other_income_pct_rev = (other_income / prior_rev * 100.0) if prior_rev > 0 else 0.0
-    finance_cost_pct_rev = (finance_cost / prior_rev * 100.0) if prior_rev > 0 else 0.0
 
     # Compute historical gross margin from last historical period
     hist_gp = hist_is.get_value("canonical.is.gross_profit", last_p)
@@ -127,10 +126,10 @@ def run_forecast(
         # ebit_margin assumption cannot produce an impossible income statement.
         ebit = min(revenue * ebit_margin / 100.0, ebitda)       # operating_profit
 
-        # PBT = EBIT + other_income − finance_cost (Infosys structure)
-        # Grow other_income and finance_cost as % of revenue (not held flat)
-        period_other_income = revenue * other_income_pct_rev / 100.0
-        period_finance_cost = revenue * finance_cost_pct_rev / 100.0
+        # PBT = EBIT + other_income − finance_cost
+        # Non-operating items held flat at their last historical absolute levels.
+        period_other_income = other_income
+        period_finance_cost = finance_cost
         pbt = ebit + period_other_income - period_finance_cost
         tax = pbt * tax_rate / 100.0
         net_profit = pbt - tax
