@@ -200,3 +200,35 @@ kbd {
   padding: 0 3px;
   margin-right: 2px;
 }
+
+/* Elevation utilities backed by tokens */
+.shadow-pop {
+  box-shadow: var(--shadow-pop);
+}
+.shadow-overlay {
+  box-shadow: var(--shadow-overlay);
+}
+
+/* Indeterminate activity bar for loading states */
+@keyframes valence-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+.activity-bar {
+  position: relative;
+  overflow: hidden;
+  height: 2px;
+  background: var(--c-surface-2);
+}
+.activity-bar::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  width: 33%;
+  background: var(--c-accent);
+  animation: valence-slide 1.2s ease-in-out infinite;
+}
