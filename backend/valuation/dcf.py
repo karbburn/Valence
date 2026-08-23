@@ -67,7 +67,12 @@ def compute_fcff_periods(
             cfo_val = forecast.get_value("canonical.cf.operating_activities", p, scenario) or (np_val + da)
             delta_wc = np_val + da - cfo_val
 
-        fcff = nopat + da - capex - delta_wc
+        # Stock-based compensation is a real economic cost even though non-cash under
+        # accounting rules — treat it as a cash operating outflow for valuation.
+        sbc_val = forecast.get_value("canonical.cf.stock_compensation", p, scenario)
+        stock_comp = abs(sbc_val) if sbc_val else 0.0
+
+        fcff = nopat + da - capex - delta_wc - stock_comp
         discount_factor = 1.0 / ((1.0 + wacc_frac) ** t)
         pv_fcff = fcff * discount_factor
 
@@ -80,6 +85,7 @@ def compute_fcff_periods(
                 da=round(da, 2),
                 capex=round(capex, 2),
                 delta_working_capital=round(delta_wc, 2),
+                stock_compensation=round(stock_comp, 2),
                 fcff=round(fcff, 2),
                 discount_factor=round(discount_factor, 6),
                 pv_fcff=round(pv_fcff, 2),
