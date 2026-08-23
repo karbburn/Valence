@@ -19,7 +19,7 @@ Acceptance criteria:
      GET /api/companies endpoint returns full list of available companies across India & US.
 
   4. USD Excel Export:
-     Generates valid 27-tab .xlsx workbooks in USD for all US companies.
+     Generates valid 30-tab .xlsx workbooks in USD for all US companies.
 
   5. Cross-Market Non-Regression:
      Confirms all 4 Indian market companies (INFY, TCS, Tata Motors, Tata Steel) remain MODEL VALID.
