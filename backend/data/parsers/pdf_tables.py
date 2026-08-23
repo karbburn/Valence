@@ -9,7 +9,6 @@ import pdfplumber
 
 from backend.data.store import RawDatapoint
 
-COMPANY_ID = "infy_infy"
 LABEL_X_MAX = 330.0  # left of this = label text; right = value columns
 
 _SKIP_LABELS = {
@@ -79,12 +78,16 @@ def parse_predicted_statement_page(
     section: str,
     source: str,
     annual_only: bool = True,
+    company_id: str = "infy_infy",
+    period_end_month: int = 3,
+    period_end_day: int = 31,
 ) -> list[RawDatapoint]:
-    """Parse one Infosys Q4-outcome statement page into RawDatapoints.
+    """Parse one filing statement page into RawDatapoints for the given company.
 
-    P&L carries quarterly + annual pairs; when annual_only we keep only the
+    P&L pages carry quarterly + annual pairs; when annual_only we keep only the
     rightmost (year-ended) columns and drop quarterly ones. Values map to the
-    nearest year anchor. Period end = March 31 (India fiscal year).
+    nearest year anchor. ``period_end_month``/``period_end_day`` follow the
+    company's fiscal calendar.
     """
     with pdfplumber.open(pdf_path) as pdf:
         page = pdf.pages[page_index]
@@ -110,15 +113,15 @@ def parse_predicted_statement_page(
                 if nearest_x not in annual_x:
                     continue
                 year = next(a[1] for a in anchors if a[0] == nearest_x)
-                period_end = date(year, 3, 31)
+                period_end = date(year, period_end_month, period_end_day)
                 period_label = _period_label(period_end)
                 if (label, period_label, v) in seen:
                     continue  # identical line printed twice on the page
                 seen.add((label, period_label, v))
                 dps.append(
                     RawDatapoint(
-                        id=_datapoint_id(COMPANY_ID, section, label, period_label, source, page_index, label, v),
-                        company_id=COMPANY_ID,
+                        id=_datapoint_id(company_id, section, label, period_label, source, page_index, label, v),
+                        company_id=company_id,
                         metric_raw=label,
                         period_label=period_label,
                         period_end_date=period_end,
