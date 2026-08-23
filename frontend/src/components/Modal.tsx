@@ -66,7 +66,9 @@ export function Modal({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    // The overlay is the scroll container: short dialogs center via auto margins,
+    // tall dialogs scroll fully instead of clipping beyond the viewport.
+    <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain">
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-[#04070d]/85 backdrop-blur-sm transition-opacity"
@@ -74,16 +76,18 @@ export function Modal({
         aria-hidden
       />
 
-      {/* Dialog */}
-      <div
-        ref={boxRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        onKeyDown={handleKeyDown}
-        className={`relative z-10 w-full ${maxWidth} bg-surface border border-border-interactive rounded-md shadow-overlay overflow-hidden outline-none`}
-      >
+      {/* Centering wrapper — min-h-full + m-auto keeps the top reachable when
+          the dialog is taller than the viewport (flex items-center would not). */}
+      <div className="relative flex min-h-full p-4 sm:p-6">
+        <div
+          ref={boxRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          tabIndex={-1}
+          onKeyDown={handleKeyDown}
+          className={`relative z-10 m-auto w-full ${maxWidth} bg-surface border border-border-interactive rounded-md shadow-overlay outline-none`}
+        >
         <div className="flex items-center justify-between border-b border-border px-5 py-3.5 bg-surface-3">
           <h2 id={titleId} className="font-bold text-[15px] text-text-main font-sans">
             {title}
@@ -99,6 +103,7 @@ export function Modal({
         </div>
 
         <div className="p-5 font-sans">{children}</div>
+        </div>
       </div>
     </div>
   )
