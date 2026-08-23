@@ -139,17 +139,24 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
       </div>
 
       {/* FCFF Matrix Table */}
-      <div className="overflow-x-auto border border-[#1e283d] rounded-[4px]">
+      <div className="overflow-x-auto border border-border rounded-sm">
         <table className="w-full text-[11px] border-collapse">
+          <caption className="sr-only">
+            Five-year FCFF build-up with mid-year discounting and the enterprise-to-equity bridge
+          </caption>
           <thead>
-            <tr className="bg-[#0d1220] border-b border-[#1e283d] h-8">
-              <th className="px-3 py-1.5 text-left font-semibold text-[#94a3b8] uppercase tracking-[0.04em]">
+            <tr className="bg-surface-3 border-b border-border h-8">
+              <th
+                scope="col"
+                className="sticky-col-deep px-3 py-1.5 text-left font-semibold text-text-muted uppercase tracking-[0.04em]"
+              >
                 DCF Line Item (Mid-Year)
               </th>
               {fcffs.map((p) => (
                 <th
                   key={p.period}
-                  className="px-3 py-1.5 text-right font-mono font-bold text-[#f8fafc] w-28"
+                  scope="col"
+                  className="px-3 py-1.5 text-right font-mono font-bold text-text-main w-28"
                 >
                   {p.period}
                 </th>
@@ -170,21 +177,31 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
                   <td
                     className={`px-3 py-1.5 ${
                       r.bold ? 'text-[#f8fafc]' : 'text-[#cbd5e1]'
-                    }`}
+                    } ${r.total ? 'sticky-col-total' : 'sticky-col'}`}
                   >
-                    <div className="group relative inline-flex items-center space-x-1.5 cursor-help">
+                    <div className="group relative inline-flex items-center space-x-1.5">
                       <span>{r.label}</span>
                       {ROW_TOOLTIPS[r.label] && (
                         <>
-                          <Info className="w-3 h-3 text-[#0ea5e9] group-hover:text-[#38bdf8] transition-colors shrink-0" />
-                          <div className="pointer-events-none absolute left-0 top-full mt-1.5 hidden group-hover:block w-80 p-3 bg-[#192030] border border-[#0ea5e9]/50 rounded-[4px] shadow-[0_10px_30px_rgba(0,0,0,0.8)] z-50 text-[11.5px] font-sans text-[#f8fafc] leading-normal">
-                            <div className="font-bold text-[12px] text-[#38bdf8] mb-1 flex items-center justify-between">
+                          <button
+                            type="button"
+                            tabIndex={0}
+                            aria-label={`${r.label}: ${ROW_TOOLTIPS[r.label].desc} Formula: ${ROW_TOOLTIPS[r.label].formula}`}
+                            className="cursor-help text-accent group-hover:text-accent-hover group-focus-visible:text-accent-hover transition-colors"
+                          >
+                            <Info className="w-3 h-3 shrink-0" aria-hidden />
+                          </button>
+                          <div
+                            role="tooltip"
+                            className="pointer-events-none absolute left-0 top-full mt-1.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 w-80 p-3 bg-surface-2 border border-accent-border rounded-sm shadow-pop z-50 text-[11.5px] font-sans text-text-main leading-normal"
+                          >
+                            <div className="font-bold text-[12px] text-accent-hover mb-1 flex items-center justify-between">
                               <span>{r.label}</span>
-                              <span className="text-[9px] font-mono uppercase bg-[#0ea5e9]/20 text-[#7dd3fc] border border-[#0ea5e9]/30 px-1.5 py-0.5 rounded-[2px]">Definition</span>
+                              <span className="text-[10px] font-mono uppercase bg-accent-subtle text-accent-hover border border-accent-border px-1.5 py-0.5 rounded-sm">Definition</span>
                             </div>
                             <div className="text-[#cbd5e1] font-normal mb-2 leading-snug">{ROW_TOOLTIPS[r.label].desc}</div>
-                            <div className="font-mono text-[10.5px] font-semibold text-[#38bdf8] bg-[#0d1220] border border-[#2a3652] px-2 py-1 rounded-[3px]">
-                              <span className="text-[#94a3b8] mr-1 font-sans font-normal">Formula:</span> {ROW_TOOLTIPS[r.label].formula}
+                            <div className="font-mono text-[10.5px] font-semibold text-accent-hover bg-canvas border border-border-interactive px-2 py-1 rounded-sm">
+                              <span className="text-text-muted mr-1 font-sans font-normal">Formula:</span> {ROW_TOOLTIPS[r.label].formula}
                             </div>
                           </div>
                         </>
@@ -211,7 +228,7 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
 
             {/* Valuation Bridge Rows */}
             <tr className="bg-[#0d1220]/80 border-t-2 border-[#2a3652]">
-              <td className="px-3 py-1.5 text-[#94a3b8] font-semibold">
+              <td className="sticky-col-deep px-3 py-1.5 text-text-muted font-semibold">
                 Σ PV of Explicit Forecasts (PV FCFF)
               </td>
               <td
@@ -223,7 +240,7 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
             </tr>
 
             <tr className="bg-[#0d1220]/80">
-              <td className="px-3 py-1.5 text-[#94a3b8] font-semibold">
+              <td className="sticky-col-deep px-3 py-1.5 text-text-muted font-semibold">
                 + PV of Terminal Value ({(tv.terminal_growth_rate || 4.0).toFixed(1)}% g, {(tv.tv_pct_of_ev || 0).toFixed(0)}% of EV)
               </td>
               <td
@@ -235,7 +252,7 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
             </tr>
 
             <tr className="bg-[#0ea5e9]/[0.08] border-t border-[#0ea5e9]/30">
-              <td className="px-3 py-1.5 font-bold text-[#7dd3fc]">
+              <td className="sticky-col-total px-3 py-1.5 font-bold text-accent-hover">
                 Enterprise Value (EV)
               </td>
               <td
@@ -247,7 +264,7 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
             </tr>
 
             <tr className="bg-[#0d1220]/80">
-              <td className="px-3 py-1.5 text-[#94a3b8] font-semibold">
+              <td className="sticky-col-deep px-3 py-1.5 text-text-muted font-semibold">
                 {isNetCash ? '+ Net Cash & Liquid Assets' : '− Total Net Debt'}
               </td>
               <td
@@ -262,7 +279,7 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
             </tr>
 
             <tr className="bg-[#10b981]/[0.08] border-t border-[#10b981]/30">
-              <td className="px-3 py-1.5 font-bold text-[#6ee7b7]">
+              <td className="sticky-col px-3 py-1.5 font-bold text-[#6ee7b7]">
                 Equity Value → DCF Implied Share Price
               </td>
               <td
