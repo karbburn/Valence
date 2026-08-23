@@ -85,12 +85,6 @@ export async function revertAll(
   return res.json()
 }
 
-export async function fetchCompanies(): Promise<CompanySummary[]> {
-  const res = await fetch(`${BASE}/api/companies`)
-  if (!res.ok) throw new Error('Failed to load companies')
-  return res.json()
-}
-
 export async function searchCompanies(
   query: string,
   limit = 15

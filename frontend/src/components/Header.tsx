@@ -9,7 +9,6 @@ export interface HeaderProps {
   spec: ModelSpecification | null
   mode: 'analyst' | 'quick' | 'full'
   scenario: ScenarioLabel
-  companyId: string
   onModeChange: (mode: 'analyst' | 'quick' | 'full') => void
   onScenarioChange: (scenario: ScenarioLabel) => void
   onSelectCompany: (company: CompanySummary) => void

@@ -59,8 +59,8 @@
 
   --color-accent: var(--c-accent);
   --color-accent-hover: var(--c-accent-hover);
-  --color-[#0ea5e9]-subtle: var(--c-accent-subtle);
-  --color-[#0ea5e9]-border: var(--c-accent-border);
+  --color-accent-subtle: var(--c-accent-subtle);
+  --color-accent-border: var(--c-accent-border);
 
   --color-positive: var(--c-positive);
   --color-positive-subtle: var(--c-positive-subtle);

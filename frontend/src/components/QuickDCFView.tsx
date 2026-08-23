@@ -269,7 +269,7 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
                 2-Way Sensitivity Matrix
               </h3>
               <p className="text-[11px] text-[#64748b]">
-                Implied Share Price ({currency}) across WACC vs Terminal Growth ($g$)
+                Implied Share Price ({currency}) across WACC vs Terminal Growth (g)
               </p>
             </div>
             <div className="font-mono text-[10px] text-[#0ea5e9] bg-[#0ea5e9]/10 border border-[#0ea5e9]/20 px-2 py-0.5 rounded-[3px]">
