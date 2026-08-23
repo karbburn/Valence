@@ -103,10 +103,7 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
             ebitda_key = (company_id, period, "canonical.is.ebitda")
             if ebitda_key not in lookup:
                 op_profit = lookup.get((company_id, period, "canonical.is.operating_profit"))
-                da = (
-                    lookup.get((company_id, period, "canonical.is.depreciation_amortization"))
-                    or lookup.get((company_id, period, "canonical.cf.depreciation_amortization"))
-                )
+                da = lookup.get((company_id, period, "canonical.is.depreciation_amortization"))
                 pbt = lookup.get((company_id, period, "canonical.is.pbt"))
                 finance_cost = lookup.get((company_id, period, "canonical.is.finance_cost"))
 
@@ -226,8 +223,17 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
             if te_key not in lookup:
                 ta_dp = lookup.get(ta_key)
                 tl_dp = lookup.get((company_id, period, "canonical.bs.total_liabilities"))
-                sc_dp = lookup.get((company_id, period, "canonical.bs.equity_share_capital"))
-                res_dp = lookup.get((company_id, period, "canonical.bs.other_equity")) or lookup.get((company_id, period, "canonical.bs.retained_earnings"))
+                # Equity components use the canonical keys produced by the taxonomy
+                # registry: share capital plus reserves and/or retained earnings.
+                component_dps = [
+                    lookup.get((company_id, period, k))
+                    for k in (
+                        "canonical.bs.equity_capital",
+                        "canonical.bs.retained_earnings",
+                        "canonical.bs.other_reserves",
+                    )
+                ]
+                present = [dp for dp in component_dps if dp is not None]
 
                 if ta_dp is not None and tl_dp is not None:
                     derived_te_val = ta_dp.value - tl_dp.value
@@ -243,17 +249,20 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
                     )
                     new_derived.append(te_dp)
                     lookup[te_key] = te_dp
-                elif sc_dp is not None and res_dp is not None:
-                    derived_te_val = sc_dp.value + res_dp.value
+                elif len(present) >= 2:
+                    derived_te_val = sum(dp.value for dp in present)
+                    source_ids: list[str] = []
+                    for dp in present:
+                        source_ids += dp.source_datapoint_ids
                     te_dp = _build_derived(
                         company_id=company_id,
                         canonical_key="canonical.bs.total_equity",
                         period=period,
                         metric_raw="Total Equity (Derived)",
                         value=derived_te_val,
-                        anchor=sc_dp,
-                        source_ids=sc_dp.source_datapoint_ids + res_dp.source_datapoint_ids,
-                        formula="total_equity = equity_share_capital + reserves",
+                        anchor=present[0],
+                        source_ids=source_ids,
+                        formula="total_equity = equity_capital + retained_earnings + other_reserves (reported components)",
                     )
                     new_derived.append(te_dp)
                     lookup[te_key] = te_dp
