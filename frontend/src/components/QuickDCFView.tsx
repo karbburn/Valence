@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { Sparkles, ArrowUpRight, ArrowDownRight, Layers, Info, GitCompare } from 'lucide-react'
+import { ArrowUpRight, ArrowDownRight, Layers, Info, GitCompare } from 'lucide-react'
 import { ModelSpecification, ScenarioLabel } from '@/lib/types'
 import { fmtNum, fmtPct, fmtPrice, getCurrencySymbol, fmtMoney } from '@/lib/formatters'
 
@@ -17,7 +17,7 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
 
   if (!valuation) {
     return (
-      <div className="bg-surface border border-border rounded-[4px] p-6 text-center text-[#64748b] text-[12px]">
+      <div className="bg-surface border border-border rounded-sm p-6 text-center text-text-dim text-[12px]">
         No valuation summary available for this scenario.
       </div>
     )
