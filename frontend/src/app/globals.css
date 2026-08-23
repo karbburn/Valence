@@ -188,3 +188,15 @@ input[type='range'].driver-range:focus-visible::-moz-range-thumb {
   z-index: 1;
   background: #112132; /* matches bg-[#0ea5e9]/[0.08] over --c-surface */
 }
+
+/* Keyboard shortcut chips in the footer */
+kbd {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--c-text-muted);
+  border: 1px solid var(--c-border);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  padding: 0 3px;
+  margin-right: 2px;
+}
