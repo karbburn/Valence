@@ -16,6 +16,31 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from backend.api.main import app
+# Patch at each consumption site: these modules bind the provider name at import time.
+import backend.valuation.pipeline as _val_pipeline
+import backend.valuation.wacc as _wacc
+from backend.data.providers import market_data as market_data_module
+
+
+# ------------------------------------------------------------------ #
+# Deterministic market data. Live spot moves between the three API
+# calls below would otherwise leak into the revert round-trip check;
+# a fixed snapshot isolates what the check is actually testing.
+# ------------------------------------------------------------------ #
+def _fixed_market_data(company_id: str, market: str | None = None, force_refresh: bool = False):
+    is_us = (market or ("us" if company_id.endswith("_us") else "india")) == "us"
+    note = "fixed self-check snapshot"
+    mkt: str = "us" if is_us else "india"
+    return market_data_module.CompanyMarketData(
+        company_id=company_id,
+        ticker=company_id.split("_")[0].upper(),
+        market=mkt,
+        price=market_data_module.MarketDataPoint(value=100.0 if is_us else 1500.0, source="self_check", provenance_note=note),
+        shares_outstanding=market_data_module.MarketDataPoint(value=5000.0 if is_us else 400.0, source="self_check", provenance_note=note),
+        beta=market_data_module.MarketDataPoint(value=1.0, source="self_check", provenance_note=note),
+        risk_free_rate=market_data_module.MarketDataPoint(value=4.64 if is_us else 6.78, source="self_check", provenance_note=note),
+        equity_risk_premium=market_data_module.MarketDataPoint(value=4.50 if is_us else 7.08, source="self_check", provenance_note=note),
+    )
 
 
 # ------------------------------------------------------------------ #
@@ -43,7 +68,34 @@ def _assert(cond: bool, msg: str) -> None:
 
 def main() -> None:
     print("Running Stage 10 Web Renderer & API self-check...")
-    client = TestClient(app)
+    market_data_module.get_company_market_data = _fixed_market_data
+    _val_pipeline.get_company_market_data = _fixed_market_data
+    _wacc.get_company_market_data = _fixed_market_data
+
+    # Redirect cache writes to scratch space: this harness runs against stubbed
+    # market data and must never overwrite the real precomputed artifacts.
+    import tempfile
+    from backend.api import routes as routes_module
+
+    real_project_root = routes_module.PROJECT_ROOT
+    scratch_root = Path(tempfile.mkdtemp(prefix="valence_selfcheck_"))
+    (scratch_root / "backend" / "data" / "cache").mkdir(parents=True, exist_ok=True)
+    routes_module.PROJECT_ROOT = scratch_root
+
+    try:
+        _run_checks(client_factory=lambda: TestClient(app))
+    finally:
+        routes_module.PROJECT_ROOT = real_project_root
+
+
+def _run_checks(client_factory) -> None:
+    client = client_factory()
+
+    # Warm-up: force one fresh forecast rebuild so the baseline below reflects the
+    # current database state rather than a precomputed snapshot that may predate
+    # the latest ingestion. The no-op bulk revert is idempotent on a clean model.
+    warm_res = client.post("/api/model/revert", json={"driver_key": "all", "period": "all", "scenario": "base"})
+    _assert(warm_res.status_code == 200, f"Baseline warm-up revert status == 200 (got {warm_res.status_code})")
 
     # 1. GET /api/model/infy_infy
     res = client.get("/api/model/infy_infy")
@@ -106,7 +158,7 @@ def main() -> None:
     print(f"    FastAPI Endpoints    : GET /api/model, POST /api/recompute, POST /api/revert, GET /api/export/excel verified")
     print(f"    Driver Edit Flow     : Revenue Growth 7.82% -> 15.0% moved price INR {initial_price:.2f} -> INR {new_price:.2f}")
     print(f"    Revert Flow          : Reverted price back to INR {reverted_price:.2f} exact match")
-    print(f"    Excel Export API     : 27-tab .xlsx download verified")
+    print(f"    Excel Export API     : 30-tab .xlsx download verified")
     print(f"    Web Dashboard UI     : Analyst Mode, Quick DCF, Full Model Mode HTML/CSS/JS ready")
 
     print("\nALL STAGE 10 SELF-CHECKS PASSED SUCCESSFULLY!")

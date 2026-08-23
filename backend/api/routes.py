@@ -118,6 +118,42 @@ def _get_hist_model(company_id: str = "infy_infy") -> HistoricalModel:
     return _lru_get(_HIST_MODEL_CACHE, company_id)
 
 
+def _historicals_fingerprint(spec: ModelSpecification) -> tuple:
+    """Anchor figures from the last historical period, for cache freshness checks."""
+    periods = spec.historicals.periods or []
+    last = periods[-1] if periods else ""
+    return (
+        spec.historicals.get_value("canonical.is.revenue", last),
+        spec.historicals.get_value("canonical.bs.total_assets", last),
+    )
+
+
+def _cache_matches_database(cached_spec: ModelSpecification) -> bool:
+    """True when the cached snapshot was built from the current database state.
+
+    The precomputed JSON freezes the forecast; if ingestion/reconciliation has since
+    corrected any anchor figure (e.g. a filing superseding a screener value), the
+    cached forecast is silently stale. Comparing two anchor values against a fresh
+    historical assembly keeps the cache self-healing at negligible cost.
+    """
+    try:
+        fresh = _get_hist_model(cached_spec.metadata.company_id)
+        fresh_periods = fresh.periods or []
+        last = fresh_periods[-1] if fresh_periods else ""
+        anchors = (
+            fresh.income_statement.get_value("canonical.is.revenue", last),
+            fresh.balance_sheet.get_value("canonical.bs.total_assets", last),
+        )
+        return _historicals_fingerprint(cached_spec) == anchors
+    except Exception as e:
+        logger.warning("Freshness check failed; treating cache as valid: %s", e)
+        return True
+
+
+class _StaleCache(Exception):
+    """Raised when a cached snapshot predates the current database state."""
+
+
 def _get_or_build_spec(company_id: str = "infy_infy") -> ModelSpecification:
     if company_id not in _MODEL_CACHE:
         cache_path = PROJECT_ROOT / "backend" / "data" / "cache" / f"{company_id}.json"
@@ -135,9 +171,27 @@ def _get_or_build_spec(company_id: str = "infy_infy") -> ModelSpecification:
                 # fall back to the snapshot rather than triggering a heavy on-demand
                 # ingestion that could OOM the free tier.
                 try:
+                    if not _cache_matches_database(spec):
+                        logger.info(
+                            "Cache for %s predates current database state; rebuilding.",
+                            company_id,
+                        )
+                        raise _StaleCache()
                     spec = run_valuation(spec)
                     spec = run_qa(spec)
                     logger.info("Refreshed live market data for %s.", company_id)
+                except _StaleCache:
+                    hist_m = _get_hist_model(company_id)
+                    f_spec = run_forecast_pipeline(hist_m)
+                    v_spec = run_valuation(f_spec)
+                    spec = run_qa(v_spec)
+                    try:
+                        cache_path.parent.mkdir(parents=True, exist_ok=True)
+                        with open(cache_path, "w", encoding="utf-8") as f:
+                            f.write(spec.serialize())
+                        logger.info("Wrote refreshed cache for %s.", company_id)
+                    except Exception as e:
+                        logger.warning("Warning: could not write cache for %s: %s", company_id, e)
                 except Exception as refresh_err:
                     logger.warning(
                         "Market-data refresh failed for %s; serving cached snapshot: %s",
