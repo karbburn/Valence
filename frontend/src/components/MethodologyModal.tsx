@@ -36,81 +36,84 @@ export function MethodologyModal({
       title="Valuation Methodology & Model Transparency"
       maxWidth="max-w-2xl"
     >
-      <div className="space-y-4 text-sans text-[12px]">
+      <div className="space-y-4 text-sans text-[12.5px]">
         {/* Banner Explanation */}
-        <div className="bg-[#0ea5e9]/10 border border-[#0ea5e9]/30 rounded-[4px] p-3.5 flex items-start space-x-3">
-          <ShieldCheck className="w-5 h-5 text-[#0ea5e9] shrink-0 mt-0.5" />
+        <div className="bg-accent-subtle border border-accent-border rounded-sm p-3.5 flex items-start space-x-3">
+          <ShieldCheck className="w-5 h-5 text-accent shrink-0 mt-0.5" aria-hidden />
           <div className="space-y-1">
-            <h4 className="font-bold text-[#7dd3fc] text-[13px]">
+            <h4 className="font-bold text-accent-hover text-[13.5px]">
               Unlevered Free Cash Flow (FCFF) Model
             </h4>
-            <p className="text-[#94a3b8] leading-relaxed text-[11.5px]">
-              Valence calculates intrinsic value using <strong className="text-[#f8fafc]">Unlevered Free Cash Flow to Firm (FCFF)</strong> discounted at the <strong className="text-[#f8fafc]">Weighted Average Cost of Capital (WACC)</strong>. Simplified Net Income or FCFE models often omit capital expenditures and working capital reinvestment drag.
+            <p className="text-[#cbd5e1] leading-relaxed">
+              Valence calculates intrinsic value using <strong className="text-text-main">Unlevered Free Cash Flow to Firm (FCFF)</strong> discounted at the <strong className="text-text-main">Weighted Average Cost of Capital (WACC)</strong>. Simplified Net Income or FCFE models often omit capital expenditures and working capital reinvestment drag.
             </p>
           </div>
         </div>
 
         {/* Side-by-Side Comparison Table */}
-        <div className="border border-[#1e283d] rounded-[4px] overflow-hidden">
-          <table className="w-full text-left text-[11px] border-collapse font-mono">
+        <div className="border border-border rounded-sm overflow-hidden">
+          <table className="w-full text-left text-[12px] border-collapse font-mono">
+            <caption className="sr-only">
+              How the Valence FCFF model compares with simplified net income or FCFE approaches
+            </caption>
             <thead>
-              <tr className="bg-[#0d1220] border-b border-[#1e283d] text-[#94a3b8]">
-                <th className="p-2.5 font-semibold">Valuation Factor</th>
-                <th className="p-2.5 font-bold text-[#0ea5e9] bg-[#0ea5e9]/5 border-r border-[#1e283d] w-5/12">
+              <tr className="bg-surface-3 border-b border-border text-text-muted">
+                <th scope="col" className="p-2.5 font-semibold">Valuation Factor</th>
+                <th scope="col" className="p-2.5 font-bold text-accent-hover bg-accent-subtle border-r border-b border-accent-border w-5/12">
                   Valence FCFF Model
                 </th>
-                <th className="p-2.5 font-semibold text-[#94a3b8] w-5/12">
+                <th scope="col" className="p-2.5 font-semibold text-text-muted w-5/12">
                   Net Income / FCFE Models
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#1e283d]/60">
+            <tbody className="divide-y divide-border/60">
               <tr>
-                <td className="p-2.5 font-semibold text-[#f8fafc]">Cash Flow Base</td>
-                <td className="p-2.5 bg-[#0ea5e9]/5 border-r border-[#1e283d] text-[#7dd3fc]">
+                <th scope="row" className="p-2.5 font-semibold text-text-main align-top text-left font-sans">Cash Flow Base</th>
+                <td className="p-2.5 border-l-2 border-l-accent/60 border-r border-border text-text-main">
                   <strong>FCFF</strong> (NOPAT + D&A − CapEx − ΔNWC)
                 </td>
-                <td className="p-2.5 text-[#94a3b8]">
+                <td className="p-2.5 text-[#cbd5e1]">
                   Net Income or Unadjusted FCFE
                 </td>
               </tr>
 
               <tr>
-                <td className="p-2.5 font-semibold text-[#f8fafc]">Discount Rate</td>
-                <td className="p-2.5 bg-[#0ea5e9]/5 border-r border-[#1e283d] text-[#7dd3fc]">
+                <td className="p-2.5 font-semibold text-text-main align-top">Discount Rate</th>
+                <td className="p-2.5 border-l-2 border-l-accent/60 border-r border-border text-text-main">
                   <strong>WACC ({fmtPct(waccVal, 2)})</strong> (Equity + Debt Capital Cost)
                 </td>
-                <td className="p-2.5 text-[#94a3b8]">
+                <td className="p-2.5 text-[#cbd5e1]">
                   Cost of Equity ≈ {fmtPct(waccVal, 1)} (live)
                 </td>
               </tr>
 
               <tr>
-                <td className="p-2.5 font-semibold text-[#f8fafc]">Reinvestment Drag</td>
-                <td className="p-2.5 bg-[#0ea5e9]/5 border-r border-[#1e283d] text-[#7dd3fc]">
+                <td className="p-2.5 font-semibold text-text-main align-top">Reinvestment Drag</th>
+                <td className="p-2.5 border-l-2 border-l-accent/60 border-r border-border text-text-main">
                   Explicit CapEx & Working Capital deducted
                 </td>
-                <td className="p-2.5 text-[#94a3b8]">
+                <td className="p-2.5 text-[#cbd5e1]">
                   Omitted or unconstrained
                 </td>
               </tr>
 
               <tr>
-                <td className="p-2.5 font-semibold text-[#f8fafc]">Capital Structure</td>
-                <td className="p-2.5 bg-[#0ea5e9]/5 border-r border-[#1e283d] text-[#7dd3fc]">
+                <td className="p-2.5 font-semibold text-text-main align-top">Capital Structure</th>
+                <td className="p-2.5 border-l-2 border-l-accent/60 border-r border-border text-text-main">
                   Enterprise Value → Net Cash/Debt → Equity Value
                 </td>
-                <td className="p-2.5 text-[#94a3b8]">
+                <td className="p-2.5 text-[#cbd5e1]">
                   Direct Equity Value shortcut
                 </td>
               </tr>
 
-              <tr className="bg-[#0d1220]">
-                <td className="p-2.5 font-bold text-[#f8fafc]">Model Valuation Output</td>
-                <td className="p-2.5 bg-[#0ea5e9]/10 border-r border-[#0ea5e9]/30 font-bold text-[#7dd3fc]">
+              <tr className="bg-surface-3">
+                <td className="p-2.5 font-bold text-text-main">Model Valuation Output</td>
+                <td className="p-2.5 bg-accent-subtle border-l-2 border-l-accent border-r border-accent-border font-bold text-accent-hover text-[13px]">
                   {impliedPrice != null ? `${currencySym}${fmtNum(impliedPrice, 2)}` : '—'} / share
                 </td>
-                <td className="p-2.5 text-[#94a3b8] font-semibold">
+                <td className="p-2.5 text-[#cbd5e1] font-semibold">
                   Differs based on cash flow definitions
                 </td>
               </tr>
@@ -119,15 +122,15 @@ export function MethodologyModal({
         </div>
 
         {/* Why FCFF Matters */}
-        <div className="bg-[#111622] border border-[#1e283d] rounded-[4px] p-3 space-y-2">
-          <div className="flex items-center space-x-2 text-[#f8fafc] font-semibold text-[12px]">
-            <Scale className="w-4 h-4 text-[#0ea5e9]" />
+        <div className="bg-surface border border-border rounded-sm p-3 space-y-2">
+          <div className="flex items-center space-x-2 text-text-main font-semibold text-[13px]">
+            <Scale className="w-4 h-4 text-accent shrink-0" aria-hidden />
             <span>Why FCFF Cash Flow Accounting is Used</span>
           </div>
-          <p className="text-[#94a3b8] text-[11px] leading-relaxed">
+          <p className="text-[#cbd5e1] leading-relaxed">
             Net income does not represent total cash available to investors because companies must spend real cash on Capital Expenditures (CapEx) to maintain operations and tie up capital in inventory and receivables (ΔNWC). FCFF accounts for these reinvestment requirements.
           </p>
-          <p className="text-[#94a3b8] text-[11px] leading-relaxed">
+          <p className="text-[#cbd5e1] leading-relaxed">
             Stock-based compensation is deducted from FCFF as a real economic cost. Although non-cash under accounting rules, it transfers value to employees and dilutes shareholders, so treating it as free cash would overstate intrinsic value.
           </p>
         </div>
@@ -136,7 +139,7 @@ export function MethodologyModal({
         <div className="flex justify-end pt-1">
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-[#0ea5e9] hover:bg-[#38bdf8] text-white text-[12px] font-semibold rounded-[4px] transition-colors cursor-pointer"
+            className="px-4 py-1.5 bg-accent hover:bg-accent-hover text-white text-[12px] font-semibold rounded-sm transition-colors cursor-pointer"
           >
             Close
           </button>
