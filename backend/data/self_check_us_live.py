@@ -6,7 +6,12 @@ def main():
     assert _fx_to_usd("USD") == 1.0
     assert _fx_to_usd("") == 1.0
     assert _fx_to_usd(None) == 1.0
-    assert _fx_to_usd("zzzz") == 1.0  # unresolvable -> no conversion
+    try:
+        _fx_to_usd("zzzz")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("unresolvable currency must fail fast")
 
     for section in (YF_INCOME_MAP, YF_BALANCE_MAP, YF_CASHFLOW_MAP, YF_SHARE_MAP):
         for label, _cands in section:

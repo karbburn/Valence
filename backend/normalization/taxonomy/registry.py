@@ -124,9 +124,6 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "4,052,169,447": ("canonical.meta.share_count", "meta"),
     "Face value": ("canonical.meta.face_value", "meta"),
     "New Bonus Shares": ("canonical.meta.bonus_shares", "meta"),
-    "Total": ("canonical.bs.total_assets", "bs"),
-    "Total_Asset": ("canonical.bs.total_assets", "bs"),
-    "Total Assets": ("canonical.bs.total_assets", "bs"),
     "Total Liabilities Net Minority Interest": ("canonical.bs.total_liabilities", "bs"),
     "Total Non Current Liabilities Net Minority Interest": ("canonical.bs.total_non_current_liabilities", "bs"),
 }

@@ -34,6 +34,7 @@ V1_CHECK_NAMES = [
     ("wacc_valid", "valuation", "WACC > 0, weights sum to 100%, no negative component costs."),
     ("terminal_growth_lt_wacc", "valuation", "Terminal growth rate < WACC (Gordon Growth requirement)."),
     ("no_missing_critical_inputs", "data_quality", "Every driver has an assumption object — no silent null."),
+    ("data_provenance_quality", "data_quality", "Every historical line item carries a non-empty provenance status."),
 ]
 
 
