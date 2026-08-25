@@ -11,6 +11,21 @@ const nextConfig: NextConfig = {
       },
     ]
   },
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            // allow embedding only on your portfolio + self (modern browsers use this, not X-Frame-Options)
+            value:
+              "frame-ancestors 'self' https://www.sourabhpradhan.in https://sourabhpradhan.in https://*.sourabhpradhan.in https://*.vercel.app",
+          },
+        ],
+      },
+    ]
+  },
 }
 
 export default nextConfig

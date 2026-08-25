@@ -8,7 +8,7 @@ Serves live REST API endpoints under /api/ and mounts static web UI frontend ass
 
 import os
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -42,6 +42,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Allow embedding in portfolio iframe (https://www.sourabhpradhan.in)
+# Modern browsers enforce CSP frame-ancestors; X-Frame-Options is legacy/fallback.
+FRAME_ANCESTORS = os.getenv(
+    "FRAME_ANCESTORS",
+    "https://www.sourabhpradhan.in https://sourabhpradhan.in https://*.sourabhpradhan.in https://*.vercel.app 'self'",
+)
+
+
+@app.middleware("http")
+async def add_iframe_headers(request: Request, call_next):  # type: ignore[no-untyped-def]
+    response = await call_next(request)
+    # CSP frame-ancestors controls who can embed this site in an <iframe>
+    response.headers["Content-Security-Policy"] = f"frame-ancestors {FRAME_ANCESTORS}"
+    # Remove X-Frame-Options if any upstream/proxy set DENY/SAMEORIGIN (it would block the iframe).
+    # CSP frame-ancestors is the modern replacement and takes precedence in modern browsers,
+    # but XFO DENY still blocks in some browsers if present, so we must not send it.
+    response.headers.pop("X-Frame-Options", None)
+    return response
+
 
 # Include API Router
 app.include_router(api_router, prefix="/api")
