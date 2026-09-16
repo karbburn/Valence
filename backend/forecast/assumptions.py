@@ -45,19 +45,16 @@ def _make(
     )
 
 
-def _default_cost_of_equity(historical_model: HistoricalModel) -> tuple[float, str]:
+def capm_default_for(company_id: str, market: Optional[str] = None) -> tuple[float, str]:
     """Per-company CAPM default for Cost of Equity: Rfr + Blume-adjusted Beta × ERP.
 
     Mirrors the valuation engine (backend/valuation/wacc.py) so the suggested
-    assumption matches what CAPM implies. Replaces the former flat 13.0 default
-    which overstated US cost of equity by ~4pp. Falls back to 13.0 only when
+    assumption matches what CAPM implies. Falls back to 13.0 only when
     market data is unavailable.
     """
     try:
         from backend.data.providers.market_data import get_company_market_data
 
-        company_id = historical_model.company_id
-        market = getattr(historical_model, "market", None)
         mdata = get_company_market_data(company_id, market=market)  # type: ignore
         rfr = mdata.risk_free_rate.value
         raw_b = mdata.beta.value
@@ -71,6 +68,17 @@ def _default_cost_of_equity(historical_model: HistoricalModel) -> tuple[float, s
         return ke, source
     except Exception:
         return 13.0, "fallback default — market data unavailable"
+
+
+def _default_cost_of_equity(historical_model: HistoricalModel) -> tuple[float, str]:
+    """Per-company CAPM default (wrapper using the historical model id).
+
+    Replaces the former flat 13.0 default which overstated US cost of equity
+    by ~4pp. Falls back to 13.0 only when market data is unavailable.
+    """
+    return capm_default_for(
+        historical_model.company_id, getattr(historical_model, "market", None)
+    )
 
 
 def suggest_base_assumptions(

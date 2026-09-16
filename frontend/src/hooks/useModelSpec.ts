@@ -8,6 +8,7 @@ interface UseModelSpecReturn {
   spec: ModelSpecification | null
   loading: boolean
   error: string | null
+  clearError: () => void
   companyId: string
   loadModel: (companyId: string) => Promise<void>
   applySpec: (spec: ModelSpecification) => void
@@ -27,10 +28,11 @@ export function useModelSpec(initialCompanyId = 'infy_infy'): UseModelSpecReturn
     companyIdRef.current = companyId
   }, [companyId])
 
+  const clearError = useCallback(() => setError(null), [])
+
   const debounceTimer = useRef<NodeJS.Timeout | null>(null)
 
-  const loadModel = useCallback(async (id: string) => {
-    setLoading(true)
+  const loadModel = useCallback(async (id: string) => {    setLoading(true)
     setError(null)
     try {
       const data = await fetchModelSpec(id)
@@ -99,5 +101,5 @@ export function useModelSpec(initialCompanyId = 'infy_infy'): UseModelSpecReturn
     []
   )
 
-  return { spec, loading, error, companyId, loadModel, applySpec, recompute, revert, resetAll }
+  return { spec, loading, error, clearError, companyId, loadModel, applySpec, recompute, revert, resetAll }
 }
