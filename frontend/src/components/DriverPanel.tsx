@@ -45,7 +45,8 @@ export function DriverPanel({
 }: DriverPanelProps) {
   const assumptions = spec?.assumptions || []
   const scenarioAssumptions = assumptions.filter((a) => a.scenario === scenario)
-  const hasOverrides = scenarioAssumptions.some((a) => a.type === 'user_override')
+  const overrideCount = scenarioAssumptions.filter((a) => a.type === 'user_override').length
+  const hasOverrides = overrideCount > 0
 
   const handleResetAll = () => {
     if (onResetAll) {
@@ -68,6 +69,14 @@ export function DriverPanel({
           </h2>
         </div>
         <div className="flex items-center space-x-2">
+          {hasOverrides && (
+            <span
+              title="Analyst edits on this shared model — visible to all viewers until reset"
+              className="text-[10px] font-semibold px-1.5 py-0.5 rounded-sm border bg-accent-subtle text-accent-hover border-accent-border cursor-help"
+            >
+              Shared draft · {overrideCount} override{overrideCount === 1 ? '' : 's'}
+            </span>
+          )}
           {hasOverrides && (
             <button
               onClick={handleResetAll}

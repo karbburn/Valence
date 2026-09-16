@@ -6,13 +6,15 @@ import { AlertTriangle, X } from 'lucide-react'
 export interface ErrorBannerProps {
   message: string | null
   onDismiss: () => void
+  onRetry?: () => void
+  retryLabel?: string
 }
 
 /**
  * Errors persist until the user dismisses them — auto-dismissing an error
  * destroys information the user may still need to read.
  */
-export function ErrorBanner({ message, onDismiss }: ErrorBannerProps) {
+export function ErrorBanner({ message, onDismiss, onRetry, retryLabel = 'Retry' }: ErrorBannerProps) {
   if (!message) return null
 
   return (
@@ -25,6 +27,15 @@ export function ErrorBanner({ message, onDismiss }: ErrorBannerProps) {
       <span className="font-medium text-[12px] text-text-main max-w-md break-words">
         {message}
       </span>
+
+      {onRetry && (
+        <button
+          onClick={onRetry}
+          className="text-[11px] font-semibold text-accent hover:text-accent-hover border border-accent-border hover:bg-accent-subtle rounded-sm px-2 py-0.5 transition-colors cursor-pointer shrink-0"
+        >
+          {retryLabel}
+        </button>
+      )}
 
       <button
         onClick={onDismiss}

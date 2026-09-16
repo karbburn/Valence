@@ -12,6 +12,7 @@ Provides API endpoints for:
 
 import logging
 import re
+import threading
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -65,6 +66,66 @@ async def health() -> Dict[str, str]:
 # Bounded in-memory session model cache for fast live recomputation
 # (simple LRU via OrderedDict to avoid unbounded memory growth).
 MAX_CACHE_SIZE = 50
+
+# Serializes recompute/revert read-modify-write cycles. Without this, rapid
+# sequential edits race: each request reads the pre-override spec and appends
+# a duplicate user_override, which can never be reverted (previous=None).
+_SPEC_MUTEX = threading.Lock()
+
+
+def _normalize_assumptions(
+    assumptions: List["AssumptionObject"],
+) -> List["AssumptionObject"]:
+    """Deduplicate assumptions to one entry per (driver_key, scenario, period).
+
+    Survivor preference: user_override carrying previous_model_value (revertable),
+    then any user_override, then model_generated. A previous_model_value found on
+    any dropped duplicate is adopted by the survivor so revert keeps working.
+    Repairs specs polluted by the pre-lock duplicate-append race.
+    """
+    from backend.models.spec.assumptions import AssumptionObject
+
+    grouped: Dict[tuple, List[AssumptionObject]] = {}
+    for a in assumptions:
+        grouped.setdefault((a.driver_key, a.scenario, a.period), []).append(a)
+
+    def rank(a: AssumptionObject) -> tuple:
+        if a.type == "user_override" and a.previous_model_value is not None:
+            return (0,)
+        if a.type == "user_override":
+            return (1,)
+        return (2,)
+
+    normalized: List[AssumptionObject] = []
+    for group in grouped.values():
+        if len(group) == 1:
+            normalized.append(group[0])
+            continue
+        ordered = sorted(group, key=rank)
+        survivor = ordered[0]
+        rescued_prev = next(
+            (g.previous_model_value for g in group if g.previous_model_value is not None),
+            None,
+        )
+        if rescued_prev is not None and survivor.previous_model_value is None:
+            survivor = survivor.model_copy(update={"previous_model_value": rescued_prev})
+        if survivor.type == "user_override" and survivor.previous_model_value is None:
+            # Baseline lost to the race: keep current math, restore revertability
+            # going forward by re-basing onto the present value.
+            survivor = survivor.model_copy(
+                update={"type": "model_generated", "source": "re-based after duplicate repair"}
+            )
+            logger.warning(
+                "Dropped %d duplicate override(s) for %s; re-based (baseline unrecoverable).",
+                len(group) - 1, survivor.driver_key,
+            )
+        else:
+            logger.warning(
+                "Dropped %d duplicate assumption(s) for %s.",
+                len(group) - 1, survivor.driver_key,
+            )
+        normalized.append(survivor)
+    return normalized
 
 
 def _lru_get(cache: OrderedDict, key: str) -> Any:
@@ -266,51 +327,63 @@ def get_model_spec(company_id: str = "infy_infy") -> Dict[str, Any]:
 def recompute_model(req: OverrideRequest, company_id: str = "infy_infy") -> Dict[str, Any]:
     """Apply driver override, re-run forecast -> valuation -> QA engine, and return updated spec."""
     _require_valid_company_id(company_id)
-    spec = _get_or_build_spec(company_id)
+    with _SPEC_MUTEX:
+        spec = _get_or_build_spec(company_id)
+        spec.assumptions = _normalize_assumptions(spec.assumptions)
 
-    # 1. Update assumption list with override across all forecast periods
-    new_assumptions = []
-    found = False
-    for a in spec.assumptions:
-        if a.driver_key == req.driver_key and a.scenario == req.scenario:
-            new_assumptions.append(a.with_override(req.value))
-            found = True
-        else:
-            new_assumptions.append(a)
+        # 1. Update assumption list with override across all forecast periods
+        new_assumptions = []
+        found = False
+        for a in spec.assumptions:
+            if a.driver_key == req.driver_key and a.scenario == req.scenario:
+                new_assumptions.append(a.with_override(req.value))
+                found = True
+            else:
+                new_assumptions.append(a)
 
-    if not found:
-        # Create new override assumption object if not present
-        from backend.models.spec.assumptions import AssumptionObject
-        new_ass = AssumptionObject(
-            driver_key=req.driver_key,
-            value=req.value,
-            period="all",
-            scenario=req.scenario,  # type: ignore
-            type="user_override",
-            source="Analyst Override",
-        )
-        new_assumptions.append(new_ass)
+        if not found:
+            # Create new override, snapshotting the model-generated baseline so
+            # revert() can restore it (a missing previous value made overrides
+            # permanently stuck pre-fix).
+            from backend.models.spec.assumptions import AssumptionObject
+            baseline = next(
+                (a.value for a in spec.assumptions
+                 if a.driver_key == req.driver_key and a.type == "model_generated"),
+                None,
+            )
+            new_ass = AssumptionObject(
+                driver_key=req.driver_key,
+                value=req.value,
+                period="all",
+                scenario=req.scenario,  # type: ignore
+                type="user_override",
+                source="Analyst Override",
+                previous_model_value=baseline,
+            )
+            new_assumptions.append(new_ass)
 
-    # 2. Re-run forecast engine for all scenarios
-    hist_m = _get_hist_model(company_id)
-    scenarios = ["base", "bull", "bear"]
-    merged_items = []
-    for s in scenarios:
-        s_assumptions = [a for a in new_assumptions if a.scenario == s]
-        f_out = run_forecast(s_assumptions, hist_m, s)
-        merged_items.extend(f_out.line_items)
+        new_assumptions = _normalize_assumptions(new_assumptions)
 
-    spec.assumptions = new_assumptions
-    spec.forecast = Forecast(line_items=merged_items)
+        # 2. Re-run forecast engine for all scenarios
+        hist_m = _get_hist_model(company_id)
+        scenarios = ["base", "bull", "bear"]
+        merged_items = []
+        for s in scenarios:
+            s_assumptions = [a for a in new_assumptions if a.scenario == s]
+            f_out = run_forecast(s_assumptions, hist_m, s)
+            merged_items.extend(f_out.line_items)
 
-    # 3. Re-run valuation engine
-    spec = run_valuation(spec)
+        spec.assumptions = new_assumptions
+        spec.forecast = Forecast(line_items=merged_items)
 
-    # 4. Re-run QA validation engine
-    spec = run_qa(spec)
+        # 3. Re-run valuation engine
+        spec = run_valuation(spec)
 
-    _lru_put(_MODEL_CACHE, company_id, spec)
-    return spec.model_dump(mode="json")
+        # 4. Re-run QA validation engine
+        spec = run_qa(spec)
+
+        _lru_put(_MODEL_CACHE, company_id, spec)
+        return spec.model_dump(mode="json")
 
 
 @router.post("/model/revert")
@@ -320,31 +393,35 @@ def revert_driver_override(req: RevertRequest, company_id: str = "infy_infy") ->
     Supports bulk revert if driver_key is 'all'.
     """
     _require_valid_company_id(company_id)
-    spec = _get_or_build_spec(company_id)
+    with _SPEC_MUTEX:
+        spec = _get_or_build_spec(company_id)
+        spec.assumptions = _normalize_assumptions(spec.assumptions)
 
-    new_assumptions = []
-    for a in spec.assumptions:
-        is_match = (req.driver_key == "all" or a.driver_key == req.driver_key)
-        if is_match and a.scenario == req.scenario and (a.period in (req.period, "all") or req.period == "all"):
-            new_assumptions.append(a.reverted())
-        else:
-            new_assumptions.append(a)
+        new_assumptions = []
+        for a in spec.assumptions:
+            is_match = (req.driver_key == "all" or a.driver_key == req.driver_key)
+            if is_match and a.scenario == req.scenario and (a.period in (req.period, "all") or req.period == "all"):
+                new_assumptions.append(a.reverted())
+            else:
+                new_assumptions.append(a)
 
-    hist_m = _get_hist_model(company_id)
-    scenarios = ["base", "bull", "bear"]
-    merged_items = []
-    for s in scenarios:
-        s_assumptions = [a for a in new_assumptions if a.scenario == s]
-        f_out = run_forecast(s_assumptions, hist_m, s)
-        merged_items.extend(f_out.line_items)
+        new_assumptions = _normalize_assumptions(new_assumptions)
 
-    spec.assumptions = new_assumptions
-    spec.forecast = Forecast(line_items=merged_items)
-    spec = run_valuation(spec)
-    spec = run_qa(spec)
+        hist_m = _get_hist_model(company_id)
+        scenarios = ["base", "bull", "bear"]
+        merged_items = []
+        for s in scenarios:
+            s_assumptions = [a for a in new_assumptions if a.scenario == s]
+            f_out = run_forecast(s_assumptions, hist_m, s)
+            merged_items.extend(f_out.line_items)
 
-    _lru_put(_MODEL_CACHE, company_id, spec)
-    return spec.model_dump(mode="json")
+        spec.assumptions = new_assumptions
+        spec.forecast = Forecast(line_items=merged_items)
+        spec = run_valuation(spec)
+        spec = run_qa(spec)
+
+        _lru_put(_MODEL_CACHE, company_id, spec)
+        return spec.model_dump(mode="json")
 
 
 @router.get("/export/excel")

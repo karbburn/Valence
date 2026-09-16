@@ -35,7 +35,7 @@ const formatDriverValue = (key: string, value: number): string => {
 }
 
 export default function HomePage() {
-  const { spec, loading, error, companyId, loadModel, applySpec, recompute, revert, resetAll } =
+  const { spec, loading, error, clearError, companyId, loadModel, applySpec, recompute, revert, resetAll } =
     useModelSpec('infy_infy')
 
   const [mode, setMode] = useState<'analyst' | 'quick' | 'full'>('analyst')
@@ -196,7 +196,16 @@ export default function HomePage() {
       {/* Global Error Banner */}
       <ErrorBanner
         message={error || localError}
-        onDismiss={() => setLocalError(null)}
+        onDismiss={() => {
+          setLocalError(null)
+          clearError()
+        }}
+        onRetry={() => {
+          setLocalError(null)
+          clearError()
+          loadModel(companyId)
+        }}
+        retryLabel={spec ? 'Retry' : 'Reload model'}
       />
 
       {/* Header Toolbar */}
@@ -221,8 +230,18 @@ export default function HomePage() {
       {/* Main Workspace Layout */}
       <main id="main" className="flex-1 w-full max-w-[1680px] mx-auto p-4 sm:p-5">
         {!spec && !loading && (
-          <div className="bg-surface border border-border rounded-sm p-8 text-center text-text-dim text-[13px]">
-            No valuation model loaded. Use the search bar in the header to select a company.
+          <div className="bg-surface border border-border rounded-sm p-8 text-center text-text-dim text-[13px] space-y-3">
+            <p>No valuation model loaded. Use the search bar in the header to select a company.</p>
+            <button
+              onClick={() => {
+                setLocalError(null)
+                clearError()
+                loadModel(companyId)
+              }}
+              className="px-4 py-1.5 bg-surface-2 hover:bg-surface text-text-muted hover:text-text-main border border-border text-[12px] font-semibold rounded-sm transition-colors cursor-pointer"
+            >
+              Reload default model
+            </button>
           </div>
         )}
 

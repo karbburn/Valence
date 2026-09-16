@@ -137,12 +137,12 @@ export function CompanySearch({ onSelectCompany }: CompanySearchProps) {
             No matching companies in the US/India universe.
           </div>
         ) : (
-        <div
+        <ul
           id={listboxId}
           role="listbox"
           aria-label="Matching companies"
           aria-busy={searching}
-          className="absolute left-0 top-9 w-80 max-h-80 overflow-y-auto bg-surface border border-border rounded-sm shadow-pop z-50 divide-y divide-border"
+          className="absolute left-0 top-9 w-80 max-h-80 overflow-y-auto bg-surface border border-border rounded-sm shadow-pop z-50 divide-y divide-border list-none m-0 p-0"
         >
           {searchResults.map((c, i) => {
               const isUS = c.market === 'us'
@@ -150,7 +150,7 @@ export function CompanySearch({ onSelectCompany }: CompanySearchProps) {
               const isHighlighted = i === highlightIndex
 
               return (
-                <div
+                <li
                   key={c.company_id}
                   id={`${listboxId}-opt-${i}`}
                   data-option-index={i}
@@ -202,10 +202,10 @@ export function CompanySearch({ onSelectCompany }: CompanySearchProps) {
                       {c.market.toUpperCase()}
                     </span>
                   </div>
-                </div>
+                </li>
               )
             })}
-        </div>
+        </ul>
         ))}
     </div>
   )
