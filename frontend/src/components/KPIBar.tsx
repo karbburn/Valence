@@ -68,7 +68,7 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
             {marketPrice != null ? fmtPrice(marketPrice, currency, 2) : '—'}
           </div>
           <div className="text-[10px] font-semibold text-[#64748b] mt-0.5 whitespace-nowrap">
-            Live / Benchmark
+            {reverseDcf?.market_price_date ? `As of ${reverseDcf.market_price_date}` : 'Live / Benchmark'}
           </div>
         </div>
 

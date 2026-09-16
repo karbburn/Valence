@@ -1,0 +1,59 @@
+name: Refresh market-data fallbacks
+
+# Weekly refresh of the hardcoded REGISTRY_FALLBACKS in
+# backend/data/providers/market_data.py from live yfinance quotes.
+# Opens a review PR — never pushes to main directly. Beta / RFR / ERP are
+# intentionally excluded (analyst-calibrated) and reported for manual review.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC (before India market open)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh-fallbacks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pydantic yfinance requests
+
+      - name: Refresh registry (dry run first for logs)
+        run: python scripts/refresh_market_fallbacks.py
+
+      - name: Apply registry updates
+        run: python scripts/refresh_market_fallbacks.py --apply
+
+      - name: Smoke-test backend
+        run: python -m pytest backend/tests -q
+
+      - name: Open update PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: chore/refresh-market-fallbacks
+          delete-branch: true
+          title: "chore(data): refresh market-data fallback quotes"
+          body: |
+            Automated weekly refresh of `REGISTRY_FALLBACKS` prices/shares
+            from live yfinance quotes.
+
+            - Only `price`/`shares` are touched; beta/RFR/ERP need analyst review.
+            - Out-of-bounds quotes are rejected by the script (see Action logs).
+            - Backend test suite passed in this run.
+
+            Please verify the diff against exchange closes before merging.
+          commit-message: "chore(data): refresh market-data fallback quotes"
+          labels: data, automated

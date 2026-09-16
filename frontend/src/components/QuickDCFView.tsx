@@ -192,7 +192,7 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
                   {getUpside(baseVal) != null ? `${getUpside(baseVal)! >= 0 ? '+' : ''}${fmtPct(getUpside(baseVal), 1)}` : '—'}
                 </td>
                 <td className="p-2.5 font-semibold text-positive text-right">
-                  {getUpside(bullVal) != null ? `+${fmtPct(getUpside(bullVal), 1)}` : '—'}
+                  {getUpside(bullVal) != null ? `${getUpside(bullVal)! >= 0 ? '+' : ''}${fmtPct(getUpside(bullVal), 1)}` : '—'}
                 </td>
                 <td className="p-2.5 font-semibold text-negative text-right">
                   {getUpside(bearVal) != null ? `${fmtPct(getUpside(bearVal), 1)}` : '—'}

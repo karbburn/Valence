@@ -8,7 +8,7 @@ Given the current market share price, solves for implied market assumptions:
 2. Implied Revenue CAGR (cagr_implied) using a bisection solver across the forecast engine.
 
 Enforces round-trip accuracy: running forward DCF with implied terminal growth reproduces
-the market price within 0.01 INR.
+the market price within 0.01 of native currency units.
 """
 
 from typing import List, Optional
@@ -42,6 +42,7 @@ def compute_reverse_dcf(
     terminal_growth_rate: float = 4.0,
     exit_multiple: float = 20.0,
     timing_convention: str = "mid_year",
+    currency: str = "INR",
 ) -> ReverseDCF:
     """Solve for implied terminal growth rate and revenue CAGR given market share price.
 
@@ -62,6 +63,7 @@ def compute_reverse_dcf(
         terminal_growth_rate: Base terminal growth rate.
         exit_multiple: Base exit multiple.
         timing_convention: "mid_year" or "end_year".
+        currency: Native currency code for the method note (e.g. "INR", "USD").
     """
     if market_price <= 0 or shares_cr <= 0:
         return ReverseDCF(market_price=market_price, method_note="Invalid price or share count")
@@ -114,7 +116,7 @@ def compute_reverse_dcf(
             timing_convention=timing_convention,
         )
 
-    note = f"Solved exact implied perpetuity growth rate for market price INR {market_price:.2f}"
+    note = f"Solved exact implied perpetuity growth rate for market price {currency} {market_price:.2f}"
     if implied_cagr is not None:
         note += f"; implied revenue CAGR via bisection"
 

@@ -55,9 +55,12 @@ COMPANIES = {
         "name": "Tata Motors Limited",
         "ticker": "TATAMOTORS",
         "shares": 367.0,
-        "price": 980.0,
+        "price": 302.0,
         "pl": {
-            "Sales": [437928.0, 468500.0, 502000.0],
+            # FY24/FY25 per audited consolidated results (Q4 FY25 statement):
+            # revenue from operations FY24 434,016 / FY25 439,695; PAT FY24 31,807 / FY25 28,149.
+            # FY26 values are estimates (unverified at fixture date).
+            "Sales": [434016.0, 439695.0, 502000.0],
             "Raw Material Cost": [270000.0, 288000.0, 308000.0],
             "Employee Cost": [38612.0, 41200.0, 44000.0],
             "Other Expenses": [70000.0, 75000.0, 80000.0],
@@ -65,8 +68,8 @@ COMPANIES = {
             "Depreciation": [26450.0, 27800.0, 29200.0],
             "Interest": [10187.0, 9200.0, 8100.0],
             "Profit before tax": [26499.0, 31400.0, 37100.0],
-            "Tax": [7000.0, 8300.0, 9800.0],
-            "Net profit": [19499.0, 23100.0, 27300.0],
+            "Tax": [-5308.0, 3251.0, 9800.0],
+            "Net profit": [31807.0, 28149.0, 27300.0],
         },
         "bs": {
             "Equity Share Capital": [766.0, 766.0, 766.0],

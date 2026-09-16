@@ -111,11 +111,11 @@ MARKET_DEFAULTS: Dict[MarketType, Dict[str, float]] = {
 # Beta is calibrated against primary domestic index (e.g. Nifty 50 / Nifty IT for India, S&P 500 for US)
 REGISTRY_FALLBACKS: Dict[str, Dict[str, float]] = {
     "infy_infy": {"price": 1080.0, "shares": 412.45, "beta": 0.79, "market": "india"},
-    "tcs_tcs": {"price": 2370.0, "shares": 361.80, "beta": 0.85, "market": "india"},
-    "tatamotors_tatamotors": {"price": 480.0, "shares": 367.00, "beta": 1.15, "market": "india"},
+    "tcs_tcs": {"price": 2270.0, "shares": 361.80, "beta": 0.85, "market": "india"},
+    "tatamotors_tatamotors": {"price": 302.0, "shares": 367.00, "beta": 1.15, "market": "india"},
     "tatasteel_tatasteel": {"price": 184.0, "shares": 1248.00, "beta": 1.25, "market": "india"},
     "ongc_ongc": {"price": 235.35, "shares": 1258.00, "beta": 0.95, "market": "india"},
-    "aapl_us": {"price": 305.54, "shares": 14594.18, "beta": 1.05, "market": "us"},
+    "aapl_us": {"price": 331.0, "shares": 14594.18, "beta": 1.05, "market": "us"},
     "msft_us": {"price": 497.00, "shares": 7430.00, "beta": 0.90, "market": "us"},
     "infy_us": {"price": 12.40, "shares": 4124.00, "beta": 0.85, "market": "us"},
 }

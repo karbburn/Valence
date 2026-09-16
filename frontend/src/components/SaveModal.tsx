@@ -48,6 +48,7 @@ export function SaveModal({
           </label>
           <input
             id="save-model-name"
+            name="model-name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}

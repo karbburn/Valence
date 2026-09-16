@@ -17,7 +17,9 @@ export function CompanySearch({ onSelectCompany }: CompanySearchProps) {
   const { searchResults, searching, search, clearSearch } = useCompanies()
   const rootRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const listboxId = useId()
+  // React useId() contains colons (e.g. ":r0:") which break CSS selectors
+  // and some assistive tech — strip them for a safe DOM id.
+  const listboxId = useId().replace(/:/g, '')
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -79,6 +81,14 @@ export function CompanySearch({ onSelectCompany }: CompanySearchProps) {
         e.preventDefault()
         setHighlightIndex((prev) => (prev - 1 + searchResults.length) % searchResults.length)
         break
+      case 'Home':
+        e.preventDefault()
+        setHighlightIndex(0)
+        break
+      case 'End':
+        e.preventDefault()
+        setHighlightIndex(searchResults.length - 1)
+        break
       case 'Enter':
         e.preventDefault()
         if (searchResults[highlightIndex]) handleSelect(searchResults[highlightIndex])
@@ -96,10 +106,13 @@ export function CompanySearch({ onSelectCompany }: CompanySearchProps) {
         )}
         <input
           ref={inputRef}
+          id="company-search-input"
+          name="company-search"
           type="text"
           role="combobox"
           aria-expanded={isOpen}
-          aria-controls={listboxId}
+          aria-controls={isOpen ? listboxId : undefined}
+          aria-haspopup="listbox"
           aria-autocomplete="list"
           aria-activedescendant={
             isOpen && searchResults[highlightIndex]
@@ -118,7 +131,12 @@ export function CompanySearch({ onSelectCompany }: CompanySearchProps) {
         />
       </div>
 
-      {isOpen && (
+      {isOpen &&
+        (searchResults.length === 0 && !searching ? (
+          <div className="absolute left-0 top-9 w-80 px-4 py-3 text-[11px] text-text-dim bg-surface border border-border rounded-sm shadow-pop z-50" role="status">
+            No matching companies in the US/India universe.
+          </div>
+        ) : (
         <div
           id={listboxId}
           role="listbox"
@@ -126,12 +144,7 @@ export function CompanySearch({ onSelectCompany }: CompanySearchProps) {
           aria-busy={searching}
           className="absolute left-0 top-9 w-80 max-h-80 overflow-y-auto bg-surface border border-border rounded-sm shadow-pop z-50 divide-y divide-border"
         >
-          {searchResults.length === 0 && !searching ? (
-            <div className="px-4 py-3 text-[11px] text-text-dim" role="status">
-              No matching companies in the US/India universe.
-            </div>
-          ) : (
-            searchResults.map((c, i) => {
+          {searchResults.map((c, i) => {
               const isUS = c.market === 'us'
               const isOnboarded = c.onboarding_status === 'onboarded'
               const isHighlighted = i === highlightIndex
@@ -191,10 +204,9 @@ export function CompanySearch({ onSelectCompany }: CompanySearchProps) {
                   </div>
                 </div>
               )
-            })
-          )}
+            })}
         </div>
-      )}
+        ))}
     </div>
   )
 }

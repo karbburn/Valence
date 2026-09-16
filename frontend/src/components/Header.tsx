@@ -47,8 +47,17 @@ export function Header({
   const metadata = spec?.metadata
   const qaChecks = spec?.qa?.checks || []
   const failedChecks = qaChecks.filter((c) => !c.passed)
+  const skippedChecks = qaChecks.filter(
+    (c) => c.passed && c.detail.startsWith('SKIPPED:')
+  )
   const qaStatus =
-    qaChecks.length === 0 ? 'not_run' : failedChecks.length === 0 ? 'passed' : 'failed'
+    qaChecks.length === 0
+      ? 'not_run'
+      : failedChecks.length === 0
+      ? skippedChecks.length === 0
+        ? 'passed'
+        : 'warning'
+      : 'failed'
 
   // Live delta per scenario vs the current market quote — glanceable without switching.
   const marketPrice =
@@ -191,6 +200,8 @@ export function Header({
           aria-label={
             qaStatus === 'passed'
               ? 'QA report: all model checks passed'
+              : qaStatus === 'warning'
+              ? `QA report: passed with ${skippedChecks.length} skipped check${skippedChecks.length === 1 ? '' : 's'}`
               : qaStatus === 'failed'
               ? `QA report: ${failedChecks.length} of ${qaChecks.length} checks failed`
               : 'QA report: checks have not run yet'
@@ -199,6 +210,8 @@ export function Header({
           className={`flex items-center space-x-1 px-2 py-1 rounded-sm text-[10px] font-semibold uppercase tracking-[0.03em] border whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
             qaStatus === 'passed'
               ? 'bg-positive-subtle text-positive border-positive/30 hover:bg-positive/20'
+              : qaStatus === 'warning'
+              ? 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/30 hover:bg-[#f59e0b]/20'
               : qaStatus === 'failed'
               ? 'bg-negative-subtle text-negative border-negative/40 hover:bg-negative/20'
               : 'bg-surface-2 text-text-dim border-border hover:text-text-muted'
@@ -208,6 +221,13 @@ export function Header({
             <>
               <CheckCircle2 className="w-3 h-3 shrink-0" aria-hidden />
               <span>Model valid</span>
+            </>
+          ) : qaStatus === 'warning' ? (
+            <>
+              <AlertTriangle className="w-3 h-3 shrink-0" aria-hidden />
+              <span>
+                Valid · {skippedChecks.length} skipped
+              </span>
             </>
           ) : qaStatus === 'failed' ? (
             <>
@@ -245,11 +265,11 @@ export function Header({
           <button
             type="button"
             onClick={onOpenSaved}
-            title="Open saved models"
+            title="Open model library (saved models)"
             className="hidden sm:flex items-center space-x-1 px-2 py-1 bg-surface-2 hover:bg-surface text-text-muted hover:text-text-main border border-border text-[11px] font-medium rounded-sm transition-colors cursor-pointer shrink-0"
           >
             <Bookmark className="w-3.5 h-3.5 shrink-0" aria-hidden />
-            <span>Saved</span>
+            <span>Library</span>
           </button>
 
           <button
