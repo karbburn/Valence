@@ -65,7 +65,7 @@ export function SavedModelsModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="Saved Valuation Models"
+      title="Model Library — Saved Valuations"
       maxWidth="max-w-2xl"
     >
       <div className="space-y-4">

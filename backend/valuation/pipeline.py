@@ -168,7 +168,9 @@ def run_valuation(
             terminal_growth_rate=term_g,
             exit_multiple=exit_mult,
             timing_convention="mid_year",
+            currency=spec.metadata.currency,
         )
+        reverse_dcf.market_price_date = mdata.price.fetch_date
 
         # Divergence Gate (sanity check on implied terminal growth band [-2%, 5%])
         if reverse_dcf.implied_terminal_growth is not None:

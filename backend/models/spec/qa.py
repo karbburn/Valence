@@ -59,6 +59,8 @@ class QAResults(BaseModel):
         if not self.checks:
             return "NOT RUN"
         if self.all_passed:
+            if any(c.passed and c.detail.startswith("SKIPPED:") for c in self.checks):
+                return "MODEL VALID (WITH WARNINGS)"
             return "MODEL VALID"
         n = self.failed_count
         return f"{n} CHECK{'S' if n != 1 else ''} FAILED"

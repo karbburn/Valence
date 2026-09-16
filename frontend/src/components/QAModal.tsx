@@ -14,7 +14,11 @@ export interface QAModalProps {
 export function QAModal({ open, onClose, qa }: QAModalProps) {
   const checks = qa?.checks || []
   const failedCount = checks.filter((c) => !c.passed).length
+  const skippedCount = checks.filter(
+    (c) => c.passed && c.detail.startsWith('SKIPPED:')
+  ).length
   const allPassed = checks.length > 0 && failedCount === 0
+  const hasWarnings = allPassed && skippedCount > 0
 
   return (
     <Modal
@@ -45,8 +49,10 @@ export function QAModal({ open, onClose, qa }: QAModalProps) {
             <span className="font-bold text-[13px]">
               {checks.length === 0
                 ? 'No QA Checks Registered'
-                : allPassed
+                : allPassed && !hasWarnings
                 ? 'All Accounting & Valuation Consistency Checks Passed'
+                : allPassed
+                ? `Passed with ${skippedCount} Warning${skippedCount === 1 ? '' : 's'} — Review Skipped Checks`
                 : `${failedCount} of ${checks.length} Checks Failed`}
             </span>
           </div>
@@ -86,20 +92,27 @@ export function QAModal({ open, onClose, qa }: QAModalProps) {
 
                 <span
                   className={`flex items-center space-x-1 px-2 py-0.5 rounded-[3px] text-[10px] font-bold shrink-0 border ${
-                    c.passed
-                      ? 'bg-[#10b981]/10 text-[#10b981] border-[#10b981]/30'
-                      : 'bg-[#ef4444]/10 text-[#ef4444] border-[#ef4444]/30'
+                    !c.passed
+                      ? 'bg-[#ef4444]/10 text-[#ef4444] border-[#ef4444]/30'
+                      : c.detail.startsWith('SKIPPED:')
+                      ? 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/30'
+                      : 'bg-[#10b981]/10 text-[#10b981] border-[#10b981]/30'
                   }`}
                 >
-                  {c.passed ? (
-                    <>
-                      <CheckCircle2 className="w-3 h-3 text-[#10b981]" />
-                      <span>PASS</span>
-                    </>
-                  ) : (
+                  {!c.passed ? (
                     <>
                       <AlertTriangle className="w-3 h-3 text-[#ef4444]" />
                       <span>FAIL</span>
+                    </>
+                  ) : c.detail.startsWith('SKIPPED:') ? (
+                    <>
+                      <AlertTriangle className="w-3 h-3 text-[#f59e0b]" />
+                      <span>SKIPPED</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-3 h-3 text-[#10b981]" />
+                      <span>PASS</span>
                     </>
                   )}
                 </span>

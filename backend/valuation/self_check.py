@@ -9,7 +9,7 @@ Acceptance criteria:
   3. DCF Bridge arithmetic checks out: EV + Net Cash = Equity Value, Equity Value / Shares = Implied Price.
   4. Dual Terminal Value (Gordon Growth & Exit Multiple) both present.
   5. Terminal growth >= WACC validation check correctly raises ValueError.
-  6. Reverse DCF round-trip: running forward DCF with implied terminal growth reproduces market price within 0.01 INR.
+  6. Reverse DCF round-trip: running forward DCF with implied terminal growth reproduces market price within 0.01 native currency units.
   7. Sensitivity grid spot-checks match standalone DCF runs.
   8. Base case implied share price lands in plausible range relative to benchmark (~1,400-2,000 INR).
   9. ModelSpecification serialization preserves valuation outputs intact.
@@ -181,8 +181,8 @@ def main() -> None:
     print(f"    Base Net Cash       : {-base_val.dcf_bridge.less_net_debt:,.0f} Cr")
     print(f"    Base Equity Value   : {base_val.dcf_bridge.equity_value:,.0f} Cr")
     print(f"    Diluted Shares      : {base_val.dcf_bridge.shares_outstanding:.2f} Cr")
-    print(f"    Implied Share Price : INR {base_price:.2f} (Bull: {bull_price:.2f}, Bear: {bear_price:.2f})")
-    print(f"    Implied Term Growth : {rev_dcf.implied_terminal_growth:.2f}% (Reverse DCF @ INR {rev_dcf.market_price:.2f})")
+    print(f"    Implied Share Price : {base_price:.2f} (Bull: {bull_price:.2f}, Bear: {bear_price:.2f})")
+    print(f"    Implied Term Growth : {rev_dcf.implied_terminal_growth:.2f}% (Reverse DCF @ {rev_dcf.market_price:.2f})")
 
     print("\nALL STAGE 7 SELF-CHECKS PASSED SUCCESSFULLY!")
 

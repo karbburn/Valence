@@ -45,6 +45,34 @@ def _make(
     )
 
 
+def _default_cost_of_equity(historical_model: HistoricalModel) -> tuple[float, str]:
+    """Per-company CAPM default for Cost of Equity: Rfr + Blume-adjusted Beta × ERP.
+
+    Mirrors the valuation engine (backend/valuation/wacc.py) so the suggested
+    assumption matches what CAPM implies. Replaces the former flat 13.0 default
+    which overstated US cost of equity by ~4pp. Falls back to 13.0 only when
+    market data is unavailable.
+    """
+    try:
+        from backend.data.providers.market_data import get_company_market_data
+
+        company_id = historical_model.company_id
+        market = getattr(historical_model, "market", None)
+        mdata = get_company_market_data(company_id, market=market)  # type: ignore
+        rfr = mdata.risk_free_rate.value
+        raw_b = mdata.beta.value
+        b = round(0.67 * raw_b + 0.33, 3)  # Blume (1971), same as valuation engine
+        erp = mdata.equity_risk_premium.value
+        ke = round(rfr + b * erp, 2)
+        source = (
+            f"CAPM default: Rfr={rfr:.2f}% + Blume-beta {b:.3f} × ERP={erp:.2f}% "
+            f"(per-company market data)"
+        )
+        return ke, source
+    except Exception:
+        return 13.0, "fallback default — market data unavailable"
+
+
 def suggest_base_assumptions(
     ratios: HistoricalRatios,
     historical_model: HistoricalModel,
@@ -212,10 +240,11 @@ def suggest_base_assumptions(
         result.append(_make("debt_repayment", 0.0, p, "base", source_debt))
 
     # ------------------------------------------------------------------ #
-    # 10. WACC — structural placeholders (populated in valuation engine)
+    # 10. WACC — CAPM default computed per company/market (no hardcode).
+    # Cost of debt resolves later from the debt schedule interest rate.
     # ------------------------------------------------------------------ #
-    source_wacc_placeholder = "structural placeholder — populated in valuation engine"
-    result.append(_make("wacc.cost_of_equity", 13.0, "all", "base", source_wacc_placeholder))
+    default_ke = _default_cost_of_equity(historical_model)
+    result.append(_make("wacc.cost_of_equity", default_ke[0], "all", "base", default_ke[1]))
     result.append(_make("wacc.cost_of_debt", 0.0, "all", "base", "placeholder — valuation uses debt schedule interest rate"))
 
     # ------------------------------------------------------------------ #

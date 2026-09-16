@@ -100,6 +100,7 @@ class DCFBridge(BaseModel):
 class ReverseDCF(BaseModel):
     """Reverse DCF: given market price, solve for implied growth/margins."""
     market_price: Optional[float] = None
+    market_price_date: Optional[str] = None       # fetch date of the market quote (ISO)
     implied_terminal_growth: Optional[float] = None     # % solved for
     implied_revenue_cagr: Optional[float] = None        # alternative solve
     method_note: str = ""                               # which variable was solved for
