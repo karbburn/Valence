@@ -59,7 +59,9 @@ async def add_iframe_headers(request: Request, call_next):  # type: ignore[no-un
     # Remove X-Frame-Options if any upstream/proxy set DENY/SAMEORIGIN (it would block the iframe).
     # CSP frame-ancestors is the modern replacement and takes precedence in modern browsers,
     # but XFO DENY still blocks in some browsers if present, so we must not send it.
-    response.headers.pop("X-Frame-Options", None)
+    # NOTE: Starlette's MutableHeaders has no .pop() — use contains/del.
+    if "x-frame-options" in response.headers:
+        del response.headers["x-frame-options"]
     return response
 
 
