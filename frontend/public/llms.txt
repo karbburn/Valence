@@ -3,7 +3,7 @@
 > Valence is a free, browser-based equity-valuation and 3-statement financial-modeling workbench for US (NASDAQ/NYSE) and Indian (NSE/BSE) equities, with DCF/WACC, trading comps, PE returns, and a 30-tab Excel exporter.
 
 ## Overview
-- [Valence Home](https://valence-valuation.vercel.app/): Interactive valuation dashboard with company search, driver overrides, scenario modeling, QA report, and in-app methodology breakdowns.
+- [Valence Home](https://valence.sourabhpradhan.in/): Interactive valuation dashboard with company search, driver overrides, scenario modeling, QA report, and in-app methodology breakdowns.
 
 ## Capabilities
 - DCF & WACC Engine: unlevered FCFF discounted at a CAPM-based WACC with Gordon-growth and exit-multiple terminal values.

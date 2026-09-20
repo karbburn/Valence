@@ -33,7 +33,7 @@ app = FastAPI(
 # In production, restrict origins via the CORS_ORIGINS env var (comma-separated).
 CORS_ORIGINS = os.getenv(
     "CORS_ORIGINS",
-    "http://localhost:3000,http://localhost:5173,http://localhost:8000",
+    "https://valence.sourabhpradhan.in,https://valence-valuation.vercel.app,http://localhost:3000,http://localhost:5173,http://localhost:8000",
 ).split(",")
 app.add_middleware(
     CORSMiddleware,

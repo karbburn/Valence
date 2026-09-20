@@ -1,5 +1,5 @@
 export const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ?? 'https://valence-valuation.vercel.app'
+  process.env.NEXT_PUBLIC_SITE_URL ?? 'https://valence.sourabhpradhan.in'
 
 export const SITE_NAME = 'Valence'
 

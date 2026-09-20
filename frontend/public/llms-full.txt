@@ -8,7 +8,7 @@ comps benchmarking, football-field valuation-range synthesis, PE exit-return wat
 automated accounting QA validation, a 30-tab Excel model exporter with live dynamic
 formulas, and a real-time web dashboard.
 
-URL: https://valence-valuation.vercel.app/
+URL: https://valence.sourabhpradhan.in/
 Author: Sourabh (https://sourabh08.vercel.app/)
 Source: https://github.com/karbburn
 
