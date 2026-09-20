@@ -182,7 +182,7 @@ export default function Image() {
             )}
           </div>
           <div style={{ fontSize: 24, fontWeight: 600, color: '#64748b' }}>
-            valence-valuation.vercel.app
+            valence.sourabhpradhan.in
           </div>
         </div>
       </div>
