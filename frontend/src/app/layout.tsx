@@ -18,6 +18,9 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
+  alternates: {
+    canonical: SITE_URL,
+  },
   title: {
     default: `${SITE_NAME} — Equity Valuation & Financial Modeling Workbench`,
     template: `%s · ${SITE_NAME}`,

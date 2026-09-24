@@ -24,6 +24,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 from backend.export.excel.exporter import export_model_to_excel
+from backend.export.excel.links import AUTHOR_URL, VALENCE_URL
 from backend.forecast.pipeline import run as run_forecast_pipeline
 from backend.validation.pipeline import run_qa
 from backend.valuation.pipeline import run_valuation
@@ -123,7 +124,8 @@ def main() -> None:
     ws_cover = wb["00_Cover"]
     sig_cell = ws_cover["B20"]
     _assert("By Sourabh" in str(sig_cell.value), f"00_Cover signature text verified ('{sig_cell.value}')")
-    _assert(sig_cell.hyperlink is not None and "sourabh08.vercel.app" in sig_cell.hyperlink.target, f"00_Cover signature hyperlink verified ('{sig_cell.hyperlink.target}')")
+    _assert(sig_cell.hyperlink is not None and sig_cell.hyperlink.target == AUTHOR_URL, f"00_Cover signature hyperlink verified ('{sig_cell.hyperlink.target}')")
+    _assert(ws_cover["B3"].hyperlink is not None and ws_cover["B3"].hyperlink.target == VALENCE_URL, f"00_Cover Valence hyperlink verified ('{ws_cover['B3'].hyperlink.target}')")
     _assert(sig_cell.font.size == 14.0 and sig_cell.font.bold, f"00_Cover signature font verified (14pt Bold Blue)")
 
     # Check 10: 01_Model_Guide Consolas Code Box Formatting

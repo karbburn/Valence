@@ -60,7 +60,11 @@ export function SaveModal({
         </div>
 
         {error && (
-          <div className="text-[11px] text-[#ef4444] font-semibold bg-[#ef4444]/10 border border-[#ef4444]/20 rounded-[3px] p-2">
+          <div
+            role="alert"
+            aria-live="assertive"
+            className="text-[11px] text-[#ef4444] font-semibold bg-[#ef4444]/10 border border-[#ef4444]/20 rounded-[3px] p-2"
+          >
             {error}
           </div>
         )}

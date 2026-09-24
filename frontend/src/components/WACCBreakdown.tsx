@@ -110,7 +110,7 @@ export function WACCBreakdown({ spec, scenario }: WACCBreakdownProps) {
 
       {/* Footnote */}
       {wacc.source_notes && (
-        <div className="text-[10px] font-mono text-[#475569] mt-2 truncate">
+        <div className="text-[10px] font-mono text-text-faint mt-2 truncate">
           Source: {wacc.source_notes}
         </div>
       )}

@@ -17,7 +17,7 @@ export function ForecastTable({ spec, scenario }: ForecastTableProps) {
   const unit = getCurrencyUnit(currency)
 
   const periods = forecast?.periods || ['FY27', 'FY28', 'FY29', 'FY30', 'FY31']
-  const lineItems = forecast?.line_items || []
+  const lineItems = forecast?.line_items
 
   const rows = [
     { key: 'canonical.is.revenue', label: 'Revenue', bold: true },
@@ -32,7 +32,7 @@ export function ForecastTable({ spec, scenario }: ForecastTableProps) {
   // Memoized lookup map to avoid O(rows * periods * N) linear searches on render
   const valMap = useMemo(() => {
     const map = new Map<string, number | null>()
-    for (const li of lineItems) {
+    for (const li of lineItems ?? []) {
       map.set(`${li.canonical_key}:${li.period_label}:${li.scenario}`, li.value)
     }
     return map

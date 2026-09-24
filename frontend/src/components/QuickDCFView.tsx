@@ -235,7 +235,7 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-mono text-[12px]">
           <div className="bg-[#0d1220] border border-[#1e283d] rounded-[4px] p-2.5">
-            <div className="text-[10px] text-[#64748b] uppercase tracking-[0.04em]">
+            <div className="text-[10px] text-text-dim uppercase tracking-[0.04em]">
               WACC (Discount Rate)
             </div>
             <div className="font-bold text-[#f8fafc] mt-0.5">
@@ -244,7 +244,7 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
           </div>
 
           <div className="bg-[#0d1220] border border-[#1e283d] rounded-[4px] p-2.5">
-            <div className="text-[10px] text-[#64748b] uppercase tracking-[0.04em]">
+            <div className="text-[10px] text-text-dim uppercase tracking-[0.04em]">
               Terminal Growth (g)
             </div>
             <div className="font-bold text-[#f8fafc] mt-0.5">
@@ -253,7 +253,7 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
           </div>
 
           <div className="bg-[#0d1220] border border-[#1e283d] rounded-[4px] p-2.5">
-            <div className="text-[10px] text-[#64748b] uppercase tracking-[0.04em]">
+            <div className="text-[10px] text-text-dim uppercase tracking-[0.04em]">
               Implied Terminal g
             </div>
             <div className="font-bold text-[#7dd3fc] mt-0.5">
@@ -284,7 +284,7 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
               <h3 className="font-bold text-[13px] text-text-main">
                 2-Way Sensitivity Matrix
               </h3>
-              <p className="text-[11px] text-[#64748b]">
+              <p className="text-[11px] text-text-dim">
                 Implied Share Price ({currency}) across WACC vs Terminal Growth (g)
               </p>
             </div>

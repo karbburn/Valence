@@ -15,4 +15,4 @@
 
 ## Optional
 - [GitHub](https://github.com/karbburn): Source code and documentation.
-- [Author — Sourabh](https://sourabh08.vercel.app/): Creator of Valence.
+- [Author — Sourabh](https://www.sourabhpradhan.in/): Creator of Valence.

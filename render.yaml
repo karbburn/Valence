@@ -11,4 +11,4 @@ services:
       - key: VALENCE_ENV
         value: production
       - key: CORS_ORIGINS
-        value: https://valence.sourabhpradhan.in,https://valence-valuation.vercel.app,http://localhost:3000
+        value: https://valence.sourabhpradhan.in,http://localhost:3000
