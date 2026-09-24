@@ -6,7 +6,9 @@ in other tabs depend on — the class of silent breakage this suite exists to st
 
 from openpyxl import Workbook
 
+from backend.export.excel.links import AUTHOR_URL, VALENCE_URL
 from backend.export.excel.render_fcst import render_debt_schedule
+from backend.export.excel.render_front import render_cover
 from backend.export.excel.render_hist import (
     render_historical_balance_sheet,
     render_historical_cash_flow,
@@ -90,6 +92,16 @@ def _row_of(ws, label: str) -> int:
         if str(ws.cell(row=r, column=2).value) == label:
             return r
     raise AssertionError(f"Label not found on sheet: {label}")
+
+
+def test_cover_links_match_current_public_urls():
+    ws = render_cover(Workbook(), _spec_with_historicals([], []))
+
+    assert ws["B20"].value == "By Sourabh"
+    assert ws["B20"].hyperlink is not None
+    assert ws["B20"].hyperlink.target == AUTHOR_URL
+    assert ws["B3"].hyperlink is not None
+    assert ws["B3"].hyperlink.target == VALENCE_URL
 
 
 def test_balance_sheet_layout_matches_formula_references():

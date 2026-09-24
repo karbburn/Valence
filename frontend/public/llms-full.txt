@@ -9,7 +9,7 @@ automated accounting QA validation, a 30-tab Excel model exporter with live dyna
 formulas, and a real-time web dashboard.
 
 URL: https://valence.sourabhpradhan.in/
-Author: Sourabh (https://sourabh08.vercel.app/)
+Author: Sourabh (https://www.sourabhpradhan.in/)
 Source: https://github.com/karbburn
 
 ---

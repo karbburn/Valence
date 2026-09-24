@@ -70,8 +70,12 @@ export function SavedModelsModal({
     >
       <div className="space-y-4">
         {error && (
-          <div className="flex items-center space-x-2 text-[11px] text-[#ef4444] font-semibold bg-[#ef4444]/10 border border-[#ef4444]/20 rounded-[3px] p-2.5">
-            <AlertCircle className="w-4 h-4 shrink-0" />
+          <div
+            role="alert"
+            aria-live="assertive"
+            className="flex items-center space-x-2 text-[11px] text-[#ef4444] font-semibold bg-[#ef4444]/10 border border-[#ef4444]/20 rounded-[3px] p-2.5"
+          >
+            <AlertCircle className="w-4 h-4 shrink-0" aria-hidden />
             <span>{error}</span>
           </div>
         )}
@@ -99,14 +103,14 @@ export function SavedModelsModal({
                   <h4 className="font-semibold text-[13px] text-[#f8fafc] truncate">
                     {m.name}
                   </h4>
-                  <div className="flex items-center space-x-3 text-[11px] text-[#64748b]">
+                  <div className="flex items-center space-x-3 text-[11px] text-text-dim">
                     <span className="flex items-center space-x-1">
                       <Building2 className="w-3 h-3 text-[#94a3b8]" />
                       <span className="font-mono text-[#94a3b8]">{m.company_id}</span>
                     </span>
                     <span>·</span>
                     <span className="flex items-center space-x-1">
-                      <Clock className="w-3 h-3 text-[#64748b]" />
+                      <Clock className="w-3 h-3 text-text-dim" />
                       <span>{new Date(m.created_at).toLocaleDateString()}</span>
                     </span>
                   </div>
@@ -144,10 +148,11 @@ export function SavedModelsModal({
                       </button>
                       <button
                         onClick={() => setConfirmDeleteId(m.model_id)}
-                        className="p-1.5 text-[#64748b] hover:text-[#ef4444] border border-[#1e283d] rounded-[4px] hover:border-[#ef4444]/30 hover:bg-[#ef4444]/10 transition-colors"
+                        className="p-1.5 text-text-dim hover:text-[#ef4444] border border-[#1e283d] rounded-[4px] hover:border-[#ef4444]/30 hover:bg-[#ef4444]/10 transition-colors"
                         title="Delete model"
+                        aria-label={`Delete ${m.name}`}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3.5 h-3.5" aria-hidden />
                       </button>
                     </>
                   )}

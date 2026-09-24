@@ -25,13 +25,13 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
   const histPeriods = historicals?.periods || ['FY24', 'FY25', 'FY26']
   const fcastPeriods = forecast?.periods || ['FY27', 'FY28', 'FY29', 'FY30', 'FY31']
 
-  const histLineItems = historicals?.line_items || []
-  const fcastLineItems = forecast?.line_items || []
+  const histLineItems = historicals?.line_items
+  const fcastLineItems = forecast?.line_items
 
   // Memoized lookups for performance
   const histMap = useMemo(() => {
     const map = new Map<string, number | null>()
-    for (const li of histLineItems) {
+    for (const li of histLineItems ?? []) {
       map.set(`${li.canonical_key}:${li.period_label}`, li.value)
     }
     return map
@@ -39,7 +39,7 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
 
   const fcastMap = useMemo(() => {
     const map = new Map<string, number | null>()
-    for (const li of fcastLineItems) {
+    for (const li of fcastLineItems ?? []) {
       map.set(`${li.canonical_key}:${li.period_label}:${li.scenario}`, li.value)
     }
     return map
@@ -96,7 +96,7 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
             className={`flex items-center space-x-1.5 px-3 py-1 text-[12px] rounded-[4px] transition-colors ${
               activeTab === 'is'
                 ? 'bg-[#0ea5e9] text-white font-semibold shadow-sm'
-                : 'text-[#64748b] hover:text-[#f8fafc]'
+                : 'text-text-dim hover:text-[#f8fafc]'
             }`}
           >
             <FileText className="w-3.5 h-3.5" />
@@ -107,7 +107,7 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
             className={`flex items-center space-x-1.5 px-3 py-1 text-[12px] rounded-[4px] transition-colors ${
               activeTab === 'bs'
                 ? 'bg-[#0ea5e9] text-white font-semibold shadow-sm'
-                : 'text-[#64748b] hover:text-[#f8fafc]'
+                : 'text-text-dim hover:text-[#f8fafc]'
             }`}
           >
             <Landmark className="w-3.5 h-3.5" />
@@ -118,7 +118,7 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
             className={`flex items-center space-x-1.5 px-3 py-1 text-[12px] rounded-[4px] transition-colors ${
               activeTab === 'cf'
                 ? 'bg-[#0ea5e9] text-white font-semibold shadow-sm'
-                : 'text-[#64748b] hover:text-[#f8fafc]'
+                : 'text-text-dim hover:text-[#f8fafc]'
             }`}
           >
             <Wallet className="w-3.5 h-3.5" />
@@ -126,7 +126,7 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
           </button>
         </div>
 
-        <div className="text-[11px] font-mono text-[#64748b]">
+        <div className="text-[11px] font-mono text-text-dim">
           All figures in <span className="font-semibold text-[#f8fafc]">{unit}</span> · FY24–FY26 (Historical) / FY27–FY31 (Forecast: {scenario})
         </div>
       </div>
@@ -147,7 +147,7 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>{p}</span>
-                    <span className="text-[10px] font-bold bg-[#192030] border border-[#1e283d] text-[#64748b] px-1 py-[1px] rounded-[2px]">
+                    <span className="text-[10px] font-bold bg-[#192030] border border-[#1e283d] text-text-dim px-1 py-[1px] rounded-[2px]">
                       H
                     </span>
                   </div>
@@ -194,7 +194,7 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
                       <td
                         key={p}
                         className={`px-3 py-1.5 text-right ${
-                          r.bold ? 'text-[#f8fafc]' : 'text-[#64748b]'
+                          r.bold ? 'text-[#f8fafc]' : 'text-text-dim'
                         }`}
                       >
                         {val != null ? `${currencySym}${fmtNum(val)}` : '—'}

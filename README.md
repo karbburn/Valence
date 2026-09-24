@@ -261,7 +261,7 @@ Valence includes an automated **Institutional Financial Audit Suite** for post-e
   - **Reverse DCF Solver**: `34_Reverse_DCF` Row 10 uses a live closed-form algebraic formula.
   - **Dynamic Model Checks**: `52_Model_Checks` evaluates live `=IF(...)` formulas returning `"PASS"` or `"FAIL"`.
 - **Institutional Visual Branding**:
-  - **`By Sourabh` Signature**: 14pt bold blue signature hyperlink on `00_Cover` cell `B20` hyperlinked to [sourabh08.vercel.app](https://sourabh08.vercel.app/).
+  - **`By Sourabh` Signature**: 14pt bold blue signature hyperlink on `00_Cover` cell `B20` hyperlinked to [the Sourabh portfolio](https://www.sourabhpradhan.in/); `B3` links to the live [Valence workbench](https://valence.sourabhpradhan.in/).
   - **Consolas Formula Code Blocks**: `01_Model_Guide` Column C formulas styled in `Consolas 11pt Bold` with light blue tint fill (`#EFF6FF`).
 
 ```bash

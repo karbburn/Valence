@@ -18,9 +18,9 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            // allow embedding only on your portfolio + self (modern browsers use this, not X-Frame-Options)
+            // Allow only the known portfolio and production hosts to embed the app.
             value:
-              "frame-ancestors 'self' https://www.sourabhpradhan.in https://sourabhpradhan.in https://*.sourabhpradhan.in https://*.vercel.app",
+              "frame-ancestors 'self' https://www.sourabhpradhan.in https://sourabhpradhan.in https://valence.sourabhpradhan.in",
           },
         ],
       },

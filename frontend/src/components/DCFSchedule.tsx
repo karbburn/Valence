@@ -17,7 +17,7 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
 
   if (!valuation) {
     return (
-      <div className="bg-surface border border-border rounded-[4px] p-6 text-center text-[#64748b] text-[12px]">
+      <div className="bg-surface border border-border rounded-[4px] p-6 text-center text-text-dim text-[12px]">
         No valuation schedule available for this scenario.
       </div>
     )
@@ -115,24 +115,24 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
         {/* Inline DCF Bridge Strip */}
         <div className="flex items-center space-x-3 text-[11px] font-mono bg-[#0d1220] border border-[#1e283d] rounded-[4px] px-2.5 py-0.5 text-[#94a3b8]">
           <div>
-            <span className="text-[#64748b]">PV FCFF: </span>
+            <span className="text-text-dim">PV FCFF: </span>
             <span className="text-[#f8fafc] font-semibold">{fmtMoney(bridge.sum_pv_fcff, currency)}</span>
           </div>
           <span className="text-[#374766]">|</span>
           <div>
-            <span className="text-[#64748b]">PV TV: </span>
+            <span className="text-text-dim">PV TV: </span>
             <span className="text-[#f8fafc] font-semibold">{fmtMoney(bridge.pv_terminal_value, currency)}</span>
           </div>
           <span className="text-[#374766]">|</span>
           <div>
-            <span className="text-[#64748b]">Net: </span>
+            <span className="text-text-dim">Net: </span>
             <span className={`font-semibold ${isNetCash ? 'text-[#10b981]' : 'text-[#ef4444]'}`}>
               {isNetCash ? `+${currencySym}${fmtNum(Math.abs(netDebt))}` : `-${currencySym}${fmtNum(netDebt)}`}
             </span>
           </div>
           <span className="text-[#374766]">|</span>
           <div>
-            <span className="text-[#64748b]">Price: </span>
+            <span className="text-text-dim">Price: </span>
             <span className="text-[#7dd3fc] font-bold">{currencySym}{fmtNum(bridge.implied_share_price, 2)}</span>
           </div>
         </div>

@@ -65,7 +65,7 @@ export function QAModal({ open, onClose, qa }: QAModalProps) {
         {/* Checks List */}
         <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
           {checks.length === 0 ? (
-            <div className="text-center py-6 text-[12px] text-[#64748b]">
+            <div className="text-center py-6 text-[12px] text-text-dim">
               No QA check records available for this model.
             </div>
           ) : (
@@ -79,7 +79,7 @@ export function QAModal({ open, onClose, qa }: QAModalProps) {
                     <span className="font-semibold text-[12px] text-[#f8fafc]">
                       {c.check_name}
                     </span>
-                    <span className="text-[9px] font-mono uppercase bg-[#111622] text-[#64748b] px-1.5 py-0.5 rounded-[2px] border border-[#1e283d]">
+                    <span className="text-[9px] font-mono uppercase bg-[#111622] text-text-dim px-1.5 py-0.5 rounded-[2px] border border-[#1e283d]">
                       {c.category}
                     </span>
                   </div>

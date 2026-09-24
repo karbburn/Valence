@@ -51,6 +51,7 @@ from backend.export.excel.styles import (
     FONT_TITLE,
     FONT_TOTAL,
 )
+from backend.export.excel.links import AUTHOR_URL, VALENCE_URL
 from backend.models.spec.model_specification import ModelSpecification
 
 
@@ -73,6 +74,7 @@ def render_cover(wb: Workbook, spec: ModelSpecification) -> Worksheet:
 
     ws["B3"] = "VALENCE VALUATION PLATFORM"
     ws["B3"].font = FONT_BRAND_SUBTITLE
+    ws["B3"].hyperlink = VALENCE_URL
     ws["B3"].alignment = ALIGN_LEFT
 
     ws["B5"] = spec.metadata.name.upper()
@@ -110,7 +112,7 @@ def render_cover(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     # Footer note with creator hyperlink (Prominent 14pt Signature)
     ws["B20"] = "By Sourabh"
     ws["B20"].font = FONT_SIGNATURE
-    ws["B20"].hyperlink = "https://sourabh08.vercel.app/"
+    ws["B20"].hyperlink = AUTHOR_URL
 
     return ws
 

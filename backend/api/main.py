@@ -33,7 +33,7 @@ app = FastAPI(
 # In production, restrict origins via the CORS_ORIGINS env var (comma-separated).
 CORS_ORIGINS = os.getenv(
     "CORS_ORIGINS",
-    "https://valence.sourabhpradhan.in,https://valence-valuation.vercel.app,http://localhost:3000,http://localhost:5173,http://localhost:8000",
+    "https://valence.sourabhpradhan.in,http://localhost:3000,http://localhost:5173,http://localhost:8000",
 ).split(",")
 app.add_middleware(
     CORSMiddleware,
@@ -47,7 +47,7 @@ app.add_middleware(
 # Modern browsers enforce CSP frame-ancestors; X-Frame-Options is legacy/fallback.
 FRAME_ANCESTORS = os.getenv(
     "FRAME_ANCESTORS",
-    "https://www.sourabhpradhan.in https://sourabhpradhan.in https://*.sourabhpradhan.in https://*.vercel.app 'self'",
+    "https://www.sourabhpradhan.in https://sourabhpradhan.in https://valence.sourabhpradhan.in 'self'",
 )
 
 

@@ -54,7 +54,7 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
                 {fmtPct(upsidePct, 1)} vs mkt
               </span>
             ) : (
-              <span className="text-[#64748b]">Intrinsic Value</span>
+              <span className="text-text-dim">Intrinsic Value</span>
             )}
           </div>
         </div>
@@ -67,7 +67,7 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
           <div className="font-mono font-bold text-[16px] text-[#f8fafc] mt-0.5 whitespace-nowrap">
             {marketPrice != null ? fmtPrice(marketPrice, currency, 2) : '—'}
           </div>
-          <div className="text-[10px] font-semibold text-[#64748b] mt-0.5 whitespace-nowrap">
+          <div className="text-[10px] font-semibold text-text-dim mt-0.5 whitespace-nowrap">
             {reverseDcf?.market_price_date ? `As of ${reverseDcf.market_price_date}` : 'Live / Benchmark'}
           </div>
         </div>
@@ -80,7 +80,7 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
           <div className="font-mono font-bold text-[16px] text-[#f8fafc] mt-0.5 whitespace-nowrap">
             {ev != null ? fmtMoney(ev, currency) : '—'}
           </div>
-          <div className="text-[10px] font-semibold text-[#64748b] mt-0.5 whitespace-nowrap">
+          <div className="text-[10px] font-semibold text-text-dim mt-0.5 whitespace-nowrap">
             PV FCFF + PV TV
           </div>
         </div>
@@ -93,7 +93,7 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
           <div className="font-mono font-bold text-[16px] text-[#f8fafc] mt-0.5 whitespace-nowrap">
             {equityVal != null ? fmtMoney(equityVal, currency) : '—'}
           </div>
-          <div className="text-[10px] font-semibold text-[#64748b] mt-0.5 whitespace-nowrap">
+          <div className="text-[10px] font-semibold text-text-dim mt-0.5 whitespace-nowrap">
             Net Debt Adjusted
           </div>
         </div>
@@ -106,7 +106,7 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
           <div className="font-mono font-bold text-[16px] text-[#f8fafc] mt-0.5 whitespace-nowrap">
             {waccVal != null ? fmtPct(waccVal, 2) : '—'}
           </div>
-          <div className="text-[10px] font-semibold text-[#64748b] mt-0.5 whitespace-nowrap">
+          <div className="text-[10px] font-semibold text-text-dim mt-0.5 whitespace-nowrap">
             CAPM / Capital Cost
           </div>
         </div>
@@ -119,7 +119,7 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
           <div className="font-mono font-bold text-[16px] text-[#f8fafc] mt-0.5 whitespace-nowrap">
             {terminalGrowthVal != null ? fmtPct(terminalGrowthVal, 2) : '—'}
           </div>
-          <div className="text-[10px] font-semibold text-[#64748b] mt-0.5 whitespace-nowrap">
+          <div className="text-[10px] font-semibold text-text-dim mt-0.5 whitespace-nowrap">
             Gordon Growth
           </div>
         </div>
