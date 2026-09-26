@@ -36,6 +36,46 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
   const waccVal = waccObj?.wacc ?? null
   const terminalGrowthVal = tvObj?.terminal_growth_rate ?? null
 
+  const priceSource = reverseDcf?.market_price_source ?? null
+  // Successor ticker: the quote belongs to a different listed entity than the
+  // model's historical financials (demerger/restructuring). The price is real
+  // but the vs-market % is not meaningful, so say so instead of printing it.
+  const isSuccessorQuote = !!priceSource && priceSource.endsWith(':successor_ticker')
+  const baseSource = isSuccessorQuote ? priceSource.slice(0, -':successor_ticker'.length) : priceSource
+  const isLiveQuote =
+    baseSource === 'yfinance' ||
+    baseSource === 'yfinance_history' ||
+    baseSource === 'yahoo_chart' ||
+    baseSource === 'twelvedata'
+  const isStaleQuote = !!baseSource && baseSource.startsWith('stale_cache')
+  const isFallbackQuote =
+    !!baseSource &&
+    (baseSource === 'registry' ||
+      baseSource === 'market_default' ||
+      baseSource.startsWith('market_default'))
+  const priceSublabel = isSuccessorQuote
+    ? `As of ${reverseDcf?.market_price_date} · Successor ticker`
+    : !reverseDcf?.market_price_date
+      ? 'Live / Benchmark'
+      : isLiveQuote
+        ? `As of ${reverseDcf.market_price_date} · Live`
+        : isStaleQuote
+          ? `As of ${reverseDcf.market_price_date} · Stale`
+          : isFallbackQuote
+            ? `As of ${reverseDcf.market_price_date} · Benchmark`
+            : `As of ${reverseDcf.market_price_date}`
+  const priceSublabelClass =
+    isStaleQuote || isFallbackQuote || isSuccessorQuote ? 'text-[#f59e0b]' : 'text-text-dim'
+  const priceTitle = isSuccessorQuote
+    ? 'The listed ticker was retired by a corporate action and this quote is the successor entity. It is not comparable with this model\'s historical financials, so the vs-market % is suppressed.'
+    : isLiveQuote
+      ? `Live quote from ${baseSource} on ${reverseDcf?.market_price_date}`
+      : isStaleQuote
+        ? 'Live quote failed — showing last cached close. Check connection, then reload.'
+        : isFallbackQuote
+          ? 'Live quote unavailable — showing benchmark fallback. Treat vs-mkt % with caution.'
+          : undefined
+
   return (
     <div className="w-full bg-[#111622]/40 border-b border-[#1e283d] px-[14px] py-[8px]">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
@@ -48,7 +88,11 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
             {impliedPrice != null ? fmtPrice(impliedPrice, currency, 2) : '—'}
           </div>
           <div className="text-[10px] font-semibold mt-0.5 whitespace-nowrap">
-            {upsidePct != null ? (
+            {isSuccessorQuote ? (
+              <span className="text-[#f59e0b]" title={priceTitle}>
+                Not comparable
+              </span>
+            ) : upsidePct != null ? (
               <span className={upsidePct >= 0 ? 'text-[#10b981]' : 'text-[#ef4444]'}>
                 {upsidePct >= 0 ? '+' : ''}
                 {fmtPct(upsidePct, 1)} vs mkt
@@ -67,8 +111,8 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
           <div className="font-mono font-bold text-[16px] text-[#f8fafc] mt-0.5 whitespace-nowrap">
             {marketPrice != null ? fmtPrice(marketPrice, currency, 2) : '—'}
           </div>
-          <div className="text-[10px] font-semibold text-text-dim mt-0.5 whitespace-nowrap">
-            {reverseDcf?.market_price_date ? `As of ${reverseDcf.market_price_date}` : 'Live / Benchmark'}
+          <div className={`text-[10px] font-semibold mt-0.5 whitespace-nowrap ${priceSublabelClass}`} title={priceTitle}>
+            {priceSublabel}
           </div>
         </div>
 

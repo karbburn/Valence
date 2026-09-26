@@ -140,6 +140,7 @@ export interface DCFBridge {
 export interface ReverseDCF {
   market_price: number | null
   market_price_date?: string | null
+  market_price_source?: string | null
   implied_terminal_growth: number | null
   implied_revenue_cagr: number | null
   method_note: string
