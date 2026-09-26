@@ -18,7 +18,10 @@ from backend.validation.accounting_checks import (
     check_debt_schedule_reconciles,
     check_share_count_consistent,
 )
-from backend.validation.data_quality import check_data_provenance_quality
+from backend.validation.data_quality import (
+    check_data_provenance_quality,
+    check_historicals_are_reported,
+)
 from backend.validation.model_checks import (
     check_dcf_bridge_reconciles,
     check_no_missing_critical_inputs,
@@ -41,6 +44,7 @@ CHECK_SUITE: List[Tuple[str, Callable[[ModelSpecification], ModelCheckResult]]] 
     ("valuation", check_terminal_growth_lt_wacc),
     ("data_quality", check_no_missing_critical_inputs),
     ("data_quality", check_data_provenance_quality),
+    ("data_quality", check_historicals_are_reported),
 ]
 
 

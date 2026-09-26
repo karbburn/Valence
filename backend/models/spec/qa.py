@@ -35,6 +35,12 @@ V1_CHECK_NAMES = [
     ("terminal_growth_lt_wacc", "valuation", "Terminal growth rate < WACC (Gordon Growth requirement)."),
     ("no_missing_critical_inputs", "data_quality", "Every driver has an assumption object — no silent null."),
     ("data_provenance_quality", "data_quality", "Every historical line item carries a non-empty provenance status."),
+    (
+        "historicals_are_reported",
+        "data_quality",
+        "Every historical period traces to a figure that was actually published, "
+        "not to a hand-entered projection.",
+    ),
 ]
 
 

@@ -5,7 +5,15 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel
 
-HistoricalStatus = Literal["reported", "reported_adjusted", "derived", "analyst_adjusted"]
+# `estimated` is a figure no filer published: a hand-entered projection in a
+# repository spreadsheet. It is a valid value but it is NOT a historical fact,
+# and any model built on it must say so rather than present it as a filing.
+HistoricalStatus = Literal[
+    "reported", "reported_adjusted", "derived", "analyst_adjusted", "estimated"
+]
+
+# Statuses that trace back to an actual filing or an audited statement.
+REPORTED_STATUSES = frozenset({"reported", "reported_adjusted"})
 
 
 class HistoricalLineItem(BaseModel):
