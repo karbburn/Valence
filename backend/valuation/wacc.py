@@ -18,6 +18,7 @@ from backend.data.providers.market_data import get_company_market_data
 from backend.forecast.debt import DebtSchedule
 from backend.forecast.share_count import ShareCountSchedule
 from backend.models.spec.assumptions import AssumptionObject
+from backend.models.spec.forecast import FORECAST_PERIODS
 from backend.models.spec.valuation import WACCBreakdown
 
 
@@ -26,12 +27,53 @@ def _get_assumption_val(
     driver_key: str,
     scenario: str = "base",
     default: Optional[float] = None,
+    *,
+    only_overrides: bool = False,
+    period: Optional[str] = None,
 ) -> Optional[float]:
+    """Resolve a driver value from the assumption layer.
+
+    only_overrides=True ignores model_generated values. Used for drivers whose
+    model_generated value is a build-time snapshot of live market data
+    (e.g. wacc.cost_of_equity): honouring that snapshot would silently pin the
+    discount rate to whatever the risk-free rate was when the model was cached,
+    while the Excel workbook recomputes CAPM from today's rf/beta/ERP — the two
+    would disagree with no visible cause.
+
+    period= pins the lookup to one period. Required for period-varying drivers:
+    without it a five-year tax-rate fade resolves to the FIRST year, so the
+    after-tax cost of debt in WACC is struck at FY27 while the DCF discounts at
+    the terminal rate.
+    """
+    if period is not None:
+        for a in assumptions:
+            if a.driver_key != driver_key or a.period != period:
+                continue
+            if only_overrides and a.type != "user_override":
+                continue
+            if a.scenario == scenario:
+                return a.value
+        for a in assumptions:
+            if a.driver_key != driver_key or a.period != period:
+                continue
+            if only_overrides and a.type != "user_override":
+                continue
+            if a.scenario == "base":
+                return a.value
+
     for a in assumptions:
-        if a.driver_key == driver_key and a.scenario == scenario:
+        if a.driver_key != driver_key:
+            continue
+        if only_overrides and a.type != "user_override":
+            continue
+        if a.scenario == scenario:
             return a.value
     for a in assumptions:
-        if a.driver_key == driver_key and a.scenario == "base":
+        if a.driver_key != driver_key:
+            continue
+        if only_overrides and a.type != "user_override":
+            continue
+        if a.scenario == "base":
             return a.value
     return default
 
@@ -48,6 +90,7 @@ def compute_wacc(
     debt_cr: float = 0.0,
     company_id: str = "infy_infy",
     market: Optional[str] = None,
+    latest_period: Optional[str] = None,
 ) -> WACCBreakdown:
     """Compute WACC breakdown generically and market-aware for a given scenario.
 
@@ -60,13 +103,21 @@ def compute_wacc(
     # 1. Cost of Equity (CAPM) with Blume's Adjusted Beta
     rfr = risk_free_rate if risk_free_rate is not None else mdata.risk_free_rate.value
     raw_b = beta if beta is not None else mdata.beta.value
-    # Raw betas are systematically biased high (Blume 1971); shrink toward 1.0 whenever
-    # the beta is provider-sourced. An explicit analyst override passes through untouched.
+    # Blume (1971): raw betas are biased high, so shrink toward the market beta
+    # of 1.0. This is the ONLY place the adjustment is applied — the market-data
+    # provider publishes the raw provider beta so the two shrinks cannot compose.
+    # An explicit analyst override passes through untouched.
     blume_applied = beta is None
     b = round(0.67 * raw_b + 0.33, 3) if blume_applied else raw_b
     erp = equity_risk_premium if equity_risk_premium is not None else mdata.equity_risk_premium.value
 
-    ke_override = _get_assumption_val(assumptions, "wacc.cost_of_equity", scenario, None)
+    # Only an ANALYST override may pin the cost of equity. The model_generated
+    # value is a CAPM snapshot taken when the model was cached, so honouring it
+    # would freeze the discount rate against a risk-free rate that has since
+    # moved — and would contradict the live CAPM chain the Excel workbook shows.
+    ke_override = _get_assumption_val(
+        assumptions, "wacc.cost_of_equity", scenario, None, only_overrides=True
+    )
     if ke_override is not None:
         cost_of_equity = ke_override
     else:
@@ -79,25 +130,42 @@ def compute_wacc(
     if pre_tax_cost_of_debt is None:
         pre_tax_cost_of_debt = 0.0
 
-    # Effective tax rate: use the model's assumption when present; otherwise fall back
-    # to the market-aware default. The explicit None check (not `or 25.17`) preserves a
-    # legitimate 0% tax rate instead of silently overriding it.
-    tax_rate = _get_assumption_val(assumptions, "tax_rate", scenario, 25.17)
+    # Effective tax rate for the after-tax cost of debt.
+    #
+    # Two corrections: the rate is taken from the TERMINAL forecast period (the
+    # discount rate applies to the whole horizon, not to year one), and the
+    # fallback follows the company's own market rather than India's statutory
+    # rate being applied to a US filer.
+    from backend.constants import statutory_tax_rate
+    from backend.models.spec.metadata import resolve_market
+
+    default_tax = statutory_tax_rate(resolve_market(company_id))
+    tax_rate = _get_assumption_val(
+        assumptions, "tax_rate", scenario, default_tax, period=FORECAST_PERIODS[-1]
+    )
     if tax_rate is None:
-        tax_rate = 25.17
+        tax_rate = default_tax
     cost_of_debt_after_tax = pre_tax_cost_of_debt * (1.0 - tax_rate / 100.0)
 
     # 3. Capital Weighting
     price = current_share_price if (current_share_price is not None and current_share_price > 0) else mdata.price.value
 
     shares_val: Optional[float] = None
-    if share_count_schedule:
-        latest_p = share_count_schedule.periods[0] if (share_count_schedule and share_count_schedule.periods) else "FY26"
-        shares_val = (
-            share_count_schedule.get_diluted(latest_p)
-            or share_count_schedule.get_diluted("FY26")
-            or share_count_schedule.get_diluted("FY27")
+    if share_count_schedule and share_count_schedule.periods:
+        # The schedule is ordered historicals-then-forecast, ascending, so
+        # periods[0] is the OLDEST year. Market capitalisation must use the
+        # LATEST count — the same one the equity bridge divides by — or the
+        # capital weights and the per-share result are computed off two
+        # different share counts in one valuation output.
+        ordered = sorted(
+            share_count_schedule.periods,
+            key=lambda p: (len(p), p),
         )
+        anchor = latest_period or ordered[-1]
+        for candidate in (anchor, *reversed(ordered)):
+            shares_val = share_count_schedule.get_diluted(candidate)
+            if shares_val:
+                break
     if not shares_val or shares_val <= 0:
         shares_val = mdata.shares_outstanding.value
 
@@ -117,9 +185,15 @@ def compute_wacc(
     source_notes = (
         f"CAPM: Rfr={rfr:.2f}% ({mdata.risk_free_rate.provenance_note}), "
         f"Beta={b:.2f} ({mdata.beta.provenance_note}"
-        + (", Blume-adjusted" if blume_applied else ", analyst override")
+        + (", Blume-adjusted" if blume_applied else ", analyst-set")
         + f"), ERP={erp:.2f}% ({mdata.equity_risk_premium.provenance_note}). "
-        f"Pre-tax Cost of Debt={pre_tax_cost_of_debt:.2f}% (after-tax {cost_of_debt_after_tax:.2f}%). "
+        f"Cost of Equity={cost_of_equity:.2f}%"
+        + (
+            " (analyst override, CAPM shown for reference)"
+            if ke_override is not None
+            else " = Rf + Beta x ERP"
+        )
+        + f". Pre-tax Cost of Debt={pre_tax_cost_of_debt:.2f}% (after-tax {cost_of_debt_after_tax:.2f}%). "
         f"Capital Weights: Equity={equity_weight*100:.1f}%, Debt={debt_weight*100:.1f}%."
     )
 

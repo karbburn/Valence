@@ -36,6 +36,7 @@ def compute_sensitivity_tables(
     base_exit_mult: float = 20.0,
     terminal_tax_rate: Optional[float] = None,
     timing_convention: str = "mid_year",
+    opening_working_capital: Optional[float] = None,
 ) -> List[SensitivityTable]:
     """Generate two-variable sensitivity grids for WACC x Terminal Growth & WACC x Exit Multiple."""
     from backend.valuation.dcf import (
@@ -62,10 +63,21 @@ def compute_sensitivity_tables(
         round(base_g + 1.0, 2),
     ]
 
+    # Final-year EBIT is required by compute_terminal_value's steady-state
+    # normalisation branch. Omitting it (as this grid used to) made the branch
+    # unreachable inside every grid, so whenever the final forecast year carried
+    # a negative FCFF the centre cell of the grid priced a DIFFERENT company
+    # from the headline DCF — measured at $32.59 per share, with the sign
+    # flipping. The grid must reproduce the headline calculation exactly at its
+    # centre, or it is not a sensitivity analysis of that DCF.
+    last_ebit = forecast.get_value("canonical.is.operating_profit", FORECAST_PERIODS[-1], scenario) or 0.0
+
     grid1: List[List[Optional[float]]] = []
     for w in wacc_steps:
         row: List[Optional[float]] = []
-        fcffs = compute_fcff_periods(forecast, w, scenario, timing_convention=timing_convention)  # type: ignore
+        fcffs = compute_fcff_periods(
+            forecast, w, scenario, timing_convention=timing_convention, opening_working_capital=opening_working_capital
+        )  # type: ignore
         last_fcff = fcffs[-1].fcff if fcffs and fcffs[-1].fcff else 0.0
         last_ebitda = forecast.get_value("canonical.is.ebitda", FORECAST_PERIODS[-1], scenario) or 0.0
 
@@ -80,6 +92,7 @@ def compute_sensitivity_tables(
                     g,
                     base_exit_mult,
                     "gordon_growth",
+                    last_ebit=last_ebit,
                     terminal_tax_rate=terminal_tax_rate,
                     timing_convention=timing_convention,  # type: ignore
                 )
@@ -117,7 +130,9 @@ def compute_sensitivity_tables(
     grid2: List[List[Optional[float]]] = []
     for w in wacc_steps:
         row: List[Optional[float]] = []
-        fcffs = compute_fcff_periods(forecast, w, scenario, timing_convention=timing_convention)  # type: ignore
+        fcffs = compute_fcff_periods(
+            forecast, w, scenario, timing_convention=timing_convention, opening_working_capital=opening_working_capital
+        )  # type: ignore
         last_fcff = fcffs[-1].fcff if fcffs and fcffs[-1].fcff else 0.0
         last_ebitda = forecast.get_value("canonical.is.ebitda", FORECAST_PERIODS[-1], scenario) or 0.0
 
@@ -129,6 +144,7 @@ def compute_sensitivity_tables(
                 base_g,
                 m,
                 "exit_multiple",
+                last_ebit=last_ebit,
                 terminal_tax_rate=terminal_tax_rate,
                 timing_convention=timing_convention,  # type: ignore
             )

@@ -43,12 +43,16 @@ def compute_reverse_dcf(
     exit_multiple: float = 20.0,
     timing_convention: str = "mid_year",
     currency: str = "INR",
+    scenario: str = "base",
+    last_ebit: Optional[float] = None,
+    terminal_tax_rate: Optional[float] = None,
+    opening_working_capital: Optional[float] = None,
 ) -> ReverseDCF:
     """Solve for implied terminal growth rate and revenue CAGR given market share price.
 
     Args:
         market_price: Current market share price.
-        fcff_periods: FCFF periods computed at base assumptions.
+        fcff_periods: FCFF periods computed at this scenario's assumptions.
         wacc_pct: WACC percentage.
         cash_cr: Cash balance in crores.
         debt_cr: Debt balance in crores.
@@ -58,12 +62,20 @@ def compute_reverse_dcf(
         minority_interest_cr: Minority interest balance.
         preferred_stock_cr: Preferred stock balance.
         forecast: Forecast object (needed for revenue CAGR solver).
-        assumptions: Base scenario assumptions (needed for revenue CAGR solver).
+        assumptions: Assumptions for this scenario (needed for the CAGR solver).
         historical_model: Historical model (needed for revenue CAGR solver).
         terminal_growth_rate: Base terminal growth rate.
         exit_multiple: Base exit multiple.
         timing_convention: "mid_year" or "end_year".
         currency: Native currency code for the method note (e.g. "INR", "USD").
+        scenario: Which scenario to solve. Must be threaded through to the CAGR
+            solver: hardcoding "base" made the bull and bear reverse DCFs solve
+            the BASE operating case and merely re-discount it, so they were not
+            scenario analyses at all.
+        last_ebit: Final-year EBIT, required by the terminal-FCFF normalisation
+            branch. Omitting it prices a different company than the headline DCF.
+        terminal_tax_rate: Terminal effective tax rate. Omitting it falls back to
+            the US statutory rate for every company, including Indian ones.
     """
     if market_price <= 0 or shares_cr <= 0:
         return ReverseDCF(market_price=market_price, method_note="Invalid price or share count")
@@ -114,6 +126,10 @@ def compute_reverse_dcf(
             terminal_growth_rate=terminal_growth_rate,
             exit_multiple=exit_multiple,
             timing_convention=timing_convention,
+            scenario=scenario,
+            terminal_tax_rate=terminal_tax_rate,
+            last_ebit=last_ebit,
+            opening_working_capital=opening_working_capital,
         )
 
     note = f"Solved exact implied perpetuity growth rate for market price {currency} {market_price:.2f}"
@@ -148,34 +164,47 @@ def _solve_implied_revenue_cagr(
     hi: float = 50.0,
     tol: float = 0.01,
     max_iter: int = 60,
+    scenario: str = "base",
+    terminal_tax_rate: Optional[float] = None,
+    last_ebit: Optional[float] = None,
+    opening_working_capital: Optional[float] = None,
 ) -> Optional[float]:
     """Bisection solver: find revenue CAGR that produces DCF implied price = market_price.
 
-    Varies revenue_growth assumption while holding all other assumptions fixed,
-    re-runs forecast + FCFF + DCF at each trial point.
+    Varies the revenue_growth driver for THIS scenario while holding all other
+    assumptions fixed, re-running forecast + FCFF + DCF at each trial point.
     """
     from backend.forecast.engine import run_forecast
     from backend.valuation.dcf import compute_dcf_bridge, compute_fcff_periods, compute_terminal_value
 
     def _price_at_growth(growth_pct: float) -> float:
-        # Create modified assumptions with trial revenue growth
+        # Create modified assumptions with trial revenue growth for this scenario
         trial_assumptions = []
         for a in assumptions:
-            if a.driver_key == "revenue_growth" and a.scenario == "base":
+            if a.driver_key == "revenue_growth" and a.scenario == scenario:
                 trial_assumptions.append(a.model_copy(update={"value": growth_pct}))
             else:
                 trial_assumptions.append(a)
 
         # Re-run forecast with trial growth
-        trial_forecast = run_forecast(trial_assumptions, historical_model, "base")
+        trial_forecast = run_forecast(trial_assumptions, historical_model, scenario)
 
-        # Compute FCFF at base WACC
-        fcffs = compute_fcff_periods(trial_forecast, wacc_pct, "base", timing_convention=timing_convention)  # type: ignore
+        # Compute FCFF at this scenario's WACC
+        fcffs = compute_fcff_periods(
+            trial_forecast,
+            wacc_pct,
+            scenario,
+            timing_convention=timing_convention,
+            opening_working_capital=opening_working_capital,
+        )  # type: ignore
         if not fcffs:
             return 0.0
 
         last_fcff = fcffs[-1].fcff or 0.0
-        last_ebitda = trial_forecast.get_value("canonical.is.ebitda", FORECAST_PERIODS[-1], "base") or 0.0
+        last_ebitda = trial_forecast.get_value("canonical.is.ebitda", FORECAST_PERIODS[-1], scenario) or 0.0
+        trial_last_ebit = trial_forecast.get_value(
+            "canonical.is.operating_profit", FORECAST_PERIODS[-1], scenario
+        ) or 0.0
 
         # Compute DCF
         tv = compute_terminal_value(
@@ -185,6 +214,8 @@ def _solve_implied_revenue_cagr(
             terminal_growth_rate,
             exit_multiple,
             "gordon_growth",
+            last_ebit=trial_last_ebit,
+            terminal_tax_rate=terminal_tax_rate,
             timing_convention=timing_convention,  # type: ignore
         )
         bridge, _ = compute_dcf_bridge(
