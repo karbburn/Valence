@@ -11,6 +11,8 @@ Constructs industry peer comps table, calculates forward and trailing valuation 
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
+from backend.valuation.peer_multiples import compute_peer_multiples
+
 
 class PeerComp(BaseModel):
     ticker: str
@@ -27,6 +29,10 @@ class PeerComp(BaseModel):
     pe_ratio: float
     fcf_yield_pct: float
     roic_pct: float
+    # When the underlying figures were reported, so a reader can judge whether
+    # a multiple is struck on current results or on last year's.
+    financials_period: str = ""
+    balance_sheet_as_of: str = ""
 
 
 class CompsBenchmark(BaseModel):
@@ -56,43 +62,62 @@ class TradingCompsAnalysis(BaseModel):
     benchmarks: Dict[str, CompsBenchmark]
     implied_valuations: List[ImpliedCompsValuation]
     quartile_implied_prices: Dict[str, Dict[str, float]] = {}
+    # Set when no benchmark is published, so the caller says so on the page
+    # rather than rendering an empty table the reader has to interpret.
+    unavailable_reason: Optional[str] = None
 
 
-# Pre-configured peer universe by sector / industry
-SECTOR_PEERS: Dict[str, List[Dict[str, float]]] = {
+# Peer ROSTER by sector / industry.
+#
+# A roster is legitimate configuration: it says which companies belong in a peer
+# group. The MULTIPLES that used to sit in this table alongside each name did
+# not. They were hand-entered constants with placeholder share prices, market
+# caps, revenues and EBITDA behind them, and they were presented to the reader
+# as market data, then used to derive the implied valuation range and a
+# football-field bar. Every multiple in a comps table is now computed live from
+# the peer's own reported figures and the most recent reported balance sheet.
+#
+# `exchange` selects the listing a peer is priced on, because a company's two
+# listings can carry different currencies and different share counts.
+SECTOR_PEERS: Dict[str, List[Dict[str, str]]] = {
     "technology": [
-        {"ticker": "MSFT", "name": "Microsoft Corp", "ev_rev": 12.5, "ev_ebitda": 23.0, "pe": 33.5, "fcf_yield": 2.8, "roic": 26.5},
-        {"ticker": "AAPL", "name": "Apple Inc", "ev_rev": 7.8, "ev_ebitda": 22.8, "pe": 30.2, "fcf_yield": 3.4, "roic": 48.2},
-        {"ticker": "GOOGL", "name": "Alphabet Inc", "ev_rev": 5.9, "ev_ebitda": 16.8, "pe": 21.4, "fcf_yield": 4.1, "roic": 28.4},
-        {"ticker": "META", "name": "Meta Platforms", "ev_rev": 8.2, "ev_ebitda": 17.5, "pe": 24.6, "fcf_yield": 3.9, "roic": 31.0},
-        {"ticker": "NVDA", "name": "NVIDIA Corp", "ev_rev": 22.0, "ev_ebitda": 34.0, "pe": 42.0, "fcf_yield": 2.1, "roic": 55.0},
+        {"ticker": "MSFT", "name": "Microsoft Corp", "exchange": "US"},
+        {"ticker": "AAPL", "name": "Apple Inc", "exchange": "US"},
+        {"ticker": "GOOGL", "name": "Alphabet Inc", "exchange": "US"},
+        {"ticker": "META", "name": "Meta Platforms", "exchange": "US"},
+        {"ticker": "NVDA", "name": "NVIDIA Corp", "exchange": "US"},
     ],
     "automotive": [
-        {"ticker": "MARUTI", "name": "Maruti Suzuki", "ev_rev": 1.8, "ev_ebitda": 14.5, "pe": 24.0, "fcf_yield": 3.8, "roic": 18.2},
-        {"ticker": "M&M", "name": "Mahindra & Mahindra", "ev_rev": 2.2, "ev_ebitda": 15.8, "pe": 26.5, "fcf_yield": 3.2, "roic": 19.5},
-        {"ticker": "HYUNDAI", "name": "Hyundai Motor", "ev_rev": 0.6, "ev_ebitda": 5.2, "pe": 6.8, "fcf_yield": 8.5, "roic": 12.0},
-        {"ticker": "TSLA", "name": "Tesla Inc", "ev_rev": 6.5, "ev_ebitda": 38.0, "pe": 65.0, "fcf_yield": 1.2, "roic": 14.5},
+        {"ticker": "MARUTI", "name": "Maruti Suzuki", "exchange": "NS"},
+        {"ticker": "M&M", "name": "Mahindra & Mahindra", "exchange": "NS"},
+        {"ticker": "HYUNDAI", "name": "Hyundai Motor", "exchange": "KR"},
+        {"ticker": "TSLA", "name": "Tesla Inc", "exchange": "US"},
     ],
     "energy_utilities": [
-        {"ticker": "NTPC", "name": "NTPC Limited", "ev_rev": 2.4, "ev_ebitda": 10.5, "pe": 15.2, "fcf_yield": 5.2, "roic": 11.5},
-        {"ticker": "POWERGRID", "name": "Power Grid Corp", "ev_rev": 4.5, "ev_ebitda": 11.2, "pe": 16.8, "fcf_yield": 6.1, "roic": 13.8},
-        {"ticker": "TATAPOWER", "name": "Tata Power", "ev_rev": 2.8, "ev_ebitda": 13.5, "pe": 32.0, "fcf_yield": 2.5, "roic": 9.8},
-        {"ticker": "NEXTERA", "name": "NextEra Energy", "ev_rev": 7.2, "ev_ebitda": 16.5, "pe": 22.5, "fcf_yield": 3.1, "roic": 8.5},
+        {"ticker": "NTPC", "name": "NTPC Limited", "exchange": "NS"},
+        {"ticker": "POWERGRID", "name": "Power Grid Corp", "exchange": "NS"},
+        {"ticker": "TATAPOWER", "name": "Tata Power", "exchange": "NS"},
+        {"ticker": "NEE", "name": "NextEra Energy", "exchange": "US"},
     ],
     "it_services": [
-        {"ticker": "TCS", "name": "Tata Consultancy Services", "ev_rev": 4.8, "ev_ebitda": 18.5, "pe": 27.5, "fcf_yield": 3.6, "roic": 42.0},
-        {"ticker": "INFY", "name": "Infosys Limited", "ev_rev": 3.6, "ev_ebitda": 15.2, "pe": 23.5, "fcf_yield": 4.2, "roic": 34.0},
-        {"ticker": "WIPRO", "name": "Wipro Limited", "ev_rev": 2.2, "ev_ebitda": 11.8, "pe": 19.0, "fcf_yield": 5.1, "roic": 19.5},
-        {"ticker": "ACN", "name": "Accenture plc", "ev_rev": 2.8, "ev_ebitda": 14.8, "pe": 26.0, "fcf_yield": 4.0, "roic": 29.5},
+        {"ticker": "TCS", "name": "Tata Consultancy Services", "exchange": "NS"},
+        {"ticker": "INFY", "name": "Infosys Limited", "exchange": "NS"},
+        {"ticker": "WIPRO", "name": "Wipro Limited", "exchange": "NS"},
+        {"ticker": "ACN", "name": "Accenture plc", "exchange": "US"},
     ],
     "capital_goods_epc": [
-        {"ticker": "SIEMENS", "name": "Siemens India", "ev_rev": 5.8, "ev_ebitda": 38.5, "pe": 55.0, "fcf_yield": 1.8, "roic": 22.0},
-        {"ticker": "ABB", "name": "ABB India", "ev_rev": 6.2, "ev_ebitda": 42.0, "pe": 62.0, "fcf_yield": 1.5, "roic": 24.5},
-        {"ticker": "BEL", "name": "Bharat Electronics", "ev_rev": 7.5, "ev_ebitda": 28.0, "pe": 40.0, "fcf_yield": 2.4, "roic": 28.0},
-        {"ticker": "KEC", "name": "KEC International", "ev_rev": 0.8, "ev_ebitda": 11.5, "pe": 22.0, "fcf_yield": 4.2, "roic": 14.0},
-        {"ticker": "CAT", "name": "Caterpillar Inc", "ev_rev": 2.4, "ev_ebitda": 13.8, "pe": 18.5, "fcf_yield": 4.8, "roic": 26.0},
+        {"ticker": "SIEMENS", "name": "Siemens India", "exchange": "NS"},
+        {"ticker": "ABB", "name": "ABB India", "exchange": "NS"},
+        {"ticker": "BEL", "name": "Bharat Electronics", "exchange": "NS"},
+        {"ticker": "KEC", "name": "KEC International", "exchange": "NS"},
+        {"ticker": "CAT", "name": "Caterpillar Inc", "exchange": "US"},
     ],
 }
+
+# Below this many sourced peers a benchmark is not published at all. A median of
+# two companies is not a peer benchmark, and printing one invites a reader to
+# treat it as a sector consensus.
+MIN_PEERS_FOR_BENCHMARK = 3
 
 
 def _calc_stats(values: List[float]) -> CompsBenchmark:
@@ -148,30 +173,59 @@ def compute_trading_comps(
     fcfs: List[float] = []
     roics: List[float] = []
 
-    for p in peers_data:
+    for entry in peers_data:
+        live = compute_peer_multiples(entry["ticker"], entry["name"], entry["exchange"])
+        if live is None:
+            # A peer that cannot be sourced on price, share count, results and
+            # balance sheet is left out. It is not filled with a placeholder,
+            # because a placeholder in a peer table is indistinguishable from a
+            # real observation once it is on the page.
+            continue
         peers.append(
             PeerComp(
-                ticker=p["ticker"],
-                company_name=p["name"],
-                market="US" if p["ticker"] in ["MSFT", "AAPL", "GOOGL", "META", "NVDA", "TSLA", "ACN"] else "India",
-                share_price=100.0,
-                market_cap=1000.0,
-                enterprise_value=1200.0,
-                revenue_ltm=500.0,
-                ebitda_ltm=150.0,
-                net_income_ltm=80.0,
-                ev_revenue=p["ev_rev"],
-                ev_ebitda=p["ev_ebitda"],
-                pe_ratio=p["pe"],
-                fcf_yield_pct=p["fcf_yield"],
-                roic_pct=p["roic"],
+                ticker=live.ticker,
+                company_name=live.company_name,
+                market=live.market,
+                share_price=live.share_price,
+                market_cap=live.market_cap,
+                enterprise_value=live.enterprise_value,
+                revenue_ltm=live.revenue_ttm,
+                ebitda_ltm=live.ebitda_ttm,
+                net_income_ltm=live.net_income_ttm,
+                ev_revenue=live.ev_revenue,
+                ev_ebitda=live.ev_ebitda,
+                pe_ratio=live.pe_ratio,
+                fcf_yield_pct=live.fcf_yield_pct,
+                roic_pct=live.roic_pct,
+                financials_period=live.financials_period,
+                balance_sheet_as_of=live.balance_sheet_as_of,
             )
         )
-        ev_revs.append(p["ev_rev"])
-        ev_ebitdas.append(p["ev_ebitda"])
-        pes.append(p["pe"])
-        fcfs.append(p["fcf_yield"])
-        roics.append(p["roic"])
+        if live.ev_revenue > 0:
+            ev_revs.append(live.ev_revenue)
+        if live.ev_ebitda > 0:
+            ev_ebitdas.append(live.ev_ebitda)
+        if live.pe_ratio > 0:
+            pes.append(live.pe_ratio)
+        if live.fcf_yield_pct:
+            fcfs.append(live.fcf_yield_pct)
+        if live.roic_pct:
+            roics.append(live.roic_pct)
+
+    # A benchmark built from too few sourced peers is not a peer benchmark, so
+    # none is published and the caller is told the section is unavailable
+    # rather than being handed a median of two companies.
+    if len(ev_revs) < MIN_PEERS_FOR_BENCHMARK:
+        return TradingCompsAnalysis(
+            peers=peers,
+            benchmarks={},
+            implied_valuations=[],
+            quartile_implied_prices={},
+            unavailable_reason=(
+                f"only {len(ev_revs)} of {len(peers_data)} peers could be sourced from "
+                "reported figures, so no benchmark is published"
+            ),
+        )
 
     benchmarks = {
         "ev_revenue": _calc_stats(ev_revs),
