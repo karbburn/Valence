@@ -1,9 +1,11 @@
 name: Refresh market-data fallbacks
 
-# Weekly refresh of the hardcoded REGISTRY_FALLBACKS in
-# backend/data/providers/market_data.py from live yfinance quotes.
-# Opens a review PR — never pushes to main directly. Beta / RFR / ERP are
-# intentionally excluded (analyst-calibrated) and reported for manual review.
+# Weekly refresh of the structural REGISTRY_FALLBACKS (shares outstanding) in
+# backend/data/providers/market_data.py from live yfinance data.
+# Opens a review PR — never pushes to main directly.
+# Prices are NOT in the registry: they are fetched live every day (see
+# refresh-market-prices.yml). Beta / RFR / ERP are intentionally excluded
+# (analyst-calibrated) and reported for manual review.
 
 on:
   schedule:
@@ -38,22 +40,25 @@ jobs:
         run: python scripts/refresh_market_fallbacks.py --apply
 
       - name: Smoke-test backend
-        run: python -m pytest backend/tests -q
+        run: |
+          python -m pip install fastapi openpyxl pandas numpy httpx
+          python -m pytest backend/tests -q
 
       - name: Open update PR
         uses: peter-evans/create-pull-request@v7
         with:
           branch: chore/refresh-market-fallbacks
           delete-branch: true
-          title: "chore(data): refresh market-data fallback quotes"
+          title: "chore(data): refresh market-data fallback share counts"
           body: |
-            Automated weekly refresh of `REGISTRY_FALLBACKS` prices/shares
-            from live yfinance quotes.
+            Automated weekly refresh of `REGISTRY_FALLBACKS` `shares` from live
+            yfinance data.
 
-            - Only `price`/`shares` are touched; beta/RFR/ERP need analyst review.
-            - Out-of-bounds quotes are rejected by the script (see Action logs).
+            - Only `shares` is touched; price is a daily quote fetched live
+              (refresh-market-prices.yml) and beta/RFR/ERP need analyst review.
+            - Out-of-bounds figures are rejected by the script (see Action logs).
             - Backend test suite passed in this run.
 
-            Please verify the diff against exchange closes before merging.
-          commit-message: "chore(data): refresh market-data fallback quotes"
+            Please verify the diff against exchange filings before merging.
+          commit-message: "chore(data): refresh market-data fallback share counts"
           labels: data, automated

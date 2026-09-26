@@ -1,0 +1,79 @@
+name: Refresh market prices
+
+# Daily refresh of backend/data/cache/market_data_cache.json — the latest
+# daily close for every onboarded company, fetched from free sources
+# (yfinance daily close -> Stooq free CSV -> TwelveData when keyed).
+# Runs shortly after the US close (22:30 UTC = 18:30 ET / 04:00 IST) and opens
+# a review PR. The API also self-heals per-request (it re-fetches whenever the
+# cached fetch_date != today), so this job only warms the cache ahead of users.
+#
+# No price is hardcoded anywhere in the repo: the registry holds shares/beta
+# only, so this file is the single source of truth for quotes.
+
+on:
+  schedule:
+    - cron: "30 22 * * *" # daily 22:30 UTC (after US close)
+  workflow_dispatch:
+    inputs:
+      company:
+        description: "Single company_id to refresh (blank = all onboarded)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh-prices:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pydantic yfinance requests
+
+      - name: Refresh daily closes
+        run: |
+          if [ -n "${{ github.event.inputs.company }}" ]; then
+            python scripts/refresh_market_data.py --company "${{ github.event.inputs.company }}"
+          else
+            python scripts/refresh_market_data.py
+          fi
+
+      - name: Show refreshed quotes
+        run: |
+          python - <<'PY'
+          import json
+          d = json.load(open("backend/data/cache/market_data_cache.json", encoding="utf-8"))
+          rows = [
+              f"| {c} | {v['data']['price']['value']} | {v['data']['price']['source']} | {v['fetch_date']} |"
+              for c, v in sorted(d.items())
+          ]
+          print("| company | close | source | as of |\n|---|---|---|---|")
+          print("\n".join(rows))
+          PY
+
+      - name: Open update PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: chore/refresh-market-prices
+          delete-branch: true
+          title: "chore(data): refresh daily market closes"
+          body: |
+            Automated daily refresh of `market_data_cache.json` from free
+            quote sources (yfinance daily close / Stooq / TwelveData).
+
+            - No hardcoded prices — quotes only, refreshed once per day.
+            - Failed tickers keep their last-known-good quote (labelled stale
+              in the UI) instead of falling back to a placeholder.
+          commit-message: "chore(data): refresh daily market closes"
+          labels: data, automated

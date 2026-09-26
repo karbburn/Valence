@@ -1,15 +1,17 @@
-"""Refresh hardcoded market-data fallbacks from live quotes.
+"""Refresh structural market-data fallbacks (shares outstanding only) from live data.
 
 Reads REGISTRY_FALLBACKS in backend/data/providers/market_data.py, fetches
-live price + shares outstanding per company via yfinance, and rewrites the
-registry values in place when the live quote passes sanity bounds.
+live shares outstanding per company via yfinance, and rewrites the registry
+`shares` values in place when the live figure passes sanity bounds.
 
 Deliberately conservative by design:
-  - Only `price` and `shares` are touched. Beta / RFR / ERP require analyst
-    calibration (domestic-index beta, Damodaran ERP) and are NEVER auto-edited.
-    Live reference values for those are printed for manual review instead.
-  - A live quote outside [0.3x, 3x] of the current fallback (price) or
-    [0.5x, 2x] (shares) is rejected as a probable bad tick / split event.
+  - Only `shares` is touched. Price is NEVER stored in the registry — it is a
+    daily quote fetched live every day (see scripts/refresh_market_data.py).
+    Beta / RFR / ERP require analyst calibration (domestic-index beta,
+    Damodaran ERP) and are NEVER auto-edited. Live reference values for those
+    are printed for manual review instead.
+  - A live shares figure outside [0.5x, 2x] of the current fallback is
+    rejected as a probable bad tick / split event.
   - Dry-run by default; pass --apply to write the file.
   - Exit code is 0 unless --strict is given, so scheduled CI never goes red
     just because a quote feed hiccuped. Use the printed report instead.
@@ -32,19 +34,22 @@ sys.path.insert(0, str(REPO_ROOT))
 
 TARGET_FILE = REPO_ROOT / "backend" / "data" / "providers" / "market_data.py"
 
-PRICE_BOUNDS = (0.3, 3.0)
 SHARES_BOUNDS = (0.5, 2.0)
 
 ENTRY_RE = re.compile(
-    r'(?P<indent>\s*)"(?P<cid>[a-z0-9_]+)":\s*\{\s*"price":\s*(?P<price>[0-9.]+),\s*'
-    r'"shares":\s*(?P<shares>[0-9.]+),\s*"beta":\s*(?P<beta>[0-9.]+),\s*'
+    r'(?P<indent>\s*)"(?P<cid>[a-z0-9_]+)":\s*\{\s*"shares":\s*(?P<shares>[0-9.]+),\s*'
+    r'"beta":\s*(?P<beta>[0-9.]+),\s*'
     r'"market":\s*"(?P<market>[a-z]+)"\s*\},?'
 )
 STAMP_RE = re.compile(r"# Last refreshed: \d{4}-\d{2}-\d{2}.*")
 
 
 def fetch_live(company_id: str, market: str, ticker: str) -> dict:
-    """Return live price/shares/beta/rfr reference values (missing keys on failure)."""
+    """Return live shares/beta/rfr reference values (missing keys on failure).
+
+    NOTE: price is intentionally NOT fetched here — the registry stores no
+    price (daily closes come from scripts/refresh_market_data.py instead).
+    """
     try:
         import yfinance as yf
     except ImportError:
@@ -55,9 +60,6 @@ def fetch_live(company_id: str, market: str, ticker: str) -> dict:
     try:
         symbol = _yf_ticker_for(company_id, market, ticker)  # type: ignore[arg-type]
         info = yf.Ticker(symbol).info or {}
-        price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
-        if price and float(price) > 0:
-            out["price"] = round(float(price), 2)
         shares_raw = info.get("sharesOutstanding")
         if shares_raw and float(shares_raw) > 0:
             divisor = 1e7 if market == "india" else 1e6
@@ -98,24 +100,13 @@ def main() -> int:
         cid = m.group("cid")
         if cid not in REGISTRY_FALLBACKS:
             return m.group(0)
-        old_price = float(m.group("price"))
         old_shares = float(m.group("shares"))
         market = m.group("market")
         ticker = cid.split("_")[0].upper()
         live = fetch_live(cid, market, ticker)
 
-        new_price, new_shares = old_price, old_shares
+        new_shares = old_shares
         actions: list[str] = []
-        if "price" in live:
-            if within_bounds(live["price"], old_price, PRICE_BOUNDS):
-                new_price = live["price"]
-                actions.append("price updated")
-            else:
-                failures.append(f"{cid}: price {live['price']} outside bounds of {old_price}")
-                actions.append("price REJECTED (bounds)")
-        else:
-            failures.append(f"{cid}: no live price ({live.get('error', 'n/a')})")
-            actions.append("price unavailable")
         if "shares" in live:
             if within_bounds(live["shares"], old_shares, SHARES_BOUNDS):
                 new_shares = live["shares"]
@@ -130,13 +121,13 @@ def main() -> int:
         ref = ", ".join(f"{k}={v}" for k, v in live.items()
                         if k.endswith("_ref")) or "—"
         action = "; ".join(actions)
-        if new_price != old_price or new_shares != old_shares:
+        if new_shares != old_shares:
             updates.append(cid)
-        report_lines.append(f"| {cid} | price/shares | {old_price}/{old_shares} "
-                            f"| {live.get('price', '—')}/{live.get('shares', '—')} "
+        report_lines.append(f"| {cid} | shares | {old_shares} "
+                            f"| {live.get('shares', '—')} "
                             f"| {action} | refs: {ref} |")
-        return (f'{m.group("indent")}"{cid}": {{"price": {new_price}, '
-                f'"shares": {new_shares}, "beta": {m.group("beta")}, '
+        return (f'{m.group("indent")}"{cid}": {{"shares": {new_shares}, '
+                f'"beta": {m.group("beta")}, '
                 f'"market": "{market}"}},')
 
     new_text, n = ENTRY_RE.subn(replace_entry, text)
