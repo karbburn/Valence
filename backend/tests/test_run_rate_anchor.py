@@ -33,7 +33,7 @@ from backend.tests.test_growth_fade import _model
 def _run_rate(value, basis="trailing twelve months to 2026-06-30"):
     """Pin the run rate the forecast anchor will see."""
     original = assumptions_module._run_rate_floor
-    assumptions_module._run_rate_floor = lambda company_id, reported: (value, basis)
+    assumptions_module._run_rate_floor = lambda company_id: (value, basis)
     try:
         yield
     finally:
