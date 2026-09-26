@@ -74,8 +74,19 @@ BRIDGE_TERMS: dict[str, tuple[str, ...]] = {
         "Current Debt",
         "Short Term Debt",
     ),
-    "finance_lease_liabilities": ("Finance Lease", "Capital Lease Obligation"),
-    "operating_lease_liabilities": ("Operating Lease Liability",),
+    # Lease liabilities, reported for the reader's benefit.
+    #
+    # This is a SUBSET of the feed's own total-debt figure, not an addition to
+    # it, and is never added on top. It is carried so a reader who prefers a
+    # capitalised-lease convention can see the balance; whether it belongs in
+    # net debt is a convention choice, and the basis note on the bridge states
+    # which convention the platform is using.
+    "lease_liabilities": (
+        "Capital Lease Obligation",
+        "Capital Lease Obligations",
+        "Finance Lease",
+        "Operating Lease Liability",
+    ),
     "minority_interest": ("Minority Interest",),
     "preferred_stock": ("Preferred Stock", "Preferred Stock Equity"),
 }
@@ -160,19 +171,20 @@ def _build(frame, column, source: str) -> Optional[BridgeSnapshot]:
     else:
         liquid = values.get("cash_and_bank", 0.0) + values.get("marketable_securities", 0.0)
 
-    # Total debt on the same basis: borrowings plus lease obligations of both
-    # kinds. The operating-lease component is separated out below so a reader
-    # who discounts cash flows built after rent can deduct only the interest
-    # bearing part.
+    # Total debt.
+    #
+    # The feed's published "Total Debt" is used as-is. It already contains the
+    # non-current lease component: adding the separately-listed lease line on
+    # top double counts, and doing so moved eleven of twelve companies away from
+    # the market reference rather than towards it.
+    #
+    # The lease balance is still read and reported, because it is the amount a
+    # reader needs in order to apply a capitalised-lease convention instead. It
+    # is a SUBSET of total debt, not an addition to it.
     if combined_debt is not None:
         debt = combined_debt
     else:
-        debt = (
-            values.get("debt_non_current", 0.0)
-            + values.get("debt_current", 0.0)
-            + values.get("finance_lease_liabilities", 0.0)
-            + values.get("operating_lease_liabilities", 0.0)
-        )
+        debt = values.get("debt_non_current", 0.0) + values.get("debt_current", 0.0)
 
     as_of = column
     try:
@@ -190,17 +202,24 @@ def _build(frame, column, source: str) -> Optional[BridgeSnapshot]:
     )
 
 
-def fetch_bridge_snapshot(company_id: str) -> BridgeSnapshot:
-    """Most recent reported bridge terms for a company, in the model's own units.
+def fetch_bridge_snapshot(company_id: str, in_model_units: bool = True) -> BridgeSnapshot:
+    """Most recent reported bridge terms for a company.
 
     Prefers the latest quarter over the latest year, because a market data
     provider's headline net cash, enterprise value and multiples are all struck
     on the most recent balance sheet. Falls back through the available periods
     so a company that has not filed a quarter is still served from its year.
 
-    The snapshot is scaled into the reporting units the model uses — USD
-    millions, INR crores — because the feed reports absolute currency and an
-    unscaled figure would enter the bridge a factor of a million too large.
+    By default the snapshot is scaled into the reporting units the model uses —
+    USD millions, INR crores — because the feed reports absolute currency and
+    an unscaled figure would enter the bridge a factor of a million too large.
+
+    `in_model_units=False` returns the feed's own absolute currency instead,
+    which is what a caller needs when it is combining the bridge with other
+    absolute figures. A market capitalisation is price times shares and is
+    therefore in rupees or dollars; adding a crores-denominated net debt to it
+    understates the debt by a factor of ten million, and the resulting multiple
+    is wrong by orders of magnitude rather than slightly.
     """
     symbol = _ticker_symbol(company_id)
     if not symbol:
@@ -222,7 +241,8 @@ def fetch_bridge_snapshot(company_id: str) -> BridgeSnapshot:
         for column in frame.columns:
             snapshot = _build(frame, column, source)
             if snapshot is not None:
-                _scale_snapshot(snapshot, company_id)
+                if in_model_units:
+                    _scale_snapshot(snapshot, company_id)
                 return snapshot
 
     return BridgeSnapshot()
@@ -357,8 +377,6 @@ def resolve_bridge_inputs(
     debt_terms = (
         "debt_non_current",
         "debt_current",
-        "finance_lease_liabilities",
-        "operating_lease_liabilities",
     )
     missing = [t for t in debt_terms if t not in snapshot.terms]
     if missing:

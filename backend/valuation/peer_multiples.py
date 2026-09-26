@@ -19,6 +19,12 @@ import warnings
 from dataclasses import dataclass
 from typing import Optional
 
+from backend.data.providers.run_rate import (
+    sum_four_quarters,
+    trailing_twelve_months,
+)
+from backend.data.providers.share_count import resolve_share_count
+
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     import yfinance as yf
@@ -73,8 +79,20 @@ PLAUSIBLE_EBITDA_MARGIN = (-0.50, 0.95)
 # twentieth of its own market value, or above a hundred times it, is almost
 # always a statement feed in the wrong unit.
 PLAUSIBLE_REVENUE_TO_MARKET_CAP = (0.02, 100.0)
-# Invested capital below this share of market capitalisation makes a return on
-# invested capital uninformative.
+# Invested capital below this share of ANNUAL REVENUE makes a return on invested
+# capital uninformative: a denominator far below the business it is measuring
+# produces a percentage that is arithmetically valid and economically
+# meaningless, and belongs on no peer table.
+#
+# This is measured against revenue, not against market capitalisation. A
+# company that has repurchased its shares for decades carries a book equity far
+# below its market value while operating an entirely ordinary capital base —
+# one large-cap returns over 100% on book invested capital and buys back
+# billions a year, which is a real and well-known characteristic rather than a
+# data error. Measuring against market value silently deleted that company's
+# return and published 0.0% in its place, which reads as "earns nothing" rather
+# than "not measurable". A business whose invested capital is genuinely
+# negligible next to its own sales still fails this bound.
 PLAUSIBLE_INVESTED_CAPITAL_FLOOR = 0.02
 
 
@@ -101,6 +119,7 @@ class PeerMultiples:
     financials_period: str
     balance_sheet_as_of: str
     price_as_of: str
+    shares_basis: str = ""
 
     def as_dict(self) -> dict:
         return self.__dict__.copy()
@@ -131,29 +150,37 @@ def _row(frame, rows: tuple[str, ...], column, default: Optional[float] = None) 
     return default
 
 
-def _ttl(frame, rows: tuple[str, ...], quarterly) -> Optional[float]:
-    """Trailing twelve months: latest annual, plus year-to-date less prior-year-to-date.
+def _column_dates(frame) -> list:
+    """Column keys of a statement, oldest to newest."""
+    return list(frame.columns)
 
-    Taking the latest ANNUAL column alone is the other way a comps table goes
-    stale — it reports a multiple on financials up to a year old. Rolling the
-    latest reported quarters forward keeps the denominator in step with the live
-    numerator.
+
+def _sum_last_four_quarters(frame, rows: tuple[str, ...]) -> Optional[float]:
+    """Trailing twelve months from four consecutive quarters.
+
+    Delegates to the shared implementation. The forecast anchor reads the same
+    construction, and the two had separate copies: a fix applied here left the
+    other computing a different denominator for the same company, which is the
+    kind of drift that makes two published numbers about one business
+    irreconcilable.
     """
-    annual_value = _row(frame, rows, frame.columns[0]) if frame is not None and len(frame.columns) else None
-    if annual_value is None:
-        return None
-    if quarterly is None or len(quarterly.columns) < 5:
-        return annual_value
-    try:
-        ytd = _row(quarterly, rows, quarterly.columns[0])
-        prior_ytd = _row(quarterly, rows, quarterly.columns[4])
-    except Exception:
-        return annual_value
-    if ytd is None or prior_ytd is None:
-        return annual_value
-    rolled = annual_value + ytd - prior_ytd
-    # A negative annual figure cannot be rolled forward meaningfully.
-    return rolled if annual_value > 0 else annual_value
+    return sum_four_quarters(frame, rows)
+
+
+def _ttl(frame, rows: tuple[str, ...], quarterly) -> Optional[float]:
+    """Trailing twelve months for a peer's statement line.
+
+    Four consecutive quarters are summed where the feed carries them; failing
+    that the latest annual figure is rolled forward by every quarter reported
+    since its year end. Both constructions are the shared ones, so a peer and the
+    forecast for the target it is compared against are denominated identically.
+
+    Falling back to the un-rolled annual is a real possibility and is why this
+    returns the annual at all: a multiple on a two-year-old denominator is better
+    than no multiple, provided the reader can see how old it is. The
+    inancials_period field carries that date.
+    """
+    return trailing_twelve_months(frame, rows, quarterly)
 
 
 def _safe_ratio(numerator: float, denominator: Optional[float]) -> Optional[float]:
@@ -163,6 +190,71 @@ def _safe_ratio(numerator: float, denominator: Optional[float]) -> Optional[floa
     if value != value:
         return None
     return value
+
+
+# Rows that state the ordinary share count, in order of preference. The filed
+# balance sheet and the provider's summary field are both read, and the choice
+# between them is made by `resolve_share_count`, which knows that a round ratio
+# means a depositary receipt and a ragged one means share classes.
+_SHARE_ROWS = (
+    "Ordinary Shares Number",
+    "Share Issued",
+    "Common Stock Shares Outstanding",
+)
+
+
+def _resolve_peer_shares(
+    handle, info: dict, symbol: str
+) -> tuple[Optional[float], str]:
+    """Ordinary shares outstanding for a peer, in the feed's own units.
+
+    Prefers the most recently filed balance sheet over the provider's summary
+    field, and says which was used. The quarterly statement is preferred because
+    it is the most recent filing; the annual is the fallback.
+
+    Returns (shares, basis). `shares` is None when neither source has a usable
+    figure, in which case the peer is dropped rather than priced on a guess.
+    """
+    filed: Optional[float] = None
+    filed_basis = ""
+
+    for attr in ("quarterly_balance_sheet", "balance_sheet"):
+        try:
+            frame = getattr(handle, attr, None)
+        except Exception:
+            continue
+        if frame is None or len(getattr(frame, "columns", [])) == 0:
+            continue
+        column = frame.columns[0]
+        for label in _SHARE_ROWS:
+            if label not in frame.index:
+                continue
+            try:
+                value = float(frame.loc[label, column])
+            except Exception:
+                continue
+            if value != value or value <= 0:
+                continue
+            filed = value
+            filed_basis = f"{label} at {str(column)[:10]}"
+            break
+        if filed is not None:
+            break
+
+    provider: Optional[float] = None
+    try:
+        raw = info.get("sharesOutstanding")
+        if raw and float(raw) > 0:
+            provider = float(raw)
+    except (TypeError, ValueError):
+        provider = None
+
+    return resolve_share_count(
+        filed,
+        provider,
+        filed_basis=filed_basis,
+        provider_basis="provider shares outstanding",
+    )
 
 
 def compute_peer_multiples(
@@ -222,7 +314,16 @@ def compute_peer_multiples(
     if cfo is not None and capex is not None:
         free_cash_flow = cfo - abs(capex)
 
-    balance = getattr(handle, "balance_sheet", None)
+    # Equity and assets come from the QUARTERLY balance sheet when it is
+    # available, matching the net debt taken from the same most-recent-reported
+    # snapshot. Reading them off the annual statement instead mixed a
+    # nine-month-old capital base with a current one, and since return on
+    # invested capital divides by that base it understated the return by
+    # whatever the company earned in the intervening quarters.
+    quarterly_balance = getattr(handle, "quarterly_balance_sheet", None)
+    balance = quarterly_balance
+    if balance is None or len(getattr(balance, "columns", [])) == 0:
+        balance = getattr(handle, "balance_sheet", None)
     equity = _row(balance, _EQUITY_ROWS, balance.columns[0]) if balance is not None and len(balance.columns) else None
     assets = _row(balance, _ASSET_ROWS, balance.columns[0]) if balance is not None and len(balance.columns) else None
     tax = _ttl(annual, _TAX_ROWS, quarterly)
@@ -230,22 +331,44 @@ def compute_peer_multiples(
     # Net debt and share count come from the same most-recent-reported
     # machinery the valuation bridge uses, so a peer is measured on the basis
     # the target is measured on.
+    #
+    # On the SAME basis means the whole bridge, not just its debt and cash legs.
+    # This used to take debt less liquid assets and stop there, leaving out the
+    # minority interests and preferred stock that enterprise value also carries.
+    # At one Indian conglomerate those holdings are worth more than its entire
+    # gross debt, so the omission moved its enterprise value by roughly a fifth
+    # and its EV/EBITDA by the same proportion — a peer that is not comparable
+    # to the target it is being compared against.
     net_debt = 0.0
     balance_as_of = ""
     try:
         from backend.data.bridge_inputs import fetch_bridge_snapshot
 
-        snapshot = fetch_bridge_snapshot(_company_id_for(symbol))
+        # Absolute currency, because the market capitalisation below is price
+        # times shares and is therefore in rupees or dollars. The snapshot's
+        # default crores/millions scaling is for the model, and adding it to an
+        # absolute market capitalisation understates net debt ten-millionfold.
+        snapshot = fetch_bridge_snapshot(_company_id_for(symbol), in_model_units=False)
         if snapshot is not None and snapshot.as_of:
-            net_debt = snapshot.total_debt - snapshot.total_liquid_assets
+            claims = (snapshot.terms.get("minority_interest") or 0.0) + (
+                snapshot.terms.get("preferred_stock") or 0.0
+            )
+            net_debt = snapshot.total_debt + claims - snapshot.total_liquid_assets
             balance_as_of = snapshot.as_of
     except Exception as exc:
         logger.info("Peer %s: balance sheet snapshot unavailable (%s)", symbol, exc)
 
-    shares = info.get("sharesOutstanding")
-    if not shares or not isinstance(shares, (int, float)) or shares <= 0:
-        shares = _row(balance, ("Ordinary Shares Number",), balance.columns[0]) if balance is not None and len(balance.columns) else None
-    if not shares or not isinstance(shares, (int, float)) or shares <= 0:
+    # Share count: the FILED total, not the provider's summary field.
+    #
+    # A multi-class issuer's summary field reports one class. For one large-cap
+    # it returned 5.87bn against a filed 12.23bn, which halved the market
+    # capitalisation, doubled every per-share figure, and made the peer's
+    # EV/Revenue read 5.0x against a market 9.2x — a real company made to look
+    # cheap because of a share-class convention. The same rejection rule the
+    # valuation bridge already applies is applied here, so a peer and the target
+    # are measured on the same basis.
+    shares, shares_basis = _resolve_peer_shares(handle, info, symbol)
+    if not shares or shares <= 0:
         logger.info("Peer %s: no share count", symbol)
         return None
 
@@ -288,18 +411,19 @@ def compute_peer_multiples(
             return None
 
     roic = None
-    # Return on invested capital needs a meaningful capital base. A company
-    # carrying near-zero book equity produces a number that is arithmetically
-    # valid and economically meaningless, so it is reported as unavailable
-    # rather than as a 160% return.
+    # Return on invested capital needs a capital base that is real relative to
+    # the business it measures, so the floor is set against annual revenue. A
+    # company that has repurchased its shares for years carries a small book
+    # equity next to a large market value, which is an ordinary situation and not
+    # a reason to withhold the figure.
     invested = None
-    if equity is not None and market_cap > 0:
+    if equity is not None and revenue > 0:
         invested = equity + max(net_debt, 0.0)
     if (
         ebit
         and tax is not None
         and invested
-        and invested > market_cap * PLAUSIBLE_INVESTED_CAPITAL_FLOOR
+        and invested > revenue * PLAUSIBLE_INVESTED_CAPITAL_FLOOR
     ):
         effective_tax = min(max(tax / ebit, 0.0), 0.6) if ebit else 0.0
         nopat = ebit * (1.0 - effective_tax)
@@ -331,6 +455,7 @@ def compute_peer_multiples(
         financials_period=str(annual.columns[0])[:10],
         balance_sheet_as_of=balance_as_of,
         price_as_of=str(info.get("regularMarketTime") or ""),
+        shares_basis=shares_basis,
     )
 
 
