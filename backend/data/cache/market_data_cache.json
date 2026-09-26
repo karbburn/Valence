@@ -1,6 +1,6 @@
 {
   "aapl_us": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "aapl_us",
       "ticker": "AAPL",
@@ -12,34 +12,34 @@
         "provenance_note": "yfinance daily close for AAPL (2026-09-25)"
       },
       "shares_outstanding": {
-        "value": 14594.18,
+        "value": 14687.356,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (14594.18 M)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-06-30); provider summary agreed at 14,594.18 = 14,687.36 M"
       },
       "beta": {
         "value": 1.05,
         "source": "registry",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "Per-company registry benchmark beta vs primary index (1.05)"
       },
       "risk_free_rate": {
         "value": 5.184,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance live 10-Year US Treasury yield ^TNX (5.18%)"
       },
       "equity_risk_premium": {
         "value": 4.5,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:58:32.738131"
+      "timestamp": "2026-09-27T00:55:39.820523"
     }
   },
   "amba_us": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "amba_us",
       "ticker": "AMBA",
@@ -53,32 +53,32 @@
       "shares_outstanding": {
         "value": 44.141,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (44.14 M)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-07-31); provider summary agreed at 44.14 = 44.14 M"
       },
       "beta": {
         "value": 2.087,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance 2Y weekly beta (2.09, raw provider beta 2.09)"
       },
       "risk_free_rate": {
         "value": 5.184,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance live 10-Year US Treasury yield ^TNX (5.18%)"
       },
       "equity_risk_premium": {
         "value": 4.5,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:58:12.994271"
+      "timestamp": "2026-09-27T00:57:26.301584"
     }
   },
   "amzn_us": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "amzn_us",
       "ticker": "AMZN",
@@ -90,34 +90,34 @@
         "provenance_note": "yfinance daily close for AMZN (2026-09-25)"
       },
       "shares_outstanding": {
-        "value": 10786.3136,
+        "value": 10754.2518,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (10786.31 M)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-03-31); provider summary agreed at 10,786.31 = 10,754.25 M"
       },
       "beta": {
         "value": 1.15,
         "source": "registry",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "Per-company registry benchmark beta vs primary index (1.15)"
       },
       "risk_free_rate": {
         "value": 5.184,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance live 10-Year US Treasury yield ^TNX (5.18%)"
       },
       "equity_risk_premium": {
         "value": 4.5,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:58:17.378928"
+      "timestamp": "2026-09-27T00:55:55.326664"
     }
   },
   "awi_us": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "awi_us",
       "ticker": "AWI",
@@ -129,34 +129,34 @@
         "provenance_note": "yfinance daily close for AWI (2026-09-25)"
       },
       "shares_outstanding": {
-        "value": 42.2628,
+        "value": 42.3279,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (42.26 M)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-06-30); provider summary agreed at 42.26 = 42.33 M"
       },
       "beta": {
         "value": 1.164,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance 2Y weekly beta (1.16, raw provider beta 1.16)"
       },
       "risk_free_rate": {
         "value": 5.184,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance live 10-Year US Treasury yield ^TNX (5.18%)"
       },
       "equity_risk_premium": {
         "value": 4.5,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:58:27.620445"
+      "timestamp": "2026-09-27T00:57:32.078857"
     }
   },
   "bhartiartl_bhartiartl": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "bhartiartl_bhartiartl",
       "ticker": "BHARTIARTL",
@@ -168,34 +168,34 @@
         "provenance_note": "yfinance daily close for BHARTIARTL.NS (2026-09-25)"
       },
       "shares_outstanding": {
-        "value": 623.8008,
+        "value": 623.8808,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (623.80 Cr)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-06-30); provider summary agreed at 623.80 = 623.88 Cr"
       },
       "beta": {
         "value": 1.0,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for beta (beta vs index)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T17:49:52.551046"
+      "timestamp": "2026-09-27T00:57:36.075709"
     }
   },
   "dox_us": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "dox_us",
       "ticker": "DOX",
@@ -209,32 +209,32 @@
       "shares_outstanding": {
         "value": 104.415,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (104.42 M)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-06-30); provider summary agreed at 104.42 = 104.42 M"
       },
       "beta": {
         "value": 0.434,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance 2Y weekly beta (0.43, raw provider beta 0.43)"
       },
       "risk_free_rate": {
         "value": 5.184,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance live 10-Year US Treasury yield ^TNX (5.18%)"
       },
       "equity_risk_premium": {
         "value": 4.5,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:57:29.784975"
+      "timestamp": "2026-09-27T00:56:51.636707"
     }
   },
   "googl_us": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "googl_us",
       "ticker": "GOOGL",
@@ -246,34 +246,34 @@
         "provenance_note": "yfinance daily close for GOOGL (2026-09-25)"
       },
       "shares_outstanding": {
-        "value": 5867.1558,
+        "value": 12229.9348,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (5867.16 M)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-06-30) = 12,229.93; provider summary said 5,867.16 and was rejected as a single-class figure (ratio 2.084) = 12,229.93 M"
       },
       "beta": {
         "value": 1.04,
         "source": "registry",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "Per-company registry benchmark beta vs primary index (1.04)"
       },
       "risk_free_rate": {
         "value": 5.184,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance live 10-Year US Treasury yield ^TNX (5.18%)"
       },
       "equity_risk_premium": {
         "value": 4.5,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:58:37.859869"
+      "timestamp": "2026-09-27T00:55:50.251560"
     }
   },
   "hcltech_hcltech": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "hcltech_hcltech",
       "ticker": "HCLTECH",
@@ -287,32 +287,32 @@
       "shares_outstanding": {
         "value": 270.5767,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (270.58 Cr)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-03-31); provider summary agreed at 270.58 = 270.58 Cr"
       },
       "beta": {
         "value": 0.95,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance 2Y weekly beta (0.00, domestic calibrated 0.95)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "yfinance 2Y weekly beta (0.00, domestic Nifty 50 recalibration 0.95)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T17:31:57.181148"
+      "timestamp": "2026-09-27T00:56:25.120774"
     }
   },
   "idea_idea": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "idea_idea",
       "ticker": "IDEA",
@@ -326,32 +326,32 @@
       "shares_outstanding": {
         "value": 10834.3035,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (10834.30 Cr)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-03-31); provider summary agreed at 10,834.30 = 10,834.30 Cr"
       },
       "beta": {
         "value": 0.95,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance 2Y weekly beta (0.45, domestic Nifty 50 recalibration 0.95)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:57:10.257744"
+      "timestamp": "2026-09-27T00:57:42.640557"
     }
   },
   "infy_infy": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "infy_infy",
       "ticker": "INFY",
@@ -363,34 +363,34 @@
         "provenance_note": "yfinance daily close for INFY.NS (2026-09-25)"
       },
       "shares_outstanding": {
-        "value": 405.0344,
+        "value": 404.9646,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (405.03 Cr)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-06-30); provider summary agreed at 405.03 = 404.96 Cr"
       },
       "beta": {
         "value": 0.79,
         "source": "registry",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "Per-company registry benchmark beta vs primary index (0.79)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:57:18.523381"
+      "timestamp": "2026-09-27T00:56:02.906832"
     }
   },
   "infy_us": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "infy_us",
       "ticker": "INFY",
@@ -402,34 +402,34 @@
         "provenance_note": "yfinance daily close for INFY (2026-09-25)"
       },
       "shares_outstanding": {
-        "value": 4050.3436,
+        "value": 4049.6458,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (4050.34 M)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-06-30); provider summary agreed at 4,050.34 = 4,049.65 M"
       },
       "beta": {
         "value": 0.85,
         "source": "registry",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "Per-company registry benchmark beta vs primary index (0.85)"
       },
       "risk_free_rate": {
         "value": 5.184,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance live 10-Year US Treasury yield ^TNX (5.18%)"
       },
       "equity_risk_premium": {
         "value": 4.5,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:56:15.212310"
+      "timestamp": "2026-09-27T00:56:07.846339"
     }
   },
   "lt_lt": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "lt_lt",
       "ticker": "LT",
@@ -441,34 +441,34 @@
         "provenance_note": "yfinance daily close for LT.NS (2026-09-25)"
       },
       "shares_outstanding": {
-        "value": 137.5866,
+        "value": 137.5632,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (137.59 Cr)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-03-31); provider summary agreed at 137.59 = 137.56 Cr"
       },
       "beta": {
         "value": 0.95,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance 2Y weekly beta (0.51, domestic Nifty 50 recalibration 0.95)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:57:55.876134"
+      "timestamp": "2026-09-27T00:56:47.022189"
     }
   },
   "msft_us": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "msft_us",
       "ticker": "MSFT",
@@ -480,34 +480,34 @@
         "provenance_note": "yfinance daily close for MSFT (2026-09-25)"
       },
       "shares_outstanding": {
-        "value": 7425.5455,
+        "value": 7427.0,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (7425.55 M)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-06-30); provider summary agreed at 7,425.55 = 7,427.00 M"
       },
       "beta": {
         "value": 0.9,
         "source": "registry",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "Per-company registry benchmark beta vs primary index (0.9)"
       },
       "risk_free_rate": {
         "value": 5.184,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance live 10-Year US Treasury yield ^TNX (5.18%)"
       },
       "equity_risk_premium": {
         "value": 4.5,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:58:22.512093"
+      "timestamp": "2026-09-27T00:55:44.721814"
     }
   },
   "ongc_ongc": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "ongc_ongc",
       "ticker": "ONGC",
@@ -521,32 +521,32 @@
       "shares_outstanding": {
         "value": 1258.0279,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (1258.03 Cr)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-03-31); provider summary agreed at 1,258.03 = 1,258.03 Cr"
       },
       "beta": {
         "value": 0.95,
         "source": "registry",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "Per-company registry benchmark beta vs primary index (0.95)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:57:59.917869"
+      "timestamp": "2026-09-27T00:56:36.406439"
     }
   },
   "reliance_reliance": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "reliance_reliance",
       "ticker": "RELIANCE",
@@ -560,32 +560,32 @@
       "shares_outstanding": {
         "value": 1353.2473,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (1353.25 Cr)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-03-31); provider summary agreed at 1,353.25 = 1,353.25 Cr"
       },
       "beta": {
         "value": 0.95,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance 2Y weekly beta (0.15, domestic Nifty 50 recalibration 0.95)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:57:37.237969"
+      "timestamp": "2026-09-27T00:56:28.514109"
     }
   },
   "sunpharma_sunpharma": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "sunpharma_sunpharma",
       "ticker": "SUNPHARMA",
@@ -599,32 +599,32 @@
       "shares_outstanding": {
         "value": 239.9335,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (239.93 Cr)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-03-31); provider summary agreed at 239.93 = 239.93 Cr"
       },
       "beta": {
         "value": 0.95,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance 2Y weekly beta (0.12, domestic Nifty 50 recalibration 0.95)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:57:25.987712"
+      "timestamp": "2026-09-27T00:57:54.306880"
     }
   },
   "tatamotors_tatamotors": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "tatamotors_tatamotors",
       "ticker": "TMPV",
@@ -638,32 +638,32 @@
       "shares_outstanding": {
         "value": 367.0,
         "source": "registry",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "Per-company registry benchmark for tatamotors_tatamotors (Cr shares)"
       },
       "beta": {
         "value": 1.15,
         "source": "registry",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "Per-company registry benchmark beta vs primary index (1.15)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:57:46.659156"
+      "timestamp": "2026-09-27T00:58:16.620269"
     }
   },
   "tatasteel_tatasteel": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "tatasteel_tatasteel",
       "ticker": "TATASTEEL",
@@ -675,34 +675,34 @@
         "provenance_note": "yfinance daily close for TATASTEEL.NS (2026-09-25)"
       },
       "shares_outstanding": {
-        "value": 1247.4316,
+        "value": 1247.1848,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (1247.43 Cr)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-03-31); provider summary agreed at 1,247.43 = 1,247.18 Cr"
       },
       "beta": {
         "value": 1.25,
         "source": "registry",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "Per-company registry benchmark beta vs primary index (1.25)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:57:14.916702"
+      "timestamp": "2026-09-27T00:56:32.586528"
     }
   },
   "tcs_tcs": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "tcs_tcs",
       "ticker": "TCS",
@@ -716,32 +716,32 @@
       "shares_outstanding": {
         "value": 361.8088,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (361.81 Cr)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-03-31); provider summary agreed at 361.81 = 361.81 Cr"
       },
       "beta": {
         "value": 0.85,
         "source": "registry",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "Per-company registry benchmark beta vs primary index (0.85)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:58:09.084778"
+      "timestamp": "2026-09-27T00:56:16.846928"
     }
   },
   "wipro_wipro": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "wipro_wipro",
       "ticker": "WIPRO",
@@ -753,30 +753,30 @@
         "provenance_note": "yfinance daily close for WIPRO.NS (2026-09-25)"
       },
       "shares_outstanding": {
-        "value": 989.334,
+        "value": 989.1644,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (989.33 Cr)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-06-30); provider summary agreed at 989.33 = 989.16 Cr"
       },
       "beta": {
         "value": 0.95,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance 2Y weekly beta (0.39, domestic Nifty 50 recalibration 0.95)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:57:33.421790"
+      "timestamp": "2026-09-27T00:56:21.120154"
     }
   },
   "kaynes_kaynes": {
@@ -819,7 +819,7 @@
     }
   },
   "tsm_us": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "tsm_us",
       "ticker": "TSM",
@@ -833,28 +833,28 @@
       "shares_outstanding": {
         "value": 5186.474,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (5186.47 M)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "provider shares outstanding = 5,186.47; the filed count of 25,932.37 is 5x that, which is a depositary receipt ratio rather than a share class, and the quoted price is per receipt = 5,186.47 M"
       },
       "beta": {
         "value": 1.1,
         "source": "registry",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "Per-company registry benchmark beta vs primary index (1.1)"
       },
       "risk_free_rate": {
         "value": 5.184,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance live 10-Year US Treasury yield ^TNX (5.18%)"
       },
       "equity_risk_premium": {
         "value": 4.5,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:56:54.593691"
+      "timestamp": "2026-09-27T00:55:59.738815"
     }
   },
   "adanigreen_adanigreen": {
@@ -897,7 +897,7 @@
     }
   },
   "nvda_us": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "nvda_us",
       "ticker": "NVDA",
@@ -911,28 +911,28 @@
       "shares_outstanding": {
         "value": 24147.0,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (24147.00 M)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-07-31); provider summary agreed at 24,147.00 = 24,147.00 M"
       },
       "beta": {
         "value": 1.67,
         "source": "registry",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "Per-company registry benchmark beta vs primary index (1.67)"
       },
       "risk_free_rate": {
         "value": 5.184,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance live 10-Year US Treasury yield ^TNX (5.18%)"
       },
       "equity_risk_premium": {
         "value": 4.5,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:58:04.579873"
+      "timestamp": "2026-09-27T00:55:36.320192"
     }
   },
   "nesr_us": {
@@ -1716,7 +1716,7 @@
     }
   },
   "tsla_us": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "tsla_us",
       "ticker": "TSLA",
@@ -1728,34 +1728,34 @@
         "provenance_note": "yfinance daily close for TSLA (2026-09-25)"
       },
       "shares_outstanding": {
-        "value": 3949.5474,
+        "value": 3949.0,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (3949.55 M)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-06-30) = 3,949.00 M"
       },
       "beta": {
         "value": 1.845,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance 2Y weekly beta (1.84, domestic calibrated 1.84)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "yfinance 2Y weekly beta (1.84, raw provider beta 1.84)"
       },
       "risk_free_rate": {
         "value": 5.184,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance live 10-Year US Treasury yield ^TNX (5.18%)"
       },
       "equity_risk_premium": {
         "value": 4.5,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T17:47:57.204661"
+      "timestamp": "2026-09-27T00:01:38.539238"
     }
   },
   "maruti_maruti": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "maruti_maruti",
       "ticker": "MARUTI",
@@ -1769,32 +1769,32 @@
       "shares_outstanding": {
         "value": 31.4403,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (31.44 Cr)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-03-31) = 31.44 Cr"
       },
       "beta": {
         "value": 0.95,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance 2Y weekly beta (0.23, domestic calibrated 0.95)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "yfinance 2Y weekly beta (0.23, domestic Nifty 50 recalibration 0.95)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T17:48:10.469106"
+      "timestamp": "2026-09-27T00:01:22.428443"
     }
   },
   "meta_us": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "meta_us",
       "ticker": "META",
@@ -1806,30 +1806,30 @@
         "provenance_note": "yfinance daily close for META (2026-09-25)"
       },
       "shares_outstanding": {
-        "value": 2205.1285,
+        "value": 2548.3777,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (2205.13 M)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-06-30); provider summary said 2,205.13 and was rejected as a single-class figure = 2,548.38 M"
       },
       "beta": {
         "value": 1.243,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance 2Y weekly beta (1.24, domestic calibrated 1.24)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "yfinance 2Y weekly beta (1.24, raw provider beta 1.24)"
       },
       "risk_free_rate": {
         "value": 5.184,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance live 10-Year US Treasury yield ^TNX (5.18%)"
       },
       "equity_risk_premium": {
         "value": 4.5,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T17:48:13.811904"
+      "timestamp": "2026-09-27T00:01:11.115172"
     }
   },
   "amd_us": {
@@ -2028,7 +2028,7 @@
     }
   },
   "tatapower_tatapower": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "tatapower_tatapower",
       "ticker": "TATAPOWER",
@@ -2042,32 +2042,32 @@
       "shares_outstanding": {
         "value": 319.534,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (319.53 Cr)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-03-31) = 319.53 Cr"
       },
       "beta": {
         "value": 0.95,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance 2Y weekly beta (0.32, domestic calibrated 0.95)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "yfinance 2Y weekly beta (0.32, domestic Nifty 50 recalibration 0.95)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T17:50:15.536993"
+      "timestamp": "2026-09-27T00:01:56.536519"
     }
   },
   "sbc_us": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "sbc_us",
       "ticker": "SBC",
@@ -2079,34 +2079,34 @@
         "provenance_note": "yfinance daily close for SBC (2026-09-25)"
       },
       "shares_outstanding": {
-        "value": 102.8469,
+        "value": 102.5769,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (102.85 M)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-06-30) = 102.58 M"
       },
       "beta": {
         "value": 0.631,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance 2Y weekly beta (0.63, raw provider beta 0.63)"
       },
       "risk_free_rate": {
         "value": 5.184,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance live 10-Year US Treasury yield ^TNX (5.18%)"
       },
       "equity_risk_premium": {
         "value": 4.5,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T18:29:24.653544"
+      "timestamp": "2026-09-27T00:19:58.302347"
     }
   },
   "m&m_m&m": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "m&m_m&m",
       "ticker": "M&M",
@@ -2118,34 +2118,34 @@
         "provenance_note": "yfinance daily close for M&M.NS (2026-09-25)"
       },
       "shares_outstanding": {
-        "value": 120.0762,
+        "value": 120.0473,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (120.08 Cr)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-03-31) = 120.05 Cr"
       },
       "beta": {
         "value": 0.95,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance 2Y weekly beta (0.28, domestic Nifty 50 recalibration 0.95)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:33:45.066741"
+      "timestamp": "2026-09-27T00:01:30.524865"
     }
   },
   "ntpc_ntpc": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "ntpc_ntpc",
       "ticker": "NTPC",
@@ -2159,32 +2159,32 @@
       "shares_outstanding": {
         "value": 969.6666,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (969.67 Cr)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-03-31) = 969.67 Cr"
       },
       "beta": {
         "value": 0.95,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance 2Y weekly beta (0.29, domestic Nifty 50 recalibration 0.95)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:33:53.553126"
+      "timestamp": "2026-09-27T00:01:43.997353"
     }
   },
   "powergrid_powergrid": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "powergrid_powergrid",
       "ticker": "POWERGRID",
@@ -2198,32 +2198,32 @@
       "shares_outstanding": {
         "value": 930.0604,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (930.06 Cr)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-03-31) = 930.06 Cr"
       },
       "beta": {
         "value": 0.95,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance 2Y weekly beta (0.16, domestic Nifty 50 recalibration 0.95)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:33:58.173105"
+      "timestamp": "2026-09-27T00:01:49.188639"
     }
   },
   "nee_us": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "nee_us",
       "ticker": "NEE",
@@ -2235,34 +2235,34 @@
         "provenance_note": "yfinance daily close for NEE (2026-09-25)"
       },
       "shares_outstanding": {
-        "value": 2085.9782,
+        "value": 2085.3415,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (2085.98 M)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-06-30) = 2,085.34 M"
       },
       "beta": {
         "value": 0.644,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance 2Y weekly beta (0.64, raw provider beta 0.64)"
       },
       "risk_free_rate": {
         "value": 5.184,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance live 10-Year US Treasury yield ^TNX (5.18%)"
       },
       "equity_risk_premium": {
         "value": 4.5,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:34:07.207361"
+      "timestamp": "2026-09-27T00:02:03.329663"
     }
   },
   "acn_us": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "acn_us",
       "ticker": "ACN",
@@ -2274,34 +2274,34 @@
         "provenance_note": "yfinance daily close for ACN (2026-09-25)"
       },
       "shares_outstanding": {
-        "value": 611.9421,
+        "value": 611.8619,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (611.94 M)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-05-31) = 611.86 M"
       },
       "beta": {
         "value": 1.092,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance 2Y weekly beta (1.09, raw provider beta 1.09)"
       },
       "risk_free_rate": {
         "value": 5.184,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance live 10-Year US Treasury yield ^TNX (5.18%)"
       },
       "equity_risk_premium": {
         "value": 4.5,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:34:20.001810"
+      "timestamp": "2026-09-27T00:02:18.267793"
     }
   },
   "siemens_siemens": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "siemens_siemens",
       "ticker": "SIEMENS",
@@ -2315,32 +2315,32 @@
       "shares_outstanding": {
         "value": 35.6121,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (35.61 Cr)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2025-09-30) = 35.61 Cr"
       },
       "beta": {
         "value": 0.95,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance 2Y weekly beta (0.58, domestic Nifty 50 recalibration 0.95)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:34:25.007052"
+      "timestamp": "2026-09-27T00:02:25.854851"
     }
   },
   "abb_abb": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "abb_abb",
       "ticker": "ABB",
@@ -2354,32 +2354,32 @@
       "shares_outstanding": {
         "value": 21.1908,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (21.19 Cr)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-06-30) = 21.19 Cr"
       },
       "beta": {
         "value": 0.95,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance 2Y weekly beta (0.48, domestic Nifty 50 recalibration 0.95)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:34:30.044259"
+      "timestamp": "2026-09-27T00:02:33.653084"
     }
   },
   "bel_bel": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "bel_bel",
       "ticker": "BEL",
@@ -2393,32 +2393,32 @@
       "shares_outstanding": {
         "value": 730.9779,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (730.98 Cr)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-03-31) = 730.98 Cr"
       },
       "beta": {
         "value": 0.95,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance 2Y weekly beta (0.28, domestic Nifty 50 recalibration 0.95)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:34:35.757052"
+      "timestamp": "2026-09-27T00:02:39.127037"
     }
   },
   "kec_kec": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "kec_kec",
       "ticker": "KEC",
@@ -2432,32 +2432,32 @@
       "shares_outstanding": {
         "value": 26.62,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (26.62 Cr)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-03-31) = 26.62 Cr"
       },
       "beta": {
         "value": 0.95,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance 2Y weekly beta (0.06, domestic Nifty 50 recalibration 0.95)"
       },
       "risk_free_rate": {
         "value": 6.78,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for rfr (10Y sovereign yield %)"
       },
       "equity_risk_premium": {
         "value": 7.08,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:34:40.566586"
+      "timestamp": "2026-09-27T00:02:44.751931"
     }
   },
   "cat_us": {
-    "fetch_date": "2026-09-26",
+    "fetch_date": "2026-09-27",
     "data": {
       "company_id": "cat_us",
       "ticker": "CAT",
@@ -2471,28 +2471,28 @@
       "shares_outstanding": {
         "value": 459.6749,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
-        "provenance_note": "yfinance live shares outstanding (459.67 M)"
+        "fetch_date": "2026-09-27",
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-06-30) = 459.67 M"
       },
       "beta": {
         "value": 1.594,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance 2Y weekly beta (1.59, raw provider beta 1.59)"
       },
       "risk_free_rate": {
         "value": 5.184,
         "source": "yfinance",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "yfinance live 10-Year US Treasury yield ^TNX (5.18%)"
       },
       "equity_risk_premium": {
         "value": 4.5,
         "source": "market_default",
-        "fetch_date": "2026-09-26",
+        "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-26T19:34:46.248760"
+      "timestamp": "2026-09-27T00:02:51.823070"
     }
   },
   "hdfcbank_hdfcbank": {
