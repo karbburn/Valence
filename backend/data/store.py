@@ -12,8 +12,17 @@ from pydantic import BaseModel, ConfigDict, Field
 if TYPE_CHECKING:
     from backend.normalization.taxonomy.models import CanonicalDatapoint, TaxonomyMapping
 
-Source = Literal["screener", "bse_filing", "nse_filing", "sec_edgar", "yfinance_live", "twelvedata"]
-Status = Literal["reported", "reported_adjusted", "derived"]
+# `local_export` is a hand-maintained spreadsheet held in the repository, NOT a
+# filing and NOT a live API response. It must never be labelled with the source
+# it imitates: doing so is how a model served invented figures comes to present
+# them to a reader as audited SEC data, with a `source_location` pointing at a
+# cell in a document nobody published.
+Source = Literal[
+    "screener", "bse_filing", "nse_filing", "sec_edgar", "yfinance_live",
+    "twelvedata", "local_export",
+]
+# `estimated` means a projection or a hand-entered figure, never a filed number.
+Status = Literal["reported", "reported_adjusted", "derived", "estimated"]
 
 
 class RawDatapoint(BaseModel):
@@ -97,6 +106,22 @@ def connect(db_path: str | Path) -> sqlite3.Connection:
     The caller owns commit()/rollback()/close().
     """
     return _connect(db_path)
+
+
+def delete_company_datapoints(db_path: str | Path, company_id: str) -> None:
+    """Drop every raw and canonical row belonging to ONE company.
+
+    Scoped deliberately. The previous way to force a re-ingest of a single
+    company unlinked the whole database file, which destroyed every other
+    company and the universe table as a side effect of refreshing one name.
+    """
+    conn = _connect(db_path)
+    try:
+        conn.execute("DELETE FROM raw_datapoints WHERE company_id = ?", (company_id,))
+        conn.execute("DELETE FROM canonical_datapoints WHERE company_id = ?", (company_id,))
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def save_datapoints(db_path: str | Path, datapoints: list[RawDatapoint], clear_existing: bool = True) -> None:

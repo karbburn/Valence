@@ -31,7 +31,7 @@ from pathlib import Path
 from backend.data.ingestion.screener import parse_screener_export
 from backend.data.parsers.pdf_tables import parse_predicted_statement_page
 from backend.data.reconciliation import reconcile
-from backend.data.store import RawDatapoint, save_datapoints
+from backend.data.store import RawDatapoint, delete_company_datapoints, save_datapoints
 
 HERE = Path(__file__).resolve().parent
 DB_PATH = HERE / "valence.db"
@@ -76,13 +76,28 @@ def _get_secondary_filing_datapoints(company_id: str) -> list[RawDatapoint]:
     return filing_dps
 
 
-def run(company_id: str = "infy_infy", db_path: str | Path = DB_PATH, clear_db: bool = False) -> dict:
-    """Run India ingestion and reconciliation pipeline for company_id."""
+def run(
+    company_id: str = "infy_infy",
+    db_path: str | Path = DB_PATH,
+    clear_db: bool = False,
+    reset_store: bool = False,
+) -> dict:
+    """Run India ingestion and reconciliation pipeline for company_id.
+
+    `clear_db` means "discard what is currently stored for THIS company" — it
+    deletes that company's rows. It used to unlink the database file, so asking
+    one company to re-ingest silently destroyed every other company's data plus
+    the universe table, and the next build served a one-company store. Deleting
+    an entire shared store is a different and much rarer operation, so it now has
+    its own name.
+    """
     from backend.data.batch import _source_file_for
 
     db_p = Path(db_path)
-    if clear_db and db_p.exists():
+    if reset_store and db_p.exists():
         db_p.unlink()
+    elif clear_db:
+        delete_company_datapoints(db_p, company_id)
 
     # 1. Primary path: Screener export
     src_file = _source_file_for(company_id)
