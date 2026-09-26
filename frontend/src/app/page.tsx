@@ -132,7 +132,19 @@ export default function HomePage() {
     setExporting(true)
     try {
       const res = await fetch(`/api/export/excel?company_id=${companyId}`)
-      if (!res.ok) throw new Error(`Export failed (${res.status})`)
+      if (!res.ok) {
+        // The server says why when it can: "busy" and "try again" are things a
+        // person can act on, and a bare status code is not. A 503 in particular
+        // is a busy signal, not a fault, so it is not dressed up as one.
+        let detail = ''
+        try {
+          const body = await res.json()
+          if (body && typeof body.detail === 'string') detail = body.detail
+        } catch {
+          // A proxy-level failure (502/504) has no JSON body to read.
+        }
+        throw new Error(detail || `Export failed (${res.status})`)
+      }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -143,7 +155,7 @@ export default function HomePage() {
       a.remove()
       URL.revokeObjectURL(url)
       setToastType('success')
-      setToastMessage(`Excel workbook downloaded — 30 tabs, live formulas`)
+      setToastMessage(`Excel workbook downloaded — 31 tabs, live formulas`)
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : 'Excel export failed')
     } finally {

@@ -72,6 +72,29 @@ MAX_CACHE_SIZE = 50
 # a duplicate user_override, which can never be reverted (previous=None).
 _SPEC_MUTEX = threading.Lock()
 
+# Serializes workbook exports, and bounds how long a request will wait for one.
+#
+# Two reasons this exists, and the second is the one that took the service down.
+#
+# 1. CORRECTNESS. The formula-value registry the exporter uses to embed cached
+#    results in the .xlsx is a module-level dict keyed by (sheet, row, col), and
+#    every export clears it on entry. Two exports in flight therefore share
+#    their keys: one wipes the other's values mid-write, and each can write the
+#    other's numbers into its own cells. A downloaded workbook can then disagree
+#    with the model it was generated from.
+#
+# 2. CAPACITY. An export holds a model specification and builds a 31-sheet
+#    workbook in memory at once. The service runs on a 512MB instance, so a
+#    handful of simultaneous exports exhausts memory and the container is
+#    killed — which presents to the user as an intermittent 500, then a 502 or
+#    503 while the instance restarts, and it stays down for as long as the
+#    restart takes. One export at a time is what fits.
+#
+# A waiting request is told the service is busy rather than being left to time
+# out, because "busy, try again" is actionable and a hung request is not.
+_EXPORT_MUTEX = threading.Lock()
+_EXPORT_WAIT_SECONDS = 90.0
+
 
 def _normalize_assumptions(
     assumptions: List["AssumptionObject"],
@@ -471,15 +494,70 @@ def revert_driver_override(req: RevertRequest, company_id: str = "infy_infy") ->
 
 @router.get("/export/excel")
 def export_excel(company_id: str = "infy_infy") -> FileResponse:
-    """Trigger the 30-tab openpyxl export and return .xlsx file download."""
+    """Build the workbook and return it as a download.
+
+    One export runs at a time; see _EXPORT_MUTEX for why. A request that cannot
+    get the lock is told the service is busy rather than being allowed to pile
+    onto an already exhausted instance.
+    """
     _require_valid_company_id(company_id)
+
+    if not _EXPORT_MUTEX.acquire(timeout=_EXPORT_WAIT_SECONDS):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Another workbook is being built. This service builds one at a "
+                "time so it stays within memory; try again in a moment."
+            ),
+            headers={"Retry-After": "15"},
+        )
+    try:
+        return _export_excel_locked(company_id)
+    finally:
+        _EXPORT_MUTEX.release()
+
+
+def _export_excel_locked(company_id: str) -> FileResponse:
+    """The export itself. Callers must hold _EXPORT_MUTEX."""
     spec = _get_or_build_spec(company_id)
+    if spec is None:
+        raise HTTPException(
+            status_code=503,
+            detail="The model is still being prepared for this company. Try again in a moment.",
+            headers={"Retry-After": "10"},
+        )
+
     out_dir = PROJECT_ROOT / "backend" / "export" / "output"
     out_dir.mkdir(parents=True, exist_ok=True)
-    safe_ticker = re.sub(r'[^a-zA-Z0-9_-]', '', spec.metadata.ticker.lower())
-    file_path = out_dir / f"{safe_ticker}_valuation_model.xlsx"
 
-    export_model_to_excel(spec, file_path)
+    # Named for the company, not the ticker. Two onboarded companies can share a
+    # ticker — the same issuer listed in two markets — and a ticker-keyed name
+    # had both writing one file, so a download could be served the other
+    # listing's workbook.
+    safe_company = re.sub(r'[^a-zA-Z0-9_-]', '', company_id.lower())
+    file_path = out_dir / f"{safe_company}_valuation_model.xlsx"
+
+    try:
+        export_model_to_excel(spec, file_path)
+    except HTTPException:
+        raise
+    except MemoryError:
+        # The one failure a user can act on by trying again later.
+        logger.exception("Out of memory building the workbook for %s", company_id)
+        raise HTTPException(
+            status_code=503,
+            detail="The workbook needs more memory than is free right now. Try again shortly.",
+            headers={"Retry-After": "30"},
+        )
+    except Exception as exc:
+        # An unhandled exception here returns a bare "Internal Server Error",
+        # which tells the user nothing and tells us nothing. The traceback is
+        # logged; the message says which company failed.
+        logger.exception("Workbook export failed for %s", company_id)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not build the workbook for {company_id}: {type(exc).__name__}",
+        )
 
     if not file_path.exists():
         raise HTTPException(status_code=500, detail="Failed to generate Excel file")
