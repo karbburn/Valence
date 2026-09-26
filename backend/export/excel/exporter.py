@@ -42,6 +42,7 @@ from backend.export.excel.render_qa import (
 )
 from backend.export.excel.render_val import (
     render_dcf_tab,
+    render_ev_bridge_tab,
     render_investment_returns,
     render_reverse_dcf_tab,
     render_scenario_analysis_tab,
@@ -102,6 +103,10 @@ def export_model_to_excel(
     # 4. Valuation Tabs
     render_wacc_tab(wb, spec)
     render_dcf_tab(wb, spec)
+    # The bridge is its own tab because it is one value per line, not one per
+    # forecast year, and the two shapes cannot share a rectangular table without
+    # either blank cells or a merged label pretending to be data.
+    render_ev_bridge_tab(wb, spec)
     render_terminal_value_tab(wb, spec)
     render_sensitivity_tab(wb, spec)
     render_reverse_dcf_tab(wb, spec)

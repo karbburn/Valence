@@ -201,14 +201,19 @@ def _last_historical_column(spec: ModelSpecification) -> str:
 def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ws = wb.create_sheet(title="31_DCF")
     apply_tab_defaults(ws, freeze_cell="C6")
-    set_col_widths(ws, {"A": 5, "B": 36, "C": 18, "D": 18, "E": 18, "F": 18, "G": 18, "H": 22})
+    set_col_widths(ws, {"A": 5, "B": 36, "C": 18, "D": 18, "E": 18, "F": 18, "G": 18})
 
     ws["B2"] = f"{spec.metadata.name.upper()} — DISCOUNTED CASH FLOW (DCF) MODEL"
     ws["B2"].font = FONT_TITLE
-    ws["B3"] = "5-Year FCFF Build, PV Discounting & Enterprise Value Bridge"
+    ws["B3"] = "5-Year FCFF Build and PV Discounting — enterprise value bridge on 36_EV_Bridge"
     ws["B3"].font = FONT_SECTION
 
-    headers = ["FCFF Line Item / DCF Bridge"] + FORECAST_PERIODS + ["Valuation Summary"]
+    # One column per forecast year and nothing else. This tab used to carry a
+    # seventh "Valuation Summary" column holding the EV bridge, which is a
+    # single number per line at one balance-sheet date and so left five blank
+    # cells beside every figure it published. The bridge is now 36_EV_Bridge,
+    # where the table is the shape of the data.
+    headers = ["FCFF Line Item"] + list(FORECAST_PERIODS)
     write_table_header(ws, 5, headers, start_col=2)
 
     base_val = spec.get_valuation("base")
@@ -410,65 +415,193 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         cell_sbc.alignment = ALIGN_RIGHT
         cell_sbc.border = BORDER_BOX
 
-    # DCF Bridge Block (rows 17-28, Column B = labels, Column H = values)
-    ws["B16"] = "DCF BRIDGE — EV TO EQUITY VALUE"
-    ws["B16"].font = FONT_SECTION
+    return ws
+
+
+# --------------------------------------------------------------------------- #
+# EV bridge — its own tab.
+# --------------------------------------------------------------------------- #
+#
+# The bridge used to be a block of single-valued rows sharing the DCF tab with
+# the five year-columns of the FCFF build. Its labels were merged across the
+# year columns, so every bridge row showed five blank cells beside its value:
+# seventy blanks in the workbook, on the tab whose output matters most.
+#
+# The bridge is one number per line at a single balance-sheet date, and the FCFF
+# build is five numbers per line. They are different shapes and cannot share one
+# rectangular table, so they no longer share a tab. Splitting them is also what
+# makes the tab honest: a blank beside a figure has to mean "this line has
+# nothing to say for this period", and the bridge never has that ambiguity.
+EV_BRIDGE_ROW_OFFSET = 6
+
+# Row index of every line on 36_EV_Bridge, keyed by the line's name.
+#
+# Published for the same reason as OPERATING_MODEL_ROWS on the operating model:
+# the sensitivity grid, the reverse DCF, the executive summary and the model
+# checks all reference these cells, and a formula that names the LINE it wants
+# cannot be re-pointed by an unrelated line being inserted above it.
+EV_BRIDGE_ROWS: dict[str, int] = {
+    "sum_pv_fcff": EV_BRIDGE_ROW_OFFSET + 0,
+    "pv_terminal_value": EV_BRIDGE_ROW_OFFSET + 1,
+    "enterprise_value": EV_BRIDGE_ROW_OFFSET + 2,
+    "cash_and_equivalents": EV_BRIDGE_ROW_OFFSET + 3,
+    "marketable_securities": EV_BRIDGE_ROW_OFFSET + 4,
+    "non_current_investments": EV_BRIDGE_ROW_OFFSET + 5,
+    "total_debt": EV_BRIDGE_ROW_OFFSET + 6,
+    "minority_interest_and_preferred": EV_BRIDGE_ROW_OFFSET + 7,
+    "net_non_operating_debt": EV_BRIDGE_ROW_OFFSET + 8,
+    "equity_value": EV_BRIDGE_ROW_OFFSET + 9,
+    "diluted_shares": EV_BRIDGE_ROW_OFFSET + 10,
+    "implied_share_price": EV_BRIDGE_ROW_OFFSET + 11,
+}
+
+
+def bridge_ref(line: str) -> str:
+    """Cross-sheet reference to one line's value cell on the EV bridge tab.
+
+    `bridge_ref("equity_value")` -> `'36_EV_Bridge'!C15`
+
+    Raises on an unknown line rather than emitting a broken reference, so a
+    renamed line fails the build instead of quietly pointing at the wrong cell.
+    """
+    if line not in EV_BRIDGE_ROWS:
+        raise KeyError(f"unknown EV bridge line: {line!r}")
+    return f"'36_EV_Bridge'!C{EV_BRIDGE_ROWS[line]}"
+
+
+def render_ev_bridge_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
+    """Tab 36_EV_Bridge: the enterprise value to share price bridge.
+
+    Three populated columns and no others: the line, its value, and where that
+    value came from. The basis column is the reason this is worth its own tab —
+    a net cash figure is meaningless without the date and the convention it was
+    struck on, and those used to live only in a note on another sheet.
+    """
+    ws = wb.create_sheet(title="36_EV_Bridge")
+    apply_tab_defaults(ws, freeze_cell="A5")
+    set_col_widths(ws, {"A": 5, "B": 42, "C": 22, "D": 62})
+
+    ws["B2"] = f"{spec.metadata.name.upper()} — ENTERPRISE VALUE BRIDGE"
+    ws["B2"].font = FONT_TITLE
+    ws["B3"] = "From discounted cash flow to equity value and implied share price"
+    ws["B3"].font = FONT_SECTION
 
     ccy = spec.metadata.currency
-    b_obj = base_val.dcf_bridge if base_val else None
-
-    cash_val = b_obj.cash_and_equivalents if (b_obj and b_obj.cash_and_equivalents is not None) else 0.0
-    mkt_sec_val = b_obj.marketable_securities if (b_obj and b_obj.marketable_securities is not None) else 0.0
-    non_curr_inv_val = b_obj.non_current_investments if (b_obj and b_obj.non_current_investments is not None) else 0.0
-    tot_debt_val = b_obj.total_debt if (b_obj and b_obj.total_debt is not None) else 0.0
-    min_int_val = ((b_obj.minority_interest or 0.0) + (b_obj.preferred_stock or 0.0)) if b_obj else 0.0
-    net_debt = (b_obj.less_net_debt if b_obj and b_obj.less_net_debt is not None else 0.0)
-
     unit_lbl = "M" if (spec.metadata.units == "millions" or spec.metadata.market == "us") else "Cr"
 
-    bridge_rows = [
-        ("Cumulative PV of FCFF (Mid-Year)", "=SUM(C14:G14)", b_obj.sum_pv_fcff if b_obj else 0, FMT_CURRENCY_INT),
-        ("PV of Terminal Value", "='32_Terminal_Value'!C13", b_obj.pv_terminal_value if b_obj else 0, FMT_CURRENCY_INT),
-        ("ENTERPRISE VALUE (EV)", "=H17+H18", b_obj.enterprise_value if b_obj else 0, FMT_CURRENCY_INT),
-        ("Plus: Cash & Cash Equivalents", cash_val, cash_val, FMT_CURRENCY_INT),
-        ("Plus: Marketable Securities", mkt_sec_val, mkt_sec_val, FMT_CURRENCY_INT),
-        ("Plus: Non-Current Investments", non_curr_inv_val, non_curr_inv_val, FMT_CURRENCY_INT),
-        ("Less: Total Debt", tot_debt_val, tot_debt_val, FMT_CURRENCY_INT),
-        ("Less: Minority Interest & Preferred", min_int_val, min_int_val, FMT_CURRENCY_INT),
-        ("Net Non-Operating Debt / (Cash)", "=(H23+H24)-(H20+H21+H22)", net_debt, FMT_CURRENCY_INT),
-        ("EQUITY VALUE", "=H19-H25", b_obj.equity_value if b_obj else 0, FMT_CURRENCY_INT),
-        (f"Diluted Shares ({unit_lbl})", "='27_Share_Count'!E6", b_obj.shares_outstanding if b_obj else 0, FMT_AMOUNT),
-        (f"IMPLIED SHARE PRICE ({ccy})", "=H26/H27", b_obj.implied_share_price if b_obj else 0, FMT_PRICE),
+    base_val = spec.get_valuation("base")
+    b_obj = base_val.dcf_bridge if base_val else None
+
+    def _num(value) -> float:
+        return value if isinstance(value, (int, float)) else 0.0
+
+    cash_val = _num(b_obj.cash_and_equivalents if b_obj else None)
+    mkt_sec_val = _num(b_obj.marketable_securities if b_obj else None)
+    non_curr_inv_val = _num(b_obj.non_current_investments if b_obj else None)
+    tot_debt_val = _num(b_obj.total_debt if b_obj else None)
+    min_int_val = (
+        _num(b_obj.minority_interest if b_obj else None)
+        + _num(b_obj.preferred_stock if b_obj else None)
+    ) if b_obj else 0.0
+    net_debt = _num(b_obj.less_net_debt if b_obj else None)
+
+    r_sum = EV_BRIDGE_ROWS["sum_pv_fcff"]
+    r_tv = EV_BRIDGE_ROWS["pv_terminal_value"]
+    r_ev = EV_BRIDGE_ROWS["enterprise_value"]
+    r_cash = EV_BRIDGE_ROWS["cash_and_equivalents"]
+    r_mkt = EV_BRIDGE_ROWS["marketable_securities"]
+    r_nci = EV_BRIDGE_ROWS["non_current_investments"]
+    r_debt = EV_BRIDGE_ROWS["total_debt"]
+    r_mi = EV_BRIDGE_ROWS["minority_interest_and_preferred"]
+    r_net = EV_BRIDGE_ROWS["net_non_operating_debt"]
+    r_eq = EV_BRIDGE_ROWS["equity_value"]
+    r_sh = EV_BRIDGE_ROWS["diluted_shares"]
+    r_px = EV_BRIDGE_ROWS["implied_share_price"]
+
+    # Provenance for the basis column. The balance-sheet date and the debt
+    # convention are the two things that decide whether a net cash number means
+    # anything, so they are stated on every line they apply to.
+    as_of = (b_obj.balance_sheet_as_of if b_obj else None) or "unresolved"
+    src = (b_obj.balance_sheet_source if b_obj else None) or "unresolved"
+    basis = (b_obj.debt_basis_note if b_obj else None) or "not stated"
+    bs_note = f"{as_of} balance sheet, {src}"
+    pv_note = "Sum of mid-year discounted FCFF, 31_DCF"
+
+    write_table_header(
+        ws, 5, ["DCF Bridge Line Item", f"Value ({ccy} {unit_lbl})", "Source / Basis"], start_col=2
+    )
+
+    rows: list[tuple[str, object, object, str, str]] = [
+        # (line key, label, formula-or-literal, cached value, num format, basis)
+        ("sum_pv_fcff", "Cumulative PV of FCFF (Mid-Year)", f"=SUM('31_DCF'!C14:G14)",
+         _num(b_obj.sum_pv_fcff if b_obj else None), FMT_CURRENCY_INT, pv_note),
+        ("pv_terminal_value", "PV of Terminal Value", "='32_Terminal_Value'!C13",
+         _num(b_obj.pv_terminal_value if b_obj else None), FMT_CURRENCY_INT,
+         "Gordon growth on FY31 FCFF, 32_Terminal_Value"),
+        ("enterprise_value", "ENTERPRISE VALUE (EV)", f"=C{r_sum}+C{r_tv}",
+         _num(b_obj.enterprise_value if b_obj else None), FMT_CURRENCY_INT,
+         "PV of forecast FCFF plus PV of terminal value"),
+        ("cash_and_equivalents", "Plus: Cash & Cash Equivalents", cash_val, cash_val,
+         FMT_CURRENCY_INT, bs_note),
+        ("marketable_securities", "Plus: Marketable Securities", mkt_sec_val, mkt_sec_val,
+         FMT_CURRENCY_INT, bs_note),
+        ("non_current_investments", "Plus: Non-Current Investments", non_curr_inv_val,
+         non_curr_inv_val, FMT_CURRENCY_INT,
+         f"{bs_note}; excluded from net cash by the published basis" if non_curr_inv_val else
+         "no non-current investments reported"),
+        ("total_debt", "Less: Total Debt", tot_debt_val, tot_debt_val, FMT_CURRENCY_INT,
+         f"{bs_note}; {basis}"),
+        ("minority_interest_and_preferred", "Less: Minority Interest & Preferred", min_int_val,
+         min_int_val, FMT_CURRENCY_INT,
+         f"{bs_note}; none reported" if min_int_val == 0 else bs_note),
+        ("net_non_operating_debt", "Net Non-Operating Debt / (Cash)",
+         f"=(C{r_debt}+C{r_mi})-(C{r_cash}+C{r_mkt}+C{r_nci})", net_debt, FMT_CURRENCY_INT,
+         f"{basis}; struck at {as_of}"),
+        ("equity_value", "EQUITY VALUE", f"=C{r_ev}-C{r_net}",
+         _num(b_obj.equity_value if b_obj else None), FMT_CURRENCY_INT,
+         "Enterprise value less net non-operating debt"),
+        ("diluted_shares", f"Diluted Shares ({unit_lbl})", "='27_Share_Count'!E6",
+         _num(b_obj.shares_outstanding if b_obj else None), FMT_AMOUNT,
+         (b_obj.shares_provenance if b_obj and getattr(b_obj, "shares_provenance", None)
+          else "27_Share_Count")),
+        ("implied_share_price", f"IMPLIED SHARE PRICE ({ccy})", f"=C{r_eq}/C{r_sh}",
+         _num(b_obj.implied_share_price if b_obj else None), FMT_PRICE,
+         "Equity value divided by diluted shares"),
     ]
 
-    for idx, (lbl, formula, c_val, fmt) in enumerate(bridge_rows):
-        r = 17 + idx
-        is_price = idx == len(bridge_rows) - 1
-        
-        ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=7)
-        cell_lbl = ws.cell(row=r, column=2, value=lbl)
-        cell_lbl.font = FONT_TOTAL if is_price else FONT_SUBHEADER
-        cell_lbl.alignment = ALIGN_LEFT
-        
-        for col in range(2, 8):
-            ws.cell(row=r, column=col).border = BORDER_TOTAL if is_price else BORDER_BOX
+    for line, label, payload, cached, fmt, basis_text in rows:
+        row = EV_BRIDGE_ROWS[line]
+        is_total = line in ("enterprise_value", "equity_value")
+        is_price = line == "implied_share_price"
+        border = BORDER_TOTAL if (is_total or is_price) else BORDER_BOX
+        lbl_font = FONT_TITLE if is_price else (FONT_TOTAL if is_total else FONT_SUBHEADER)
 
-        if str(formula).startswith("="):
+        cell_lbl = ws.cell(row=row, column=2, value=label)
+        cell_lbl.font = lbl_font
+        cell_lbl.alignment = ALIGN_LEFT
+        cell_lbl.border = border
+
+        if str(payload).startswith("="):
             write_formula_cell(
-                ws, r, 8,
-                formula=formula,
-                cached_value=c_val,
+                ws, row, 3,
+                formula=str(payload),
+                cached_value=cached,
                 num_format=fmt,
                 font=FONT_TITLE if is_price else FONT_TOTAL,
-                border=BORDER_TOTAL if is_price else BORDER_BOX,
+                border=border,
                 alignment=ALIGN_RIGHT,
             )
         else:
-            cell = ws.cell(row=r, column=8, value=formula)
+            cell = ws.cell(row=row, column=3, value=payload)
             cell.font = FONT_TITLE if is_price else FONT_TOTAL
             cell.number_format = fmt
             cell.alignment = ALIGN_RIGHT
-            cell.border = BORDER_TOTAL if is_price else BORDER_BOX
+            cell.border = border
+
+        cell_basis = ws.cell(row=row, column=4, value=basis_text)
+        cell_basis.font = FONT_SUBTITLE
+        cell_basis.alignment = ALIGN_LEFT
+        cell_basis.border = border
 
     return ws
 
@@ -643,7 +776,11 @@ def render_sensitivity_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
                 "+'31_DCF'!G12/(1+$B{r})^4.5"
             ).format(r=r)
             tv_term = f"('20_Operating_Model'!G{op_row('canonical.is.ebitda')}*{col_letter}$13)"
-            formula = f"=(({pv_stream}+{tv_term}/(1+$B{r})^5)-'31_DCF'!H25)/'31_DCF'!H27"
+            formula = (
+                f"=(({pv_stream}+{tv_term}/(1+$B{r})^5)"
+                f"-{bridge_ref('net_non_operating_debt')})"
+                f"/{bridge_ref('diluted_shares')}"
+            )
             write_formula_cell(
                 ws, r, c,
                 formula=formula,
@@ -686,11 +823,11 @@ def render_reverse_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     rows = [
         (f"Current Market Benchmark Price ({spec.metadata.currency})", mkt_price, None, FMT_PRICE, True, "Market price input"),
         (f"Market Implied Equity Value ({ccy})", "=C6*'27_Share_Count'!E6", eq_val_mkt, FMT_CURRENCY_INT, False, "Market Price * Diluted Shares"),
-        # Live link to the DCF bridge's own net-debt cell, so the reverse DCF
+        # Live link to the EV bridge's own net-debt cell, so the reverse DCF
         # responds to a bridge edit instead of carrying a frozen literal that
-        # can silently drift from 31_DCF!H25.
-        (f"Market Implied EV ({ccy})", "=C7-'31_DCF'!H25", ev_mkt, FMT_CURRENCY_INT, False, "Implied Equity Value − net debt (from 31_DCF!H25)"),
-        (f"Market Implied PV of TV ({ccy})", "=C8-'31_DCF'!H17", pv_tv_mkt, FMT_CURRENCY_INT, False, "Implied EV - Cumulative PV(FCFF)"),
+        # can silently drift from the bridge.
+        (f"Market Implied EV ({ccy})", f"=C7-{bridge_ref('net_non_operating_debt')}", ev_mkt, FMT_CURRENCY_INT, False, f"Implied Equity Value − net debt (from {bridge_ref('net_non_operating_debt')})"),
+        (f"Market Implied PV of TV ({ccy})", f"=C8-{bridge_ref('sum_pv_fcff')}", pv_tv_mkt, FMT_CURRENCY_INT, False, f"Implied EV − cumulative PV(FCFF) (from {bridge_ref('sum_pv_fcff')})"),
         ("MARKET IMPLIED TERMINAL GROWTH %", "=((C9*(1+'30_WACC'!C15)^5*'30_WACC'!C15 - '31_DCF'!G12)/(C9*(1+'30_WACC'!C15)^5 + '31_DCF'!G12))", implied_g, FMT_PERCENT_PRECISION, False, rev_dcf.method_note if rev_dcf and rev_dcf.method_note else "Exact solved implied perpetuity growth rate"),
     ]
 
@@ -803,17 +940,22 @@ def render_scenario_analysis_tab(wb: Workbook, spec: ModelSpecification) -> Work
     bull_v = spec.get_valuation("bull")
     bear_v = spec.get_valuation("bear")
 
-    r_base_pct = get_assumption_value(spec, "ebitda_margin", "FY31", "base") / 100.0
-    r_bull_pct = get_assumption_value(spec, "ebitda_margin", "FY31", "bull") / 100.0
-    r_bear_pct = get_assumption_value(spec, "ebitda_margin", "FY31", "bear") / 100.0
+    # Final-year margin and revenue are read from each scenario's OWN forecast.
+    #
+    # They used to be read from the ebitda_margin driver and the revenue was
+    # back-solved by dividing earnings by it. The engine derives earnings as
+    # operating profit plus depreciation, so that driver does not move the
+    # model: the table published a scenario spread the model never produced and
+    # a revenue figure that disagreed with the forecast beside it.
+    def _final_year(scenario: str) -> tuple[float, float]:
+        revenue = spec.forecast.get_value("canonical.is.revenue", "FY31", scenario) or 0.0
+        ebitda = spec.forecast.get_value("canonical.is.ebitda", "FY31", scenario) or 0.0
+        margin = (ebitda / revenue) if revenue else 0.0
+        return revenue, margin
 
-    ebitda_base = (base_v.terminal_value.final_year_ebitda if (base_v and base_v.terminal_value.final_year_ebitda is not None) else 0.0)
-    ebitda_bull = (bull_v.terminal_value.final_year_ebitda if (bull_v and bull_v.terminal_value.final_year_ebitda is not None) else 0.0)
-    ebitda_bear = (bear_v.terminal_value.final_year_ebitda if (bear_v and bear_v.terminal_value.final_year_ebitda is not None) else 0.0)
-
-    rev_base = (ebitda_base / r_base_pct) if r_base_pct > 0 else 0.0
-    rev_bull = (ebitda_bull / r_bull_pct) if r_bull_pct > 0 else 0.0
-    rev_bear = (ebitda_bear / r_bear_pct) if r_bear_pct > 0 else 0.0
+    rev_base, r_base_pct = _final_year("base")
+    rev_bull, r_bull_pct = _final_year("bull")
+    rev_bear, r_bear_pct = _final_year("bear")
 
     ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
     curr = spec.metadata.currency
@@ -827,10 +969,10 @@ def render_scenario_analysis_tab(wb: Workbook, spec: ModelSpecification) -> Work
     # Bull and bear remain literals — the workbook renders one DCF chain, and
     # the alternative scenarios are engine outputs, not separate models.
     base_formulas = {
-        0: "='31_DCF'!H28",
-        1: "='31_DCF'!H19",
-        2: "='31_DCF'!H25*(-1)",
-        3: "='31_DCF'!H26",
+        0: f"={bridge_ref('implied_share_price')}",
+        1: f"={bridge_ref('enterprise_value')}",
+        2: f"={bridge_ref('net_non_operating_debt')}*(-1)",
+        3: f"={bridge_ref('equity_value')}",
         4: "='27_Share_Count'!E6",
         5: "='30_WACC'!C15",
         6: "='32_Terminal_Value'!C6",
@@ -838,7 +980,7 @@ def render_scenario_analysis_tab(wb: Workbook, spec: ModelSpecification) -> Work
         8: "='22_Cost_Build'!G6",
     }
     rows = [
-        (f"Implied Share Price ({curr}) — base is live from 31_DCF", base_v.dcf_bridge.implied_share_price, bull_v.dcf_bridge.implied_share_price, bear_v.dcf_bridge.implied_share_price, FMT_PRICE),
+        (f"Implied Share Price ({curr}) — base is live from 36_EV_Bridge", base_v.dcf_bridge.implied_share_price, bull_v.dcf_bridge.implied_share_price, bear_v.dcf_bridge.implied_share_price, FMT_PRICE),
         (f"Enterprise Value ({ccy})", base_v.dcf_bridge.enterprise_value, bull_v.dcf_bridge.enterprise_value, bear_v.dcf_bridge.enterprise_value, FMT_CURRENCY_INT),
         (f"Net Cash / (Debt) ({ccy})", -base_v.dcf_bridge.less_net_debt if base_v.dcf_bridge.less_net_debt is not None else 0, -bull_v.dcf_bridge.less_net_debt if bull_v.dcf_bridge.less_net_debt is not None else 0, -bear_v.dcf_bridge.less_net_debt if bear_v.dcf_bridge.less_net_debt is not None else 0, FMT_CURRENCY_INT),
         (f"Equity Value ({ccy})", base_v.dcf_bridge.equity_value, bull_v.dcf_bridge.equity_value, bear_v.dcf_bridge.equity_value, FMT_CURRENCY_INT),
@@ -925,24 +1067,42 @@ def render_trading_comps(wb: Workbook, spec: ModelSpecification) -> Worksheet:
                 ws.cell(row=r, column=col_i).font = FONT_FORMULA
 
     # 2. Benchmark Summary Statistics
+    #
+    # This block carries its own header naming the five statistics it reports,
+    # starting at column C.
+    #
+    # It used to leave columns C and D empty so that its four multiples would
+    # sit directly under the peer columns they summarise. Preserving that
+    # vertical alignment is a real convenience, but not at the cost of a row
+    # that reads as two missing values: a blank in a model is a hole the reader
+    # has to interpret, and a statistic that is genuinely absent should say so
+    # rather than leave a gap. Naming the columns also means the block can be
+    # read on its own, without counting across from the peer table above.
     bench_r = 6 + len(comps.peers) + 1
-    write_table_header(ws, bench_r, ["Statistic / Benchmark", "", "", "EV / Rev", "EV / EBITDA", "P / E", "FCF Yield %", "ROIC %"], start_col=2)
+    stat_headers = [
+        "Statistic / Benchmark", "EV / Rev", "EV / EBITDA", "P / E", "FCF Yield %", "ROIC %"
+    ]
+    write_table_header(ws, bench_r, stat_headers, start_col=2)
 
     stat_names = [("25th Percentile", "p25"), ("Median", "median"), ("Mean / Average", "mean"), ("75th Percentile", "p75")]
     for s_idx, (s_lbl, s_attr) in enumerate(stat_names):
         r = bench_r + 1 + s_idx
-        ws.cell(row=r, column=2, value=s_lbl).font = FONT_TOTAL if "Median" in s_lbl else FONT_SUBHEADER
-        ws.cell(row=r, column=5, value=getattr(comps.benchmarks["ev_revenue"], s_attr)).number_format = "0.0\"x\""
-        ws.cell(row=r, column=6, value=getattr(comps.benchmarks["ev_ebitda"], s_attr)).number_format = "0.0\"x\""
-        ws.cell(row=r, column=7, value=getattr(comps.benchmarks["pe_ratio"], s_attr)).number_format = "0.0\"x\""
-        ws.cell(row=r, column=8, value=getattr(comps.benchmarks["fcf_yield"], s_attr) / 100.0).number_format = FMT_PERCENT
-        ws.cell(row=r, column=9, value=getattr(comps.benchmarks["roic"], s_attr) / 100.0).number_format = FMT_PERCENT
+        is_median = "Median" in s_lbl
+        border = BORDER_TOTAL if is_median else BORDER_BOX
+        font = FONT_TOTAL if is_median else FONT_SUBHEADER
+        ws.cell(row=r, column=2, value=s_lbl).font = font
+        ws.cell(row=r, column=3, value=getattr(comps.benchmarks["ev_revenue"], s_attr)).number_format = "0.0\"x\""
+        ws.cell(row=r, column=4, value=getattr(comps.benchmarks["ev_ebitda"], s_attr)).number_format = "0.0\"x\""
+        ws.cell(row=r, column=5, value=getattr(comps.benchmarks["pe_ratio"], s_attr)).number_format = "0.0\"x\""
+        ws.cell(row=r, column=6, value=getattr(comps.benchmarks["fcf_yield"], s_attr) / 100.0).number_format = FMT_PERCENT
+        ws.cell(row=r, column=7, value=getattr(comps.benchmarks["roic"], s_attr) / 100.0).number_format = FMT_PERCENT
 
-        for col_i in range(2, 10):
-            ws.cell(row=r, column=col_i).border = BORDER_TOTAL if "Median" in s_lbl else BORDER_BOX
-            if col_i >= 5:
-                ws.cell(row=r, column=col_i).alignment = ALIGN_RIGHT
-                ws.cell(row=r, column=col_i).font = FONT_TOTAL if "Median" in s_lbl else FONT_FORMULA
+        for col_i in range(2, 8):
+            cell = ws.cell(row=r, column=col_i)
+            cell.border = border
+            if col_i >= 3:
+                cell.alignment = ALIGN_RIGHT
+                cell.font = FONT_TOTAL if is_median else FONT_FORMULA
 
     # 3. Implied Target Valuation Bridge
     val_r = bench_r + len(stat_names) + 2

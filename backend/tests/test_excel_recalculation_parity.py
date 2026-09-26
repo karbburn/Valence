@@ -32,7 +32,7 @@ from backend.export.excel.render_fcst import (
     render_operating_model,
     render_working_capital,
 )
-from backend.export.excel.render_val import render_dcf_tab
+from backend.export.excel.render_val import bridge_ref, render_dcf_tab
 from backend.models.spec.forecast import FORECAST_PERIODS, Forecast, ForecastLineItem
 from backend.models.spec.historicals import Historicals
 from backend.models.spec.metadata import ModelMetadata
@@ -100,6 +100,29 @@ def _model(**overrides) -> ModelSpecification:
     add("canonical.cf.operating_activities", [200.0, 227.6, 252.2, 276.8, 301.4])
     add("canonical.cf.dividends_paid", [-40.0, -44.3, -48.6, -53.0, -57.3])
     add("canonical.cf.financing_activities", [-40.0, -44.3, -48.6, -53.0, -57.3])
+
+    # Bull and bear carry their own revenue and EBITDA, at margins either side of
+    # base. Without them the scenario table has nothing to compare, and a
+    # regression that collapsed all three scenarios onto one number would pass.
+    def add_scenario(scenario: str, revenue: float, margin: float):
+        for p in FORECAST_PERIODS:
+            for key, value in (
+                ("canonical.is.revenue", revenue),
+                ("canonical.is.ebitda", revenue * margin),
+            ):
+                items.append(
+                    ForecastLineItem(
+                        canonical_key=key,
+                        period_label=p,
+                        period_end_date=__import__("datetime").date(2027, 12, 31),
+                        value=value,
+                        scenario=scenario,
+                        driver_key="revenue_growth" if key.endswith("revenue") else "ebit_margin",
+                    )
+                )
+
+    add_scenario("bull", 1300.0, 0.33)   # higher revenue AND a higher margin
+    add_scenario("bear", 800.0, 0.27)    # lower revenue AND a lower margin
 
     spec.forecast = Forecast(line_items=items)
     spec.valuation = [
@@ -182,11 +205,21 @@ def test_fcff_rebuilds_from_the_workbook_cells(exported):
 
 
 def test_bridge_recalculates_to_the_published_price(exported):
+    """The workbook's bridge must recompute to the price the model published.
+
+    Cells are addressed by line name through `bridge_ref` rather than by row
+    number, so this keeps testing the same relationship if a line is inserted.
+    """
     spec, wb, _ = exported
     bridge = spec.get_valuation("base").dcf_bridge
-    ev = (_cell(wb, "31_DCF", "H17") or 0) + (_cell(wb, "31_DCF", "H18") or 0)
-    equity = (_cell(wb, "31_DCF", "H19") or 0) - (_cell(wb, "31_DCF", "H25") or 0)
-    price = equity / (_cell(wb, "31_DCF", "H27") or 1)
+
+    def bridge_cell(line):
+        coord = bridge_ref(line).split("!")[1]
+        return _cell(wb, "36_EV_Bridge", coord) or 0
+
+    ev = bridge_cell("sum_pv_fcff") + bridge_cell("pv_terminal_value")
+    equity = bridge_cell("enterprise_value") - bridge_cell("net_non_operating_debt")
+    price = equity / (bridge_cell("diluted_shares") or 1)
 
     assert ev == pytest.approx(bridge.enterprise_value, rel=0.001)
     assert equity == pytest.approx(bridge.equity_value, rel=0.001)
