@@ -44,6 +44,8 @@ BS_LINE_ITEM_CONFIG: List[tuple[str, str, CategoryType]] = [
     ("canonical.bs.equity_capital", "Equity Share Capital", "equity"),
     ("canonical.bs.retained_earnings", "Retained Earnings", "equity"),
     ("canonical.bs.other_reserves", "Other Reserves", "equity"),
+    ("canonical.bs.minority_interest", "Minority / Non-Controlling Interest", "equity"),
+    ("canonical.bs.preferred_stock", "Preference Share Capital", "equity"),
     ("canonical.bs.total_equity", "Total Equity", "equity"),
 
     # Non-Current Liabilities
@@ -51,6 +53,15 @@ BS_LINE_ITEM_CONFIG: List[tuple[str, str, CategoryType]] = [
     ("canonical.bs.lease_liabilities", "Lease Liabilities", "non_current_liabilities"),
     ("canonical.bs.other_non_current_liabilities", "Other Non-Current Liabilities", "non_current_liabilities"),
     ("canonical.bs.total_non_current_liabilities", "Total Non-Current Liabilities", "non_current_liabilities"),
+
+    # Current Liabilities
+    # Short-term borrowings are a SEPARATE line from non-current borrowings, and
+    # they include the current portion of long-term debt. Rolling them into one
+    # figure, or omitting them, understates total debt in the EV -> equity
+    # bridge by the whole current maturity.
+    ("canonical.bs.short_term_borrowings", "Short-Term Borrowings & Current Portion of Long-Term Debt", "current_liabilities"),
+    ("canonical.bs.operating_lease_liabilities", "Operating Lease Liabilities", "current_liabilities"),
+    ("canonical.bs.finance_lease_liabilities", "Finance / Capital Lease Liabilities", "non_current_liabilities"),
 
     # Current Liabilities
     ("canonical.bs.trade_payables", "Trade Payables", "current_liabilities"),
@@ -148,8 +159,91 @@ def assemble_balance_sheet(
     is_balanced: Dict[str, bool] = {}
     imbalance: Dict[str, float] = {}
 
+    def _item_for(key: str) -> Optional[BalanceSheetLineItem]:
+        return next((i for i in items if i.canonical_key == key), None)
+
+    def _add_derived(key: str, label: str, values: Dict[str, float], template: BalanceSheetLineItem) -> None:
+        """Insert a derived line item, preserving currency/units/lineage."""
+        items.append(
+            BalanceSheetLineItem(
+                canonical_key=key,
+                display_label=label,
+                category="summary",
+                values_by_period=values,
+                currency=template.currency,
+                units=template.units,
+                lineage_ids_by_period=dict(template.lineage_ids_by_period),
+            )
+        )
+
+    # Derive the totals a filer omits but the roll-forward needs.
+    #
+    # Most EDGAR/screener exports carry Total Assets and Total Liabilities &
+    # Equity but neither Total Liabilities nor Total Equity. Without them the
+    # forecast equity roll-forward would start from a ZERO opening base, which
+    # silently deletes the whole equity account (a 93% error on a steelmaker)
+    # while the balance sheet still "balances" because cash is the plug.
+    assets_ref = _item_for("canonical.bs.total_assets")
+    ncl = _item_for("canonical.bs.total_non_current_liabilities")
+    cl = _item_for("canonical.bs.total_current_liabilities")
+    borrowings = _item_for("canonical.bs.borrowings")
+    leases = _item_for("canonical.bs.lease_liabilities")
+    other_ncl = _item_for("canonical.bs.other_non_current_liabilities")
+    trade_pay = _item_for("canonical.bs.trade_payables")
+    unearned = _item_for("canonical.bs.unearned_revenue")
+    provisions = _item_for("canonical.bs.provisions")
+    other_cl = _item_for("canonical.bs.other_current_liabilities")
+
+    if assets_ref and not _item_for("canonical.bs.total_liabilities"):
+        if ncl and cl:
+            values = {
+                p: (ncl.values_by_period.get(p, 0.0) + cl.values_by_period.get(p, 0.0))
+                for p in periods
+                if p in ncl.values_by_period or p in cl.values_by_period
+            }
+            _add_derived("canonical.bs.total_liabilities", "Total Liabilities", values, assets_ref)
+        else:
+            # Sum the individual liability lines we do have.
+            components = [borrowings, leases, other_ncl, trade_pay, unearned, provisions, other_cl]
+            components = [c for c in components if c is not None]
+            if components:
+                values = {}
+                for p in periods:
+                    total = sum(c.values_by_period.get(p, 0.0) for c in components)
+                    if any(p in c.values_by_period for c in components):
+                        values[p] = total
+                if values:
+                    _add_derived("canonical.bs.total_liabilities", "Total Liabilities", values, assets_ref)
+
+    if assets_ref and not _item_for("canonical.bs.total_equity"):
+        total_liabilities = _item_for("canonical.bs.total_liabilities")
+        if total_liabilities:
+            values = {}
+            for p in periods:
+                ta = assets_ref.values_by_period.get(p)
+                tl = total_liabilities.values_by_period.get(p)
+                if ta is not None and tl is not None:
+                    values[p] = ta - tl
+            if values:
+                _add_derived("canonical.bs.total_equity", "Total Equity", values, assets_ref)
+        else:
+            # No liability detail at all: fall back to the equity components.
+            equity_capital = _item_for("canonical.bs.equity_capital")
+            retained = _item_for("canonical.bs.retained_earnings")
+            reserves = _item_for("canonical.bs.other_reserves")
+            components = [c for c in (equity_capital, retained, reserves) if c is not None]
+            if components:
+                values = {}
+                for p in periods:
+                    if any(p in c.values_by_period for c in components):
+                        values[p] = sum(c.values_by_period.get(p, 0.0) for c in components)
+                if values:
+                    _add_derived("canonical.bs.total_equity", "Total Equity", values, assets_ref)
+
     # Reconcile Total Assets from sum of Non-Current Assets and Current Assets
-    nca_item = next((i for i in items if i.canonical_key == "canonical.bs.total_non_current_assets"), None)
+    nca_item = _item_for("canonical.bs.total_non_current_assets")
+    ca_item = _item_for("canonical.bs.total_current_assets")
+    assets_item = _item_for("canonical.bs.total_assets")
     ca_item = next((i for i in items if i.canonical_key == "canonical.bs.total_current_assets"), None)
     assets_item = next((i for i in items if i.canonical_key == "canonical.bs.total_assets"), None)
 
@@ -173,7 +267,7 @@ def assemble_balance_sheet(
             )
             items.append(assets_item)
 
-    liab_eq_item = next((i for i in items if i.canonical_key == "canonical.bs.total_liabilities_and_equity"), None)
+    liab_eq_item = _item_for("canonical.bs.total_liabilities_and_equity")
 
     if assets_item and not liab_eq_item:
         liab_eq_item = BalanceSheetLineItem(

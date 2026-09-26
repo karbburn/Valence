@@ -189,23 +189,68 @@ def _historicals_fingerprint(spec: ModelSpecification) -> tuple:
     )
 
 
+def _forecast_contract(spec: ModelSpecification) -> frozenset:
+    """The set of canonical keys this spec's forecast actually carries.
+
+    Used to detect a snapshot written by an older engine. Comparing anchor
+    values alone cannot see an engine change: a cache that still matches the
+    database on revenue and total assets may have been produced before the
+    forecast engine began emitting, say, the working-capital movement, in which
+    case the valuation layer has to substitute a derived number and the
+    published figures no longer come from the model the reader is looking at.
+    """
+    return frozenset(
+        li.canonical_key
+        for li in (spec.forecast.line_items if spec.forecast else [])
+        if li.scenario == "base"
+    )
+
+
+def _expected_forecast_contract(company_id: str) -> frozenset:
+    """Canonical keys the CURRENT forecast engine emits for this company.
+
+    Derived by running the engine rather than from a hardcoded list, so the
+    check cannot itself drift out of date when the engine gains a line item.
+    """
+    from backend.forecast.pipeline import run as run_forecast_pipeline
+
+    return _forecast_contract(run_forecast_pipeline(_get_hist_model(company_id)))
+
+
 def _cache_matches_database(cached_spec: ModelSpecification) -> bool:
     """True when the cached snapshot was built from the current database state.
 
-    The precomputed JSON freezes the forecast; if ingestion/reconciliation has since
-    corrected any anchor figure (e.g. a filing superseding a screener value), the
-    cached forecast is silently stale. Comparing two anchor values against a fresh
-    historical assembly keeps the cache self-healing at negligible cost.
+    Two independent conditions must hold:
+
+    1. The historical anchors still agree with a fresh assembly, so an ingestion
+       correction invalidates the frozen forecast.
+    2. The cached forecast carries every canonical key the current forecast
+       engine emits, so a snapshot written by an older engine is rebuilt rather
+       than served with substituted inputs.
     """
     try:
-        fresh = _get_hist_model(cached_spec.metadata.company_id)
+        company_id = cached_spec.metadata.company_id
+        fresh = _get_hist_model(company_id)
         fresh_periods = fresh.periods or []
         last = fresh_periods[-1] if fresh_periods else ""
         anchors = (
             fresh.income_statement.get_value("canonical.is.revenue", last),
             fresh.balance_sheet.get_value("canonical.bs.total_assets", last),
         )
-        return _historicals_fingerprint(cached_spec) == anchors
+        if _historicals_fingerprint(cached_spec) != anchors:
+            return False
+
+        missing = _expected_forecast_contract(company_id) - _forecast_contract(cached_spec)
+        if missing:
+            logger.info(
+                "Rebuilding %s: cached forecast is missing %d canonical key(s) the "
+                "current engine emits (e.g. %s)",
+                company_id,
+                len(missing),
+                ", ".join(sorted(missing)[:3]),
+            )
+            return False
+        return True
     except Exception as e:
         logger.warning("Freshness check failed; treating cache as valid: %s", e)
         return True

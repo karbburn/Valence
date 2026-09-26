@@ -25,6 +25,9 @@ def select_primary_datapoints(
     AUTHORITATIVE_SOURCES = {"nse_filing", "sec_edgar", "bse_filing"}
     SECONDARY_SOURCES = {"screener"}
     MARKET_FEED_SOURCES = {"yfinance_live", "twelvedata"}
+    # A hand-maintained repository spreadsheet ranks below every retrieved
+    # source. It is a last resort, not an imitation filing.
+    LOCAL_EXPORT_SOURCES = {"local_export"}
 
     def _score(dp: CanonicalDatapoint) -> int:
         score = 0
@@ -38,6 +41,8 @@ def select_primary_datapoints(
                 score += 100
             elif sources & MARKET_FEED_SOURCES:
                 score += 50
+            elif sources & LOCAL_EXPORT_SOURCES:
+                score += 10
 
             locs = [raw_datapoints_map[rid].source_location for rid in dp.source_datapoint_ids if rid in raw_datapoints_map]
             loc_str = " ".join(locs).upper()
