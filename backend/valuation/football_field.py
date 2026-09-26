@@ -127,13 +127,22 @@ def compute_football_field(
         em_notes = "Fixed band fallback — no valuation output supplied"
 
     # 4/5. Comps ranges from peer quartiles when available.
-    pe_mid = max(0.01, comps_pe_price)
-    pe_low = round(max(0.01, comps_pe_low), 2) if comps_pe_low else round(pe_mid * 0.85, 2)
-    pe_high = round(max(0.01, comps_pe_high), 2) if comps_pe_high else round(pe_mid * 1.20, 2)
+    #
+    # A company whose peer set could not be sourced has no comparables price at
+    # all. That used to arrive here as None and raise a TypeError comparing it
+    # with a float, which cost the company its whole workbook. A method with no
+    # inputs contributes no bar to the range: the football field is a synthesis
+    # of what can be valued, and an unsourceable method is absent from it rather
+    # than fatal to the page.
+    #
+    # `mid` is None when the method is unavailable, and the bar is skipped below.
+    pe_mid = max(0.01, comps_pe_price) if comps_pe_price is not None else None
+    pe_low = round(max(0.01, comps_pe_low), 2) if comps_pe_low else (round(pe_mid * 0.85, 2) if pe_mid else None)
+    pe_high = round(max(0.01, comps_pe_high), 2) if comps_pe_high else (round(pe_mid * 1.20, 2) if pe_mid else None)
 
-    ev_mid = max(0.01, comps_ev_ebitda_price)
-    ev_low = round(max(0.01, comps_ev_ebitda_low), 2) if comps_ev_ebitda_low else round(ev_mid * 0.88, 2)
-    ev_high = round(max(0.01, comps_ev_ebitda_high), 2) if comps_ev_ebitda_high else round(ev_mid * 1.22, 2)
+    ev_mid = max(0.01, comps_ev_ebitda_price) if comps_ev_ebitda_price is not None else None
+    ev_low = round(max(0.01, comps_ev_ebitda_low), 2) if comps_ev_ebitda_low else (round(ev_mid * 0.88, 2) if ev_mid else None)
+    ev_high = round(max(0.01, comps_ev_ebitda_high), 2) if comps_ev_ebitda_high else (round(ev_mid * 1.22, 2) if ev_mid else None)
 
     bars = [
         ValuationRangeBar(
@@ -163,29 +172,40 @@ def compute_football_field(
             spread=round(dcf_em_high - dcf_em_low, 2),
             notes=em_notes,
         ),
-        ValuationRangeBar(
-            methodology="Public Comps — P/E Multiples",
-            category="Relative (Comps)",
-            low_value=pe_low,
-            mid_value=round(pe_mid, 2),
-            high_value=pe_high,
-            spread=round(pe_high - pe_low, 2),
-            notes="Peer universe 25th to 75th percentile implied prices",
-        ),
-        ValuationRangeBar(
-            methodology="Public Comps — EV/EBITDA Multiples",
-            category="Relative (Comps)",
-            low_value=ev_low,
-            mid_value=round(ev_mid, 2),
-            high_value=ev_high,
-            spread=round(ev_high - ev_low, 2),
-            notes="Peer universe 25th to 75th percentile implied prices",
-        ),
     ]
 
-    all_lows = [b.low_value for b in bars]
-    all_highs = [b.high_value for b in bars]
-    all_mids = [b.mid_value for b in bars]
+    # Comps bars are added only when a peer benchmark was actually published. A
+    # bar built from a missing price would carry None into the range arithmetic
+    # and into the synthesis below, which is how an unsourceable method turned
+    # into a failed export rather than an absent one.
+    if pe_mid is not None and pe_low is not None and pe_high is not None:
+        bars.append(
+            ValuationRangeBar(
+                methodology="Public Comps — P/E Multiples",
+                category="Relative (Comps)",
+                low_value=pe_low,
+                mid_value=round(pe_mid, 2),
+                high_value=pe_high,
+                spread=round(pe_high - pe_low, 2),
+                notes="Peer universe 25th to 75th percentile implied prices",
+            )
+        )
+    if ev_mid is not None and ev_low is not None and ev_high is not None:
+        bars.append(
+            ValuationRangeBar(
+                methodology="Public Comps — EV/EBITDA Multiples",
+                category="Relative (Comps)",
+                low_value=ev_low,
+                mid_value=round(ev_mid, 2),
+                high_value=ev_high,
+                spread=round(ev_high - ev_low, 2),
+                notes="Peer universe 25th to 75th percentile implied prices",
+            )
+        )
+
+    all_lows = [b.low_value for b in bars if b.low_value is not None]
+    all_highs = [b.high_value for b in bars if b.high_value is not None]
+    all_mids = [b.mid_value for b in bars if b.mid_value is not None]
 
     return FootballFieldSummary(
         ticker=ticker,

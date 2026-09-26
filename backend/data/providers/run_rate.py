@@ -44,6 +44,21 @@ with warnings.catch_warnings():
 _MIN_QUARTER_GAP_DAYS = 60
 _MAX_QUARTER_GAP_DAYS = 130
 
+# The span four genuine consecutive quarters must cover.
+#
+# Gaps alone are not enough. With a 60-day floor, four stamps can be 180 days
+# apart in total and still pass every individual gap test, so three of them can
+# be a half-year's trading added up and labelled a trailing twelve months. Four
+# real quarters span about 273 days; anything under 250 is not four quarters.
+_MIN_FOUR_QUARTER_SPAN_DAYS = 250
+
+# A period a whole year or more after the one before it is a different frequency,
+# not another quarter. A frame mixing annual and quarterly columns — whose four
+# newest date columns would otherwise pass every gap test, because an annual
+# column sitting next to a quarter looks like a 90-day gap — would have an annual
+# figure added to three quarters and publish five quarters' worth of revenue.
+_MAX_PERIOD_GAP_DAYS = 200
+
 # A year-ago quarter is found this close to 365 days from its quarter.
 _TWIN_TOLERANCE_DAYS = 10
 
@@ -107,6 +122,19 @@ def sum_four_quarters(frame, rows: Sequence[str]) -> Optional[float]:
     stamps = sorted(_column_date(c) for c in window)
     gaps = [(stamps[i + 1] - stamps[i]).days for i in range(len(stamps) - 1)]
     if not all(_MIN_QUARTER_GAP_DAYS <= gap <= _MAX_QUARTER_GAP_DAYS for gap in gaps):
+        return None
+
+    # The window must span four quarters in total, not merely have three
+    # acceptable gaps between it.
+    span = (stamps[-1] - stamps[0]).days
+    if span < _MIN_FOUR_QUARTER_SPAN_DAYS:
+        return None
+
+    # And no column may be a different frequency from its neighbour. An annual
+    # column sitting among quarterly ones is about 275 days from the quarter
+    # before it and about 90 from the one after, so only the span of the whole
+    # window and the individual gaps together catch it.
+    if any(gap > _MAX_PERIOD_GAP_DAYS for gap in gaps):
         return None
 
     return sum(values)
@@ -243,25 +271,39 @@ def current_run_rate_revenue(company_id: str) -> tuple[Optional[float], str]:
         _RUN_RATE_CACHE[company_id] = (today, None, "no trailing revenue reported")
         return None, "no trailing revenue reported"
 
-    # State the period the figure actually covers, from whichever statement it
-    # was built out of.
-    basis = _period_basis(quarterly, annual)
+    # State the period the figure ACTUALLY covers.
+    #
+    # Not whichever statement happens to be the most recent. Feeds commonly carry
+    # only four or five quarters, so there is no year-ago twin to roll against and
+    # the figure is the un-rolled annual — which is a fiscal year, not a trailing
+    # twelve months. Labelling that "trailing twelve months to <latest quarter>"
+    # states a period the number does not cover, and the string is published
+    # verbatim in the growth source where a reader would take it at face value.
+    basis = _period_basis(revenue, annual, quarterly)
     _RUN_RATE_CACHE[company_id] = (today, revenue, basis)
     return revenue, basis
 
 
-def _period_basis(quarterly, annual) -> str:
-    for frame, label in ((quarterly, "trailing twelve months to"), (annual, "fiscal year to")):
-        if frame is None or len(getattr(frame, "columns", [])) == 0:
-            continue
-        newest = max(
-            (c for c in frame.columns if _column_date(c) is not None),
-            key=_column_date,
-            default=None,
-        )
-        if newest is not None:
-            return f"{label} {newest.date().isoformat()}"
-    return "period not stated"
+def _period_basis(revenue, annual, quarterly) -> str:
+    """Name the period the figure covers, chosen by how it was actually built.
+
+    The construction decides the label, not the most recent date available. If
+    the four most recent quarters were summed, it is a trailing twelve months;
+    if the annual could not be rolled forward it is a fiscal year, and calling it
+    a trailing figure would misdescribe it in a string a reader sees.
+    """
+    if sum_four_quarters(quarterly, _REVENUE_ROWS) is not None:
+        return f"trailing twelve months to {_newest_date(quarterly)}"
+    return f"reported fiscal year to {_newest_date(annual)} (not a trailing twelve months)"
+
+
+def _newest_date(frame) -> str:
+    newest = max(
+        (c for c in getattr(frame, "columns", []) if _column_date(c) is not None),
+        key=_column_date,
+        default=None,
+    )
+    return _column_date(newest).date().isoformat() if newest is not None else "unknown"
 
 
 # A trailing twelve months is compared with the last reported fiscal year, which
@@ -275,6 +317,11 @@ def _period_basis(quarterly, annual) -> str:
 # times too large; another came back a hundredth of its reported year. Both
 # would otherwise be taken as fact and would set a growth rate that is arithmetically
 # valid and economically absurd.
+#
+# The upper edge is EXCLUSIVE. At exactly 4x the floor would publish a year-one
+# growth rate of +300%, which is arithmetically what the ratio says and not a
+# thing a business does inside a year. Past the band the reading is not a fast
+# company; it is a different unit or a different company.
 _RUN_RATE_SANE_BAND = (0.25, 4.0)
 
 
@@ -287,7 +334,7 @@ def run_rate_is_comparable(run_rate: Optional[float], reported: Optional[float])
     if not run_rate or not reported or reported <= 0 or run_rate <= 0:
         return False
     ratio = run_rate / reported
-    return _RUN_RATE_SANE_BAND[0] <= ratio <= _RUN_RATE_SANE_BAND[1]
+    return _RUN_RATE_SANE_BAND[0] <= ratio < _RUN_RATE_SANE_BAND[1]
 
 
 def run_rate_advanced_beyond(run_rate: Optional[float], reported: Optional[float]) -> bool:

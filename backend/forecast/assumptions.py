@@ -91,7 +91,7 @@ def _default_cost_of_equity(historical_model: HistoricalModel) -> tuple[float, s
 
 
 def _run_rate_floor(
-    company_id: str, reported_revenue: Optional[float]
+    company_id: str
 ) -> tuple[Optional[float], str]:
     """Trailing-twelve-month revenue in the model's own units, and its basis.
 
@@ -161,7 +161,6 @@ def suggest_base_assumptions(
     #
     # The decay rate rises with the growth band, because the further a company's
     # growth is from a mature rate the faster it is assumed to converge.
-    decay_band = base_cagr
     if base_cagr > 25.0:
         decay = 0.55      # e.g. 88% -> 48% -> 26% -> 15% -> 8%
     elif base_cagr > 10.0:
@@ -194,24 +193,29 @@ def suggest_base_assumptions(
     # The floor is the growth needed to merely MATCH the trailing twelve months.
     # It only ever raises the published rate, never lowers it, and it is stated
     # in the source so the reader can see which base the number rests on.
-    run_rate, run_rate_basis = _run_rate_floor(historical_model.company_id, rev_end)
+    run_rate, run_rate_basis = _run_rate_floor(historical_model.company_id)
     year_one = base_cagr
     run_rate_note = ""
-    if run_rate is not None and run_rate_advanced_beyond(run_rate, rev_end):
-        if not run_rate_is_comparable(run_rate, rev_end):
-            # A reading tens of times, or a fraction of, the reported year is a
-            # unit error rather than a change in the business. Acting on it would
-            # publish a growth rate that is arithmetically valid and
-            # economically absurd, so the reported fiscal year stands.
-            logger.info(
-                "Run rate for %s is %s against a reported year of %s — not the same "
-                "units, so it is not used as a forecast anchor",
-                historical_model.company_id,
-                run_rate,
-                rev_end,
-            )
-            run_rate, run_rate_basis = None, "not comparable with the reported year"
-    if run_rate is not None and rev_end and rev_end > 0 and run_rate > rev_end:
+
+    # The unit guard is applied on its own terms, not inside the "has the run
+    # rate advanced" test. Nesting it there meant the guard only ever ran when
+    # the reading was already larger than the reported year, so whether it
+    # applied was decided by a different question than the one it protects.
+    if run_rate is not None and not run_rate_is_comparable(run_rate, rev_end):
+        # A reading tens of times, or a fraction of, the reported year is a unit
+        # error rather than a change in the business. Acting on it would publish a
+        # growth rate that is arithmetically valid and economically absurd, so
+        # the reported fiscal year stands.
+        logger.info(
+            "Run rate for %s is %s against a reported year of %s — not the same "
+            "units, so it is not used as a forecast anchor",
+            historical_model.company_id,
+            run_rate,
+            rev_end,
+        )
+        run_rate, run_rate_basis = None, "not comparable with the reported year"
+
+    if run_rate_advanced_beyond(run_rate, rev_end):
         floor_pct = (run_rate / rev_end - 1.0) * 100.0
         if floor_pct > year_one:
             year_one = floor_pct
@@ -225,8 +229,15 @@ def suggest_base_assumptions(
             )
 
     for idx, p in enumerate(FORECAST_PERIODS):
-        anchor = year_one if idx == 0 else base_cagr
-        g_val = round(max(0.0, anchor * (decay ** idx)), 2)
+        # The whole path decays from the YEAR-ONE rate, not from the historical
+        # one. Using the measured rate again from year two produced a cliff the
+        # moment the floor bound: a company measured at 4.2% whose run rate
+        # required 12% was published as 12.0, then 4.2, 4.2, 4.2, 4.2 — a sharp
+        # deceleration invented by the model on the second year, immediately
+        # after the floor had just argued the business is growing faster than
+        # its history. When the floor does not bind, year_one equals the measured
+        # rate and the path is unchanged.
+        g_val = round(max(0.0, year_one * (decay ** idx)), 2)
         if decay == 1.0:
             source_rev = f"CAGR held flat ({first_p}-{last_p}: {base_cagr:.1f}%)"
         else:

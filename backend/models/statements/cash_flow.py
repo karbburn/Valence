@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 from backend.normalization.taxonomy.models import CanonicalDatapoint
+
+logger = logging.getLogger(__name__)
 
 CFCategoryType = Literal["operating", "investing", "financing", "adjustments", "summary"]
 
@@ -108,3 +111,69 @@ def assemble_cash_flow(
         line_items=items,
         reconciles_to_bs_by_period={p: True for p in periods},
     )
+
+
+# The three sections a cash flow statement is made of. Their sum IS the net
+# change in cash: that is the definition, not a relationship that might hold.
+_CF_SECTIONS = (
+    "canonical.cf.operating_activities",
+    "canonical.cf.investing_activities",
+    "canonical.cf.financing_activities",
+)
+
+
+def derive_net_change_in_cash(cf_model: CashFlowStatement) -> None:
+    """Set net change in cash to the sum of the three sections, in place.
+
+    It was read as an input, and the feeds either omit it or report zero, so the
+    cash flow statement published a net change in cash of 0.0 for every company
+    in every period while the balance sheet's own cash line moved — at one
+    large-cap by 1,309 and 2,016 against a published zero. The line a reader
+    checks to see whether the statement adds up was the one line guaranteed not
+    to.
+
+    Where all three sections are present the sum is the answer, and a reported
+    figure that disagrees with it is logged rather than published. Where a
+    section is missing the reported figure is left alone: a partial sum is not a
+    net change, and inventing one is worse than reporting what the source said.
+    """
+    by_key = {item.canonical_key: item for item in cf_model.line_items}
+    net_item = by_key.get("canonical.cf.net_change_in_cash")
+    sections = [by_key.get(k) for k in _CF_SECTIONS]
+
+    # The line is created when the source never reported one. It is the total of
+    # the three sections the statement already publishes, so leaving it off the
+    # page removes the one line a reader uses to see whether the statement adds
+    # up — and at one large-cap its balance-sheet cash moved 1,309 and 2,016
+    # against a line that was simply absent.
+    if net_item is None and all(s is not None for s in sections):
+        net_item = CashFlowLineItem(
+            canonical_key="canonical.cf.net_change_in_cash",
+            display_label="Net Change in Cash & Cash Equivalents",
+            category="summary",
+            values_by_period={},
+            currency=sections[0].currency,
+            units=sections[0].units,
+            lineage_ids_by_period={},
+        )
+        cf_model.line_items.append(net_item)
+        # Keep the summary line last, where a reader looks for it.
+        cf_model.line_items.sort(key=lambda i: 0 if i.category != "summary" else 1)
+
+    if net_item is None:
+        return
+
+    for period in cf_model.periods:
+        if any(s is None or period not in s.values_by_period for s in sections):
+            continue
+        derived = sum(float(s.values_by_period[period]) for s in sections)
+
+        reported = net_item.values_by_period.get(period)
+        if reported is not None and abs(float(reported) - derived) > 0.01:
+            logger.info(
+                "%s %s: reported net change in cash %.2f disagrees with the sum of "
+                "its three sections %.2f; publishing the sum, which is the "
+                "definition",
+                cf_model.company_id, period, float(reported), derived,
+            )
+        net_item.values_by_period[period] = round(derived, 2)

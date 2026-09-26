@@ -5,7 +5,11 @@ from pydantic import BaseModel
 
 from backend.data.store import RawDatapoint
 from backend.models.statements.balance_sheet import BalanceSheet, assemble_balance_sheet
-from backend.models.statements.cash_flow import CashFlowStatement, assemble_cash_flow
+from backend.models.statements.cash_flow import (
+    CashFlowStatement,
+    assemble_cash_flow,
+    derive_net_change_in_cash,
+)
 from backend.models.statements.income_statement import IncomeStatement, assemble_income_statement
 from backend.models.statements.ratios import HistoricalRatios, compute_historical_ratios
 from backend.normalization.taxonomy.models import CanonicalDatapoint
@@ -65,6 +69,10 @@ def build_historical_model(
         canonical_datapoints,
         target_periods=target_periods,
     )
+    # Net change in cash is the sum of the three sections by definition, not a
+    # fourth reported figure. Left as read, it published as zero for every
+    # company while the balance sheet's cash line moved.
+    derive_net_change_in_cash(cf_model)
 
     # Reconcile Cash Flow Statement to Balance Sheet cash change
     reconciles_dict = {}

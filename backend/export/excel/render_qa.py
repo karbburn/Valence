@@ -176,14 +176,20 @@ def render_model_checks_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet
             f'-N(\'11_Balance_Sheet\'!{prev_col}16)))'
             f'<=0.01*MAX(ABS(N(\'11_Balance_Sheet\'!{hist_col}16)),1),"PASS","FAIL"))'
         ),
-        # Cross-foot: the rendered cash-flow total must equal the sum of its
-        # three sections. This can fail, unlike comparing a total to the sum
-        # that defines it.
+        # Closing debt must equal opening plus drawdowns less repayments. This
+        # can fail, unlike comparing a total to the sum that defines it.
+        #
+        # It compared the CLOSING balance against the OPTIONAL REPAYMENTS row
+        # instead, so for any company that carries debt and repays nothing
+        # optionally it compared 8,468 against 0 and returned FAIL — in all
+        # twenty-two workbooks, while the cached verdict said PASS.
         "debt_schedule_reconciles": (
             '=IF(N(\'25_Debt_Schedule\'!G10)=0,"N/A",'
             'IF(AND('
             + ",".join(
-                f"ABS('25_Debt_Schedule'!{c}10-N('25_Debt_Schedule'!{c}9))<=0.01"
+                f"ABS(N('25_Debt_Schedule'!{c}10)-(N('25_Debt_Schedule'!{c}6)"
+                f"+N('25_Debt_Schedule'!{c}7)-N('25_Debt_Schedule'!{c}8)"
+                f"-N('25_Debt_Schedule'!{c}9)))<=0.01*MAX(ABS(N('25_Debt_Schedule'!{c}10)),1)"
                 for c in "CDEFG"
             )
             + '),"PASS","FAIL"))'
@@ -222,22 +228,44 @@ def render_model_checks_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet
         cached_res = "PASS" if c.passed else "FAIL"
         formula_expr = formula_map.get(c.check_name, None)
 
+        # A live formula and the value cached beside it must not be able to
+        # disagree.
+        #
+        # The cached verdict was written unconditionally from the engine's own
+        # result, so a check whose formula did not actually test what its name
+        # said showed PASS until someone pressed recalculate and watched it turn
+        # FAIL. The reader sees the cached value on open and the recalculated one
+        # afterwards, which is the worst of both: the workbook appears to
+        # contradict itself depending on when it was opened.
+        #
+        # Where the engine's own detail contradicts the verdict — it explains
+        # that an input does not reconcile while the row claims it does — the
+        # cached value follows the detail, because a row that says PASS while
+        # its own explanation says otherwise is the defect.
+        detail_text = (c.detail or "").lower()
+        contradicts = any(
+            phrase in detail_text
+            for phrase in ("does not reconcile", "does not balance", "not reconciled")
+        )
+        if contradicts and c.passed:
+            cached_res = "FAIL"
+
         if formula_expr:
             write_formula_cell(
                 ws, r, 4,
                 formula=formula_expr,
                 cached_value=cached_res,
                 num_format="@",
-                font=FONT_PASS if c.passed else FONT_ALERT,
-                fill=FILL_PASS if c.passed else FILL_FAIL,
+                font=FONT_PASS if cached_res == "PASS" else FONT_ALERT,
+                fill=FILL_PASS if cached_res == "PASS" else FILL_FAIL,
                 border=BORDER_BOX,
                 alignment=ALIGN_CENTER,
             )
         else:
             res_cell = ws.cell(row=r, column=4, value=cached_res)
             res_cell.alignment = ALIGN_CENTER
-            res_cell.font = FONT_PASS if c.passed else FONT_ALERT
-            res_cell.fill = FILL_PASS if c.passed else FILL_FAIL
+            res_cell.font = FONT_PASS if cached_res == "PASS" else FONT_ALERT
+            res_cell.fill = FILL_PASS if cached_res == "PASS" else FILL_FAIL
             res_cell.border = BORDER_BOX
 
         # Always show the engine's own explanation. Replacing a passing check's
@@ -245,7 +273,7 @@ def render_model_checks_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet
         # reader HOW the check passed — which is the sentence that reveals a
         # check passing for the wrong reason.
         detail_cell = ws.cell(row=r, column=5, value=c.detail or "Verified OK")
-        detail_cell.font = FONT_ALERT if not c.passed else FONT_FORMULA
+        detail_cell.font = FONT_PASS if cached_res == "PASS" else FONT_ALERT
         detail_cell.alignment = ALIGN_LEFT
 
         for col in range(2, 6):

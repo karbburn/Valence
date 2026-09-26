@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from backend.export.excel.exporter import export_model_to_excel
@@ -94,6 +94,16 @@ _SPEC_MUTEX = threading.Lock()
 # out, because "busy, try again" is actionable and a hung request is not.
 _EXPORT_MUTEX = threading.Lock()
 _EXPORT_WAIT_SECONDS = 90.0
+
+# How many requests may be WAITING for the export lock.
+#
+# Without a bound, every queued request occupies a worker thread for the whole
+# wait. The sync routes share one threadpool, so a burst of exports would fill it
+# with threads doing nothing but waiting on a lock, and /api/health — the check
+# the platform's own uptime monitor uses — would stop answering. The service
+# would look dead while doing exactly what it was asked to.
+_EXPORT_QUEUE_LIMIT = 2
+_export_waiting = threading.Semaphore(_EXPORT_QUEUE_LIMIT)
 
 
 def _normalize_assumptions(
@@ -493,7 +503,7 @@ def revert_driver_override(req: RevertRequest, company_id: str = "infy_infy") ->
 
 
 @router.get("/export/excel")
-def export_excel(company_id: str = "infy_infy") -> FileResponse:
+def export_excel(company_id: str = "infy_infy") -> Response:
     """Build the workbook and return it as a download.
 
     One export runs at a time; see _EXPORT_MUTEX for why. A request that cannot
@@ -502,22 +512,37 @@ def export_excel(company_id: str = "infy_infy") -> FileResponse:
     """
     _require_valid_company_id(company_id)
 
-    if not _EXPORT_MUTEX.acquire(timeout=_EXPORT_WAIT_SECONDS):
+    # Refuse at the door rather than queueing without limit: a waiting request
+    # holds a worker thread, and the sync threadpool is shared with every other
+    # route including the health check.
+    if not _export_waiting.acquire(blocking=False):
         raise HTTPException(
             status_code=503,
             detail=(
-                "Another workbook is being built. This service builds one at a "
-                "time so it stays within memory; try again in a moment."
+                "Workbooks are already being built. This service builds a small "
+                "number at a time so it stays within memory; try again shortly."
             ),
-            headers={"Retry-After": "15"},
+            headers={"Retry-After": "20"},
         )
     try:
-        return _export_excel_locked(company_id)
+        if not _EXPORT_MUTEX.acquire(timeout=_EXPORT_WAIT_SECONDS):
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Another workbook is being built. This service builds one at "
+                    "a time so it stays within memory; try again in a moment."
+                ),
+                headers={"Retry-After": "20"},
+            )
+        try:
+            return _export_excel_locked(company_id)
+        finally:
+            _EXPORT_MUTEX.release()
     finally:
-        _EXPORT_MUTEX.release()
+        _export_waiting.release()
 
 
-def _export_excel_locked(company_id: str) -> FileResponse:
+def _export_excel_locked(company_id: str) -> Response:
     """The export itself. Callers must hold _EXPORT_MUTEX."""
     spec = _get_or_build_spec(company_id)
     if spec is None:
@@ -562,10 +587,29 @@ def _export_excel_locked(company_id: str) -> FileResponse:
     if not file_path.exists():
         raise HTTPException(status_code=500, detail="Failed to generate Excel file")
 
-    return FileResponse(
-        path=str(file_path),
-        filename=file_path.name,
+    # The bytes are read while the lock is still held and returned in memory.
+    #
+    # A FileResponse streams from the path AFTER this function returns, by which
+    # point the lock is released and another export of the same company can
+    # rewrite the very file being streamed. A download would then be truncated
+    # or contain a half-written workbook. Reading it here costs one workbook's
+    # worth of memory briefly, which the serialisation already bounds.
+    try:
+        payload = file_path.read_bytes()
+    except OSError as exc:
+        logger.exception("Could not read the workbook for %s", company_id)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not read the workbook for {company_id}: {type(exc).__name__}",
+        )
+
+    return Response(
+        content=payload,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{file_path.name}"',
+            "Content-Length": str(len(payload)),
+        },
     )
 
 
