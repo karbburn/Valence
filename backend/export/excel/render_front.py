@@ -139,7 +139,8 @@ def render_model_guide(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     quick_jumps = [
         ("02_Executive_Summary", "Executive Summary", "60-second valuation summary, upside/downside & Base/Bull/Bear price targets"),
         ("20_Operating_Model", "Operating Model", "5-year integrated 3-statement forecast model linked to schedules 21-27"),
-        ("31_DCF", "DCF Valuation", "Unlevered FCFF model, WACC discount factors & Enterprise Value bridge"),
+        ("31_DCF", "DCF Valuation", "Unlevered FCFF model, WACC discount factors & present value by year"),
+        ("36_EV_Bridge", "EV Bridge", "Enterprise value to equity value and implied share price, with the basis each term was struck on"),
         ("41_Valuation_Comparison", "Football Field", "Institutional multi-methodology range synthesis (DCF vs Comps vs Market)"),
         ("52_Model_Checks", "Model Audit Checks", "Automated 9-point accounting equality and financial logic audit rollup"),
     ]
@@ -186,7 +187,8 @@ def render_model_guide(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         ("Forecast & Schedules", "27_Share_Count", "Diluted share count schedule"),
         # Valuation
         ("Valuation", "30_WACC", "WACC CAPM cost of equity & capital weighting"),
-        ("Valuation", "31_DCF", "5-year FCFF, PV discounting, and EV -> Price bridge"),
+        ("Valuation", "31_DCF", "5-year FCFF build and PV discounting, year by year"),
+        ("Valuation", "36_EV_Bridge", "EV -> equity value -> implied share price, with the basis and date of every term"),
         ("Valuation", "32_Terminal_Value", "Dual terminal value: Gordon Growth & Exit Multiple"),
         ("Valuation", "33_Sensitivity", "2D sensitivity grids (WACC x Growth, WACC x Multiple)"),
         ("Valuation", "34_Reverse_DCF", "Market implied perpetuity terminal growth rate"),
@@ -281,7 +283,8 @@ def render_model_guide(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     workflow_guide = [
         ("Step 1: Executive Overview", "02_Executive_Summary", "Start here! Get a 60-second summary of implied share price vs market benchmark, WACC, and scenario outputs."),
         ("Step 2: Operating Model", "20_Operating_Model", "Inspect historical financial actuals (FY24-FY26) and 5-year integrated 3-statement forecast (FY27-FY31)."),
-        ("Step 3: WACC & DCF Schedule", "30_WACC & 31_DCF", "Examine CAPM Cost of Equity, mid-year discount factors (1+WACC)^-(t-0.5), free cash flows, and non-operating equity bridge."),
+        ("Step 3: WACC & DCF Schedule", "30_WACC & 31_DCF", "Examine CAPM Cost of Equity, mid-year discount factors (1+WACC)^-(t-0.5), and free cash flows year by year."),
+        ("Step 3b: EV Bridge", "36_EV_Bridge", "Walk enterprise value to equity value and the implied share price, with the balance-sheet date and debt basis each term was struck on."),
         ("Step 4: Terminal Value & ROIC", "32_Terminal_Value", "Validate dual terminal value outputs (Gordon Growth vs Exit Multiple) and check implied terminal ROIC consistency."),
         ("Step 5: Sensitivity & Reverse DCF", "33_Sensitivity & 34_Reverse_DCF", "Test 2D sensitivity matrices (WACC x Growth, WACC x Multiple) and solve for market-implied growth expectations."),
         ("Step 6: Scenario & Audit Log", "35_Scenario_Analysis & 52_Model_Checks", "Compare Base, Bull, and Bear cases side-by-side and review automated QA check results."),

@@ -42,6 +42,19 @@ from backend.export.excel.styles import (
 from backend.models.spec.model_specification import ModelSpecification
 
 
+def _br(line: str) -> str:
+    """Address of one EV-bridge line, for use inside a workbook formula.
+
+    The QA checks recompute the bridge's arithmetic from the cells the bridge
+    actually published, so they are written against line names rather than
+    against row numbers. A renamed or reordered line therefore moves the check
+    with it instead of leaving it pointing at whatever shifted into the row.
+    """
+    from backend.export.excel.render_val import bridge_ref
+
+    return bridge_ref(line)
+
+
 def render_data_sources(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ws = wb.create_sheet(title="50_Data_Sources")
     apply_tab_defaults(ws, freeze_cell="A5")
@@ -179,15 +192,20 @@ def render_model_checks_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet
         # Equity value must equal EV less net debt, and the per-share result
         # must equal equity / shares. Both are genuine recomputations of a
         # relationship, not restatements of the defining formula.
+        #
+        # The bridge lives on 36_EV_Bridge and every cell is named by line, so
+        # a line inserted above another cannot silently re-point these checks
+        # at a different figure.
         "dcf_bridge_reconciles": (
-            '=IF(N(\'31_DCF\'!H26)=0,"N/A",IF(AND('
-            "ABS('31_DCF'!H26-('31_DCF'!H19-'31_DCF'!H25))<=0.01*MAX(ABS('31_DCF'!H26),1),"
-            "ABS('31_DCF'!H28-('31_DCF'!H26/'31_DCF'!H27))<=0.01"
+            f'=IF(N({_br("equity_value")})=0,"N/A",IF(AND('
+            f"ABS({_br('equity_value')}-({_br('enterprise_value')}-{_br('net_non_operating_debt')}))"
+            f"<=0.01*MAX(ABS({_br('equity_value')}),1),"
+            f"ABS({_br('implied_share_price')}-({_br('equity_value')}/{_br('diluted_shares')}))<=0.01"
             '),"PASS","FAIL"))'
         ),
         "wacc_valid": '=IF(N(\'30_WACC\'!C15)=0,"N/A",IF(AND(\'30_WACC\'!C15>0.03,\'30_WACC\'!C15<0.30),"PASS","FAIL"))',
         "terminal_growth_lt_wacc": '=IF(OR(N(\'32_Terminal_Value\'!C6)=0,N(\'30_WACC\'!C15)=0),"N/A",IF(\'32_Terminal_Value\'!C6<\'30_WACC\'!C15,"PASS","FAIL"))',
-        "no_missing_critical_inputs": '=IF(N(\'31_DCF\'!H28)=0,"N/A",IF(\'31_DCF\'!H28>0,"PASS","FAIL"))',
+        "no_missing_critical_inputs": f'=IF(N({_br("implied_share_price")})=0,"N/A",IF({_br("implied_share_price")}>0,"PASS","FAIL"))',
         "data_provenance_quality": '=IF(COUNTA(\'50_Data_Sources\'!B6:B11)>0,"PASS","FAIL")',
         # Cannot be recomputed from workbook cells — the provenance status lives
         # on the historical line items, not in a number. The engine's verdict is

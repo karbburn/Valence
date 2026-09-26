@@ -25,6 +25,23 @@ from openpyxl import load_workbook
 
 from backend.export.excel.exporter import export_model_to_excel
 from backend.export.excel.links import AUTHOR_URL, VALENCE_URL
+from backend.export.excel.render_val import bridge_ref
+
+# Every tab the workbook must contain, in the order it must appear.
+#
+# Published rather than asserted inline so the launch-readiness check and this
+# audit cannot disagree about what the workbook is supposed to look like.
+EXPECTED_SHEETS = (
+    "00_Cover", "01_Model_Guide", "02_Executive_Summary", "03_Model_Control",
+    "10_Income_Statement", "11_Balance_Sheet", "12_Cash_Flow", "13_Financial_Ratios",
+    "14_Historical_Drivers",
+    "20_Operating_Model", "21_Revenue_Build", "22_Cost_Build", "23_Working_Capital",
+    "24_Capex_D&A", "25_Debt_Schedule", "26_Tax_Schedule", "27_Share_Count",
+    "30_WACC", "31_DCF", "36_EV_Bridge", "32_Terminal_Value", "33_Sensitivity",
+    "34_Reverse_DCF", "35_Scenario_Analysis",
+    "40_Trading_Comps", "41_Valuation_Comparison", "42_Investment_Returns",
+    "50_Data_Sources", "51_Assumption_Log", "52_Model_Checks", "53_Methodology",
+)
 from backend.forecast.pipeline import run as run_forecast_pipeline
 from backend.validation.pipeline import run_qa
 from backend.valuation.pipeline import run_valuation
@@ -57,20 +74,22 @@ def main() -> None:
     # 2. Reload workbook for structural and financial audit
     wb = load_workbook(str(out_file), data_only=False)
     sheet_names = wb.sheetnames
-    _assert(len(sheet_names) == 30, f"30 total institutional sheets rendered cleanly (got {len(sheet_names)})")
-
-    expected_key_tabs = [
-        "00_Cover", "01_Model_Guide", "02_Executive_Summary", "03_Model_Control",
-        "10_Income_Statement", "11_Balance_Sheet", "12_Cash_Flow", "13_Financial_Ratios", "14_Historical_Drivers",
-        "20_Operating_Model", "21_Revenue_Build", "22_Cost_Build", "23_Working_Capital",
-        "24_Capex_D&A", "25_Debt_Schedule", "26_Tax_Schedule", "27_Share_Count",
-        "30_WACC", "31_DCF", "32_Terminal_Value", "33_Sensitivity", "34_Reverse_DCF", "35_Scenario_Analysis",
-        "40_Trading_Comps", "41_Valuation_Comparison", "42_Investment_Returns",
-        "50_Data_Sources", "51_Assumption_Log", "52_Model_Checks", "53_Methodology",
+    # The exact set of tabs, in order. A count alone cannot tell a renamed tab
+    # from a replaced one, so a tab could move and every reference to its old
+    # location go quietly nowhere while the count stayed right. The enterprise
+    # value bridge moving to 36_EV_Bridge is exactly that change.
+    missing = [tab for tab in EXPECTED_SHEETS if tab not in sheet_names]
+    extra = [tab for tab in sheet_names if tab not in EXPECTED_SHEETS]
+    out_of_order = [
+        tab
+        for (want, got) in zip(EXPECTED_SHEETS, sheet_names)
+        if want != got
     ]
-
-    for tab in expected_key_tabs:
-        _assert(tab in sheet_names, f"Tab '{tab}' verified in workbook structure")
+    _assert(
+        not missing and not extra and not out_of_order,
+        f"{len(EXPECTED_SHEETS)} institutional sheets rendered cleanly and in order "
+        f"(missing={missing}, unexpected={extra}, out_of_order={out_of_order})",
+    )
 
     print("\n--- 1. AUDITING 3-STATEMENT INTEGRATION & ACCOUNTING EQUALITY ---")
     base_val = next(v for v in spec.valuation if v.scenario == "base")
@@ -110,15 +129,27 @@ def main() -> None:
     wacc_formula = str(ws_wacc["C9"].value)
     _assert("=" in wacc_formula and "C6" in wacc_formula, f"30_WACC live CAPM formula verified ({wacc_formula})")
 
-    # Check 7: 31_DCF Live FCFF Sum Formula
-    ws_dcf = wb["31_DCF"]
-    dcf_fcff_sum_formula = str(ws_dcf["H17"].value)
-    _assert("=" in dcf_fcff_sum_formula and "SUM" in dcf_fcff_sum_formula, f"31_DCF live FCFF sum formula verified ({dcf_fcff_sum_formula})")
+    # Check 7: 36_EV_Bridge Live FCFF Sum Formula
+    #
+    # The cumulative PV of FCFF used to sit in 31_DCF's summary column, which
+    # the bridge no longer has: the bridge is a single value per line and now
+    # has its own tab. Addressed by line name so the check follows a rename.
+    ws_bridge = wb["36_EV_Bridge"]
+    dcf_fcff_sum_formula = str(ws_bridge[bridge_ref("sum_pv_fcff").split("!")[1]].value)
+    _assert("=" in dcf_fcff_sum_formula and "SUM" in dcf_fcff_sum_formula, f"36_EV_Bridge live FCFF sum formula verified ({dcf_fcff_sum_formula})")
 
     # Check 8: 02_Executive_Summary Cross-Sheet Reference
     ws_exec = wb["02_Executive_Summary"]
     exec_price_formula = str(ws_exec["C6"].value)
-    _assert("=" in exec_price_formula and ("35_Scenario_Analysis" in exec_price_formula or "31_DCF" in exec_price_formula), f"02_Executive_Summary cross-sheet price formula verified ({exec_price_formula})")
+    _assert(
+        "=" in exec_price_formula
+        and (
+            "35_Scenario_Analysis" in exec_price_formula
+            or "36_EV_Bridge" in exec_price_formula
+            or "31_DCF" in exec_price_formula
+        ),
+        f"02_Executive_Summary cross-sheet price formula verified ({exec_price_formula})",
+    )
 
     # Check 9: 00_Cover Signature Link
     ws_cover = wb["00_Cover"]
