@@ -88,7 +88,8 @@ class DCFBridge(BaseModel):
     cash_and_equivalents: Optional[float] = None    # cash & bank
     marketable_securities: Optional[float] = None   # current investments
     non_current_investments: Optional[float] = None # LT financial investments / equity stakes
-    total_debt: Optional[float] = None              # total borrowings
+    total_debt: Optional[float] = None              # total interest-bearing debt
+    operating_lease_liabilities: Optional[float] = None  # shown, not deducted (see note)
     minority_interest: Optional[float] = None       # non-controlling interests
     preferred_stock: Optional[float] = None         # preferred equity
     less_net_debt: Optional[float] = None           # (Debt + NCI + Pref) - (Cash + MktSec + NonCurrInv)
@@ -96,11 +97,21 @@ class DCFBridge(BaseModel):
     shares_outstanding: Optional[float] = None      # diluted, in units
     implied_share_price: Optional[float] = None     # equity_value / shares
 
+    # Date of the balance sheet the bridge was struck on, and how it was
+    # obtained. A net debt figure without its date is unreadable: the same
+    # company at the same price carries a different enterprise value depending
+    # on whether the balance sheet is three months old or two years old, and
+    # that is exactly the difference a reader cannot see unless it is published.
+    balance_sheet_as_of: Optional[str] = None       # ISO date or period label
+    balance_sheet_source: Optional[str] = None      # reported_quarter | filed_annual_balance_sheet
+    debt_basis_note: Optional[str] = None           # what counts as debt, in words
+
 
 class ReverseDCF(BaseModel):
     """Reverse DCF: given market price, solve for implied growth/margins."""
     market_price: Optional[float] = None
     market_price_date: Optional[str] = None       # fetch date of the market quote (ISO)
+    market_price_source: Optional[str] = None     # yfinance | twelvedata | registry | stale_cache:* | market_default
     implied_terminal_growth: Optional[float] = None     # % solved for
     implied_revenue_cagr: Optional[float] = None        # alternative solve
     method_note: str = ""                               # which variable was solved for

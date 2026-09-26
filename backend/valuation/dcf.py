@@ -24,16 +24,61 @@ from backend.models.spec.valuation import (
 # caller does not supply an explicit terminal tax rate (US statutory rate).
 DEFAULT_TERMINAL_TAX_RATE = 0.21
 
+# Balance-sheet lines that make up operating working capital. The forecast
+# engine moves exactly these three, so a spec missing the explicit
+# delta_working_capital line can be reconstructed from them without guessing.
+_WC_ASSET_KEYS = (
+    "canonical.bs.trade_receivables",
+    "canonical.bs.inventory",
+)
+_WC_LIABILITY_KEYS = ("canonical.bs.trade_payables",)
+
+
+def _wc_level(forecast: Forecast, period: str, scenario: str) -> float:
+    """Operating working capital at `period`: receivables + inventory − payables."""
+    total = 0.0
+    for key in _WC_ASSET_KEYS:
+        total += forecast.get_value(key, period, scenario) or 0.0
+    for key in _WC_LIABILITY_KEYS:
+        total -= forecast.get_value(key, period, scenario) or 0.0
+    return total
+
+
+def _delta_wc_from_balance_sheet(
+    forecast: Forecast,
+    period: str,
+    scenario: str,
+    prior: Optional[float] = None,
+) -> float:
+    """Change in working capital for `period`, derived from balance-sheet levels.
+
+    `prior` is the opening level carried in from the previous period; when it is
+    None the first forecast year falls back to zero, which is the correct
+    reading when the opening balance is genuinely absent from the spec.
+    """
+    if prior is None:
+        return 0.0
+    return _wc_level(forecast, period, scenario) - prior
+
 
 def compute_fcff_periods(
     forecast: Forecast,
     wacc_pct: float,
     scenario: str = "base",
     timing_convention: Literal["mid_year", "end_year"] = "mid_year",
+    opening_working_capital: Optional[float] = None,
 ) -> List[FCFFPeriod]:
-    """Compute FCFF and discounted PV for each forecast period using mid-year discounting."""
+    """Compute FCFF and discounted PV for each forecast period using mid-year discounting.
+
+    `opening_working_capital` is the operating working-capital level carried in
+    from the last historical period. It is only consulted when the forecast is
+    missing its explicit `canonical.cf.delta_working_capital` line, so that a
+    spec cached by an older engine still produces the engine's own working
+    capital movement rather than a guess.
+    """
     periods_fcff: List[FCFFPeriod] = []
     wacc_frac = wacc_pct / 100.0
+    prior_wc = opening_working_capital
 
     for idx, p in enumerate(FORECAST_PERIODS):
         t = (idx + 1) - 0.5 if timing_convention == "mid_year" else (idx + 1)
@@ -58,14 +103,20 @@ def compute_fcff_periods(
             # Conservative fallback: maintenance capex ≈ D&A (standard assumption for large-cap tech)
             capex = abs(da)
 
-        # Working Capital delta: use explicit non-cash operating working capital change
+        # Working Capital delta.
+        #
+        # The engine defines it as a balance-sheet movement:
+        #   ΔWC = (AR_t − AR_{t−1}) + (Inv_t − Inv_{t−1}) − (AP_t − AP_{t−1})
+        # which is a cash OUTFLOW when working capital grows. Never back it out
+        # of net profit / D&A / CFO: that identity only holds if CFO was itself
+        # built from the same ΔWC, so on a spec cached by an older engine it
+        # silently returns a different — and wrong — number instead of missing.
         delta_wc_val = forecast.get_value("canonical.cf.delta_working_capital", p, scenario)
         if delta_wc_val is not None:
             delta_wc = delta_wc_val
         else:
-            np_val = forecast.get_value("canonical.is.net_profit", p, scenario) or 0.0
-            cfo_val = forecast.get_value("canonical.cf.operating_activities", p, scenario) or (np_val + da)
-            delta_wc = np_val + da - cfo_val
+            delta_wc = _delta_wc_from_balance_sheet(forecast, p, scenario, prior=prior_wc)
+        prior_wc = _wc_level(forecast, p, scenario)
 
         # Stock-based compensation is a real economic cost even though non-cash under
         # accounting rules — treat it as a cash operating outflow for valuation.
@@ -187,8 +238,21 @@ def compute_dcf_bridge(
     non_current_investments_cr: float = 0.0,
     minority_interest_cr: float = 0.0,
     preferred_stock_cr: float = 0.0,
+    operating_lease_liabilities_cr: float = 0.0,
 ) -> Tuple[DCFBridge, TerminalValue]:
-    """Compute EV -> Equity Value -> Implied Share Price bridge with full non-operating breakdown."""
+    """Compute EV -> Equity Value -> Implied Share Price bridge with full non-operating breakdown.
+
+    `debt_cr` must be total interest-bearing debt: non-current borrowings plus
+    current borrowings including the current portion of long-term debt, plus
+    finance and capital lease liabilities.
+
+    `operating_lease_liabilities_cr` is reported on the bridge but NOT deducted.
+    Rent is an operating expense in EBIT under US GAAP, so the lease obligation
+    is already reflected in the cash flows being discounted; deducting the
+    liability as well would charge for it twice. It is carried here so a reader
+    who prefers the capitalised-lease convention can see the amount and apply
+    it deliberately.
+    """
     sum_pv_fcff = sum(p.pv_fcff for p in fcff_periods if p.pv_fcff is not None)
     pv_tv = terminal_value.terminal_value_pv or 0.0
     ev = sum_pv_fcff + pv_tv
@@ -215,6 +279,7 @@ def compute_dcf_bridge(
         marketable_securities=round(marketable_securities_cr, 2),
         non_current_investments=round(non_current_investments_cr, 2),
         total_debt=round(debt_cr, 2),
+        operating_lease_liabilities=round(operating_lease_liabilities_cr, 2),
         minority_interest=round(minority_interest_cr, 2),
         preferred_stock=round(preferred_stock_cr, 2),
         less_net_debt=round(net_debt, 2),
