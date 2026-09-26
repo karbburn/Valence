@@ -10,8 +10,10 @@ the AssumptionObject must match exactly what was computed — no fabrication.
 from datetime import datetime
 from typing import List, Optional
 
+from backend import constants
 from backend.models.spec.assumptions import AssumptionObject
 from backend.models.spec.forecast import FORECAST_PERIODS
+from backend.models.spec.metadata import resolve_market
 from backend.models.statements.historical_model import HistoricalModel
 from backend.models.statements.ratios import HistoricalRatios
 
@@ -67,7 +69,7 @@ def capm_default_for(company_id: str, market: Optional[str] = None) -> tuple[flo
         )
         return ke, source
     except Exception:
-        return 13.0, "fallback default — market data unavailable"
+        return constants.FALLBACK_COST_OF_EQUITY, "fallback default — market data unavailable"
 
 
 def _default_cost_of_equity(historical_model: HistoricalModel) -> tuple[float, str]:
@@ -77,7 +79,7 @@ def _default_cost_of_equity(historical_model: HistoricalModel) -> tuple[float, s
     by ~4pp. Falls back to 13.0 only when market data is unavailable.
     """
     return capm_default_for(
-        historical_model.company_id, getattr(historical_model, "market", None)
+        historical_model.company_id, resolve_market(historical_model.company_id)
     )
 
 
@@ -95,8 +97,8 @@ def suggest_base_assumptions(
     num_years = len(periods) - 1 if len(periods) > 1 else 1
     result: List[AssumptionObject] = []
 
-    is_us = historical_model.company_id.endswith("_us")
-    default_tax = 21.0 if is_us else 25.17
+    is_us = resolve_market(historical_model.company_id) == "us"
+    default_tax = constants.statutory_tax_rate("us" if is_us else "india")
 
     # ------------------------------------------------------------------ #
     # 1. Revenue Growth — Dynamic Fade Curve Engine
@@ -125,10 +127,18 @@ def suggest_base_assumptions(
 
     # ------------------------------------------------------------------ #
     # 2. EBITDA Margin — Multi-year average
+    #
+    # `resolve` rather than `or`: a company whose reported EBITDA margin is
+    # genuinely 0.0 must keep 0.0, not inherit the fallback.
     # ------------------------------------------------------------------ #
     ebitda_margins = [ratios.get_value("ebitda_margin_pct", p) for p in periods]
-    ebitda_margin = _avg(ebitda_margins) or 23.5
-    source_ebitda = f"Multi-year average EBITDA margin ({first_p}-{last_p})"
+    ebitda_measured = _avg(ebitda_margins)
+    ebitda_margin = constants.resolve(ebitda_measured, constants.DEFAULT_EBITDA_MARGIN)
+    source_ebitda = (
+        f"Multi-year average EBITDA margin ({first_p}-{last_p})"
+        if ebitda_measured is not None
+        else f"No reported EBITDA margin; platform default {constants.DEFAULT_EBITDA_MARGIN}%"
+    )
     for p in FORECAST_PERIODS:
         result.append(_make("ebitda_margin", ebitda_margin, p, "base", source_ebitda))
 
@@ -136,8 +146,13 @@ def suggest_base_assumptions(
     # 3. EBIT Margin — Multi-year average operating margin
     # ------------------------------------------------------------------ #
     ebit_margins = [ratios.get_value("operating_margin_pct", p) for p in periods]
-    ebit_margin = _avg(ebit_margins) or 20.0
-    source_ebit = f"Multi-year average operating margin ({first_p}-{last_p})"
+    ebit_measured = _avg(ebit_margins)
+    ebit_margin = constants.resolve(ebit_measured, constants.DEFAULT_EBIT_MARGIN)
+    source_ebit = (
+        f"Multi-year average operating margin ({first_p}-{last_p})"
+        if ebit_measured is not None
+        else f"No reported operating margin; platform default {constants.DEFAULT_EBIT_MARGIN}%"
+    )
     for p in FORECAST_PERIODS:
         result.append(_make("ebit_margin", ebit_margin, p, "base", source_ebit))
 
@@ -145,8 +160,13 @@ def suggest_base_assumptions(
     # 4. D&A % Revenue — Multi-year average
     # ------------------------------------------------------------------ #
     da_pcts = [ratios.get_value("da_pct_revenue", p) for p in periods]
-    da_pct = _avg(da_pcts) or 2.9
-    source_da = f"Multi-year average D&A % revenue ({first_p}-{last_p})"
+    da_measured = _avg(da_pcts)
+    da_pct = constants.resolve(da_measured, constants.DEFAULT_DA_PCT_REVENUE)
+    source_da = (
+        f"Multi-year average D&A % revenue ({first_p}-{last_p})"
+        if da_measured is not None
+        else f"No reported D&A; platform default {constants.DEFAULT_DA_PCT_REVENUE}%"
+    )
     for p in FORECAST_PERIODS:
         result.append(_make("da_pct_revenue", da_pct, p, "base", source_da))
 
@@ -154,7 +174,7 @@ def suggest_base_assumptions(
     # 5. Effective Tax Rate — Multi-year average with statutory convergence
     # ------------------------------------------------------------------ #
     tax_rates = [ratios.get_value("effective_tax_rate_pct", p) for p in periods]
-    hist_tax_rate = _avg(tax_rates) or default_tax
+    hist_tax_rate = constants.resolve(_avg(tax_rates), default_tax)
     # Guard against any residual absurd average leaking into WACC.
     if hist_tax_rate <= 0.0 or hist_tax_rate > 50.0:
         hist_tax_rate = default_tax
@@ -173,17 +193,50 @@ def suggest_base_assumptions(
 
     # ------------------------------------------------------------------ #
     # 6. DSO — most recent historical period
+    #
+    # When the receivables line is absent from the filings the DSO ratio is
+    # genuinely unknown, not zero. Falling back to 100 days invents a large
+    # phantom receivable; 0 is the only defensible reading of "no receivable
+    # reported", and the source string says so.
     # ------------------------------------------------------------------ #
-    dso = ratios.get_value("dso_days", last_p) or 100.0
-    source_dso = f"most recent period DSO ({last_p})"
+    dso = ratios.get_value("dso_days", last_p)
+    has_receivables = any(
+        historical_model.balance_sheet.get_value("canonical.bs.trade_receivables", p) is not None
+        for p in periods
+    )
+    if dso is None or not has_receivables:
+        dso = 0.0
+        source_dso = (
+            "unresolved — no receivables reported in the ingested filings; "
+            "receivables held at zero rather than assumed"
+        )
+    else:
+        source_dso = f"most recent period DSO ({last_p})"
+
     for p in FORECAST_PERIODS:
         result.append(_make("dso_days", dso, p, "base", source_dso))
 
     # ------------------------------------------------------------------ #
     # 7. DPO — most recent historical period
+    #
+    # Same reasoning as DSO. Many ingestion paths do not map accounts payable,
+    # so a 14-day default here silently creates a payable balance the company
+    # never reported and books a one-off working-capital inflow in year 1.
     # ------------------------------------------------------------------ #
-    dpo = ratios.get_value("dpo_days", last_p) or 14.0
-    source_dpo = f"most recent period DPO ({last_p})"
+    dpo = ratios.get_value("dpo_days", last_p)
+    has_payables = any(
+        historical_model.balance_sheet.get_value("canonical.bs.trade_payables", p) is not None
+        for p in periods
+    )
+    if dpo is None or not has_payables:
+        dpo = 0.0
+        source_dpo = (
+            "unresolved — no accounts payable reported in the ingested filings; "
+            "payables held at zero rather than assumed"
+        )
+    else:
+        source_dpo = f"most recent period DPO ({last_p})"
+
     for p in FORECAST_PERIODS:
         result.append(_make("dpo_days", dpo, p, "base", source_dpo))
 
@@ -194,50 +247,85 @@ def suggest_base_assumptions(
     if dio is not None:
         source_dio = f"most recent period DIO ({last_p})"
     else:
-        inv_val = historical_model.balance_sheet.get_value("canonical.bs.inventory", last_p) or 0.0
-        cogs_val = historical_model.income_statement.get_value("canonical.is.cost_of_sales", last_p) or 0.0
+        inv_val = constants.resolve(
+            historical_model.balance_sheet.get_value("canonical.bs.inventory", last_p), 0.0
+        )
+        cogs_val = constants.resolve(
+            historical_model.income_statement.get_value("canonical.is.cost_of_sales", last_p), 0.0
+        )
         if inv_val > 0 and cogs_val > 0:
             dio = round((inv_val / cogs_val) * 365.0, 1)
             source_dio = f"Computed from historical inventory ({inv_val:.0f}) and COGS ({cogs_val:.0f})"
         else:
             dio = 0.0
-            source_dio = "zero — asset-light services/software company"
+            source_dio = (
+                "unresolved — no inventory reported in the ingested filings; "
+                "inventory held at zero rather than assumed"
+            )
 
     for p in FORECAST_PERIODS:
         result.append(_make("dio_days", dio, p, "base", source_dio))
 
     # ------------------------------------------------------------------ #
     # 8. Capex % Revenue — Multi-year average using canonical capex / revenue
+    #
+    # |investing_activities| is NOT a capex proxy: it nets M&A, disposals and
+    # investments, so a year with a large acquisition reports capex far above
+    # revenue, and a net investing INFLOW (a disposal year) gets abs()'d into a
+    # positive "capex". The proxy is only used when it lands in a believable
+    # band, and the result is always clamped.
     # ------------------------------------------------------------------ #
     capex_pcts = []
     used_direct_capex = False
+    used_proxy = False
     for p in periods:
         capex_val = historical_model.cash_flow_statement.get_value("canonical.cf.capex", p)
         if capex_val is not None:
             used_direct_capex = True
         else:
             inv = historical_model.cash_flow_statement.get_value("canonical.cf.investing_activities", p)
-            if inv is not None:
+            # A net investing INFLOW cannot be capex — abs() would relabel a
+            # disposal as capital expenditure.
+            if inv is not None and inv < 0:
                 capex_val = abs(inv)
+                used_proxy = True
 
         rev = historical_model.income_statement.get_value("canonical.is.revenue", p)
         if capex_val is not None and rev and rev > 0:
-            capex_pcts.append(round(abs(capex_val) / rev * 100.0, 4))
+            pct = abs(capex_val) / rev * 100.0
+            if pct <= constants.MAX_CAPEX_PCT_REVENUE:
+                capex_pcts.append(round(pct, 4))
 
-    hist_capex_pct = _avg(capex_pcts) or 2.5
-    steady_state_capex = max(da_pct * 1.25, min(hist_capex_pct, 4.0))
+    hist_capex_pct = constants.resolve(_avg(capex_pcts), constants.DEFAULT_CAPEX_PCT_REVENUE)
+    if not capex_pcts:
+        source_capex_base = (
+            f"No usable capex reported; platform default {constants.DEFAULT_CAPEX_PCT_REVENUE}% of revenue"
+        )
+    elif used_direct_capex:
+        source_capex_base = f"Multi-year average GAAP capex (canonical.cf.capex) % revenue ({first_p}-{last_p})"
+    elif used_proxy:
+        source_capex_base = (
+            f"Multi-year average |investing_activities| proxy % revenue ({first_p}-{last_p}) "
+            "— no GAAP capex line was mapped for this filer"
+        )
+    else:
+        source_capex_base = f"Multi-year average GAAP capex % revenue ({first_p}-{last_p})"
+
+    steady_state_capex = max(
+        da_pct * 1.25, min(hist_capex_pct, constants.MAX_STEADY_STATE_CAPEX_PCT)
+    )
     is_expansion_cycle = hist_capex_pct > (da_pct * 1.35) and hist_capex_pct > 6.0
     capex_fade_weights = [0.0, 0.20, 0.45, 0.65, 0.85] if is_expansion_cycle else [0.0, 0.0, 0.0, 0.0, 0.0]
 
     for idx, p in enumerate(FORECAST_PERIODS):
         w_fade = capex_fade_weights[idx] if idx < len(capex_fade_weights) else 0.0
         p_capex = round((1.0 - w_fade) * hist_capex_pct + w_fade * steady_state_capex, 4)
+        if p_capex > constants.MAX_CAPEX_PCT_REVENUE:
+            p_capex = constants.MAX_CAPEX_PCT_REVENUE
         if is_expansion_cycle and w_fade > 0:
             source_capex = f"Peak cycle CapEx ({hist_capex_pct:.1f}%) fading to steady-state maintenance ({steady_state_capex:.1f}%)"
-        elif used_direct_capex:
-            source_capex = f"Multi-year average GAAP capex (canonical.cf.capex) % revenue ({first_p}-{last_p})"
         else:
-            source_capex = f"derived — Multi-year average |investing_activities| proxy % revenue ({first_p}-{last_p})"
+            source_capex = source_capex_base
         result.append(_make("capex_pct_revenue", p_capex, p, "base", source_capex))
 
     # ------------------------------------------------------------------ #
@@ -258,13 +346,17 @@ def suggest_base_assumptions(
     # ------------------------------------------------------------------ #
     # 11. Terminal Value inputs — structural placeholders
     # ------------------------------------------------------------------ #
-    # Perpetuity growth anchors to long-run nominal GDP of the reporting economy:
-    # developed-market (US) filers carry materially lower nominal growth than India.
-    is_us_filer = historical_model.company_id.endswith("_us")
-    default_terminal_growth = 2.25 if is_us_filer else 4.0
-    basis = "US long-run nominal GDP" if is_us_filer else "India long-run nominal GDP"
+    # Perpetuity growth anchors to long-run nominal GDP of the reporting
+    # economy. The market comes from the company's own metadata, NOT from the
+    # company_id suffix: infy_us is a US-listed ADR on an Indian fiscal
+    # calendar, so a suffix test mis-classifies it.
+    default_terminal_growth, basis = constants.terminal_growth_for(
+        "us" if resolve_market(historical_model.company_id) == "us" else "india"
+    )
     source_terminal = f"structural placeholder — anchored to {basis}"
     result.append(_make("terminal_growth_rate", default_terminal_growth, "terminal", "base", source_terminal))
-    result.append(_make("exit_ev_multiple", 20.0, "terminal", "base", source_terminal))
+    result.append(
+        _make("exit_ev_multiple", constants.DEFAULT_EXIT_EV_MULTIPLE, "terminal", "base", source_terminal)
+    )
 
     return result
