@@ -40,6 +40,8 @@ from pathlib import Path
 from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
+from backend.data.providers.share_count import resolve_share_count
+
 # Suppress urllib3/requests dependency warnings if present at import time
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
@@ -175,6 +177,37 @@ TICKER_REDIRECTS: Dict[str, str] = {
 }
 
 
+def _shares_from_balance_sheet(ticker_obj, market: str) -> tuple[Optional[float], str]:
+    """Ordinary shares outstanding from the filed balance sheet, in model units.
+
+    Returns (value_in_model_units, period_label). The quarterly statement is
+    preferred because it is the most recently filed one; the annual is the
+    fallback.
+    """
+    divisor = 1e7 if market == "india" else 1e6
+    labels = ("Ordinary Shares Number", "Share Issued", "Common Stock Shares Outstanding")
+    for attr in ("quarterly_balance_sheet", "balance_sheet"):
+        try:
+            frame = getattr(ticker_obj, attr, None)
+        except Exception:
+            continue
+        if frame is None or len(getattr(frame, "columns", [])) == 0:
+            continue
+        column = frame.columns[0]
+        for label in labels:
+            if label not in frame.index:
+                continue
+            try:
+                value = float(frame.loc[label, column])
+            except Exception:
+                continue
+            if value != value or value <= 0:
+                continue
+            period = str(column)[:10]
+            return value / divisor, f"{label} at {period}"
+    return None, ""
+
+
 def _fetch_yfinance(company_id: str, market: MarketType, ticker: str) -> Dict[str, Optional[MarketDataPoint]]:
     """Fetch live data from yfinance."""
     if yf is None:
@@ -198,25 +231,39 @@ def _fetch_yfinance(company_id: str, market: MarketType, ticker: str) -> Dict[st
                 provenance_note=f"yfinance live price for {yf_symbol}",
             )
 
-        # Shares outstanding
-        shares_raw = info.get("sharesOutstanding")
-        if shares_raw and float(shares_raw) > 0:
-            if market == "india":
-                shares_cr = float(shares_raw) / 1e7  # raw shares to Crores
-                results["shares"] = MarketDataPoint(
-                    value=round(shares_cr, 4),
-                    source="yfinance",
-                    fetch_date=today_str,
-                    provenance_note=f"yfinance live shares outstanding ({shares_cr:.2f} Cr)",
-                )
-            else:
-                shares_m = float(shares_raw) / 1e6   # raw shares to Millions
-                results["shares"] = MarketDataPoint(
-                    value=round(shares_m, 4),
-                    source="yfinance",
-                    fetch_date=today_str,
-                    provenance_note=f"yfinance live shares outstanding ({shares_m:.2f} M)",
-                )
+        # Shares outstanding.
+        #
+        # Two published counts routinely disagree, and for opposite reasons: a
+        # multi-class issuer's provider summary reports ONE class, while a
+        # depositary listing's filed count is in ORDINARY shares against a price
+        # quoted per RECEIPT. Adjudicating those needs the shape of the
+        # disagreement, not a fixed preference, so it is done in one place —
+        # `resolve_share_count` — which the peer path also uses, so the two
+        # cannot drift apart again.
+        shares_from_bs, shares_basis = _shares_from_balance_sheet(t, market)
+        shares_provider = None
+        try:
+            raw = info.get("sharesOutstanding")
+            if raw and float(raw) > 0:
+                shares_provider = float(raw) / (1e7 if market == "india" else 1e6)
+        except (TypeError, ValueError):
+            shares_provider = None
+
+        chosen, note = resolve_share_count(
+            shares_from_bs,
+            shares_provider,
+            filed_basis=shares_basis,
+            provider_basis="provider shares outstanding",
+        )
+
+        if chosen and chosen > 0:
+            unit = "Cr" if market == "india" else "M"
+            results["shares"] = MarketDataPoint(
+                value=round(chosen, 4),
+                source="yfinance",
+                fetch_date=today_str,
+                provenance_note=f"{note} = {chosen:,.2f} {unit}",
+            )
 
         # Beta vs primary index
         #
