@@ -547,13 +547,22 @@ def render_ev_bridge_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
          FMT_CURRENCY_INT, bs_note),
         ("non_current_investments", "Plus: Non-Current Investments", non_curr_inv_val,
          non_curr_inv_val, FMT_CURRENCY_INT,
-         f"{bs_note}; excluded from net cash by the published basis" if non_curr_inv_val else
-         "no non-current investments reported"),
+         # A reported zero is not the same as an unreported line, and the two
+         # are now distinguished. The bridge has no way to tell "this company
+         # holds no non-current investments" from "the feed did not report the
+         # line", and saying "none reported" for a company that reported a
+         # genuine zero asserts a fact about a filing this tab never read.
+         f"{bs_note}; excluded from net cash by the published basis"
+         if b_obj is not None and b_obj.non_current_investments is not None
+         else "not reported by the source"),
         ("total_debt", "Less: Total Debt", tot_debt_val, tot_debt_val, FMT_CURRENCY_INT,
          f"{bs_note}; {basis}"),
         ("minority_interest_and_preferred", "Less: Minority Interest & Preferred", min_int_val,
          min_int_val, FMT_CURRENCY_INT,
-         f"{bs_note}; none reported" if min_int_val == 0 else bs_note),
+         f"{bs_note}; no minority interest or preferred reported"
+         if min_int_val else
+         ("neither reported by the source" if b_obj is None else
+          f"{bs_note}; reported as nil")),
         ("net_non_operating_debt", "Net Non-Operating Debt / (Cash)",
          f"=(C{r_debt}+C{r_mi})-(C{r_cash}+C{r_mkt}+C{r_nci})", net_debt, FMT_CURRENCY_INT,
          f"{basis}; struck at {as_of}"),
@@ -726,7 +735,17 @@ def render_sensitivity_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
                 "+'31_DCF'!G12/(1+$B{r})^4.5"
             ).format(r=r)
             tv_term = f"('31_DCF'!G12*(1+{col_letter}$5)/($B{r}-{col_letter}$5))"
-            core = f"(({pv_stream}+{tv_term}/(1+$B{r})^5)-'31_DCF'!H25)/'31_DCF'!H27"
+            # Net debt and the share count come from the bridge by LINE NAME.
+            # This grid used to read '31_DCF'!H25 and !H27, the bridge's former
+            # cells inside the DCF tab. That column no longer exists, so both
+            # resolved to empty and the whole 5x5 grid returned #DIV/0! the
+            # moment anyone pressed recalculate — the cached values hid it, and
+            # the sensitivity tab has no parity test, so nothing caught it.
+            core = (
+                f"(({pv_stream}+{tv_term}/(1+$B{r})^5)"
+                f"-{bridge_ref('net_non_operating_debt')})"
+                f"/{bridge_ref('diluted_shares')}"
+            )
             formula = f'=IF({col_letter}$5>=$B{r},"",{core})'
             write_formula_cell(
                 ws, r, c,
@@ -1079,33 +1098,63 @@ def render_trading_comps(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     # rather than leave a gap. Naming the columns also means the block can be
     # read on its own, without counting across from the peer table above.
     bench_r = 6 + len(comps.peers) + 1
-    stat_headers = [
-        "Statistic / Benchmark", "EV / Rev", "EV / EBITDA", "P / E", "FCF Yield %", "ROIC %"
-    ]
-    write_table_header(ws, bench_r, stat_headers, start_col=2)
 
-    stat_names = [("25th Percentile", "p25"), ("Median", "median"), ("Mean / Average", "mean"), ("75th Percentile", "p75")]
-    for s_idx, (s_lbl, s_attr) in enumerate(stat_names):
-        r = bench_r + 1 + s_idx
-        is_median = "Median" in s_lbl
-        border = BORDER_TOTAL if is_median else BORDER_BOX
-        font = FONT_TOTAL if is_median else FONT_SUBHEADER
-        ws.cell(row=r, column=2, value=s_lbl).font = font
-        ws.cell(row=r, column=3, value=getattr(comps.benchmarks["ev_revenue"], s_attr)).number_format = "0.0\"x\""
-        ws.cell(row=r, column=4, value=getattr(comps.benchmarks["ev_ebitda"], s_attr)).number_format = "0.0\"x\""
-        ws.cell(row=r, column=5, value=getattr(comps.benchmarks["pe_ratio"], s_attr)).number_format = "0.0\"x\""
-        ws.cell(row=r, column=6, value=getattr(comps.benchmarks["fcf_yield"], s_attr) / 100.0).number_format = FMT_PERCENT
-        ws.cell(row=r, column=7, value=getattr(comps.benchmarks["roic"], s_attr) / 100.0).number_format = FMT_PERCENT
+    # The analysis withholds a benchmark when too few peers could be sourced, and
+    # says why in `unavailable_reason`. That contract was ignored here: the
+    # renderer indexed the benchmark dict directly and raised KeyError, so a
+    # company whose peer set could not be sourced produced NO WORKBOOK AT ALL
+    # rather than a workbook that says why its peer median is missing.
+    #
+    # A withheld benchmark is a legitimate result — a median of two sourced
+    # peers is not a median — and the page has to be able to show that.
+    if not comps.benchmarks:
+        reason = comps.unavailable_reason or "no peer benchmark could be published"
+        ws.cell(row=bench_r, column=2, value="Peer benchmark not published").font = FONT_SUBHEADER
+        note = ws.cell(row=bench_r + 1, column=2, value=reason)
+        note.font = FONT_SUBTITLE
+        note.alignment = ALIGN_LEFT
+        for col in range(2, 8):
+            ws.cell(row=bench_r, column=col).border = BORDER_BOX
+            ws.cell(row=bench_r + 1, column=col).border = BORDER_BOX
+        bench_r += 3
+    else:
+        stat_headers = [
+            "Statistic / Benchmark", "EV / Rev", "EV / EBITDA", "P / E", "FCF Yield %", "ROIC %"
+        ]
+        write_table_header(ws, bench_r, stat_headers, start_col=2)
 
-        for col_i in range(2, 8):
-            cell = ws.cell(row=r, column=col_i)
-            cell.border = border
-            if col_i >= 3:
-                cell.alignment = ALIGN_RIGHT
-                cell.font = FONT_TOTAL if is_median else FONT_FORMULA
+        stat_names = [
+            ("25th Percentile", "p25"),
+            ("Median", "median"),
+            ("Mean / Average", "mean"),
+            ("75th Percentile", "p75"),
+        ]
+        for s_idx, (s_lbl, s_attr) in enumerate(stat_names):
+            r = bench_r + 1 + s_idx
+            is_median = "Median" in s_lbl
+            border = BORDER_TOTAL if is_median else BORDER_BOX
+            font = FONT_TOTAL if is_median else FONT_SUBHEADER
+            ws.cell(row=r, column=2, value=s_lbl).font = font
+            ws.cell(row=r, column=3, value=getattr(comps.benchmarks["ev_revenue"], s_attr)).number_format = "0.0\"x\""
+            ws.cell(row=r, column=4, value=getattr(comps.benchmarks["ev_ebitda"], s_attr)).number_format = "0.0\"x\""
+            ws.cell(row=r, column=5, value=getattr(comps.benchmarks["pe_ratio"], s_attr)).number_format = "0.0\"x\""
+            ws.cell(row=r, column=6, value=getattr(comps.benchmarks["fcf_yield"], s_attr) / 100.0).number_format = FMT_PERCENT
+            ws.cell(row=r, column=7, value=getattr(comps.benchmarks["roic"], s_attr) / 100.0).number_format = FMT_PERCENT
+
+            for col_i in range(2, 8):
+                cell = ws.cell(row=r, column=col_i)
+                cell.border = border
+                if col_i >= 3:
+                    cell.alignment = ALIGN_RIGHT
+                    cell.font = FONT_TOTAL if is_median else FONT_FORMULA
+        bench_r += len(stat_names) + 1
 
     # 3. Implied Target Valuation Bridge
-    val_r = bench_r + len(stat_names) + 2
+    #
+    # Derived from bench_r, which already accounts for whether a benchmark was
+    # published. It used to add len(stat_names) here as well, so a withheld
+    # benchmark left the bridge overlapping the block above it.
+    val_r = bench_r + 2
     ws.cell(row=val_r, column=2, value="IMPLIED PEER VALUATION BRIDGE").font = FONT_SUBHEADER
     write_table_header(ws, val_r + 1, ["Methodology", "Benchmark Multiple", "Target FY27 Metric", "Implied EV", "Net Debt", "Implied Equity Value", "Implied Share Price"], start_col=2)
 
@@ -1172,8 +1221,14 @@ def render_valuation_comparison(wb: Workbook, spec: ModelSpecification) -> Works
         shares_outstanding=shares,
     )
 
-    comps_ev = comps_res.implied_valuations[0].implied_share_price
-    comps_pe = comps_res.implied_valuations[1].implied_share_price
+    # Withheld when the peer set could not be sourced far enough to publish a
+    # benchmark. Indexing the list unconditionally raised IndexError and cost the
+    # company its entire workbook; the football field can be built from the DCF
+    # and the market price alone, and a comparables method that has no
+    # comparables is absent from the range rather than fatal to the page.
+    implied = comps_res.implied_valuations or []
+    comps_ev = implied[0].implied_share_price if len(implied) > 0 else None
+    comps_pe = implied[1].implied_share_price if len(implied) > 1 else None
     q = getattr(comps_res, "quartile_implied_prices", {}) or {
         "pe_ratio": {"p25": None, "p75": None},
         "ev_ebitda": {"p25": None, "p75": None},

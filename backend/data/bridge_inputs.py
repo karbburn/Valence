@@ -143,6 +143,32 @@ def _label_value(frame, labels: tuple[str, ...], column) -> Optional[float]:
     return None
 
 
+def _drop_claims_at_or_above_total(values: dict[str, float], total_debt: float) -> None:
+    """Remove terms that claim to be a component but are as large as the whole.
+
+    A lease liability, a minority interest or a preferred balance that is at or
+    above the total debt it is supposedly part of is not a component of it. In
+    practice it means the feed is restating an aggregate under a component's
+    label, and publishing it as a component invents a capital structure: it
+    showed one issuer's entire debt balance as "lease liabilities".
+
+    Dropped rather than published, because a wrong component is worse than an
+    absent one — an absent figure can be chased down, a plausible wrong one is
+    simply believed.
+    """
+    if total_debt <= 0:
+        return
+    for key in ("lease_liabilities", "minority_interest", "preferred_stock"):
+        value = values.get(key)
+        if value is not None and value >= total_debt:
+            logger.info(
+                "Dropping %s of %s: it is at or above the total debt of %s, so it "
+                "restates the aggregate rather than forming part of it",
+                key, f"{value:,.0f}", f"{total_debt:,.0f}",
+            )
+            values.pop(key, None)
+
+
 def _build(frame, column, source: str) -> Optional[BridgeSnapshot]:
     values: dict[str, float] = {}
     for key, labels in BRIDGE_TERMS.items():
@@ -178,13 +204,23 @@ def _build(frame, column, source: str) -> Optional[BridgeSnapshot]:
     # top double counts, and doing so moved eleven of twelve companies away from
     # the market reference rather than towards it.
     #
-    # The lease balance is still read and reported, because it is the amount a
-    # reader needs in order to apply a capitalised-lease convention instead. It
-    # is a SUBSET of total debt, not an addition to it.
+    # The lease balance is read so a reader can see it, but only where it is
+    # genuinely a COMPONENT of the debt total.
+    #
+    # A feed's lease row is not reliably a lease component. For one large
+    # Indian listing the row equalled the entire debt balance to the rupee, which
+    # is a restatement of total debt rather than a subset of it; published as
+    # "lease liabilities" it told a reader that all of that company's debt was
+    # leases. A component cannot equal or exceed the total it is part of, so a
+    # row at or above the total is dropped rather than reported as something it
+    # is not. The same rule is applied to the minority-interest and preferred
+    # rows.
     if combined_debt is not None:
         debt = combined_debt
     else:
         debt = values.get("debt_non_current", 0.0) + values.get("debt_current", 0.0)
+
+    _drop_claims_at_or_above_total(values, debt)
 
     as_of = column
     try:

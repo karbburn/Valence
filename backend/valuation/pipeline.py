@@ -36,11 +36,15 @@ logger = logging.getLogger(__name__)
 # the platform's number is reconcilable with the one a reader is comparing it
 # against.
 DEBT_BASIS_NOTE = (
-    "Net cash = (cash + short-term investments) - total debt. Debt = "
-    "non-current borrowings + current borrowings (including the current portion "
-    "of long-term debt) + finance lease liabilities + operating lease "
-    "liabilities. Non-current investments are not netted. Struck on the most "
-    "recent reported balance sheet, whose date is shown on this bridge."
+    "Net cash = (cash + short-term investments) - total interest-bearing debt, "
+    "as reported on the most recent balance sheet whose date is shown here. Debt "
+    "is the issuer's own reported total, which already contains its lease "
+    "component; lease liabilities are shown on this bridge for reference and are "
+    "NOT added on top, because doing so double counts. Non-current investments "
+    "are not netted. Note that a feed's debt total does not carry the full lease "
+    "obligation of every issuer, so a provider that capitalises all leases will "
+    "show a higher debt figure and a correspondingly lower net cash; the date "
+    "and this basis are published so the two can be reconciled."
 )
 
 

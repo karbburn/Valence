@@ -400,17 +400,22 @@ def render_executive_summary(wb: Workbook, spec: ModelSpecification) -> Workshee
     ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
     curr = spec.metadata.currency
 
-    r_base_pct = get_assumption_value(spec, "ebitda_margin", "FY31", "base") / 100.0
-    r_bull_pct = get_assumption_value(spec, "ebitda_margin", "FY31", "bull") / 100.0
-    r_bear_pct = get_assumption_value(spec, "ebitda_margin", "FY31", "bear") / 100.0
+    # Final-year revenue and margin are read from each scenario's OWN forecast.
+    #
+    # They used to be back-solved: final-year EBITDA divided by the ebitda_margin
+    # driver. The engine derives earnings as operating profit plus depreciation,
+    # so that driver does not move the model. For a company whose margin resolves
+    # to zero the division returned zero and the executive summary published
+    # FY31 revenue of 0 against an actual 712.92 — the first page of the workbook
+    # stating a company earns nothing.
+    def _final_year(scenario: str) -> tuple[float, float]:
+        revenue = spec.forecast.get_value("canonical.is.revenue", "FY31", scenario) or 0.0
+        ebitda = spec.forecast.get_value("canonical.is.ebitda", "FY31", scenario) or 0.0
+        return revenue, (ebitda / revenue) if revenue else 0.0
 
-    ebitda_base = (base_val.terminal_value.final_year_ebitda if (base_val and base_val.terminal_value.final_year_ebitda is not None) else 0.0)
-    ebitda_bull = (bull_val.terminal_value.final_year_ebitda if (bull_val and bull_val.terminal_value.final_year_ebitda is not None) else 0.0)
-    ebitda_bear = (bear_val.terminal_value.final_year_ebitda if (bear_val and bear_val.terminal_value.final_year_ebitda is not None) else 0.0)
-
-    rev_base = (ebitda_base / r_base_pct) if r_base_pct > 0 else 0.0
-    rev_bull = (ebitda_bull / r_bull_pct) if r_bull_pct > 0 else 0.0
-    rev_bear = (ebitda_bear / r_bear_pct) if r_bear_pct > 0 else 0.0
+    rev_base, r_base_pct = _final_year("base")
+    rev_bull, r_bull_pct = _final_year("bull")
+    rev_bear, r_bear_pct = _final_year("bear")
 
     val_rows = [
         (f"Implied Share Price ({curr})", "='35_Scenario_Analysis'!C6", "='35_Scenario_Analysis'!D6", "='35_Scenario_Analysis'!E6", base_price, bull_price, bear_price, FMT_PRICE),
