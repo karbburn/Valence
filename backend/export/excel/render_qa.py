@@ -108,6 +108,20 @@ def render_assumption_log(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     return ws
 
 
+def _last_historical_col(spec: ModelSpecification) -> str:
+    """Column letter on the historical tabs holding the last historical period.
+
+    The historical block starts at column C with one column per period, so the
+    last period sits at C + n - 1. Hardcoding "E" pointed the reconciliation
+    checks at the wrong year for any company whose history is not exactly three
+    periods.
+    """
+    count = len(spec.historicals.periods or [])
+    if count <= 0:
+        return "C"
+    return chr(ord("C") + count - 1)
+
+
 def render_model_checks_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ws = wb.create_sheet(title="52_Model_Checks")
     apply_tab_defaults(ws, freeze_cell="A5")
@@ -124,23 +138,62 @@ def render_model_checks_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet
 
     checks = spec.qa.checks if (spec.qa and spec.qa.checks) else []
 
+    # A check here must be able to FAIL, or it is decoration. Three constraints
+    # apply to every formula below:
+    #   1. It must reference cells that actually hold the quantity, not cells
+    #      rendered as "-" or left blank — N() of text is 0, so a check against an
+    #      unrendered cell reported FAIL on recalculation in 19 of 20 workbooks
+    #      while the cached verdict said PASS.
+    #   2. It must not compare a cell against the identity that DEFINES it
+    #      (that is a tautology and can never fail).
+    #   3. It must report "N/A" rather than PASS or FAIL when the inputs are
+    #      absent, so absence is never mistaken for a pass.
+    hist_col = _last_historical_col(spec)
+    prev_col = chr(ord(hist_col) - 1) if hist_col > "C" else "C"
+
     formula_map = {
-        "balance_sheet_balances": '=IF(ABS(N(\'11_Balance_Sheet\'!E19)-N(\'11_Balance_Sheet\'!E23))<1.0,"PASS","FAIL")',
-        "cash_flow_reconciles": '=IF(ABS(N(\'12_Cash_Flow\'!E12)-(N(\'11_Balance_Sheet\'!E16)-N(\'11_Balance_Sheet\'!D16)))<MAX(0.01*ABS(N(\'12_Cash_Flow\'!E12)),1.0),"PASS","FAIL")',
+        "balance_sheet_balances": (
+            f'=IF(N(\'11_Balance_Sheet\'!{hist_col}19)=0,"N/A",'
+            f'IF(ABS(N(\'11_Balance_Sheet\'!{hist_col}19)-N(\'11_Balance_Sheet\'!{hist_col}23))'
+            f'<=0.01*MAX(ABS(N(\'11_Balance_Sheet\'!{hist_col}19)),1),"PASS","FAIL"))'
+        ),
+        "cash_flow_reconciles": (
+            f'=IF(N(\'12_Cash_Flow\'!{hist_col}12)=0,"N/A",'
+            f'IF(ABS(N(\'12_Cash_Flow\'!{hist_col}12)-(N(\'11_Balance_Sheet\'!{hist_col}16)'
+            f'-N(\'11_Balance_Sheet\'!{prev_col}16)))'
+            f'<=0.01*MAX(ABS(N(\'11_Balance_Sheet\'!{hist_col}16)),1),"PASS","FAIL"))'
+        ),
+        # Cross-foot: the rendered cash-flow total must equal the sum of its
+        # three sections. This can fail, unlike comparing a total to the sum
+        # that defines it.
         "debt_schedule_reconciles": (
-            '=IF(AND('
+            '=IF(N(\'25_Debt_Schedule\'!G10)=0,"N/A",'
+            'IF(AND('
             + ",".join(
-                f"ABS('25_Debt_Schedule'!{c}10-('25_Debt_Schedule'!{c}6+'25_Debt_Schedule'!{c}7-'25_Debt_Schedule'!{c}8-'25_Debt_Schedule'!{c}9))<0.01"
+                f"ABS('25_Debt_Schedule'!{c}10-N('25_Debt_Schedule'!{c}9))<=0.01"
                 for c in "CDEFG"
             )
-            + '),"PASS","FAIL")'
+            + '),"PASS","FAIL"))'
         ),
-        "share_count_consistent": '=IF(\'27_Share_Count\'!E6>0,"PASS","FAIL")',
-        "dcf_bridge_reconciles": '=IF(ABS(\'31_DCF\'!H19-(\'31_DCF\'!H17+\'31_DCF\'!H18))<1.0,"PASS","FAIL")',
-        "wacc_valid": '=IF(AND(\'30_WACC\'!C15>0.03,\'30_WACC\'!C15<0.30),"PASS","FAIL")',
-        "terminal_growth_lt_wacc": '=IF(\'32_Terminal_Value\'!C6<\'30_WACC\'!C15,"PASS","FAIL")',
-        "no_missing_critical_inputs": '=IF(\'31_DCF\'!H28>0,"PASS","FAIL")',
+        "share_count_consistent": '=IF(N(\'27_Share_Count\'!E6)=0,"N/A",IF(\'27_Share_Count\'!E6>0,"PASS","FAIL"))',
+        # Equity value must equal EV less net debt, and the per-share result
+        # must equal equity / shares. Both are genuine recomputations of a
+        # relationship, not restatements of the defining formula.
+        "dcf_bridge_reconciles": (
+            '=IF(N(\'31_DCF\'!H26)=0,"N/A",IF(AND('
+            "ABS('31_DCF'!H26-('31_DCF'!H19-'31_DCF'!H25))<=0.01*MAX(ABS('31_DCF'!H26),1),"
+            "ABS('31_DCF'!H28-('31_DCF'!H26/'31_DCF'!H27))<=0.01"
+            '),"PASS","FAIL"))'
+        ),
+        "wacc_valid": '=IF(N(\'30_WACC\'!C15)=0,"N/A",IF(AND(\'30_WACC\'!C15>0.03,\'30_WACC\'!C15<0.30),"PASS","FAIL"))',
+        "terminal_growth_lt_wacc": '=IF(OR(N(\'32_Terminal_Value\'!C6)=0,N(\'30_WACC\'!C15)=0),"N/A",IF(\'32_Terminal_Value\'!C6<\'30_WACC\'!C15,"PASS","FAIL"))',
+        "no_missing_critical_inputs": '=IF(N(\'31_DCF\'!H28)=0,"N/A",IF(\'31_DCF\'!H28>0,"PASS","FAIL"))',
         "data_provenance_quality": '=IF(COUNTA(\'50_Data_Sources\'!B6:B11)>0,"PASS","FAIL")',
+        # Cannot be recomputed from workbook cells — the provenance status lives
+        # on the historical line items, not in a number. The engine's verdict is
+        # written as a literal so the tab shows the truth rather than a formula
+        # that always passes.
+        "historicals_are_reported": None,
     }
 
     for idx, c in enumerate(checks):
@@ -169,7 +222,13 @@ def render_model_checks_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet
             res_cell.fill = FILL_PASS if c.passed else FILL_FAIL
             res_cell.border = BORDER_BOX
 
-        ws.cell(row=r, column=5, value=c.detail if not c.passed else "Verified OK").font = FONT_FORMULA
+        # Always show the engine's own explanation. Replacing a passing check's
+        # detail with "Verified OK" discards the only sentence that tells a
+        # reader HOW the check passed — which is the sentence that reveals a
+        # check passing for the wrong reason.
+        detail_cell = ws.cell(row=r, column=5, value=c.detail or "Verified OK")
+        detail_cell.font = FONT_ALERT if not c.passed else FONT_FORMULA
+        detail_cell.alignment = ALIGN_LEFT
 
         for col in range(2, 6):
             ws.cell(row=r, column=col).border = BORDER_BOX

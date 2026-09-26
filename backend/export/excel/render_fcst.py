@@ -52,6 +52,68 @@ def get_assumption_value(spec: ModelSpecification, driver_key: str, period: str,
     return 0.0
 
 
+OPERATING_MODEL_ROW_OFFSET = 6
+
+# Row index of every line on 20_Operating_Model, keyed by canonical key.
+#
+# These row numbers used to be hardcoded as literals inside the formulas on
+# 31_DCF and 52_Model_Checks. Inserting one line into the operating model
+# therefore silently re-pointed every self-referencing formula at whatever moved
+# into the vacated row: "Less: Capex Outflow" began reading operating cash flow,
+# and the balance-sheet check began reading the cash line. A reader pressing
+# recalculate then got a different free cash flow from the one the model
+# published, with nothing on the page to explain it.
+#
+# Publishing the map means a formula names the LINE it wants, and adding or
+# removing a line can no longer break an unrelated one.
+OPERATING_MODEL_ROWS: dict[str, int] = {
+    key: OPERATING_MODEL_ROW_OFFSET + index
+    for index, (key, *_rest) in enumerate(
+        [
+            ("canonical.is.revenue",),
+            ("canonical.is.cost_of_sales",),
+            ("canonical.is.gross_profit",),
+            ("canonical.is.ebitda",),
+            ("canonical.is.depreciation_amortization",),
+            ("canonical.is.operating_profit",),
+            ("canonical.is.other_income",),
+            ("canonical.is.finance_cost",),
+            ("canonical.is.pbt",),
+            ("canonical.is.tax",),
+            ("canonical.is.net_profit",),
+            ("canonical.bs.trade_receivables",),
+            ("canonical.bs.inventory",),
+            ("canonical.bs.trade_payables",),
+            ("canonical.bs.cash_and_bank",),
+            ("canonical.bs.total_assets",),
+            ("canonical.bs.total_equity",),
+            ("canonical.bs.total_liabilities",),
+            ("canonical.bs.total_liabilities_and_equity",),
+            ("canonical.cf.operating_activities",),
+            ("canonical.cf.investing_activities",),
+            ("canonical.cf.dividends_paid",),
+            ("canonical.cf.financing_activities",),
+        ]
+    )
+}
+
+
+def op_row(canonical_key: str) -> int:
+    """Row on 20_Operating_Model holding a canonical key.
+
+    Raises rather than guessing if the key is not on the tab: a silent fallback
+    to a neighbouring row is how a formula ends up reading a different
+    quantity from the one its label promises.
+    """
+    try:
+        return OPERATING_MODEL_ROWS[canonical_key]
+    except KeyError as exc:  # pragma: no cover - programming error
+        raise KeyError(
+            f"{canonical_key} is not a line on 20_Operating_Model; add it to "
+            "OPERATING_MODEL_ROWS and to the tab's line list together"
+        ) from exc
+
+
 def render_operating_model(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ws = wb.create_sheet(title="20_Operating_Model")
     apply_tab_defaults(ws, freeze_cell="C6")
@@ -67,24 +129,40 @@ def render_operating_model(wb: Workbook, spec: ModelSpecification) -> Worksheet:
 
     fcst_items = [
         ("canonical.is.revenue", "Revenue from Operations", True, FMT_AMOUNT, "='21_Revenue_Build'!{col}7"),
-        ("canonical.is.cost_of_sales", "Cost of Sales", False, FMT_AMOUNT, "={col}6-{col}8"),
+        ("canonical.is.cost_of_sales", "Cost of Sales", False, FMT_AMOUNT, f"={{col}}{op_row('canonical.is.revenue')}-{{col}}{op_row('canonical.is.gross_profit')}"),
         ("canonical.is.gross_profit", "Gross Profit", True, FMT_AMOUNT, None),
         ("canonical.is.ebitda", "EBITDA", True, FMT_AMOUNT, "='22_Cost_Build'!{col}7"),
         ("canonical.is.depreciation_amortization", "Depreciation & Amortization", False, FMT_AMOUNT, "='24_Capex_D&A'!{col}9"),
-        ("canonical.is.operating_profit", "Operating Profit (EBIT)", True, FMT_AMOUNT, "={col}9-{col}10"),
+        ("canonical.is.operating_profit", "Operating Profit (EBIT)", True, FMT_AMOUNT, "='22_Cost_Build'!{col}9"),
         ("canonical.is.other_income", "Other Income", False, FMT_AMOUNT, None),
-        ("canonical.is.finance_cost", "Finance Cost", False, FMT_AMOUNT, "='25_Debt_Schedule'!{col}11"),
-        ("canonical.is.pbt", "Profit Before Tax (PBT)", True, FMT_AMOUNT, "={col}11+{col}12-{col}13"),
-        ("canonical.is.tax", "Tax Expense", False, FMT_AMOUNT, "={col}14*'26_Tax_Schedule'!{col}6"),
-        ("canonical.is.net_profit", "Net Profit After Tax", True, FMT_AMOUNT, "={col}14-{col}15"),
+        # Finance cost is a LITERAL, not a link to the debt schedule. The engine
+        # holds it flat at the last historical actual, while
+        # 25_Debt_Schedule!row 11 recomputes AVERAGE(opening, closing) x Kd. The
+        # two disagree for every company (Infosys 416 vs 688; NVDA 0 vs 560), so
+        # the live formula silently rewrote PBT, tax and net profit on
+        # recalculation. A literal that matches the model is honest.
+        ("canonical.is.finance_cost", "Finance Cost (held flat at last actual)", False, FMT_AMOUNT, None),
+        ("canonical.is.pbt", "Profit Before Tax (PBT)", True, FMT_AMOUNT, f"={{col}}{op_row('canonical.is.operating_profit')}+{{col}}{op_row('canonical.is.other_income')}-{{col}}{op_row('canonical.is.finance_cost')}"),
+        ("canonical.is.tax", "Tax Expense", False, FMT_AMOUNT, f"={{col}}{op_row('canonical.is.pbt')}*'26_Tax_Schedule'!{{col}}6"),
+        ("canonical.is.net_profit", "Net Profit After Tax", True, FMT_AMOUNT, f"={{col}}{op_row('canonical.is.pbt')}-{{col}}{op_row('canonical.is.tax')}"),
         ("canonical.bs.trade_receivables", "Trade Receivables", False, FMT_AMOUNT, "='23_Working_Capital'!{col}7"),
+        ("canonical.bs.inventory", "Inventory", False, FMT_AMOUNT, "='23_Working_Capital'!{col}11"),
         ("canonical.bs.trade_payables", "Trade Payables", False, FMT_AMOUNT, "='23_Working_Capital'!{col}9"),
         ("canonical.bs.cash_and_bank", "Cash & Cash Equivalents", False, FMT_AMOUNT, None),
         ("canonical.bs.total_assets", "Total Assets", True, FMT_AMOUNT, None),
         ("canonical.bs.total_equity", "Total Equity", True, FMT_AMOUNT, None),
-        ("canonical.bs.total_liabilities_and_equity", "Total Liabilities & Equity", True, FMT_AMOUNT, "={col}20"),
+        # Total liabilities is shown so the accounting identity is a real check.
+        # Without it, the equity-plus-liabilities total can only be written as a
+        # copy of total assets, which makes the balance unfalsifiable.
+        ("canonical.bs.total_liabilities", "Total Liabilities", True, FMT_AMOUNT, None),
+        # Equity + liabilities, not a copy of total assets. The two are equal by
+        # construction in the engine, and showing both makes that visible rather
+        # than assumed.
+        ("canonical.bs.total_liabilities_and_equity", "Total Liabilities & Equity", True, FMT_AMOUNT, f"={{col}}{op_row('canonical.bs.total_equity')}+{{col}}{op_row('canonical.bs.total_liabilities')}"),
         ("canonical.cf.operating_activities", "Operating Cash Flow", True, FMT_AMOUNT, None),
         ("canonical.cf.investing_activities", "Investing Cash Flow (Capex)", True, FMT_AMOUNT, "='24_Capex_D&A'!{col}7"),
+        ("canonical.cf.dividends_paid", "Dividends Paid", False, FMT_AMOUNT, None),
+        ("canonical.cf.financing_activities", "Financing Cash Flow", True, FMT_AMOUNT, None),
     ]
 
     for idx, (ckey, label, is_tot, fmt, formula_template) in enumerate(fcst_items):
@@ -186,24 +264,29 @@ def render_cost_build(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ebit_margins = [get_assumption_value(spec, "ebit_margin", p) / 100.0 for p in FORECAST_PERIODS]
     ebit_c_vals = [spec.forecast.get_value("canonical.is.operating_profit", p, "base") for p in FORECAST_PERIODS]
 
-    # Row 6: EBITDA Margin %
-    ws.cell(row=6, column=2, value="EBITDA Margin %").font = FONT_SUBHEADER
+    # Row 6: EBITDA Margin % — a MEMO of the resulting margin, not a driver.
+    ws.cell(row=6, column=2, value="EBITDA Margin % (derived: EBIT + D&A)").font = FONT_SUBHEADER
     for p_idx, m in enumerate(ebitda_margins):
         c = 3 + p_idx
         cell = ws.cell(row=6, column=c, value=m)
-        cell.font = FONT_INPUT
+        cell.font = FONT_FORMULA
         cell.number_format = FMT_PERCENT
         cell.alignment = ALIGN_RIGHT
         cell.border = BORDER_BOX
 
-    # Row 7: EBITDA
-    ws.cell(row=7, column=2, value=f"EBITDA ({ccy})").font = FONT_TOTAL
+    # Row 7: EBITDA — DERIVED as EBIT + D&A.
+    #
+    # The engine derives EBITDA from EBIT and D&A rather than driving all three
+    # margins independently, because three independently-averaged drivers let
+    # EBITDA − D&A ≠ EBIT and the income statement stops footing. Row 7 must
+    # reproduce that, or the sheet shows a margin the model never used.
+    ws.cell(row=7, column=2, value=f"EBITDA ({ccy}) — derived, = EBIT + D&A").font = FONT_TOTAL
     for p_idx, c_val in enumerate(ebitda_c_vals):
         c = 3 + p_idx
         col_let = chr(67 + p_idx)
         write_formula_cell(
             ws, 7, c,
-            formula=f"='21_Revenue_Build'!{col_let}7*{col_let}6",
+            formula=f"={col_let}9+'24_Capex_D&A'!{col_let}9",
             cached_value=c_val,
             num_format=FMT_AMOUNT,
             font=FONT_TOTAL,
@@ -211,8 +294,8 @@ def render_cost_build(wb: Workbook, spec: ModelSpecification) -> Worksheet:
             alignment=ALIGN_RIGHT,
         )
 
-    # Row 8: Operating Profit Margin %
-    ws.cell(row=8, column=2, value="Operating Profit Margin %").font = FONT_SUBHEADER
+    # Row 8: Operating Profit Margin % — the driver the engine actually applies.
+    ws.cell(row=8, column=2, value="Operating Profit Margin % (driver)").font = FONT_SUBHEADER
     for p_idx, m in enumerate(ebit_margins):
         c = 3 + p_idx
         cell = ws.cell(row=8, column=c, value=m)
@@ -222,7 +305,7 @@ def render_cost_build(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         cell.border = BORDER_BOX
 
     # Row 9: Operating Profit (EBIT)
-    ws.cell(row=9, column=2, value=f"Operating Profit ({ccy})").font = FONT_TOTAL
+    ws.cell(row=9, column=2, value=f"Operating Profit (EBIT) ({ccy})").font = FONT_TOTAL
     for p_idx, c_val in enumerate(ebit_c_vals):
         c = 3 + p_idx
         col_let = chr(67 + p_idx)
@@ -244,7 +327,7 @@ def render_working_capital(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     apply_tab_defaults(ws, freeze_cell="C6")
     set_col_widths(ws, {"A": 5, "B": 35, "C": 18, "D": 18, "E": 18, "F": 18, "G": 18})
 
-    ws["B2"] = "WORKING CAPITAL FORECAST (DSO / DPO)"
+    ws["B2"] = "WORKING CAPITAL FORECAST (DSO / DIO / DPO)"
     ws["B2"].font = FONT_TITLE
 
     headers = ["Working Capital Driver"] + FORECAST_PERIODS
@@ -256,6 +339,8 @@ def render_working_capital(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     rec_c_vals = [spec.forecast.get_value("canonical.bs.trade_receivables", p, "base") for p in FORECAST_PERIODS]
     dpo_vals = [get_assumption_value(spec, "dpo_days", p) for p in FORECAST_PERIODS]
     pay_c_vals = [spec.forecast.get_value("canonical.bs.trade_payables", p, "base") for p in FORECAST_PERIODS]
+    dio_vals = [get_assumption_value(spec, "dio_days", p) for p in FORECAST_PERIODS]
+    inv_c_vals = [spec.forecast.get_value("canonical.bs.inventory", p, "base") for p in FORECAST_PERIODS]
 
     # Row 6: DSO
     ws.cell(row=6, column=2, value="Days Sales Outstanding (DSO)").font = FONT_SUBHEADER
@@ -304,6 +389,63 @@ def render_working_capital(wb: Workbook, spec: ModelSpecification) -> Worksheet:
             num_format=FMT_AMOUNT,
             font=FONT_FORMULA,
             border=BORDER_BOX,
+            alignment=ALIGN_RIGHT,
+        )
+
+    # Rows 10-11: DIO and Inventory.
+    #
+    # Inventory MUST be on this tab. The engine's working-capital movement is
+    # (ΔAR) + (ΔInv) − (ΔAP); with no inventory row the DCF tab's level
+    # difference could not express that, and the workbook silently recomputed a
+    # different ΔNWC from the one the model used — a 27% (NVDA) to 57% (AWI)
+    # gap in the implied share price on recalculation.
+    ws.cell(row=10, column=2, value="Days Inventory Outstanding (DIO)").font = FONT_SUBHEADER
+    for p_idx, v in enumerate(dio_vals):
+        c = 3 + p_idx
+        cell = ws.cell(row=10, column=c, value=v)
+        cell.font = FONT_INPUT
+        cell.number_format = FMT_DAYS
+        cell.alignment = ALIGN_RIGHT
+        cell.border = BORDER_BOX
+
+    ws.cell(row=11, column=2, value=f"Inventory ({ccy})").font = FONT_FORMULA
+    for p_idx, c_val in enumerate(inv_c_vals):
+        c = 3 + p_idx
+        col_let = chr(67 + p_idx)
+        dio = dio_vals[p_idx] or 0
+        if dio > 0:
+            # Inventory = COGS × DIO / 365, matching the engine.
+            formula = f"='20_Operating_Model'!{col_let}7*{col_let}10/365"
+        else:
+            # DIO is zero because the filings report no inventory, so the engine
+            # carries the opening balance flat. A live formula would recompute
+            # zero and contradict the model, so this is a literal input.
+            formula = None
+        write_formula_cell(
+            ws, 11, c,
+            formula=formula,
+            cached_value=c_val,
+            num_format=FMT_AMOUNT,
+            font=FONT_FORMULA if formula else FONT_INPUT,
+            border=BORDER_BOX,
+            alignment=ALIGN_RIGHT,
+        )
+
+    # Row 12: Net operating working capital — the single definition the DCF tab
+    # differences, so the tab and the model cannot disagree about what NWC means.
+    ws.cell(row=12, column=2, value=f"Net Operating Working Capital ({ccy})").font = FONT_TOTAL
+    for p_idx in range(len(FORECAST_PERIODS)):
+        c = 3 + p_idx
+        col_let = chr(67 + p_idx)
+        write_formula_cell(
+            ws, 12, c,
+            formula=f"=({col_let}7+{col_let}11)-{col_let}9",
+            cached_value=(
+                (rec_c_vals[p_idx] or 0) + (inv_c_vals[p_idx] or 0) - (pay_c_vals[p_idx] or 0)
+            ),
+            num_format=FMT_AMOUNT,
+            font=FONT_TOTAL,
+            border=BORDER_TOTAL,
             alignment=ALIGN_RIGHT,
         )
 

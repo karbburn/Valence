@@ -103,7 +103,7 @@ def write_formula_cell(
     ws: Worksheet,
     row: int,
     col: int,
-    formula: str,
+    formula: Optional[str],
     cached_value: Optional[Any] = None,
     num_format: Optional[str] = None,
     font: Optional[Any] = None,
@@ -111,8 +111,15 @@ def write_formula_cell(
     alignment: Optional[Any] = None,
     fill: Optional[Any] = None,
 ) -> Any:
-    """Write an interactive Excel formula with optional precomputed cached value and formatting."""
-    cell = ws.cell(row=row, column=col, value=formula)
+    """Write an interactive Excel formula with optional precomputed cached value.
+
+    `formula=None` writes the cached value as a literal input. Use it where a
+    live formula would recompute something DIFFERENT from the model — a literal
+    that agrees with the engine is honest, a formula that disagrees is a trap
+    that only fires when the reader presses Ctrl+Alt+F9.
+    """
+    value = cached_value if formula is None else formula
+    cell = ws.cell(row=row, column=col, value=value)
     if cached_value is not None:
         register_formula_value(ws, row, col, cached_value)
     if num_format:

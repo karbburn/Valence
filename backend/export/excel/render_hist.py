@@ -78,11 +78,16 @@ def render_historical_income_statement(wb: Workbook, spec: ModelSpecification) -
             c = 3 + p_idx
             val = spec.historicals.get_value(ckey, p)
             if val is None and ckey == "canonical.is.ebitda":
-                op_v = spec.historicals.income_statement.get_value("canonical.is.operating_profit", p)
+                # Historicals is a flat canonical store with a single
+                # get_value() accessor. Reaching for .income_statement /
+                # .cash_flow_statement sub-objects raised AttributeError and
+                # aborted the whole export for any company whose EBITDA line
+                # was absent.
+                op_v = spec.historicals.get_value("canonical.is.operating_profit", p)
                 da_v = (
-                    spec.historicals.income_statement.get_value("canonical.is.depreciation_amortization", p)
-                    or spec.historicals.cash_flow_statement.get_value("canonical.cf.depreciation_amortization", p)
-                    or spec.historicals.cash_flow_statement.get_value("canonical.cf.depreciation", p)
+                    spec.historicals.get_value("canonical.is.depreciation_amortization", p)
+                    or spec.historicals.get_value("canonical.cf.depreciation_amortization", p)
+                    or spec.historicals.get_value("canonical.cf.depreciation", p)
                 )
                 if op_v is not None and da_v is not None:
                     val = op_v + abs(da_v)

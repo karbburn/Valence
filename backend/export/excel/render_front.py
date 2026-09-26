@@ -363,6 +363,13 @@ def render_executive_summary(wb: Workbook, spec: ModelSpecification) -> Workshee
 
     ws["B6"] = mkt_price
     ws["B6"].number_format = FMT_PRICE
+    # The KPI card shows a bare price; stamp its date + provider on the label so
+    # a reader can never mistake a stale benchmark for a live quote.
+    rev_dcf = base_val.reverse_dcf if base_val else None
+    if rev_dcf is not None and rev_dcf.market_price:
+        prov_date = rev_dcf.market_price_date or "unknown"
+        prov_src = rev_dcf.market_price_source or "unknown"
+        ws["B5"] = f"Market Benchmark Price (as of {prov_date} · {prov_src})"
 
     write_formula_cell(ws, 6, 3, "='35_Scenario_Analysis'!C6", cached_value=base_price, num_format=FMT_PRICE)
     write_formula_cell(ws, 6, 4, '=IF(B6=0,"N/A",(C6-B6)/B6)', cached_value=(upside_pct / 100.0), num_format=FMT_PERCENT)
