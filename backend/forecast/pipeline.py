@@ -165,7 +165,7 @@ def run(
         f"  - Forecast periods      : {merged_forecast.periods}\n"
         f"  - Scenarios             : base, bull, bear\n"
         f"  - Debt schedules        : {len(debt_schedules)} scenarios "
-        f"(opening debt INR {opening_debt:,.0f} Cr @ {interest_rate:.1f}%)\n"
+        f"(opening debt {opening_debt:,.0f} {spec.metadata.units} @ {interest_rate:.1f}%)\n"
         f"  - Share count periods   : {len(spec.share_count.periods)} (hist + forecast)"
     )
 

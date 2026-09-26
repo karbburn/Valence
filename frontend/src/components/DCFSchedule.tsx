@@ -124,11 +124,25 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
             <span className="text-[#f8fafc] font-semibold">{fmtMoney(bridge.pv_terminal_value, currency)}</span>
           </div>
           <span className="text-[#374766]">|</span>
-          <div>
+          <div
+            title={
+              bridge.debt_basis_note ||
+              'Net cash = cash and short-term investments less total debt.'
+            }
+          >
             <span className="text-text-dim">Net: </span>
             <span className={`font-semibold ${isNetCash ? 'text-[#10b981]' : 'text-[#ef4444]'}`}>
               {isNetCash ? `+${currencySym}${fmtNum(Math.abs(netDebt))}` : `-${currencySym}${fmtNum(netDebt)}`}
             </span>
+            {/*
+              The net figure is only interpretable alongside the date of the
+              balance sheet it came from. A live price paired with a year-old
+              balance sheet produces an enterprise value that looks current and
+              is not, and nothing else on the screen reveals it.
+            */}
+            {bridge.balance_sheet_as_of && (
+              <span className="text-text-dim ml-1">@ {bridge.balance_sheet_as_of}</span>
+            )}
           </div>
           <span className="text-[#374766]">|</span>
           <div>
