@@ -191,6 +191,31 @@ COMPANY_METADATA_REGISTRY: dict[str, ModelMetadata] = {
 }
 
 
+def resolve_market(company_id: str) -> str:
+    """Reporting market for a company: "us" or "india".
+
+    The single replacement for `company_id.endswith("_us")`. The suffix is only a
+    last resort: it mis-classifies any listing whose slug and reporting calendar
+    differ, most importantly infy_us, a US-listed ADR that reports on a 31 March
+    Indian fiscal year and is taxed as an Indian company. The registry is
+    consulted first so the answer is the company's actual market.
+    """
+    registered = COMPANY_METADATA_REGISTRY.get(company_id)
+    if registered is not None:
+        return registered.market
+
+    try:
+        from backend.data.universe.store import get_universe_company
+
+        co = get_universe_company(company_id)
+        if co is not None and co.market:
+            return co.market
+    except Exception:
+        pass
+
+    return "us" if company_id.endswith("_us") else "india"
+
+
 def get_metadata_for_company(company_id: str) -> ModelMetadata:
     """Return ModelMetadata for company_id.
 

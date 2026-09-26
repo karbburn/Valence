@@ -7,6 +7,8 @@ a fully populated ModelSpecification with forecast, assumptions, and scenarios.
 
 from pathlib import Path
 
+from backend import constants
+from backend.constants import MAX_CARRYING_RATE, MIN_CARRYING_RATE
 from backend.forecast.assumptions import suggest_base_assumptions
 from backend.forecast.debt import build_debt_schedule
 from backend.forecast.engine import run_forecast
@@ -91,16 +93,50 @@ def run(
     spec.valuation = valuation_scaffolds
     spec.qa = QAResults.empty()
 
-    # Determine opening debt balance from last historical balance sheet
+    # Determine opening debt balance from the last historical balance sheet.
+    # Must match the definition the valuation bridge deducts, or the schedule's
+    # interest and the bridge's obligation are two different numbers for the
+    # same debt: non-current borrowings + current borrowings (including the
+    # current portion of long-term debt) + finance lease liabilities.
     last_period = historical_model.periods[-1] if historical_model.periods else "FY26"
-    borrowings_item = next(
-        (i for i in historical_model.balance_sheet.line_items if i.canonical_key == "canonical.bs.borrowings"),
+    debt_keys = (
+        "canonical.bs.borrowings",
+        "canonical.bs.short_term_borrowings",
+        "canonical.bs.finance_lease_liabilities",
+    )
+    opening_debt = 0.0
+    for key in debt_keys:
+        item = next(
+            (i for i in historical_model.balance_sheet.line_items if i.canonical_key == key),
+            None,
+        )
+        if item is not None:
+            opening_debt += constants.resolve(item.values_by_period.get(last_period), 0.0)
+
+    # Carrying rate from the company's OWN interest expense over its OWN debt
+    # balance. A two-valued per-market literal (5.5 / 7.5) is not a carrying
+    # rate: it was 65% away from Infosys' actual 4.53% and 40% away from Apple's
+    # actual 3.93%, and the same number then fed both the P&L and the WACC.
+    finance_cost_item = next(
+        (
+            i
+            for i in historical_model.income_statement.line_items
+            if i.canonical_key == "canonical.is.finance_cost"
+        ),
         None,
     )
-    opening_debt = borrowings_item.values_by_period.get(last_period, 0.0) if borrowings_item else 0.0
-    # Market-aware cost of debt (carrying rate when a balance exists). No hardcoded single rate.
-    is_us = historical_model.company_id.endswith("_us")
-    interest_rate = (5.5 if is_us else 7.5) if opening_debt > 0 else 0.0
+    reported_finance_cost = (
+        abs(finance_cost_item.values_by_period.get(last_period, 0.0))
+        if finance_cost_item
+        else 0.0
+    )
+    if opening_debt > 0 and reported_finance_cost > 0:
+        interest_rate = min(
+            max(reported_finance_cost / opening_debt * 100.0, MIN_CARRYING_RATE),
+            MAX_CARRYING_RATE,
+        )
+    else:
+        interest_rate = 0.0
 
     # Build debt schedules for each scenario
     debt_schedules = [
