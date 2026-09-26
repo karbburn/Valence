@@ -24,6 +24,10 @@ import sys
 import urllib.request
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from backend.export.excel.render_val import bridge_ref
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
@@ -158,16 +162,21 @@ def _audit_excel(cid: str, blob: bytes, spec: dict) -> list[str]:
             problems.append(f"{cid}: stale quote not flagged in excel")
 
     # 3. The DCF bridge must be live formulas chained off the right precedents.
-    dcf = wb["31_DCF"]
-    for coord, expect in (
-        ("H17", "SUM(C14:G14)"),
-        ("H19", "H17+H18"),
-        ("H26", "H19-H25"),
-        ("H28", "H26/H27"),
+    #
+    #    The bridge is on 36_EV_Bridge, addressed by line name. It used to sit in
+    #    a summary column of 31_DCF, where each row was single-valued beside the
+    #    five year-columns of the FCFF build.
+    bridge = wb["36_EV_Bridge"]
+    for line, expect in (
+        ("sum_pv_fcff", "SUM('31_DCF'!C14:G14)"),
+        ("enterprise_value", "=C6+C7"),
+        ("equity_value", "=C8-C14"),
+        ("implied_share_price", "=C15/C16"),
     ):
-        got = str(dcf[coord].value or "")
+        coord = bridge_ref(line).split("!")[1]
+        got = str(bridge[coord].value or "")
         if expect not in got.replace(" ", ""):
-            problems.append(f"{cid}: excel 31_DCF!{coord} formula {got!r} missing {expect!r}")
+            problems.append(f"{cid}: excel 36_EV_Bridge!{coord} formula {got!r} missing {expect!r}")
 
     # 4. WACC recomputed from the sheet's own literals must equal the API WACC.
     #    Catches percent/decimal unit errors that still *look* plausible.
