@@ -35,6 +35,7 @@ from backend.export.excel.styles import (
     FMT_PERCENT,
     FMT_PERCENT_PRECISION,
     FMT_PRICE,
+    FONT_ALERT,
     FONT_FORMULA,
     FONT_HEADER,
     FONT_INPUT,
@@ -46,6 +47,7 @@ from backend.export.excel.styles import (
 )
 from backend.models.spec.forecast import FORECAST_PERIODS
 from backend.models.spec.model_specification import ModelSpecification
+from backend.export.excel.render_fcst import op_row
 
 # Named fallbacks
 FALLBACK_WACC = 12.0
@@ -111,7 +113,18 @@ def render_wacc_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
             except Exception:
                 pass
 
-    ke_val = (wacc_b.cost_of_equity / 100.0) if (wacc_b and wacc_b.cost_of_equity) else ((rfr + beta * erp) / 100.0)
+    # An analyst-set cost of equity must appear as an INPUT, not be hidden behind
+    # a live CAPM formula that would recompute a different number than the engine
+    # actually discounted at.
+    capm_ke = (rfr + beta * erp) / 100.0
+    ke_is_override = bool(
+        wacc_b and wacc_b.cost_of_equity is not None
+        and abs(wacc_b.cost_of_equity - (rfr + beta * erp)) > 0.005
+    )
+    if wacc_b and wacc_b.cost_of_equity is not None:
+        ke_val = wacc_b.cost_of_equity / 100.0
+    else:
+        ke_val = capm_ke
     kd_val = (debt_pre / 100.0 * (1.0 - tax / 100.0))
     if wacc_b and wacc_b.wacc is not None and wacc_b.wacc != 0:
         wacc_val = wacc_b.wacc / 100.0
@@ -122,7 +135,16 @@ def render_wacc_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         ("Risk-Free Rate (Rf) %", rfr / 100.0, None, FMT_PERCENT_PRECISION, True, rfr_note),
         ("Equity Beta (β)", beta, None, "0.00", True, beta_note),
         ("Equity Risk Premium (ERP) %", erp / 100.0, None, FMT_PERCENT_PRECISION, True, erp_note),
-        ("Cost of Equity (r_e) %", "=C6+(C7*C8)", ke_val, FMT_PERCENT_PRECISION, False, "CAPM formula: r_e = Rf + Beta * ERP"),
+        (
+            "Cost of Equity (r_e) %",
+            ke_val if ke_is_override else "=C6+(C7*C8)",
+            ke_val,
+            FMT_PERCENT_PRECISION,
+            ke_is_override,
+            "Analyst-set cost of equity (overrides CAPM)"
+            if ke_is_override
+            else "CAPM formula: r_e = Rf + Beta * ERP",
+        ),
         ("Pre-Tax Cost of Debt %", debt_pre / 100.0, None, FMT_PERCENT_PRECISION, True, f"{spec.metadata.ticker} pre-tax cost of borrowings"),
         ("Effective Tax Rate %", tax / 100.0, None, FMT_PERCENT_PRECISION, True, "Forecast average tax rate"),
         ("After-Tax Cost of Debt (r_d) %", "=C10*(1-C11)", kd_val, FMT_PERCENT_PRECISION, False, "Pre-tax * (1 - tax_rate)"),
@@ -162,6 +184,20 @@ def render_wacc_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     return ws
 
 
+def _last_historical_column(spec: ModelSpecification) -> str:
+    """Column letter on 11_Balance_Sheet holding the last historical period.
+
+    The historical block starts at column C and one column per period, so the
+    last period sits at C + n - 1. Hardcoding "E" read the wrong year's
+    balances for any company whose history is not exactly three periods, which
+    shifts the opening working-capital level and therefore the whole DCF.
+    """
+    count = len(spec.historicals.periods or [])
+    if count <= 0:
+        return "C"
+    return chr(ord("C") + count - 1)
+
+
 def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ws = wb.create_sheet(title="31_DCF")
     apply_tab_defaults(ws, freeze_cell="C6")
@@ -186,7 +222,7 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         c_val = p.ebit if p else None
         write_formula_cell(
             ws, 6, c,
-            formula=f"='20_Operating_Model'!{col}11",
+            formula=f"='20_Operating_Model'!{col}{op_row('canonical.is.operating_profit')}",
             cached_value=c_val,
             num_format=FMT_AMOUNT,
             font=FONT_FORMULA,
@@ -235,7 +271,7 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         c_val = p.da if p else None
         write_formula_cell(
             ws, 9, c,
-            formula=f"='20_Operating_Model'!{col}10",
+            formula=f"='20_Operating_Model'!{col}{op_row('canonical.is.depreciation_amortization')}",
             cached_value=c_val,
             num_format=FMT_AMOUNT,
             font=FONT_FORMULA,
@@ -244,6 +280,11 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         )
 
     # Row 10: Less: Capex
+    #
+    # Sourced from the capex SCHEDULE, not from the operating model's investing
+    # line. A hardcoded row index on that tab once landed on operating cash flow
+    # after a line was inserted, so recalculating the workbook moved free cash
+    # flow by the whole of operating cash flow for every company.
     ws.cell(row=10, column=2, value="Less: Capex Outflow").font = FONT_SUBHEADER
     for idx, col in enumerate(["C", "D", "E", "F", "G"]):
         c = 3 + idx
@@ -251,7 +292,7 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         c_val = abs(p.capex) if p and p.capex else None
         write_formula_cell(
             ws, 10, c,
-            formula=f"=ABS('20_Operating_Model'!{col}24)",
+            formula=f"=ABS('24_Capex_D&A'!{col}7)",
             cached_value=c_val,
             num_format=FMT_AMOUNT,
             font=FONT_FORMULA,
@@ -259,8 +300,22 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
             alignment=ALIGN_RIGHT,
         )
 
-    # Row 11: Less: Change in Working Capital (Clean Delta NWC Formula)
+    # Row 11: Less: Change in Working Capital
+    #
+    # The engine defines the working-capital movement as a balance-sheet level
+    # difference: ΔNWC = NWC_t − NWC_{t−1}, where NWC = receivables +
+    # inventory − payables. '23_Working_Capital'!row 12 is that single
+    # definition, so this row differences ONE consistent quantity in all five
+    # columns.
+    #
+    # The previous version built the level inline as (AR − AP), omitting
+    # inventory entirely, AND changed the definition between year 1 (a
+    # historical NWC including inventory and unbilled revenue) and years 2-5 (a
+    # forecast NWC including neither). Recalculating the workbook therefore
+    # produced a different implied share price from the one the model and the
+    # Executive Summary published — +27% on NVDA, +57% on AWI.
     ws.cell(row=11, column=2, value="Less: Change in Working Capital").font = FONT_SUBHEADER
+    hist_period_col = _last_historical_column(spec)
     for idx, p_label in enumerate(FORECAST_PERIODS):
         c = 3 + idx
         col_let = chr(67 + idx)
@@ -268,14 +323,19 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         c_val = p.delta_working_capital if p else None
 
         if idx == 0:
-            form = (
-                f"=('23_Working_Capital'!C7-'23_Working_Capital'!C9)"
-                f"-(N('11_Balance_Sheet'!E13)+N('11_Balance_Sheet'!E14)"
-                f"+N('11_Balance_Sheet'!E15)-N('11_Balance_Sheet'!E22))"
+            # Opening level comes from the historical balance sheet: receivables
+            # + unbilled revenue + inventory − payables, on the last historical
+            # column that actually carries them.
+            prior_level = (
+                f"(N('11_Balance_Sheet'!{hist_period_col}13)+N('11_Balance_Sheet'!{hist_period_col}14)"
+                f"+N('11_Balance_Sheet'!{hist_period_col}15)-N('11_Balance_Sheet'!{hist_period_col}22))"
             )
+            form = f"='23_Working_Capital'!{col_let}12-{prior_level}"
         else:
             prev_col_let = chr(67 + idx - 1)
-            form = f"=('23_Working_Capital'!{col_let}7-'23_Working_Capital'!{col_let}9)-('23_Working_Capital'!{prev_col_let}7-'23_Working_Capital'!{prev_col_let}9)"
+            form = (
+                f"='23_Working_Capital'!{col_let}12-'23_Working_Capital'!{prev_col_let}12"
+            )
 
         write_formula_cell(
             ws, 11, c,
@@ -441,7 +501,7 @@ def render_terminal_value_tab(wb: Workbook, spec: ModelSpecification) -> Workshe
         (f"FY31 Final Year FCFF ({ccy})", "='31_DCF'!G12", tv.final_year_fcff if tv else 0, FMT_AMOUNT, False, "Final forecast year FCFF"),
         ("Gordon Growth Undiscounted TV", "=(C7*(1+C6)/('30_WACC'!C15-C6))", tv.terminal_value_undiscounted if tv else 0, FMT_CURRENCY_INT, False, "TV = FCFF_n * (1+g) / (WACC - g)"),
         ("Exit Multiple (EV/EBITDA)", exit_mult, None, FMT_MULTIPLE, True, "Exit EV/EBITDA multiple"),
-        (f"FY31 Final Year EBITDA ({ccy})", "='20_Operating_Model'!G9", tv.final_year_ebitda if tv else 0, FMT_AMOUNT, False, "Final forecast year EBITDA"),
+        (f"FY31 Final Year EBITDA ({ccy})", f"='20_Operating_Model'!G{op_row('canonical.is.ebitda')}", tv.final_year_ebitda if tv else 0, FMT_AMOUNT, False, "Final forecast year EBITDA"),
         ("Exit Multiple Undiscounted TV", "=C9*C10", tv.exit_multiple_tv_undiscounted if tv else 0, FMT_CURRENCY_INT, False, "TV = EBITDA_n * Exit Multiple"),
         ("Discount Factor (t=5)", "=1/((1+'30_WACC'!C15)^5)", tv.discount_factor if tv else 0, "0.000000", False, "Discount factor for Year 5"),
         ("DISCOUNTED TERMINAL VALUE (PV)", "=C8*C12", base_val.dcf_bridge.pv_terminal_value if base_val else 0, FMT_CURRENCY_INT, False, "Gordon Growth PV of Terminal Value"),
@@ -582,7 +642,7 @@ def render_sensitivity_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
                 "+'31_DCF'!E12/(1+$B{r})^2.5+'31_DCF'!F12/(1+$B{r})^3.5"
                 "+'31_DCF'!G12/(1+$B{r})^4.5"
             ).format(r=r)
-            tv_term = f"('20_Operating_Model'!G9*{col_letter}$13)"
+            tv_term = f"('20_Operating_Model'!G{op_row('canonical.is.ebitda')}*{col_letter}$13)"
             formula = f"=(({pv_stream}+{tv_term}/(1+$B{r})^5)-'31_DCF'!H25)/'31_DCF'!H27"
             write_formula_cell(
                 ws, r, c,
@@ -626,7 +686,10 @@ def render_reverse_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     rows = [
         (f"Current Market Benchmark Price ({spec.metadata.currency})", mkt_price, None, FMT_PRICE, True, "Market price input"),
         (f"Market Implied Equity Value ({ccy})", "=C6*'27_Share_Count'!E6", eq_val_mkt, FMT_CURRENCY_INT, False, "Market Price * Diluted Shares"),
-        (f"Market Implied EV ({ccy})", f"=C7{net_debt:+.2f}", ev_mkt, FMT_CURRENCY_INT, False, "Implied Equity Value + Net Debt"),
+        # Live link to the DCF bridge's own net-debt cell, so the reverse DCF
+        # responds to a bridge edit instead of carrying a frozen literal that
+        # can silently drift from 31_DCF!H25.
+        (f"Market Implied EV ({ccy})", "=C7-'31_DCF'!H25", ev_mkt, FMT_CURRENCY_INT, False, "Implied Equity Value − net debt (from 31_DCF!H25)"),
         (f"Market Implied PV of TV ({ccy})", "=C8-'31_DCF'!H17", pv_tv_mkt, FMT_CURRENCY_INT, False, "Implied EV - Cumulative PV(FCFF)"),
         ("MARKET IMPLIED TERMINAL GROWTH %", "=((C9*(1+'30_WACC'!C15)^5*'30_WACC'!C15 - '31_DCF'!G12)/(C9*(1+'30_WACC'!C15)^5 + '31_DCF'!G12))", implied_g, FMT_PERCENT_PRECISION, False, rev_dcf.method_note if rev_dcf and rev_dcf.method_note else "Exact solved implied perpetuity growth rate"),
     ]
@@ -658,6 +721,68 @@ def render_reverse_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         cell_n.alignment = ALIGN_LEFT
         ws.cell(row=r, column=2).border = BORDER_TOTAL if is_tot else BORDER_BOX
         ws.cell(row=r, column=4).border = BORDER_TOTAL if is_tot else BORDER_BOX
+
+    # Quote provenance row — an exported model must never carry a market price
+    # whose trading date and provider are invisible, which is how a stale
+    # benchmark silently reads as a live quote. Flagged in red when stale.
+    prov_row = 6 + len(rows)
+    if rev_dcf is not None:
+        prov_date = rev_dcf.market_price_date or "unknown"
+        prov_src = rev_dcf.market_price_source or "unknown"
+        is_stale = prov_src.startswith("stale_cache") or prov_src == "market_default"
+
+        ws.cell(row=prov_row, column=2, value="Quote as of / source").font = FONT_SUBTITLE
+        ws.cell(row=prov_row, column=2).alignment = ALIGN_LEFT
+        ws.cell(row=prov_row, column=2).border = BORDER_BOX
+
+        prov_cell = ws.cell(
+            row=prov_row, column=3,
+            value=f"{prov_date} · {prov_src}" + ("  [STALE — re-run for a live quote]" if is_stale else ""),
+        )
+        prov_cell.font = FONT_ALERT if is_stale else FONT_SUBTITLE
+        prov_cell.alignment = ALIGN_RIGHT
+        prov_cell.border = BORDER_BOX
+
+        prov_note = ws.cell(
+            row=prov_row, column=4,
+            value="Trading date of the market quote and the free data provider it came from",
+        )
+        prov_note.font = FONT_SUBTITLE
+        prov_note.alignment = ALIGN_LEFT
+        prov_note.border = BORDER_BOX
+
+    # The balance sheet the net debt figure came from. An enterprise value is
+    # only interpretable alongside both its price date and its balance-sheet
+    # date: the same company at the same price carries a different enterprise
+    # value depending on whether the balance sheet is three months old or two
+    # years old, and nothing else on the page reveals which.
+    bridge = base_val.dcf_bridge if base_val else None
+    if bridge is not None and bridge.less_net_debt is not None:
+        bs_row = prov_row + 1
+        ws.cell(row=bs_row, column=2, value="Balance sheet as of").font = FONT_SUBTITLE
+        ws.cell(row=bs_row, column=2).alignment = ALIGN_LEFT
+        ws.cell(row=bs_row, column=2).border = BORDER_BOX
+
+        bs_cell = ws.cell(
+            row=bs_row,
+            column=3,
+            value=f"{bridge.balance_sheet_as_of or 'unknown'} · {bridge.balance_sheet_source or 'unknown'}",
+        )
+        bs_cell.font = FONT_SUBTITLE
+        bs_cell.alignment = ALIGN_RIGHT
+        bs_cell.border = BORDER_BOX
+
+        basis_row = bs_row + 1
+        ws.cell(row=basis_row, column=2, value="Net cash basis").font = FONT_SUBTITLE
+        ws.cell(row=basis_row, column=2).alignment = ALIGN_LEFT
+        ws.cell(row=basis_row, column=2).border = BORDER_BOX
+
+        basis_cell = ws.cell(
+            row=basis_row, column=3, value=bridge.debt_basis_note or ""
+        )
+        basis_cell.font = FONT_SUBTITLE
+        basis_cell.alignment = ALIGN_LEFT
+        basis_cell.border = BORDER_BOX
 
     return ws
 
@@ -692,8 +817,28 @@ def render_scenario_analysis_tab(wb: Workbook, spec: ModelSpecification) -> Work
 
     ccy = f"{spec.metadata.currency} {spec.metadata.units.capitalize()[:2]}"
     curr = spec.metadata.currency
+
+    # The BASE column is written as live formulas into the DCF/WACC/terminal
+    # chain. It was previously all literals, which made 02_Executive_Summary's
+    # "live" price cell a pointer to a dead end: editing the DCF moved nothing
+    # on the summary page, and a real error inside 31_DCF stayed invisible
+    # because nothing downstream ever recomputed.
+    #
+    # Bull and bear remain literals — the workbook renders one DCF chain, and
+    # the alternative scenarios are engine outputs, not separate models.
+    base_formulas = {
+        0: "='31_DCF'!H28",
+        1: "='31_DCF'!H19",
+        2: "='31_DCF'!H25*(-1)",
+        3: "='31_DCF'!H26",
+        4: "='27_Share_Count'!E6",
+        5: "='30_WACC'!C15",
+        6: "='32_Terminal_Value'!C6",
+        7: f"='20_Operating_Model'!G{op_row('canonical.is.revenue')}",
+        8: "='22_Cost_Build'!G6",
+    }
     rows = [
-        (f"Implied Share Price ({curr})", base_v.dcf_bridge.implied_share_price, bull_v.dcf_bridge.implied_share_price, bear_v.dcf_bridge.implied_share_price, FMT_PRICE),
+        (f"Implied Share Price ({curr}) — base is live from 31_DCF", base_v.dcf_bridge.implied_share_price, bull_v.dcf_bridge.implied_share_price, bear_v.dcf_bridge.implied_share_price, FMT_PRICE),
         (f"Enterprise Value ({ccy})", base_v.dcf_bridge.enterprise_value, bull_v.dcf_bridge.enterprise_value, bear_v.dcf_bridge.enterprise_value, FMT_CURRENCY_INT),
         (f"Net Cash / (Debt) ({ccy})", -base_v.dcf_bridge.less_net_debt if base_v.dcf_bridge.less_net_debt is not None else 0, -bull_v.dcf_bridge.less_net_debt if bull_v.dcf_bridge.less_net_debt is not None else 0, -bear_v.dcf_bridge.less_net_debt if bear_v.dcf_bridge.less_net_debt is not None else 0, FMT_CURRENCY_INT),
         (f"Equity Value ({ccy})", base_v.dcf_bridge.equity_value, bull_v.dcf_bridge.equity_value, bear_v.dcf_bridge.equity_value, FMT_CURRENCY_INT),
@@ -701,15 +846,23 @@ def render_scenario_analysis_tab(wb: Workbook, spec: ModelSpecification) -> Work
         ("Discount Rate (WACC %)", base_v.wacc.wacc / 100.0 if base_v.wacc.wacc is not None else 0, bull_v.wacc.wacc / 100.0 if bull_v.wacc.wacc is not None else 0, bear_v.wacc.wacc / 100.0 if bear_v.wacc.wacc is not None else 0, FMT_PERCENT),
         ("Terminal Growth Rate %", base_v.terminal_value.terminal_growth_rate / 100.0 if base_v.terminal_value.terminal_growth_rate is not None else 0, bull_v.terminal_value.terminal_growth_rate / 100.0 if bull_v.terminal_value.terminal_growth_rate is not None else 0, bear_v.terminal_value.terminal_growth_rate / 100.0 if bear_v.terminal_value.terminal_growth_rate is not None else 0, FMT_PERCENT),
         (f"FY31 Revenue ({ccy})", rev_base, rev_bull, rev_bear, FMT_CURRENCY_INT),
-        ("FY31 EBITDA Margin %", r_base_pct, r_bull_pct, r_bear_pct, FMT_PERCENT),
+        ("FY31 EBITDA Margin % (derived)", r_base_pct, r_bull_pct, r_bear_pct, FMT_PERCENT),
     ]
 
     for idx, (lbl, v1, v2, v3, fmt) in enumerate(rows):
         r = 6 + idx
         ws.cell(row=r, column=2, value=lbl).font = FONT_TOTAL if idx == 0 else FONT_SUBHEADER
-        for c_idx, val in enumerate([v1, v2, v3]):
-            c = 3 + c_idx
-            cell = ws.cell(row=r, column=c, value=val)
+        write_formula_cell(
+            ws, r, 3,
+            formula=base_formulas.get(idx),
+            cached_value=v1,
+            num_format=fmt,
+            font=FONT_TOTAL if idx == 0 else FONT_FORMULA,
+            border=BORDER_TOTAL if idx == 0 else BORDER_BOX,
+            alignment=ALIGN_RIGHT,
+        )
+        for c_idx, val in ((4, v2), (5, v3)):
+            cell = ws.cell(row=r, column=c_idx, value=val)
             cell.font = FONT_TOTAL if idx == 0 else FONT_FORMULA
             cell.number_format = fmt
             cell.alignment = ALIGN_RIGHT
