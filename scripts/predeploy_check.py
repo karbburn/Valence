@@ -178,7 +178,18 @@ def check_live_server(base: str | None) -> None:
             import io
 
             wb = load_workbook(io.BytesIO(blob))
-            check(f"{cid} workbook has 30 tabs", len(wb.sheetnames) == 30, str(len(wb.sheetnames)))
+            # The full expected list, not a count. A count cannot tell a renamed
+            # tab from a replaced one, and the enterprise value bridge moving to
+            # its own tab would have satisfied a stale "30 tabs" assertion while
+            # every reference to the old location silently went nowhere.
+            from backend.export.excel.self_check import EXPECTED_SHEETS
+
+            check(
+                f"{cid} workbook has the expected tabs",
+                wb.sheetnames == list(EXPECTED_SHEETS),
+                f"{len(wb.sheetnames)} tabs"
+                + ("" if wb.sheetnames == list(EXPECTED_SHEETS) else f"; got {wb.sheetnames}"),
+            )
             rev = wb["34_Reverse_DCF"]
             prov = [
                 str(rev.cell(row=r, column=3).value)
