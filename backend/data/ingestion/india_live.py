@@ -42,13 +42,23 @@ YF_INCOME_MAP = [
     ("Profit before tax", ["Pretax Income", "Income Before Tax"]),
     ("Tax", ["Tax Provision", "Income Tax Expense"]),
     ("Net profit", ["Net Income Common Stockholders", "Net Income", "Net Income From Continuing Operation Net Minority Interest"]),
-    ("EPS in Rs", ["Basic EPS", "Diluted EPS"]),
+    # Basic and diluted EPS are distinct canonical keys. Collapsing them meant
+    # every yfinance-sourced Indian filer carried its BASIC EPS under the
+    # diluted label, so the share-count schedule derived a basic share count and
+    # the per-share valuation was computed on the wrong denominator.
+    ("Basic (in Rs)", ["Basic EPS"]),
+    ("Diluted (in Rs)", ["Diluted EPS"]),
 ]
 
 YF_BALANCE_MAP = [
     ("Equity Share Capital", ["Share Issued", "Ordinary Shares Number"]),
     ("Reserves", ["Retained Earnings", "Other Equity", "Stockholders Equity"]),
-    ("Borrowings", ["Total Debt", "Long Term Debt", "Long Term Debt And Capital Lease Obligation"]),
+    # Long-term borrowings only. Short-term debt is mapped separately so the
+    # EV -> equity bridge is not missing the current maturities.
+    ("Borrowings", ["Long Term Debt", "Long Term Debt And Capital Lease Obligation"]),
+    ("Short term borrowings", ["Current Debt", "Current Debt And Capital Lease Obligation", "Other Current Borrowings"]),
+    ("Finance lease liabilities", ["Finance Lease", "Capital Lease Obligation"]),
+    ("Operating lease liabilities", ["Operating Lease Liability"]),
     ("Other Liabilities", ["Total Non Current Liabilities Net Minority Interest", "Current Liabilities"]),
     ("Total_Liab", ["Total Liabilities Net Minority Interest", "Total Liabilities"]),
     ("Net Block", ["Net PPE", "Gross PPE", "Properties"]),
@@ -57,6 +67,14 @@ YF_BALANCE_MAP = [
     ("Other Assets", ["Other Non Current Assets", "Other Current Assets"]),
     ("Total_Asset", ["Total Assets"]),
     ("Receivables", ["Accounts Receivable", "Receivables", "Gross Accounts Receivable"]),
+    # Payables and inventory are operating-working-capital lines the forecast
+    # needs. Omitting them left DPO unresolvable for every yfinance-sourced
+    # filer, so the driver was invented and booked a phantom one-off working
+    # capital inflow in the first forecast year.
+    ("Trade payables", ["Accounts Payable", "Accounts Payable Current", "Trade Payables"]),
+    ("Inventory", ["Inventory", "Inventory Net"]),
+    ("Total equity", ["Stockholders Equity", "Total Equity Gross Minority Interest", "Common Stock Equity"]),
+    ("Minority interest", ["Minority Interest", "Minority Interest And Other Voting Interest"]),
     ("Cash & Bank", ["Cash Cash Equivalents And Short Term Investments", "Cash And Cash Equivalents", "Cash Financial"]),
 ]
 
@@ -66,6 +84,9 @@ YF_CASHFLOW_MAP = [
     ("Cash from Investing Activity", ["Investing Cash Flow", "Cash Flowsfromusedin Investing Activities"]),
     ("Cash from Financing Activity", ["Financing Cash Flow", "Cash Flowsfromusedin Financing Activities"]),
     ("Stock Based Compensation", ["Stock Based Compensation", "Share Based Compensation"]),
+    # Reported dividends. Without this line the payout ratio is unresolvable and
+    # the model books a dividend against a company that has never paid one.
+    ("Dividend Amount", ["Cash Dividends Paid", "Common Stock Dividend Paid", "Cash Dividends Paid To Minority Interest"]),
 ]
 
 

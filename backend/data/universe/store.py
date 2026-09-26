@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -185,6 +186,70 @@ def update_onboarding_status(
 
 def list_all_universe_companies(db_path: str | Path = DB_PATH) -> list[UniverseCompany]:
     return search_universe_companies(query="", limit=10000, db_path=db_path)
+
+
+def backfill_universe_from_built_models(
+    db_path: str | Path = DB_PATH,
+    cache_dir: str | Path | None = None,
+) -> list[str]:
+    """Add universe rows for companies the platform can already serve.
+
+    The hand-maintained seed list is a starting point, not the source of truth.
+    A company that has a precomputed model snapshot, or an entry in the
+    metadata registry, is a company the product can serve, so the universe must
+    list it. Without this, rebuilding the store silently dropped every company
+    that had been added through acquisition rather than seeded — the model still
+    existed and still rendered, but the company vanished from search and from
+    every bulk operation that enumerates the universe.
+
+    Returns the company_ids that were added.
+    """
+    from datetime import datetime
+
+    if cache_dir is None:
+        cache_dir = Path(__file__).resolve().parents[2] / "data" / "cache"
+    cache_path = Path(cache_dir)
+
+    known = {c.company_id for c in list_all_universe_companies(db_path)}
+
+    discovered: dict[str, UniverseCompany] = {}
+
+    for snapshot in sorted(cache_path.glob("*.json")):
+        if snapshot.name == "market_data_cache.json":
+            continue
+        cid = snapshot.stem
+        if cid in known or cid in discovered:
+            continue
+        try:
+            payload = json.loads(snapshot.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        # A snapshot is a versioned envelope around the specification.
+        model = payload.get("model") if isinstance(payload.get("model"), dict) else payload
+        meta = (model or {}).get("metadata") or {}
+        if not meta.get("company_id"):
+            continue
+        ticker = meta.get("ticker") or cid.split("_")[0].upper()
+        market = meta.get("market") or ("us" if cid.endswith("_us") else "india")
+        discovered[cid] = UniverseCompany(
+            company_id=cid,
+            ticker=ticker,
+            name=meta.get("name") or ticker,
+            market=market,
+            exchange=meta.get("exchange") or ("NASDAQ" if market == "us" else "NSE"),
+            sector=meta.get("sector") or "Unclassified",
+            industry=meta.get("industry") or "Unclassified",
+            is_financial=False,
+            onboarding_status="onboarded",
+            onboarding_notes="recovered from precomputed model snapshot",
+            last_updated=datetime.now(),
+        )
+
+    if not discovered:
+        return []
+
+    save_universe_companies(list(discovered.values()), db_path=db_path)
+    return sorted(discovered)
 
 
 def clean_corrupted_legacy_universe_ids(db_path: str | Path = DB_PATH) -> int:

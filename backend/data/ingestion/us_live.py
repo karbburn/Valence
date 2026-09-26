@@ -40,6 +40,10 @@ YF_INCOME_MAP = [
     ("Profit before tax", ["Pretax Income", "Income Before Tax"]),
     ("Tax", ["Tax Provision", "Income Tax Expense"]),
     ("Net Profit", ["Net Income Common Stockholders", "Net Income", "Net Income From Continuing Operation Net Minority Interest"]),
+    # Basic and diluted EPS are distinct canonical keys. Collapsing them made
+    # the share-count schedule derive its "diluted" count from a basic figure.
+    ("Basic (₹)", ["Basic EPS"]),
+    ("Diluted (₹)", ["Diluted EPS"]),
 ]
 
 YF_BALANCE_MAP = [
@@ -47,14 +51,25 @@ YF_BALANCE_MAP = [
     ("Current investments", ["Investments And Advances", "Other Investments", "Investment Properties", "Marketable Securities"]),
     ("Trade receivables", ["Accounts Receivable", "Receivables", "Gross Accounts Receivable"]),
     ("Inventory", ["Inventory", "Inventory Net"]),
+    # Accounts payable is an operating working-capital line the forecast needs
+    # to resolve DPO. Without it every yfinance-sourced US filer had the driver
+    # invented, and the invented payable balance booked a phantom first-year
+    # working-capital inflow.
+    ("Trade payables", ["Accounts Payable", "Accounts Payable Current", "Trade Payables"]),
     ("Prepayments and other assets", ["Other Non Current Assets", "Other Current Assets", "Prepaid Expense"]),
     ("Total current assets", ["Total Current Assets"]),
     ("Cash & Bank", ["Cash Cash Equivalents And Short Term Investments", "Cash And Cash Equivalents", "Cash Financial"]),
     ("Total assets", ["Total Assets"]),
-    ("Borrowings", ["Total Debt", "Long Term Debt", "Long Term Debt And Capital Lease Obligation"]),
+    # Long-term borrowings only; short-term debt is mapped separately so current
+    # maturities are not silently excluded from the EV -> equity bridge.
+    ("Borrowings", ["Long Term Debt", "Long Term Debt And Capital Lease Obligation"]),
+    ("Short term borrowings", ["Current Debt", "Current Debt And Capital Lease Obligation", "Other Current Borrowings"]),
+    ("Finance lease liabilities", ["Finance Lease", "Capital Lease Obligation"]),
+    ("Operating lease liabilities", ["Operating Lease Liability", "Capital Lease Obligation"]),
     ("Total current liabilities", ["Total Current Liabilities"]),
     ("Total liabilities", ["Total Liabilities Net Minority Interest", "Total Liabilities"]),
     ("Total equity", ["Stockholders Equity", "Total Equity Gross Minority Interest", "Common Stock Equity"]),
+    ("Minority interest", ["Minority Interest", "Minority Interest And Other Voting Interest"]),
 ]
 
 YF_CASHFLOW_MAP = [
@@ -63,6 +78,9 @@ YF_CASHFLOW_MAP = [
     ("Cash from Investing Activity", ["Investing Cash Flow", "Cash Flowsfromusedin Investing Activities"]),
     ("Cash from Financing Activity", ["Financing Cash Flow", "Cash Flowsfromusedin Financing Activities"]),
     ("Stock Based Compensation", ["Stock Based Compensation", "Share Based Compensation"]),
+    # Reported dividends. Without this line the payout ratio is unresolvable and
+    # the model books a dividend against a company that pays none.
+    ("Dividend Amount", ["Cash Dividends Paid", "Common Stock Dividend Paid"]),
 ]
 
 YF_SHARE_MAP = [
