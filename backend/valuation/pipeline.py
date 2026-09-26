@@ -154,8 +154,11 @@ def run_valuation(
         minority_int = constants.resolve(snapshot.terms.get("minority_interest"), minority_int)
         pref_stock = constants.resolve(snapshot.terms.get("preferred_stock"), pref_stock)
         debt_cr = snapshot.total_debt
+        # Lease obligations are part of total debt on the market convention, and
+        # the balance is reported separately so a reader who prefers to exclude
+        # them can see the amount. The basis note on the bridge says which.
         operating_lease_liability = constants.resolve(
-            snapshot.terms.get("operating_lease_liabilities"), 0.0
+            snapshot.terms.get("lease_liabilities"), 0.0
         )
         bridge_as_of = snapshot.as_of
         bridge_source = snapshot.source
