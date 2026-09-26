@@ -7,15 +7,22 @@ Each driver has its own explicit suggestion method. The source label stored in
 the AssumptionObject must match exactly what was computed — no fabrication.
 """
 
+import logging
 from datetime import datetime
 from typing import List, Optional
 
 from backend import constants
+from backend.data.providers.run_rate import (
+    run_rate_advanced_beyond,
+    run_rate_is_comparable,
+)
 from backend.models.spec.assumptions import AssumptionObject
 from backend.models.spec.forecast import FORECAST_PERIODS
 from backend.models.spec.metadata import resolve_market
 from backend.models.statements.historical_model import HistoricalModel
 from backend.models.statements.ratios import HistoricalRatios
+
+logger = logging.getLogger(__name__)
 
 
 def _avg(values: List[Optional[float]]) -> Optional[float]:
@@ -83,6 +90,33 @@ def _default_cost_of_equity(historical_model: HistoricalModel) -> tuple[float, s
     )
 
 
+def _run_rate_floor(
+    company_id: str, reported_revenue: Optional[float]
+) -> tuple[Optional[float], str]:
+    """Trailing-twelve-month revenue in the model's own units, and its basis.
+
+    The market feed reports absolute currency; the model works in USD millions
+    and INR crores. Comparing the two without scaling is out by a factor of a
+    million, which would make the run-rate floor either irrelevant or absurd.
+
+    Returns (None, reason) whenever the run rate cannot be established, so the
+    caller falls back to the reported fiscal year rather than guessing.
+    """
+    try:
+        from backend.data.providers.run_rate import current_run_rate_revenue
+        from backend.models.spec.metadata import get_metadata_for_company
+
+        run_rate, basis = current_run_rate_revenue(company_id)
+        if not run_rate or run_rate <= 0:
+            return None, basis
+
+        meta = get_metadata_for_company(company_id)
+        divisor = 1e7 if meta.currency == "INR" else 1e6
+        return run_rate / divisor, basis
+    except Exception as exc:  # pragma: no cover - defensive
+        return None, f"unavailable ({type(exc).__name__})"
+
+
 def suggest_base_assumptions(
     ratios: HistoricalRatios,
     historical_model: HistoricalModel,
@@ -108,21 +142,100 @@ def suggest_base_assumptions(
     rev_cagr = _cagr(rev_start, rev_end, num_years)
     base_cagr = rev_cagr if (rev_cagr is not None and rev_cagr > -50.0) else 10.0
 
-    # Growth Fade multipliers for FY27..FY31
+    # Growth fade.
+    #
+    # Year one carries the measured rate in EVERY band, and the fade is a
+    # geometric decay applied from year two. Two defects are removed:
+    #
+    # 1. The first year used to be halved for any company whose growth exceeded
+    #    25% and left at full rate below it. A 32.7% grower was published at
+    #    16.4% and an 88.3% grower at 44.1%, while a 16.4% grower kept its
+    #    16.4%. There is no economic reason a company that grows slightly
+    #    faster should have its first forecast year cut in half — the rule had a
+    #    threshold discontinuity, not a rationale. For one large-cap that put
+    #    the published first-year growth at roughly half the street's estimate.
+    #
+    # 2. Fading each year as a fraction of the BASE rate produced a cliff after
+    #    year one (88% then 26%). Decaying geometrically gives a path that
+    #    actually looks like a company maturing, with no step change.
+    #
+    # The decay rate rises with the growth band, because the further a company's
+    # growth is from a mature rate the faster it is assumed to converge.
+    decay_band = base_cagr
     if base_cagr > 25.0:
-        # High-growth fade curve (e.g. 88% -> 44% -> 26% -> 16% -> 11% -> 8%)
-        fade_factors = [0.50, 0.30, 0.18, 0.12, 0.08]
+        decay = 0.55      # e.g. 88% -> 48% -> 26% -> 15% -> 8%
     elif base_cagr > 10.0:
-        # Moderate-growth fade curve
-        fade_factors = [1.00, 0.85, 0.70, 0.55, 0.45]
+        decay = 0.82      # e.g. 16% -> 13% -> 11% -> 9% -> 7%
     else:
-        # Stable/low-growth flat trajectory
-        fade_factors = [1.00, 1.00, 1.00, 1.00, 1.00]
+        decay = 1.00      # stable: held flat
+
+    # Sanity bound on the decay itself. If the band boundaries above are ever
+    # retuned into something implausible, a company would be published with a
+    # growth path the model cannot defend, and the defect would only show up as
+    # a strange number in the product.
+    if not 0.0 < decay <= 1.0:
+        raise ValueError(f"implausible growth decay {decay} for a {base_cagr:.1f}% base rate")
+
+    # RUN-RATE FLOOR on the first forecast year.
+    #
+    # The measured CAGR runs from the last REPORTED FISCAL YEAR. That year is
+    # not the current run rate: it ended up to a year ago, and a company part-way
+    # through the year since has already traded a different twelve months. When
+    # those trailing twelve months exceed the reported year, growing the reported
+    # year at its own historical rate produces a first forecast year BELOW what
+    # the business earned in the last twelve months — a forecast of decline
+    # published next to a positive growth rate.
+    #
+    # One large-cap's trailing revenue was 12% above its last fiscal year, so its
+    # first forecast year sat 7% below its own trailing twelve months while the
+    # sheet said revenue grew 4.2%. The two published numbers contradict each
+    # other, and it is the first thing a reader checks.
+    #
+    # The floor is the growth needed to merely MATCH the trailing twelve months.
+    # It only ever raises the published rate, never lowers it, and it is stated
+    # in the source so the reader can see which base the number rests on.
+    run_rate, run_rate_basis = _run_rate_floor(historical_model.company_id, rev_end)
+    year_one = base_cagr
+    run_rate_note = ""
+    if run_rate is not None and run_rate_advanced_beyond(run_rate, rev_end):
+        if not run_rate_is_comparable(run_rate, rev_end):
+            # A reading tens of times, or a fraction of, the reported year is a
+            # unit error rather than a change in the business. Acting on it would
+            # publish a growth rate that is arithmetically valid and
+            # economically absurd, so the reported fiscal year stands.
+            logger.info(
+                "Run rate for %s is %s against a reported year of %s — not the same "
+                "units, so it is not used as a forecast anchor",
+                historical_model.company_id,
+                run_rate,
+                rev_end,
+            )
+            run_rate, run_rate_basis = None, "not comparable with the reported year"
+    if run_rate is not None and rev_end and rev_end > 0 and run_rate > rev_end:
+        floor_pct = (run_rate / rev_end - 1.0) * 100.0
+        if floor_pct > year_one:
+            year_one = floor_pct
+            # Both levels are named so the figure can be checked rather than
+            # taken on trust: the growth rate is only meaningful against the
+            # number it is measured from.
+            run_rate_note = (
+                f"; raised to the {floor_pct:.1f}% needed to reach the {run_rate:,.0f} "
+                f"traded in the last twelve months ({run_rate_basis}), which the "
+                f"{rev_end:,.0f} reported in {last_p} has fallen behind"
+            )
 
     for idx, p in enumerate(FORECAST_PERIODS):
-        factor = fade_factors[idx] if idx < len(fade_factors) else 1.0
-        g_val = round(max(5.0 if base_cagr > 10.0 else base_cagr, base_cagr * factor), 2)
-        source_rev = f"CAGR ({first_p}-{last_p}: {base_cagr:.1f}%) faded by factor {factor:.2f}"
+        anchor = year_one if idx == 0 else base_cagr
+        g_val = round(max(0.0, anchor * (decay ** idx)), 2)
+        if decay == 1.0:
+            source_rev = f"CAGR held flat ({first_p}-{last_p}: {base_cagr:.1f}%)"
+        else:
+            source_rev = (
+                f"CAGR ({first_p}-{last_p}: {base_cagr:.1f}%); year one carries it in "
+                f"full, then decays {decay:.2f}x per year"
+            )
+        if run_rate_note and idx == 0:
+            source_rev += run_rate_note
         result.append(_make("revenue_growth", g_val, p, "base", source_rev))
 
     # ------------------------------------------------------------------ #
