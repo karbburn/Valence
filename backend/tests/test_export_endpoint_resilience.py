@@ -73,27 +73,93 @@ def test_simultaneous_exports_do_not_run_at_the_same_time(stub_export):
 
     Without the lock, ten requests each hold a specification and a workbook
     simultaneously and the instance is killed.
+
+    The surplus beyond what may wait is refused with a 503 rather than queued, so
+    a burst of clicks cannot fill the shared threadpool with threads doing
+    nothing but waiting on a lock — which is what made the health check stop
+    answering while the service was busy.
     """
-    errors: list[BaseException] = []
+    busy: list[str] = []
+    served: list[str] = []
+    lock = threading.Lock()
 
-    def attempt():
+    def attempt(cid):
         try:
-            routes.export_excel(company_id="infy_infy")
-        except BaseException as exc:  # noqa: BLE001 - recorded for assertion
-            errors.append(exc)
+            routes.export_excel(company_id=cid)
+            with lock:
+                served.append(cid)
+        except HTTPException as exc:
+            with lock:
+                busy.append(f"{cid}:{exc.status_code}")
 
-    threads = [threading.Thread(target=attempt) for _ in range(6)]
+    threads = [
+        threading.Thread(target=attempt, args=(f"co{i}",)) for i in range(6)
+    ]
     for t in threads:
         t.start()
     for t in threads:
-        t.join(timeout=30)
+        t.join(timeout=60)
 
-    assert not errors, f"exports raised: {[type(e).__name__ for e in errors]}"
     assert stub_export["overlap"]["max"] == 1, (
         f"{stub_export['overlap']['max']} exports ran concurrently; the exporter's "
         "formula-value registry is shared and one export clears another's values "
         "mid-write, and the instance cannot hold them all at once"
     )
+    # Everything refused must be refused as BUSY, never as a fault.
+    assert all(code.endswith(":503") for code in busy), f"unexpected refusals: {busy}"
+    assert len(served) + len(busy) == 6, f"{len(served)} served, {len(busy)} refused"
+
+
+def test_a_burst_does_not_starve_the_other_routes(stub_export, monkeypatch):
+    """The health check must keep answering while exports are queued.
+
+    The sync routes share one threadpool, so an unbounded queue of exports
+    waiting on a lock would consume it and make the service look dead while
+    doing exactly what it was asked to.
+    """
+    monkeypatch.setattr(routes, "_EXPORT_QUEUE_LIMIT", 1)
+    monkeypatch.setattr(routes, "_EXPORT_WAIT_SECONDS", 0.05)
+    routes._export_waiting = threading.Semaphore(routes._EXPORT_QUEUE_LIMIT)
+
+    held = threading.Event()
+    release = threading.Event()
+
+    def _hold():
+        routes._EXPORT_MUTEX.acquire()
+        held.set()
+        release.wait(timeout=10)
+        routes._EXPORT_MUTEX.release()
+
+    holder = threading.Thread(target=_hold)
+    holder.start()
+    assert held.wait(timeout=5)
+
+    # A waiting export takes the only queue slot...
+    waiter = threading.Thread(
+        target=lambda: _swallow(lambda: routes.export_excel(company_id="aapl_us"))
+    )
+    waiter.start()
+    try:
+        # ...so a further request is turned away immediately rather than also
+        # taking a thread to wait on.
+        start = time.time()
+        with pytest.raises(HTTPException) as caught:
+            routes.export_excel(company_id="msft_us")
+        assert caught.value.status_code == 503
+        assert time.time() - start < 5.0, (
+            "a request beyond the queue limit waited rather than being refused"
+        )
+    finally:
+        release.set()
+        holder.join(timeout=10)
+        waiter.join(timeout=10)
+
+
+def _swallow(fn):
+    try:
+        fn()
+    except HTTPException:
+        pass
 
 
 def test_a_busy_service_says_so_instead_of_failing_opaquely(monkeypatch, tmp_path):

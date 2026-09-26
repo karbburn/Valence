@@ -78,7 +78,7 @@ def _no_run_rate():
     import backend.forecast.assumptions as assumptions_module
 
     original = assumptions_module._run_rate_floor
-    assumptions_module._run_rate_floor = lambda company_id, reported: (None, "stubbed")
+    assumptions_module._run_rate_floor = lambda company_id: (None, "stubbed")
     try:
         yield
     finally:
