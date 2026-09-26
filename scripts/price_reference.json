@@ -1,0 +1,63 @@
+{
+  "_comment": "Official closing prices verified in a browser against public quote pages (no API key). Valence serves a free-API close; this file pins the human-visible official close so drift is detectable. Update the date+price when re-verified.",
+  "infy_infy": {
+    "price": 998.80,
+    "date": "2026-09-25",
+    "source": "Google Finance INFY:NSE (Rs 998.80, -1.55%, closed 25 Sept 3:30pm IST) + StockAnalysis NSE:INFY (998.80, -15.70, -1.55%)"
+  },
+  "nvda_us": {
+    "price": 225.07,
+    "date": "2026-09-25",
+    "source": "Google Finance NVDA:NASDAQ ($225.07, +0.22%, after-hours 225.00) + StockAnalysis NVDA (225.07 at close, Sep 25 4:00 PM EDT)"
+  },
+  "aapl_us": {
+    "price": 341.07,
+    "date": "2026-09-25",
+    "source": "Google Finance AAPL:NASDAQ ($341.07, +1.53%, closed Sep 25 4:00 PM EDT)"
+  },
+  "googl_us": {
+    "price": 343.92,
+    "date": "2026-09-25",
+    "source": "Google Finance GOOGL:NASDAQ ($343.92, +0.46%, closed Sep 25 4:00 PM EDT)"
+  },
+  "msft_us": {
+    "price": 516.17,
+    "date": "2026-09-25",
+    "source": "Google Finance MSFT:NASDAQ ($516.17, +3.66%, closed Sep 25 4:00 PM EDT)"
+  },
+  "tsm_us": {
+    "price": 450.61,
+    "date": "2026-09-25",
+    "source": "Google Finance TSM:NYSE ($450.61, -0.12%, closed Sep 25 4:00 PM EDT)"
+  },
+  "tcs_tcs": {
+    "price": 2080.50,
+    "date": "2026-09-25",
+    "source": "Google Finance TCS:NSE (Rs 2,080.50, -0.31%, closed 25 Sept 3:30pm IST)"
+  },
+  "tatasteel_tatasteel": {
+    "price": 187.79,
+    "date": "2026-09-25",
+    "source": "StockAnalysis NSE:TATASTEEL (Rs 187.79, -0.23, -0.12%, Sep 25 3:14 PM IST)"
+  },
+  "amzn_us": {
+    "price": 249.67,
+    "date": "2026-09-25",
+    "source": "Google Finance AMZN:NASDAQ ($249.67, +0.12%, closed Sep 25 4:00 PM EDT)"
+  },
+  "ongc_ongc": {
+    "price": 235.25,
+    "date": "2026-09-25",
+    "source": "Google Finance ONGC:NSE (Rs 235.25, -1.57%, closed 25 Sept 3:30pm IST)"
+  },
+  "infy_us": {
+    "price": 10.50,
+    "date": "2026-09-25",
+    "source": "StockAnalysis NYSE:INFY ($10.50 at close Sep 25 4:00 PM EDT; after-hours $10.54)"
+  },
+  "tatamotors_tatamotors": {
+    "price": 290.45,
+    "date": "2026-09-25",
+    "source": "StockAnalysis NSE:TMPV (Tata Motors Passenger Vehicles, Rs 290.05, -4.95, -1.68%, Sep 25 3:15 PM IST). NOTE: NSE:TATAMOTORS was retired after the demerger; Valence follows the successor ticker via TICKER_REDIRECTS, so this row tracks the passenger-vehicle entity, not the pre-demerger Tata Motors Limited."
+  }
+}

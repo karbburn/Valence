@@ -33,9 +33,35 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
 
   const impliedPrice = bridge.implied_share_price ?? null
   const marketPrice = reverseDcf.market_price ?? null
+  const priceSource = (reverseDcf as { market_price_source?: string | null }).market_price_source ?? null
+  const priceDate = (reverseDcf as { market_price_date?: string | null }).market_price_date ?? null
+  // Successor ticker (demerger/restructuring): the quote is a real price but for
+  // a different listed entity than this model's financials, so the upside is
+  // not meaningful and must not be presented as if it were.
+  const isSuccessorQuote = !!priceSource && priceSource.endsWith(':successor_ticker')
+  const baseSource = isSuccessorQuote ? priceSource.slice(0, -':successor_ticker'.length) : priceSource
+  const isLiveQuote =
+    baseSource === 'yfinance' ||
+    baseSource === 'yfinance_history' ||
+    baseSource === 'yahoo_chart' ||
+    baseSource === 'twelvedata'
+  const isStaleQuote = !!baseSource && baseSource.startsWith('stale_cache')
+  const isFallbackQuote =
+    !!baseSource && (baseSource === 'registry' || baseSource === 'market_default')
+  const quoteLabel = isSuccessorQuote
+    ? `Successor ticker · As of ${priceDate}`
+    : !priceDate
+      ? 'Benchmark quote'
+      : isLiveQuote
+        ? `Live quote · As of ${priceDate}`
+        : isStaleQuote
+          ? `Stale close · As of ${priceDate}`
+          : isFallbackQuote
+            ? `Benchmark · As of ${priceDate}`
+            : `As of ${priceDate}`
 
   let upsidePct: number | null = null
-  if (impliedPrice != null && marketPrice != null && marketPrice > 0) {
+  if (!isSuccessorQuote && impliedPrice != null && marketPrice != null && marketPrice > 0) {
     upsidePct = ((impliedPrice - marketPrice) / marketPrice) * 100
   }
 
@@ -47,6 +73,7 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
   const bearVal = spec?.valuation?.find((v) => v.scenario === 'bear')
 
   const getUpside = (v?: typeof baseVal) => {
+    if (isSuccessorQuote) return null
     const p = v?.dcf_bridge?.implied_share_price
     if (p != null && marketPrice != null && marketPrice > 0) {
       return ((p - marketPrice) / marketPrice) * 100
@@ -97,7 +124,22 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
           <div className="font-mono font-bold text-[26px] text-text-main">
             {marketPrice != null ? fmtPrice(marketPrice, currency, 2) : '—'}
           </div>
-          <div className="text-[11px] text-text-dim mt-1">Benchmark quote</div>
+          <div
+            className={`text-[11px] mt-1 ${isStaleQuote || isFallbackQuote || isSuccessorQuote ? 'text-[#f59e0b] font-semibold' : 'text-text-dim'}`}
+            title={
+              isSuccessorQuote
+                ? 'The listed ticker was retired by a corporate action. This quote is the successor entity and is not comparable with this model’s financials.'
+                : isStaleQuote
+                  ? 'Live quote failed — showing last cached close.'
+                  : isFallbackQuote
+                    ? 'Live quote unavailable — showing benchmark fallback.'
+                    : isLiveQuote
+                      ? `Live quote from ${baseSource}.`
+                      : undefined
+            }
+          >
+            {quoteLabel}
+          </div>
         </div>
 
         {/* Implied Upside / Downside */}
