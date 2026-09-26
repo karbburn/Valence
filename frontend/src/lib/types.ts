@@ -129,12 +129,19 @@ export interface DCFBridge {
   marketable_securities: number | null
   non_current_investments: number | null
   total_debt: number | null
+  operating_lease_liabilities?: number | null
   minority_interest: number | null
   preferred_stock: number | null
   less_net_debt: number | null
   equity_value: number | null
   shares_outstanding: number | null
   implied_share_price: number | null
+  /** Date of the balance sheet the net debt figure was struck on. */
+  balance_sheet_as_of?: string | null
+  /** How that balance sheet was obtained. */
+  balance_sheet_source?: string | null
+  /** What counts as debt, stated in words. */
+  debt_basis_note?: string | null
 }
 
 export interface ReverseDCF {
