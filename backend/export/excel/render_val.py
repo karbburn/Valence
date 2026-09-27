@@ -1156,6 +1156,23 @@ def render_trading_comps(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     # benchmark left the bridge overlapping the block above it.
     val_r = bench_r + 2
     ws.cell(row=val_r, column=2, value="IMPLIED PEER VALUATION BRIDGE").font = FONT_SUBHEADER
+
+    if not comps.implied_valuations:
+        # A column header with nothing under it reads as a rendering fault, and a
+        # reader cannot tell it from a bridge that genuinely produced no
+        # valuation. When the peer set could not be sourced there is no implied
+        # valuation to state, so the page says so.
+        reason = (
+            comps.unavailable_reason
+            or "no peer multiples could be sourced, so no implied valuation is published"
+        )
+        note = ws.cell(row=val_r + 1, column=2, value=reason)
+        note.font = FONT_SUBTITLE
+        note.alignment = ALIGN_LEFT
+        for col in range(2, 9):
+            ws.cell(row=val_r + 1, column=col).border = BORDER_BOX
+        return ws
+
     write_table_header(ws, val_r + 1, ["Methodology", "Benchmark Multiple", "Target FY27 Metric", "Implied EV", "Net Debt", "Implied Equity Value", "Implied Share Price"], start_col=2)
 
     curr = spec.metadata.currency

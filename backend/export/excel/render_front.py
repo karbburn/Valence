@@ -68,13 +68,18 @@ def render_cover(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     set_col_widths(ws, {"A": 5, "B": 28, "C": 45, "D": 20})
 
     # Header / Branding Slot (Clean design font — no logo image)
+    #
+    # The wordmark is the single place on the cover that navigates to the
+    # platform. The strapline beneath it is plain text: two adjacent cells
+    # linking to the same destination makes a reader choose between them, and
+    # neither looks like the intended one.
     ws["B2"] = "V A L E N C E"
     ws["B2"].font = FONT_BRAND_TITLE
+    ws["B2"].hyperlink = VALENCE_URL
     ws["B2"].alignment = ALIGN_LEFT
 
     ws["B3"] = "VALENCE VALUATION PLATFORM"
     ws["B3"].font = FONT_BRAND_SUBTITLE
-    ws["B3"].hyperlink = VALENCE_URL
     ws["B3"].alignment = ALIGN_LEFT
 
     ws["B5"] = spec.metadata.name.upper()
@@ -327,6 +332,46 @@ def render_model_guide(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     return ws
 
 
+def _model_status_label(spec) -> str:
+    """The QA banner, qualified by any valuation method that produced nothing.
+
+    The QA checks are structural: they ask whether the arithmetic ties and
+    whether the inputs are sound. None of them can notice that an entire
+    valuation method was absent, because the comparables analysis is built at
+    render time and a company whose peers cannot be sourced has nothing wrong
+    with its balance sheet.
+
+    A workbook therefore read "MODEL VALID" while its comparables page was
+    entirely empty — every check passing, and one of the ways of valuing the
+    company silently missing. The banner is where a reader looks first, so it is
+    where that has to be said.
+    """
+    label = spec.qa.summary_label if spec.qa else "MODEL VALID"
+    if not label.startswith("MODEL VALID"):
+        return label
+
+    try:
+        from backend.valuation.comps import compute_trading_comps
+
+        base_val = spec.get_valuation("base")
+        bridge = base_val.dcf_bridge if base_val else None
+        comps = compute_trading_comps(
+            target_ticker=spec.metadata.ticker,
+            target_sector=spec.metadata.sector or "Technology",
+            target_revenue_fy27=spec.forecast.get_value("canonical.is.revenue", "FY27", "base") or 1000.0,
+            target_ebitda_fy27=spec.forecast.get_value("canonical.is.ebitda", "FY27", "base") or 300.0,
+            target_net_profit_fy27=spec.forecast.get_value("canonical.is.net_profit", "FY27", "base") or 150.0,
+            net_debt=(bridge.less_net_debt if bridge else 0.0) or 0.0,
+            shares_outstanding=(bridge.shares_outstanding if bridge else 100.0) or 100.0,
+        )
+    except Exception:
+        return f"{label} — COMPARABLES UNAVAILABLE"
+
+    if not comps.peers or not comps.implied_valuations:
+        return f"{label} — COMPARABLES UNAVAILABLE"
+    return label
+
+
 def render_executive_summary(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ws = wb.create_sheet(title="02_Executive_Summary")
     apply_tab_defaults(ws, freeze_cell="A6")
@@ -378,7 +423,7 @@ def render_executive_summary(wb: Workbook, spec: ModelSpecification) -> Workshee
     write_formula_cell(ws, 6, 4, '=IF(B6=0,"N/A",(C6-B6)/B6)', cached_value=(upside_pct / 100.0), num_format=FMT_PERCENT)
     write_formula_cell(ws, 6, 5, "='30_WACC'!C15", cached_value=wacc_pct, num_format=FMT_PERCENT)
 
-    ws["F6"] = spec.qa.summary_label if spec.qa else "MODEL VALID"
+    ws["F6"] = _model_status_label(spec)
 
     for c in range(2, 7):
         cell = ws.cell(row=6, column=c)
@@ -387,7 +432,13 @@ def render_executive_summary(wb: Workbook, spec: ModelSpecification) -> Workshee
         cell.fill = FILL_CARD
         cell.border = BORDER_BOX
 
-    if spec.qa and spec.qa.all_passed:
+    if "COMPARABLES UNAVAILABLE" in str(ws["F6"].value):
+        # A missing method is not a green light. The banner is shaded as a
+        # warning rather than a pass, so the state is visible before the words
+        # are read.
+        ws["F6"].fill = FILL_FAIL
+        ws["F6"].font = FONT_ALERT
+    elif spec.qa and spec.qa.all_passed:
         ws["F6"].fill = FILL_PASS
         ws["F6"].font = FONT_PASS
     else:
