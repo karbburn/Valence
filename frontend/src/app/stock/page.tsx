@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getManifestServer } from '@/lib/serverApi'
 import { stockPath } from '@/lib/tickers'
-import { SITE_URL, SITE_NAME, OG_IMAGE } from '@/lib/site'
+import { SITE_URL, SITE_NAME, OG_IMAGE, CONTACT_EMAIL } from '@/lib/site'
 import type { ResolvedSlug } from '@/lib/tickers'
 import { TickerSearch } from '@/components/landing/TickerSearch'
 import { SiteFooter } from '@/components/SiteFooter'
@@ -16,14 +16,17 @@ export const revalidate = 3600
 const PAGE_SIZE = 500
 
 export const metadata: Metadata = {
-  title: `Every listed ticker`,
+  // Deliberately not "every listed ticker". The index is a covered set that
+  // grows, and claiming the whole market in the title tag is the same overclaim
+  // the page copy used to make in the body.
+  title: `Companies covered`,
   description:
-    'Every listed US and Indian ticker Valence covers, with the ones already modelled marked. Search any other listed ticker and the engine builds it on demand. Unlevered FCFF DCF, three scenarios and a 31-tab Excel export.',
+    'The companies Valence covers so far, each already modelled and opening with its figures in place. Any other listed US or Indian ticker can be requested and the engine builds it on demand. Unlevered FCFF DCF, three scenarios and a 31-tab Excel export.',
   alternates: { canonical: `${SITE_URL}/stock` },
   openGraph: {
-    title: `Every listed ticker | ${SITE_NAME}`,
+    title: `Companies covered | ${SITE_NAME}`,
     description:
-      'Every listed US and Indian ticker Valence covers. Already-modelled names are marked, and anything else builds on first open.',
+      'Every name on this list is already modelled. It is a covered set that grows, not the whole market, and any other listed ticker can be requested.',
     url: `${SITE_URL}/stock`,
     images: [OG_IMAGE],
   },
@@ -52,6 +55,7 @@ export default async function StockIndexPage() {
   if (companies.length === 0) notFound()
 
   const withModel = companies.filter((c) => c.has_model)
+  const allModelled = withModel.length === companies.length
   const india = companies.filter((c) => c.market === 'india')
   const us = companies.filter((c) => c.market === 'us')
 
@@ -62,37 +66,47 @@ export default async function StockIndexPage() {
       <main className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 py-10 sm:py-14">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
           <div className="lg:col-span-7">
+            {/* Not "Every listed ticker". That was an overclaim: this grid is the
+                covered universe, which is a curated list that grows, and calling
+                it every listed ticker made a closed catalogue of a few dozen rows
+                read as the whole market. The number is stated instead, so the
+                page cannot imply a scale it does not have. */}
             <h1 className="text-[30px] sm:text-[38px] font-bold tracking-tight leading-[1.08] text-text-main">
-              Every listed ticker
+              {companies.length} companies, covered so far
             </h1>
             <p className="mt-4 text-[14.5px] text-text-muted max-w-[58ch] leading-relaxed">
-              The engine reads filings for any listed US or Indian ticker and builds the model on
-              first visit, usually in a few seconds.{' '}
-              {withModel.length === companies.length ? (
+              This is a curated list and it grows, not the whole market. Every name below is
+              modelled already and opens with its figures in place.{' '}
+              {withModel.length < companies.length && (
                 <>
-                  All {companies.length} below are already built and open with their figures in
-                  place.
-                </>
-              ) : (
-                <>
-                  {withModel.length} of the {companies.length} below are already built and open
-                  with their figures in place, marked{' '}
-                  <span className="font-mono text-[13px] text-positive">Ready</span>. The rest
+                  {withModel.length} are marked{' '}
+                  <span className="font-mono text-[13px] text-positive">Ready</span>; the rest
                   build on first open.
                 </>
-              )}
+              )}{' '}
+              Anything not listed here can be requested, and the engine reads filings for any
+              listed US or Indian ticker it is asked about.
+            </p>
+            <p className="mt-3 text-[13px] leading-relaxed">
+              <a
+                href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Request a ticker')}`}
+                className="text-accent hover:text-accent-hover transition-colors"
+              >
+                Ask for a ticker
+              </a>{' '}
+              if one is missing.
             </p>
           </div>
           <div className="lg:col-span-5">
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-dim mb-3">
-              Jump to one
+              Search covered names
             </p>
             <Suspense fallback={<div className="h-12 rounded-sm bg-surface border border-border" />}>
               <TickerSearch />
             </Suspense>
             <p className="mt-2.5 text-[11.5px] text-text-dim leading-relaxed">
-              Search any ticker. If a model cannot be built from the filings available, the page
-              says so rather than showing an empty result.
+              If a model cannot be built from the filings available, the page says so rather than
+              showing an empty result.
             </p>
           </div>
         </div>
@@ -101,14 +115,14 @@ export default async function StockIndexPage() {
           <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-dim pb-2 border-b border-border">
             India ({india.length})
           </h2>
-          <TickerGrid companies={india} />
+          <TickerGrid companies={india} allModelled={allModelled} />
         </section>
 
         <section className="mt-10">
           <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-dim pb-2 border-b border-border">
             United States ({us.length})
           </h2>
-          <TickerGrid companies={us} />
+          <TickerGrid companies={us} allModelled={allModelled} />
         </section>
       </main>
 
@@ -122,7 +136,13 @@ export default async function StockIndexPage() {
   )
 }
 
-function TickerGrid({ companies }: { companies: ResolvedSlug[] }) {
+function TickerGrid({
+  companies,
+  allModelled,
+}: {
+  companies: ResolvedSlug[]
+  allModelled: boolean
+}) {
   return (
     <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
       {companies.map((c) => (
@@ -142,15 +162,21 @@ function TickerGrid({ companies }: { companies: ResolvedSlug[] }) {
                 {c.exchange} · {c.slug}
               </span>
             </span>
-            <span
-              className={`shrink-0 font-mono text-[10px] px-1.5 py-0.5 rounded-sm border ${
-                c.has_model
-                  ? 'bg-positive-subtle text-positive border-positive/30'
-                  : 'bg-surface-2 text-text-dim border-border'
-              }`}
-            >
-              {c.has_model ? 'Ready' : 'On demand'}
-            </span>
+            {/* Only shown when it distinguishes something. When every covered
+                company is already modelled, a column of identical green Ready
+                chips carries no information and reads as a status light on a
+                list where status is not the variable. */}
+            {!allModelled && (
+              <span
+                className={`shrink-0 font-mono text-[10px] px-1.5 py-0.5 rounded-sm border ${
+                  c.has_model
+                    ? 'bg-positive-subtle text-positive border-positive/30'
+                    : 'bg-surface-2 text-text-dim border-border'
+                }`}
+              >
+                {c.has_model ? 'Ready' : 'On demand'}
+              </span>
+            )}
           </Link>
         </li>
       ))}
