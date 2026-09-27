@@ -14,6 +14,7 @@ from the company's actual debt schedule and market cap. No Infosys-specific shar
 
 from typing import List, Optional
 
+from backend.constants import MIN_CARRYING_RATE
 from backend.data.providers.market_data import get_company_market_data
 from backend.forecast.debt import DebtSchedule
 from backend.forecast.share_count import ShareCountSchedule
@@ -109,6 +110,11 @@ def compute_wacc(
     # An explicit analyst override passes through untouched.
     blume_applied = beta is None
     b = round(0.67 * raw_b + 0.33, 3) if blume_applied else raw_b
+    beta_adjustment = (
+        "Blume adjusted toward the market: 0.67 x "
+        f"{raw_b:.2f} + 0.33 x 1.00 = {b:.2f}. Raw published betas are biased high."
+        if blume_applied else ""
+    )
     erp = equity_risk_premium if equity_risk_premium is not None else mdata.equity_risk_premium.value
 
     # Only an ANALYST override may pin the cost of equity. The model_generated
@@ -129,6 +135,25 @@ def compute_wacc(
         pre_tax_cost_of_debt = debt_schedule.interest_rate
     if pre_tax_cost_of_debt is None:
         pre_tax_cost_of_debt = 0.0
+
+    # A measured rate of 0% is not a rate. The carrying rate is taken from the
+    # company's own finance cost over its own debt, and a company that does not
+    # break that cost out of its income statement yields no rate to measure — so
+    # the measurement came back as zero and the workbook published "Pre-Tax Cost
+    # of Debt 0.00%" beside a debt balance in the tens of billions. Zero is not
+    # defensible in either direction: it is not what the company pays, and it
+    # understates WACC by the whole after-tax cost of the debt.
+    #
+    # Where the rate is unmeasurable and debt is outstanding, the floor is the
+    # company's OWN sovereign yield, already sourced for the risk-free rate. No
+    # borrower pays less than the long bond of its own government, so this is the
+    # one bound that is true by construction rather than assumed, and it comes
+    # from the same market the rest of the discount rate does. It is an estimate
+    # and is labelled as one on the page; it is not presented as measured.
+    cost_of_debt_is_estimated = False
+    if not pre_tax_cost_of_debt and debt_cr > 0:
+        pre_tax_cost_of_debt = max(rfr, MIN_CARRYING_RATE)
+        cost_of_debt_is_estimated = True
 
     # Effective tax rate for the after-tax cost of debt.
     #
@@ -200,6 +225,10 @@ def compute_wacc(
     return WACCBreakdown(
         risk_free_rate=round(rfr, 4),
         beta=round(b, 4),
+        raw_beta=round(raw_b, 4),
+        beta_adjusted=blume_applied,
+        beta_adjustment=beta_adjustment,
+        cost_of_debt_estimated=cost_of_debt_is_estimated,
         equity_risk_premium=round(erp, 4),
         cost_of_equity=round(cost_of_equity, 4),
         pre_tax_cost_of_debt=round(pre_tax_cost_of_debt, 4),

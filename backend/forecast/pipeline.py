@@ -8,7 +8,7 @@ a fully populated ModelSpecification with forecast, assumptions, and scenarios.
 from pathlib import Path
 
 from backend import constants
-from backend.constants import MAX_CARRYING_RATE, MIN_CARRYING_RATE
+from backend.constants import MAX_CARRYING_RATE, MIN_CARRYING_RATE  # noqa: F401
 from backend.forecast.assumptions import suggest_base_assumptions
 from backend.forecast.debt import build_debt_schedule
 from backend.forecast.engine import run_forecast

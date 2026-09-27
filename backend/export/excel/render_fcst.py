@@ -17,8 +17,7 @@ Renders:
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
-from backend.export.excel.builder import (
-    apply_tab_defaults,
+from backend.export.excel.builder import (    apply_tab_defaults,
     register_formula_value,
     set_col_widths,
     write_formula_cell,
@@ -43,6 +42,47 @@ from backend.export.excel.styles import (
 )
 from backend.models.spec.forecast import FORECAST_PERIODS
 from backend.models.spec.model_specification import ModelSpecification
+
+# Row index of every line on 30_WACC, keyed by the line's name.
+#
+# Published for the same reason as OPERATING_MODEL_ROWS on this tab: the DCF
+# discount factors, the terminal value, the reverse DCF, the executive summary
+# and the model checks all reference these cells, and every one of them used a
+# hardcoded row number. Inserting a line therefore re-pointed each reference at
+# whatever moved into the vacated row — the sensitivity grid once divided by two
+# cells that no longer existed and returned #DIV/0! for every company. A formula
+# that names the LINE it wants cannot be broken that way.
+#
+# It lives here rather than in render_val because render_val imports from this
+# module, so the map has to be available in the direction that already exists.
+WACC_ROW_OFFSET = 6
+
+WACC_ROWS: dict[str, int] = {
+    "risk_free_rate": WACC_ROW_OFFSET + 0,
+    "beta_raw": WACC_ROW_OFFSET + 1,
+    "beta_used": WACC_ROW_OFFSET + 2,
+    "equity_risk_premium": WACC_ROW_OFFSET + 3,
+    "cost_of_equity": WACC_ROW_OFFSET + 4,
+    "pre_tax_cost_of_debt": WACC_ROW_OFFSET + 5,
+    "tax_rate": WACC_ROW_OFFSET + 6,
+    "after_tax_cost_of_debt": WACC_ROW_OFFSET + 7,
+    "equity_weight": WACC_ROW_OFFSET + 8,
+    "debt_weight": WACC_ROW_OFFSET + 9,
+    "wacc": WACC_ROW_OFFSET + 10,
+}
+
+
+def wacc_ref(line: str) -> str:
+    """Cross-sheet reference to one WACC line's value cell.
+
+    `wacc_ref("wacc")` -> `'30_WACC'!C16`
+
+    Raises on an unknown line so a renamed row fails the build rather than
+    emitting a reference to whatever happens to sit there.
+    """
+    if line not in WACC_ROWS:
+        raise KeyError(f"unknown WACC line: {line!r}")
+    return f"'30_WACC'!C{WACC_ROWS[line]}"
 
 
 def get_assumption_value(spec: ModelSpecification, driver_key: str, period: str, scenario: str = "base") -> float:
@@ -625,7 +665,7 @@ def render_debt_schedule(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         val = _period_val("interest_expense", p)
         write_formula_cell(
             ws, 11, c,
-            formula=f"=AVERAGE({col_let}6,{col_let}10)*'30_WACC'!C10",
+            formula=f"=AVERAGE({col_let}6,{col_let}10)*{wacc_ref('pre_tax_cost_of_debt')}",
             cached_value=val,
             num_format=FMT_AMOUNT,
             font=FONT_FORMULA,
