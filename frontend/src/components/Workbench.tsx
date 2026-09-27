@@ -216,7 +216,7 @@ export default function Workbench({ companyId, initialSpec, syncUrl = true }: Wo
       a.remove()
       URL.revokeObjectURL(url)
       setToastType('success')
-      setToastMessage('Excel workbook downloaded — 31 tabs, live formulas')
+      setToastMessage('Excel workbook downloaded. 31 tabs, live formulas.')
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : 'Excel export failed')
     } finally {
@@ -250,7 +250,7 @@ export default function Workbench({ companyId, initialSpec, syncUrl = true }: Wo
       setToastMessage('Valuation memo copied to clipboard')
     } catch {
       setToastType('error')
-      setToastMessage('Clipboard unavailable — copy blocked by the browser')
+      setToastMessage('Clipboard unavailable. Copy blocked by the browser.')
     }
   }
 

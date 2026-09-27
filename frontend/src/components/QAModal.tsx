@@ -52,7 +52,7 @@ export function QAModal({ open, onClose, qa }: QAModalProps) {
                 : allPassed && !hasWarnings
                 ? 'All Accounting & Valuation Consistency Checks Passed'
                 : allPassed
-                ? `Passed with ${skippedCount} Warning${skippedCount === 1 ? '' : 's'} — Review Skipped Checks`
+                ? `Passed with ${skippedCount} Warning${skippedCount === 1 ? '' : 's'}. Review Skipped Checks.`
                 : `${failedCount} of ${checks.length} Checks Failed`}
             </span>
           </div>

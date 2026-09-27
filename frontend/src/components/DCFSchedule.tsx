@@ -32,7 +32,7 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
 
   const ROW_TOOLTIPS: Record<string, { desc: string; formula: string }> = {
     'EBIT (Operating Profit)': {
-      desc: 'Earnings Before Interest and Taxes — core operating profitability before capital structure and taxes.',
+      desc: 'Earnings Before Interest and Taxes: core operating profitability before capital structure and taxes.',
       formula: 'Revenue - COGS - Operating Expenses - D&A',
     },
     'Tax Rate %': {
@@ -40,7 +40,7 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
       formula: 'Taxes / PBT',
     },
     'NOPAT': {
-      desc: 'Net Operating Profit After Tax — un-levered profit generated purely by core operations.',
+      desc: 'Net Operating Profit After Tax: un-levered profit generated purely by core operations.',
       formula: 'EBIT × (1 - Effective Tax Rate)',
     },
     '+ D&A': {
@@ -48,11 +48,11 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
       formula: 'Cash Flow Statement D&A Add-back',
     },
     '− CapEx': {
-      desc: 'Capital Expenditures — net cash spent on property, plant, equipment, and intangible assets.',
+      desc: 'Capital Expenditures: net cash spent on property, plant, equipment, and intangible assets.',
       formula: 'Cash Flow Statement Capital Investments',
     },
     '± ΔNWC': {
-      desc: 'Change in Non-Cash Operating Working Capital — cash invested or freed up in working capital.',
+      desc: 'Change in Non-Cash Operating Working Capital: cash invested or freed up in working capital.',
       formula: '− (Δ Receivables + Δ Inventory − Δ Payables)',
     },
     '− Stock Comp': {
@@ -60,7 +60,7 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
       formula: 'Cash Flow Statement SBC (when reported)',
     },
     '= FCFF (Free Cash Flow)': {
-      desc: 'Free Cash Flow to Firm — unlevered cash flow available to all debt and equity capital providers.',
+      desc: 'Free Cash Flow to Firm: unlevered cash flow available to all debt and equity capital providers.',
       formula: 'NOPAT + D&A − CapEx − ΔNWC − Stock Comp',
     },
     'Discount Factor (Mid-Year)': {

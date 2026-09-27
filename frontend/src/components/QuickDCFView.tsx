@@ -130,9 +130,9 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
               isSuccessorQuote
                 ? 'The listed ticker was retired by a corporate action. This quote is the successor entity and is not comparable with this model’s financials.'
                 : isStaleQuote
-                  ? 'Live quote failed — showing last cached close.'
+                  ? 'Live quote failed. Showing last cached close.'
                   : isFallbackQuote
-                    ? 'Live quote unavailable — showing benchmark fallback.'
+                    ? 'Live quote unavailable. Showing benchmark fallback.'
                     : isLiveQuote
                       ? `Live quote from ${baseSource}.`
                       : undefined
@@ -305,7 +305,14 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
             </div>
           </div>
 
-          <div className="bg-surface-3 border border-border rounded-sm p-2.5">
+          <div
+            className="bg-surface-3 border border-border rounded-sm p-2.5"
+            title={
+              reverseDcf.implied_revenue_cagr != null
+                ? `The revenue growth rate that would make this model reproduce the ${reverseDcf.market_price != null ? reverseDcf.market_price.toFixed(2) : 'market'} market price, holding every other assumption fixed.`
+                : 'Not solvable. No revenue growth rate between -10% and +50% reproduces the market price under this model\'s margins and WACC, so the engine reports nothing rather than a number it cannot justify. Raise margins or lower the discount rate to bring the two into range.'
+            }
+          >
             <div className="text-[10px] text-text-dim uppercase tracking-[0.04em]">
               Implied Revenue CAGR
             </div>

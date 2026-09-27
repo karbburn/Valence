@@ -53,7 +53,7 @@ export function ForecastTable({ spec, scenario }: ForecastTableProps) {
           </h2>
         </div>
         <span className="font-mono text-[10px] text-[#94a3b8]">
-          FY27–FY31 ({unit})
+          FY27-FY31 ({unit})
         </span>
       </div>
 

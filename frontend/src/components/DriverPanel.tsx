@@ -71,7 +71,7 @@ export function DriverPanel({
         <div className="flex items-center space-x-2">
           {hasOverrides && (
             <span
-              title="Analyst edits on this shared model — visible to all viewers until reset"
+              title="Analyst edits on this shared model. Visible to all viewers until reset."
               className="text-[10px] font-semibold px-1.5 py-0.5 rounded-sm border bg-accent-subtle text-accent-hover border-accent-border cursor-help"
             >
               Shared draft · {overrideCount} override{overrideCount === 1 ? '' : 's'}
