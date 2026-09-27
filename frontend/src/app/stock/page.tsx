@@ -99,14 +99,15 @@ export default async function StockIndexPage() {
           </div>
           <div className="lg:col-span-5">
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-dim mb-3">
-              Search covered names
+              Search any listed ticker
             </p>
             <Suspense fallback={<div className="h-12 rounded-sm bg-surface border border-border" />}>
               <TickerSearch />
             </Suspense>
             <p className="mt-2.5 text-[11.5px] text-text-dim leading-relaxed">
-              If a model cannot be built from the filings available, the page says so rather than
-              showing an empty result.
+              Search covers the whole listed universe, not just the names below. If a model cannot
+              be built from the filings available, the page says so rather than showing an empty
+              result.
             </p>
           </div>
         </div>
@@ -165,7 +166,13 @@ function TickerGrid({
             {/* Only shown when it distinguishes something. When every covered
                 company is already modelled, a column of identical green Ready
                 chips carries no information and reads as a status light on a
-                list where status is not the variable. */}
+                list where status is not the variable.
+
+                "Builds on open" rather than "On demand", matching the search
+                dropdown. Nothing is on demand: the engine reads the filings when
+                the page is opened. A page that says "on demand" in one place and
+                "builds on open" in another has made the reader reconcile two
+                words for one state. */}
             {!allModelled && (
               <span
                 className={`shrink-0 font-mono text-[10px] px-1.5 py-0.5 rounded-sm border ${
@@ -174,7 +181,7 @@ function TickerGrid({
                     : 'bg-surface-2 text-text-dim border-border'
                 }`}
               >
-                {c.has_model ? 'Ready' : 'On demand'}
+                {c.has_model ? 'Ready' : 'Builds on open'}
               </span>
             )}
           </Link>

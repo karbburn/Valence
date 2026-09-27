@@ -35,10 +35,18 @@ export function TickerSearch() {
   const [results, setResults] = useState<CompanySummary[]>([])
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  // True while a newly discovered ticker is being registered and its canonical
+  // URL minted. Without it a second click during the request starts a second
+  // registration and a second navigation.
+  const [resolving, setResolving] = useState(false)
   const [highlight, setHighlight] = useState(0)
   const rootRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // A ref rather than the state above, because choose() has to see it
+  // synchronously: two clicks in the same tick both read the state value from
+  // the render they were bound to, and both would proceed.
+  const resolvingRef = useRef(false)
 
   const search = useCallback(async (q: string): Promise<CompanySummary[]> => {
     const res = await fetch(`/api/companies/search?q=${encodeURIComponent(q)}&limit=8`)
@@ -97,11 +105,39 @@ export function TickerSearch() {
     }, 200)
   }
 
-  const choose = (c: CompanySummary) => {
+  const choose = async (c: CompanySummary) => {
     setOpen(false)
-    // A result without a slug has no canonical page, so fall back to the index
-    // rather than pushing a URL that would 404.
-    router.push(c.slug ? stockPath(c.slug) : '/stock')
+    if (c.slug) {
+      router.push(stockPath(c.slug))
+      return
+    }
+    // A company found in the exchange index has no page yet, so there is no slug
+    // to link to. Rather than push a guessed URL and 404, ask the resolver to
+    // register it and hand back the canonical slug. Guessing would be worse than
+    // it looks: the slug is the bare ticker only while that ticker is unclaimed,
+    // and a collision gets a numeric suffix, so a constructed URL can be wrong
+    // for exactly the companies that need this path most.
+    //
+    // One extra request, but only on a deliberate click, and the alternative was
+    // dropping the visitor on the index with no indication of what they picked.
+    if (resolvingRef.current) return
+    resolvingRef.current = true
+    setResolving(true)
+    try {
+      const res = await fetch(`/api/companies/resolve?slug=${encodeURIComponent(c.ticker)}`)
+      if (!res.ok) {
+        router.push('/stock')
+        return
+      }
+      const record = (await res.json()) as { slug?: string | null }
+      if (record.slug) router.push(stockPath(record.slug))
+      else router.push('/stock')
+    } catch {
+      router.push('/stock')
+    } finally {
+      resolvingRef.current = false
+      setResolving(false)
+    }
   }
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -119,7 +155,7 @@ export function TickerSearch() {
       setHighlight((p) => (p - 1 + results.length) % results.length)
     } else if (e.key === 'Enter') {
       e.preventDefault()
-      if (results[highlight]) choose(results[highlight])
+      if (results[highlight]) void choose(results[highlight])
     }
   }
 
@@ -129,7 +165,7 @@ export function TickerSearch() {
         Search a ticker or company
       </label>
       <div className="relative">
-        {loading ? (
+        {loading || resolving ? (
           <Loader2
             className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-accent animate-spin"
             aria-hidden
@@ -174,7 +210,7 @@ export function TickerSearch() {
                 role="option"
                 aria-selected={i === highlight}
                 onMouseEnter={() => setHighlight(i)}
-                onClick={() => choose(c)}
+                onClick={() => void choose(c)}
                 className={`px-3.5 py-2.5 cursor-pointer flex items-center justify-between gap-3 transition-colors ${
                   i === highlight ? 'bg-surface-2' : ''
                 }`}
@@ -190,14 +226,29 @@ export function TickerSearch() {
                     </span>
                   </span>
                 </span>
-                {/* Badged on has_model, not onboarding_status. Onboarded means
+                {/* Two states, because there are two things that can be true and
+                    only one of them is "there is already a number here".
+
+                    Badged on has_model, not onboarding_status. Onboarded means
                     the filings are in the store, which is true of nearly every
                     result, so keying the label off it claimed a compiled model
-                    that mostly did not exist. has_model is what decides whether
-                    the page opens with figures already in it. Same label as the
-                    ticker index, so the two never disagree. */}
-                <span className="font-mono text-[10px] text-text-faint shrink-0">
-                  {c.has_model ? 'Ready' : 'On demand'}
+                    that mostly did not exist.
+
+                    "Builds on open" rather than "On demand", which read like the
+                    user had to request something. Nothing is requested: the
+                    engine reads the filings and compiles the model when the page
+                    opens. The title attribute carries the longer form for
+                    anyone who needs it, since a 10px badge is not where a
+                    sentence belongs. */}
+                <span
+                  className="font-mono text-[10px] text-text-faint shrink-0"
+                  title={
+                    c.has_model
+                      ? 'A compiled model exists, so the page opens with figures in place.'
+                      : 'No compiled model yet. The engine reads this company’s filings and builds one when you open it.'
+                  }
+                >
+                  {c.has_model ? 'Ready' : 'Builds on open'}
                 </span>
               </li>
             )
