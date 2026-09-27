@@ -138,16 +138,24 @@ def test_one_market_slow_fetch_does_not_block_the_other_market(
 
 
 def test_concurrent_callers_share_one_fetch(isolated_cache, monkeypatch):
-    """Five callers racing for one cold market must produce one fetch."""
+    """Five callers racing for one cold market must produce one fetch.
+
+    What each of them *receives* is asserted as well as how many fetches ran.
+    One fetch is compatible with four waiters getting nothing: the count holds
+    whether the waiters return the published index or an empty dict, and the
+    empty answer is the one that is indistinguishable from "no such company".
+    """
     counter = _install_slow_fetcher(monkeypatch, seconds=1.0)
+    expected = {"ZZZ": ti.ListedCompany("ZZZ", "Slow Co", "us", "SEC")}
 
     latencies: list[float] = []
+    got: list[dict] = []
     start = threading.Barrier(5)
 
     def hit() -> None:
         start.wait()
         t0 = time.time()
-        ti.index_for("us")
+        got.append(ti.index_for("us"))
         latencies.append(time.time() - t0)
 
     threads = [threading.Thread(target=hit) for _ in range(5)]
@@ -157,6 +165,9 @@ def test_concurrent_callers_share_one_fetch(isolated_cache, monkeypatch):
         t.join(timeout=30)
 
     assert len(latencies) == 5
+    assert not any(t.is_alive() for t in threads), "a caller never returned"
+    for received in got:
+        assert received == expected, f"a caller received {received!r}"
     assert counter["n"] == 1, f"made {counter['n']} fetches, expected 1"
 
 
@@ -181,6 +192,65 @@ def test_a_failed_fetch_is_cached_so_an_outage_is_not_re_paid(
     assert attempts["n"] == 1, f"re-fetched {attempts['n']} times during an outage"
     # The first call may pay the timeout; the rest must not.
     assert max(latencies[1:]) < 0.01, f"later calls still slow: {latencies}"
+
+
+def test_a_waiter_waits_out_a_slow_but_successful_fetch(
+    isolated_cache, monkeypatch
+):
+    """A fetch that takes longer than one request leg must still reach waiters.
+
+    `requests` applies `timeout` to the connect and to the read separately, so
+    a fetch that spends FETCH_TIMEOUT connecting and FETCH_TIMEOUT reading is
+    twice that and *succeeds*. A waiter bound of FETCH_TIMEOUT + 5 therefore
+    expires while the fetch it is waiting for is about to publish a perfectly
+    good index, and every concurrent caller gets `{}` — an empty answer with a
+    200, indistinguishable from "no such company", on precisely the degraded
+    network this path exists for. The global lock it replaced queued waiters
+    and handed them the data, so this was a regression, not a trade.
+
+    The bound is scaled down rather than waited out at production size:
+    FETCH_TIMEOUT is patched to 0.2s, which puts the old bound at 5.2s and the
+    current one (two timeouts plus the allowance) at 15.4s, and the fetch is
+    given 6s. Six seconds is the floor here, not a choice — the old bound has a
+    hard-coded 5 on it, so any fetch that outlasts it has to outlast 5s.
+    """
+    monkeypatch.setattr(ti, "FETCH_TIMEOUT", 0.2)
+    slow_seconds = 6.0
+    entry = {"ZZZ": ti.ListedCompany("ZZZ", "Slow Co", "us", "SEC")}
+
+    started = threading.Event()
+
+    def slow_but_successful():
+        started.set()
+        time.sleep(slow_seconds)
+        return entry
+
+    monkeypatch.setitem(ti._FETCHERS, "us", slow_but_successful)
+
+    first_result: dict = {}
+    waiter_results: list[dict] = []
+
+    def fetch_it() -> None:
+        first_result["value"] = ti.index_for("us")
+
+    def wait_for_it() -> None:
+        started.wait(timeout=5)
+        waiter_results.append(ti.index_for("us"))
+
+    first = threading.Thread(target=fetch_it)
+    waiter = threading.Thread(target=wait_for_it)
+    first.start()
+    started.wait(timeout=5)
+    waiter.start()
+    first.join(timeout=60)
+    waiter.join(timeout=60)
+
+    assert not first.is_alive() and not waiter.is_alive(), "a caller never returned"
+    assert first_result.get("value") == entry, "the fetch itself did not land"
+    assert waiter_results == [entry], (
+        f"the waiter received {waiter_results!r} from a fetch that succeeded "
+        f"after {slow_seconds}s"
+    )
 
 
 def test_market_scope_is_applied_before_the_limit(isolated_cache, monkeypatch):
