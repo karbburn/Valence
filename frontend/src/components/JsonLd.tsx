@@ -73,7 +73,12 @@ interface StockJsonLdProps {
 }
 
 /**
- * Per-ticker graph, emitted alongside the site graph on a ticker page.
+ * Per-ticker graph, emitted on a ticker page alongside the site graph.
+ *
+ * Only the ticker-specific nodes. The site graph is emitted once by the root
+ * layout, and repeating it here would declare Organization, WebSite,
+ * SoftwareApplication and Person twice on the same document with identical
+ * @ids, which is a duplicated structured-data claim rather than a richer one.
  *
  * A WebPage and a BreadcrumbList rather than a FinancialProduct: there is no
  * price being sold here, only a computed valuation, and describing a computed
@@ -135,5 +140,5 @@ export function StockJsonLd({ company, spec }: StockJsonLdProps) {
     })
   }
 
-  return <JsonLd data={{ '@context': 'https://schema.org', '@graph': [...graph()['@graph'], ...extra] }} />
+  return <JsonLd data={{ '@context': 'https://schema.org', '@graph': extra }} />
 }
