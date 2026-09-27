@@ -1,0 +1,86 @@
+#!/bin/sh
+# Refuse a history rewrite unless someone has deliberately taken the lock.
+#
+# Why this exists
+# ---------------
+# main was force-pushed twice in one session, and a background agent amended a
+# commit that had already been pushed. The amend produced a new object, the
+# branch moved, and every other session's base changed underneath it. Another
+# agent ran `git reset` in the shared checkout, which orphaned a commit and
+# discarded a second agent's uncommitted work mid-edit.
+#
+# None of that is a git bug. It is the predictable result of several sessions
+# sharing one index and one working tree, which is why each session should have
+# its own worktree. This hook is the backstop for whoever is still in the shared
+# checkout.
+#
+# How it works
+# ------------
+# git feeds pre-push four fields per ref on stdin:
+#
+#   <local ref> <local sha> <remote ref> <remote sha>
+#
+# A ref is a history rewrite when the remote sha is non-zero and is NOT an
+# ancestor of the local sha. Branch deletion (local sha zero) and a new branch
+# (remote sha zero) are both fine and are excluded.
+#
+# How to override, when a rewrite is genuinely correct
+# ---------------------------------------------------
+#   VALENCE_ALLOW_FORCE_PUSH=1 git push --force-with-lease origin main
+#
+# Deliberately awkward. A rewrite should cost a deliberate act and leave a trace
+# in the shell history, because the recovery cost lands on every other session
+# and the benefit is almost always available through an ordinary commit.
+
+zero=0000000000000000000000000000000000000000
+rewrite=""
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ -z "$local_sha" ] && continue
+    [ "$local_sha" = "$zero" ] && continue
+    [ "$remote_sha" = "$zero" ] && continue
+
+    if git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+        continue
+    fi
+
+    rewrite="$rewrite  $local_ref
+    local  $local_sha
+    remote $remote_sha
+"
+done
+
+if [ -z "$rewrite" ]; then
+    exit 0
+fi
+
+if [ -n "$VALENCE_ALLOW_FORCE_PUSH" ]; then
+    echo "VALENCE: history rewrite allowed by VALENCE_ALLOW_FORCE_PUSH." >&2
+    echo "VALENCE: $rewrite" >&2
+    echo "VALENCE: tell the other sessions the new base before you finish." >&2
+    exit 0
+fi
+
+{
+    echo "VALENCE: refused a non-fast-forward push."
+    echo
+    echo "$rewrite"
+    cat <<'MSG'
+
+This rewrites commits that are already on the remote, so every other session
+working on this repository has to rebase onto the new tip. That has happened
+twice already, and cost an orphaned commit plus discarded uncommitted work.
+
+Normally the answer is an ordinary commit, which needs no override:
+
+    git add -A && git commit -m "..." && git push
+
+If the rewrite is genuinely correct, take the lock on purpose and say so out loud
+so the other sessions can rebase:
+
+    VALENCE_ALLOW_FORCE_PUSH=1 git push --force-with-lease origin main
+
+MSG
+} >&2
+
+exit 1
