@@ -203,18 +203,13 @@ def search_universe_companies(
     finally:
         conn.close()
 
-    cols = (
-        "company_id", "ticker", "name", "market", "exchange",
-        "sector", "industry", "is_financial", "onboarding_status",
-        "onboarding_notes", "last_updated"
-    )
-    result = []
-    for r in rows:
-        d = dict(zip(cols, r))
-        d["is_financial"] = bool(d["is_financial"])
-        d["last_updated"] = datetime.fromisoformat(d["last_updated"])
-        result.append(UniverseCompany(**d))
-    return result
+    # Through the shared mapper, not a second column list. This function had its
+    # own inline tuple that predated the slug and cik columns, so every search
+    # result came back with slug=None even though the row had one. The dropdown
+    # navigates by slug, so selecting a result fell back to the index instead of
+    # opening the company, and the most-searched ticker in the product could not
+    # be reached from its own search box.
+    return [_row_to_company(r) for r in rows]
 
 
 def get_universe_by_slug(slug: str, db_path: str | Path = DB_PATH) -> Optional[UniverseCompany]:

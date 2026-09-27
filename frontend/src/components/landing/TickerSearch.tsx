@@ -190,8 +190,14 @@ export function TickerSearch() {
                     </span>
                   </span>
                 </span>
+                {/* Badged on has_model, not onboarding_status. Onboarded means
+                    the filings are in the store, which is true of nearly every
+                    result, so keying the label off it claimed a compiled model
+                    that mostly did not exist. has_model is what decides whether
+                    the page opens with figures already in it. Same label as the
+                    ticker index, so the two never disagree. */}
                 <span className="font-mono text-[10px] text-text-faint shrink-0">
-                  {c.onboarding_status === 'onboarded' ? 'Ready' : 'On demand'}
+                  {c.has_model ? 'Ready' : 'On demand'}
                 </span>
               </li>
             )
