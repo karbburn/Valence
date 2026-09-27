@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import Link from 'next/link'
-import { Play } from 'lucide-react'
+import { Pause, Play } from 'lucide-react'
 
 /**
  * Hero video slot.
@@ -73,32 +73,72 @@ export function LaunchVideo() {
             dark screen recording and turned this light card grey. The pill
             carries its own background, so it reads over any frame without
             touching the image. */}
+        {/* The whole frame is the click target and carries no visible control.
+            The poster is a composed title card that fills the frame edge to
+            edge, so there is no collision-free zone inside it: centred put the
+            pill over the figure, top-left over the eyebrow, and the browser's
+            own control bar owns the bottom strip on a paused video. Putting the
+            affordance in the caption row below is the only placement that
+            covers nothing, and it is where a caption and its control belong
+            anyway. The visible label is that button, so it is a real control
+            rather than a decoration over one. */}
         {!started && (
           <button
             type="button"
             onClick={() => videoRef.current?.play()}
-            className="absolute inset-0 group flex items-start justify-start p-3 sm:p-4"
+            className="absolute inset-0 group"
             aria-label="Play the clip"
           >
-            <span className="inline-flex items-center gap-2.5 h-10 pl-3.5 pr-4 rounded-sm bg-canvas/90 border border-border group-hover:border-accent-border group-hover:bg-surface-2 transition-colors">
-              <Play className="w-4 h-4 text-accent fill-accent" aria-hidden />
-              <span className="text-[12.5px] font-semibold text-text-main">Play the clip</span>
-            </span>
+            <span
+              className="absolute inset-0 rounded-sm ring-1 ring-inset ring-transparent
+                         group-hover:ring-accent-border group-focus-visible:ring-accent
+                         transition-shadow"
+              aria-hidden
+            />
           </button>
         )}
       </div>
 
-      {/* Not "recorded from the live workbench". The poster is a composed title
-          card, and a caption that misdescribes the thing above it is the same
-          class of error as a caption that misdescribes a number. This one also
-          survives a re-cut, because it points at the assumptions rather than
-          describing the production. */}
-      <p className="mt-2.5 text-[11px] text-text-dim font-mono">
-        Silent.{' '}
-        <Link href="/methodology" className="text-accent hover:text-accent-hover transition-colors">
+      {/* Caption row. Carries the visible play control, the accessibility
+          statement, and the way to the assumptions. Not "recorded from the live
+          workbench": the poster is a composed card, and a caption that
+          misdescribes the thing above it is the same class of error as a
+          caption that misdescribes a number. This one also survives a re-cut,
+          because it points at the assumptions rather than the production. */}
+      <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <button
+          type="button"
+          onClick={() => {
+            const v = videoRef.current
+            if (!v) return
+            if (v.paused) void v.play()
+            else v.pause()
+          }}
+          className="inline-flex items-center gap-1.5 text-[11px] font-mono text-text-muted
+                     hover:text-text-main transition-colors"
+          aria-label={started ? 'Pause the clip' : 'Play the clip'}
+        >
+          {started ? (
+            <Pause className="w-3 h-3" aria-hidden />
+          ) : (
+            <Play className="w-3 h-3 text-accent fill-accent" aria-hidden />
+          )}
+          {started ? 'Pause' : 'Play the clip'}
+        </button>
+        <span className="text-[11px] text-text-faint font-mono" aria-hidden>
+          /
+        </span>
+        <span className="text-[11px] text-text-dim font-mono">Silent</span>
+        <span className="text-[11px] text-text-faint font-mono" aria-hidden>
+          /
+        </span>
+        <Link
+          href="/methodology"
+          className="text-[11px] text-accent hover:text-accent-hover transition-colors font-mono"
+        >
           How the valuation is built
         </Link>
-      </p>
+      </div>
     </div>
   )
 }

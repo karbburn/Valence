@@ -167,23 +167,28 @@ export default async function LandingPage() {
         {/* Rail. Real figures, and framed as what is pre-built rather than as a limit. */}
         {rail.length > 0 && (
           <section className="border-y border-border bg-surface">
-            <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 py-12 sm:py-14">
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 items-end">
-                <div className="lg:col-span-5">
-                  <h2 className="text-[21px] sm:text-[24px] font-bold tracking-tight text-text-main">
-                    Ready before you ask
-                  </h2>
-                </div>
-                <div className="lg:col-span-7">
-                  <p className="text-[13.5px] text-text-muted leading-relaxed">
-                    These are pre-built, so they open with the model already in the page. Any other
-                    ticker builds on first visit, usually in a few seconds. Every figure below is
-                    the model&apos;s own output against the last closing price.
-                  </p>
-                </div>
+            <div className="section-band w-full max-w-[1400px] mx-auto px-4 sm:px-5">
+              {/* Stacked, not split. A heading on the left with the explainer
+                  floating in the right column is the pattern that leaves a void
+                  under the heading, and the heading carried the message on its
+                  own anyway. */}
+              <div className="max-w-[62ch]">
+                <h2 className="text-[21px] sm:text-[24px] font-bold tracking-tight text-text-main">
+                  Ready before you ask
+                </h2>
+                <p className="mt-3 text-[13.5px] text-text-muted leading-relaxed">
+                  These are pre-built, so they open with the model already in the page. Any other
+                  ticker builds on first visit, usually in a few seconds. Every figure below is
+                  the model&apos;s own output against the last closing price.
+                </p>
               </div>
 
-              <RevealGroup className="mt-7 flex gap-3 overflow-x-auto pb-3 -mx-4 px-4 snap-x snap-mandatory">
+              {/* The rail scrolls, and 380px of the last card was being sliced by
+                  the viewport edge with nothing to say so. A mask on the right
+                  edge fades the cut card out, which is the difference between
+                  "there is more" and "this is broken". Left edge too, so the
+                  fade reads as a scroller rather than as damage to one side. */}
+              <RevealGroup className="rail-fade mt-7 flex gap-3 overflow-x-auto pb-3 -mx-4 px-4 snap-x snap-mandatory">
                 {rail.map((item) => (
                   <RevealItem key={item.company.company_id} className="snap-start shrink-0">
                     <Link
@@ -232,7 +237,7 @@ export default async function LandingPage() {
 
         {/* The model, running. Full-bleed band, one message. */}
         {previewSpec && (
-          <section className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 py-14 sm:py-18">
+          <section className="section-band w-full max-w-[1400px] mx-auto px-4 sm:px-5">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12">
               <div className="lg:col-span-4">
                 <h2 className="text-[24px] sm:text-[29px] font-bold tracking-tight text-text-main leading-[1.12]">
@@ -258,7 +263,7 @@ export default async function LandingPage() {
 
         {/* What it does. Two groups: what runs in the browser, what ships in the workbook. */}
         <section className="border-y border-border bg-surface">
-          <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 py-14 sm:py-18">
+          <div className="section-band w-full max-w-[1400px] mx-auto px-4 sm:px-5">
             <Reveal>
               <h2 className="text-[24px] sm:text-[29px] font-bold tracking-tight text-text-main max-w-[26ch]">
                 What runs in the browser, and what ships in the workbook
@@ -338,7 +343,7 @@ export default async function LandingPage() {
 
         {/* Audit. Prose left, report right. The report spans the width it needs. */}
         {qa && (
-          <section className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 py-14 sm:py-18">
+          <section className="section-band w-full max-w-[1400px] mx-auto px-4 sm:px-5">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
               <div className="lg:col-span-5">
                 <Reveal>
@@ -426,39 +431,42 @@ export default async function LandingPage() {
           </section>
         )}
 
-        {/* Close. Same action, same label as the hero. */}
-        <section className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 py-14 sm:py-20">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
-            <div className="lg:col-span-5">
-              <h2 className="text-[24px] sm:text-[29px] font-bold tracking-tight text-text-main leading-[1.12]">
-                Start with a ticker.
-              </h2>
-              <p className="mt-4 text-[13.5px] text-text-muted leading-relaxed max-w-[44ch]">
-                No account, no upload, nothing stored on a server. Saved models live in this
-                browser and nowhere else.
-              </p>
-              <p className="mt-4 text-[13px] text-text-dim max-w-[46ch] leading-relaxed">
-                Prefer to read first, or want a name covered that is not there?{' '}
-                <Link href="/methodology" className="text-accent hover:text-accent-hover">
-                  How the valuation is built
-                </Link>{' '}
-                covers the model, the data sources and what it cannot do.{' '}
-                <a
-                  href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Valence ticker request')}`}
-                  className="text-accent hover:text-accent-hover"
-                >
-                  Ask for a ticker
-                </a>{' '}
-                if one is missing.
-              </p>
-            </div>
-            <div className="lg:col-span-5 lg:col-start-8">
+        {/* Close. A real closing band rather than a second hero: centred, so
+            the action is the last thing on the page instead of sitting in a
+            right-hand column with 204px of nothing under the prose. It is
+            centred rather than left-aligned because a closing move wants to
+            feel arrived-at, and the asymmetry the rest of the page uses reads
+            as unfinished when there is nothing after it. */}
+        <section className="section-band w-full max-w-[1400px] mx-auto px-4 sm:px-5">
+          <div className="max-w-[620px] mx-auto text-center">
+            <h2 className="text-[24px] sm:text-[29px] font-bold tracking-tight text-text-main leading-[1.12] text-balance">
+              Start with a ticker.
+            </h2>
+            <p className="mt-4 text-[13.5px] text-text-muted leading-relaxed">
+              No account, no upload, nothing stored on a server. Saved models live in this browser
+              and nowhere else.
+            </p>
+            <div className="mt-6">
               <Suspense
-                fallback={<div className="h-12 max-w-[440px] rounded-sm bg-surface border border-border" />}
+                fallback={<div className="h-12 max-w-[440px] mx-auto rounded-sm bg-surface border border-border" />}
               >
                 <TickerSearch />
               </Suspense>
             </div>
+            <p className="mt-5 text-[13px] text-text-dim leading-relaxed max-w-[52ch] mx-auto">
+              Prefer to read first, or want a name covered that is not there?{' '}
+              <Link href="/methodology" className="text-accent hover:text-accent-hover">
+                How the valuation is built
+              </Link>{' '}
+              covers the model, the data sources and what it cannot do.{' '}
+              <a
+                href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Valence ticker request')}`}
+                className="text-accent hover:text-accent-hover"
+              >
+                Ask for a ticker
+              </a>{' '}
+              if one is missing.
+            </p>
           </div>
         </section>
       </main>

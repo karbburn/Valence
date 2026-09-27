@@ -60,6 +60,10 @@ export function LiveModelPreview({ spec }: { spec: ModelSpecification }) {
           spec={spec}
           scenario={scenario}
           onOpenMethodology={() => router.push('/methodology')}
+          // The landing page is a proof, not a workstation. The sensitivity
+          // matrix is the tallest thing in here and the least useful without
+          // the rest of the workbench, so it stays on the ticker page only.
+          compact
         />
       </div>
 
