@@ -27,12 +27,28 @@ from backend.data.universe import ticker_index as ti
 
 @pytest.fixture
 def isolated_cache(monkeypatch):
-    """An empty cache directory, so the fetch path is genuinely exercised."""
+    """An empty cache directory, so the fetch path is genuinely exercised.
+
+    The module globals are saved and restored, not just emptied. `monkeypatch`
+    puts CACHE_DIR back but nothing put `_cache` back: every test here leaves
+    fabricated entries behind, and after this file ran, `index_for`, `search`,
+    `lookup` and `resolve_or_register` in the same process answered from them
+    and never touched the network or the real cache directory again. Any later
+    test asserting on real universe behaviour was then asserting on data this
+    file invented. `_inflight` goes the same way, because a gate stranded by
+    one test turns the next test's first caller into a waiter.
+    """
     tmp = pathlib.Path(tempfile.mkdtemp())
     monkeypatch.setattr(ti, "CACHE_DIR", tmp)
-    for market in ti.SUPPORTED:
-        ti._cache.pop(market, None)
+    saved_cache = dict(ti._cache)
+    saved_inflight = dict(ti._inflight)
+    ti._cache.clear()
+    ti._inflight.clear()
     yield tmp
+    ti._cache.clear()
+    ti._cache.update(saved_cache)
+    ti._inflight.clear()
+    ti._inflight.update(saved_inflight)
 
 
 def _install_slow_fetcher(monkeypatch, seconds: float = 2.0) -> dict:
@@ -79,7 +95,7 @@ def test_one_market_slow_fetch_does_not_block_the_other_market(
         time.sleep(2.5)
         return {"ZZZ": ti.ListedCompany("ZZZ", "Slow Co", "us", "SEC")}
 
-    ti._FETCHERS["us"] = genuinely_slow_us_fetch
+    monkeypatch.setitem(ti._FETCHERS, "us", genuinely_slow_us_fetch)
 
     def fetch_us() -> None:
         us_result["value"] = ti.index_for("us")
