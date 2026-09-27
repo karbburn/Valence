@@ -127,7 +127,7 @@ def _main_body() -> None:
         _assert(cache_path.stat().st_size > 10000, f"Cache payload non-empty for {cid}")
 
     # 5. USD Excel Export Verification
-    print("\n5. USD 27-Tab Excel Workbook Export...")
+    print("\n5. USD 31-Tab Excel Workbook Export...")
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     for cid, spec in compiled_us_specs.items():
         excel_path = OUTPUT_DIR / f"{cid}_valuation_model.xlsx"
@@ -140,7 +140,7 @@ def _main_body() -> None:
     print(f"    US Companies Processed : {len(us_companies)} (AAPL, MSFT, INFY ADR)")
     print(f"    QA Engine Rollup       : ALL US COMPANIES MODEL VALID")
     print(f"    Multi-Market API List  : {len(companies_list)} Companies (India + US)")
-    print(f"    USD Excel Export       : Workbooks Generated (27 Tabs each)")
+    print(f"    USD Excel Export       : Workbooks Generated (31 Tabs each)")
     print("=" * 65)
     print("\nALL US EXPANSION SELF-CHECKS PASSED SUCCESSFULLY!")
 
