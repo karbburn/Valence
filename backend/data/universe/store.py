@@ -21,7 +21,9 @@ CREATE TABLE IF NOT EXISTS company_universe (
     is_financial INTEGER NOT NULL,
     onboarding_status TEXT NOT NULL,
     onboarding_notes TEXT,
-    last_updated TEXT NOT NULL
+    last_updated TEXT NOT NULL,
+    slug TEXT,
+    cik TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_universe_market ON company_universe(market);
 CREATE INDEX IF NOT EXISTS idx_universe_status ON company_universe(onboarding_status);
@@ -51,7 +53,54 @@ CREATE TABLE IF NOT EXISTS taxonomy_learned_mappings (
 def _connect(db_path: str | Path = DB_PATH) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path))
     conn.executescript(_UNIVERSE_SCHEMA)
+    _migrate_columns(conn)
     return conn
+
+
+# Columns added after the first release. ALTER TABLE ADD COLUMN is a no-op when
+# the column is already present, so this runs on every connect and needs no
+# schema-version table. Existing rows get NULL, which every read path treats as
+# "not yet assigned" and backfills.
+_ADDED_COLUMNS = (("slug", "TEXT"), ("cik", "TEXT"))
+
+
+def _migrate_columns(conn: sqlite3.Connection) -> None:
+    present = {r[1] for r in conn.execute("PRAGMA table_info(company_universe)")}
+    added = False
+    for name, decl in _ADDED_COLUMNS:
+        if name not in present:
+            conn.execute(f"ALTER TABLE company_universe ADD COLUMN {name} {decl}")
+            added = True
+    if added:
+        conn.commit()
+
+
+_UNIVERSE_COLS = (
+    "company_id", "ticker", "name", "market", "exchange", "sector", "industry",
+    "is_financial", "onboarding_status", "onboarding_notes", "last_updated",
+    "slug", "cik",
+)
+
+
+def _row_to_company(row: tuple) -> UniverseCompany:
+    d = dict(zip(_UNIVERSE_COLS, row))
+    d["is_financial"] = bool(d["is_financial"])
+    d["last_updated"] = datetime.fromisoformat(d["last_updated"])
+    return UniverseCompany(
+        company_id=d["company_id"],
+        ticker=d["ticker"],
+        name=d["name"],
+        market=d["market"],
+        exchange=d["exchange"],
+        sector=d["sector"],
+        industry=d["industry"],
+        is_financial=d["is_financial"],
+        onboarding_status=d["onboarding_status"],
+        onboarding_notes=d["onboarding_notes"],
+        last_updated=d["last_updated"],
+        slug=d.get("slug"),
+        cik=d.get("cik"),
+    )
 
 
 def save_universe_companies(companies: list[UniverseCompany], db_path: str | Path = DB_PATH) -> None:
@@ -70,11 +119,18 @@ def save_universe_companies(companies: list[UniverseCompany], db_path: str | Pat
                 c.onboarding_status,
                 c.onboarding_notes,
                 c.last_updated.isoformat(),
+                c.slug,
+                c.cik,
             )
             for c in companies
         ]
+        # Named columns, not positional: the table has grown since it was first
+        # written, and a positional INSERT silently truncates the moment the
+        # column order and the row tuple disagree.
+        placeholders = ", ".join(["?"] * len(_UNIVERSE_COLS))
         conn.executemany(
-            "INSERT OR REPLACE INTO company_universe VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            f"INSERT OR REPLACE INTO company_universe ({', '.join(_UNIVERSE_COLS)}) "
+            f"VALUES ({placeholders})",
             rows,
         )
         conn.commit()
@@ -85,20 +141,15 @@ def save_universe_companies(companies: list[UniverseCompany], db_path: str | Pat
 def get_universe_company(company_id: str, db_path: str | Path = DB_PATH) -> Optional[UniverseCompany]:
     conn = _connect(db_path)
     try:
-        row = conn.execute("SELECT * FROM company_universe WHERE company_id = ?", (company_id,)).fetchone()
+        row = conn.execute(
+            f"SELECT {', '.join(_UNIVERSE_COLS)} FROM company_universe WHERE company_id = ?",
+            (company_id,),
+        ).fetchone()
     finally:
         conn.close()
     if not row:
         return None
-    cols = (
-        "company_id", "ticker", "name", "market", "exchange",
-        "sector", "industry", "is_financial", "onboarding_status",
-        "onboarding_notes", "last_updated"
-    )
-    d = dict(zip(cols, row))
-    d["is_financial"] = bool(d["is_financial"])
-    d["last_updated"] = datetime.fromisoformat(d["last_updated"])
-    return UniverseCompany(**d)
+    return _row_to_company(row)
 
 
 def search_universe_companies(
@@ -164,6 +215,68 @@ def search_universe_companies(
         d["last_updated"] = datetime.fromisoformat(d["last_updated"])
         result.append(UniverseCompany(**d))
     return result
+
+
+def get_universe_by_slug(slug: str, db_path: str | Path = DB_PATH) -> Optional[UniverseCompany]:
+    """Exact, case-insensitive slug lookup. The resolver behind every /stock route.
+
+    Only non-financial rows resolve. Financial-sector companies are excluded from
+    the model engine, so returning one here would hand a page route a company_id
+    the builder cannot service.
+    """
+    if not slug:
+        return None
+    conn = _connect(db_path)
+    try:
+        row = conn.execute(
+            f"SELECT {', '.join(_UNIVERSE_COLS)} FROM company_universe "
+            "WHERE UPPER(slug) = UPPER(?) AND is_financial = 0",
+            (slug.strip(),),
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return None
+    return _row_to_company(row)
+
+
+def list_slugs(db_path: str | Path = DB_PATH) -> list[UniverseCompany]:
+    """Every non-financial company that has a slug assigned, in slug order."""
+    conn = _connect(db_path)
+    try:
+        rows = conn.execute(
+            f"SELECT {', '.join(_UNIVERSE_COLS)} FROM company_universe "
+            "WHERE slug IS NOT NULL AND is_financial = 0 ORDER BY UPPER(slug)"
+        ).fetchall()
+    finally:
+        conn.close()
+    return [_row_to_company(r) for r in rows]
+
+
+def assign_slugs_to_universe(db_path: str | Path = DB_PATH) -> int:
+    """Recompute slugs for every non-financial company and persist them.
+
+    Idempotent. Safe to run on every acquisition and on every deploy.
+    """
+    from backend.data.universe.slugs import assign_slugs
+
+    companies = list_all_universe_companies(db_path)
+    mapping = assign_slugs(companies)
+    if not mapping:
+        return 0
+    conn = _connect(db_path)
+    try:
+        conn.executemany(
+            "UPDATE company_universe SET slug = ? WHERE company_id = ?",
+            [(slug, cid) for cid, slug in mapping.items()],
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_universe_slug ON company_universe(UPPER(slug))"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return len(mapping)
 
 
 def update_onboarding_status(

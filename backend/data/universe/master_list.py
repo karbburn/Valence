@@ -6,6 +6,7 @@ from pathlib import Path
 from backend.data.pipeline import DB_PATH
 from backend.data.universe.models import UniverseCompany
 from backend.data.universe.sector_filter import is_financial_sector
+from backend.data.universe.slugs import assign_slugs
 from backend.data.universe.store import save_universe_companies, get_universe_company
 
 SEED_COMPANIES: list[dict] = [
@@ -222,6 +223,15 @@ def seed_master_universe(db_path: str | Path = DB_PATH) -> list[UniverseCompany]
             last_updated=datetime.now(),
         )
         companies.append(c)
+
+    # Slugs are assigned before the write rather than at the call site: this
+    # function persists with INSERT OR REPLACE, so any row it rewrites loses its
+    # slug unless the row being written carries one. Callers include the API
+    # startup path and the rollout orchestrator, and neither should have to
+    # remember to reassign afterwards.
+    slug_by_id = assign_slugs(companies)
+    for c in companies:
+        c.slug = slug_by_id.get(c.company_id)
 
     save_universe_companies(companies, db_path=db_path)
 
