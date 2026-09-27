@@ -118,36 +118,49 @@ export default async function LandingPage() {
       <main className="flex-1">
         {/* Hero. The action is a search, so the search is the hero. Left-weighted
             text against a full-bleed media band below it. */}
-        <section className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 pt-14 sm:pt-16 lg:pt-20 pb-10 sm:pb-12">
-          <div className="max-w-[760px]">
-            <h1 className="text-balance text-[40px] sm:text-[54px] lg:text-[62px] font-bold tracking-[-0.025em] leading-[1.02] text-text-main">
-              A DCF you can argue with.
-            </h1>
-            <p className="mt-5 text-[15px] sm:text-[16px] text-text-muted leading-relaxed max-w-[46ch]">
-              Unlevered FCFF at WACC for US and Indian equities. Change any driver, export the
-              whole workbook, read the audit.
-            </p>
-            <div className="mt-7">
-              <Suspense
-                fallback={<div className="h-12 max-w-[440px] rounded-sm bg-surface border border-border" />}
-              >
-                <TickerSearch />
-              </Suspense>
-            </div>
-            <p className="mt-3.5 text-[12.5px] text-text-dim max-w-[56ch] leading-relaxed">
-              Any listed ticker. The engine reads its annual filings and builds the model from
-              scratch, then runs its own checks before showing you a number. Nothing to install,
-              no account.
-            </p>
-          </div>
-        </section>
+        {/* Hero. Asymmetric split, which is what every serious product in this
+            category does: the value proposition on the left, a real artifact on
+            the right. The previous arrangement stacked a 760px text block over a
+            full-bleed media band, which left the right 55% of the viewport empty
+            and read as a layout that failed to finish rather than as margin.
 
-        {/* The clip. Full bleed because its value is legibility: this is a screen
-            recording whose whole point is the figures in the KPI bar, and at the
-            5-column measure it used to sit in, those numerals rendered around 8px. */}
-        <section className="w-full border-y border-border bg-surface">
-          <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 py-8 sm:py-10">
-            <LaunchVideo />
+            The clip used to have to be full-bleed for legibility, because it was a
+            screen recording whose KPI numerals rendered around 8px at half width.
+            It is a composed title card now, built around one large figure, so it
+            carries at 6 columns. Measured after the move: the 12.45% renders at
+            roughly 60px, which is the point of the card.
+
+            Six and six rather than five and seven, so the search box keeps a
+            usable measure, and the headline drops to 54px so it still sets in two
+            lines inside 660px. One block instead of two, so the page is six
+            blocks rather than seven. */}
+        <section className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 pt-14 sm:pt-16 lg:pt-20 pb-12 sm:pb-14">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
+            <div className="lg:col-span-6">
+              <h1 className="text-balance text-[40px] sm:text-[50px] lg:text-[54px] font-bold tracking-[-0.025em] leading-[1.04] text-text-main">
+                A DCF you can argue with.
+              </h1>
+              <p className="mt-5 text-[15px] sm:text-[16px] text-text-muted leading-relaxed max-w-[46ch]">
+                Unlevered FCFF at WACC for US and Indian equities. Change any driver, export the
+                whole workbook, read the audit.
+              </p>
+              <div className="mt-7">
+                <Suspense
+                  fallback={<div className="h-12 max-w-[440px] rounded-sm bg-surface border border-border" />}
+                >
+                  <TickerSearch />
+                </Suspense>
+              </div>
+              <p className="mt-3.5 text-[12.5px] text-text-dim max-w-[52ch] leading-relaxed">
+                Any listed ticker. The engine reads its annual filings and builds the model from
+                scratch, then runs its own checks before showing you a number. Nothing to install,
+                no account.
+              </p>
+            </div>
+
+            <div className="lg:col-span-6">
+              <LaunchVideo />
+            </div>
           </div>
         </section>
 
