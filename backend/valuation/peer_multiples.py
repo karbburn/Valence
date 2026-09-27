@@ -339,16 +339,33 @@ def compute_peer_multiples(
     # gross debt, so the omission moved its enterprise value by roughly a fifth
     # and its EV/EBITDA by the same proportion — a peer that is not comparable
     # to the target it is being compared against.
-    net_debt = 0.0
+    # Net debt.
+    #
+    # `None` until it is actually established. A peer whose balance sheet cannot
+    # be resolved is dropped rather than published at zero: a net debt of 0.0
+    # reads as "carries no debt" and flows straight into an enterprise value and
+    # a multiple, so an unsourced peer presented as a debt-free one is worse than
+    # an absent peer.
+    net_debt: Optional[float] = None
     balance_as_of = ""
     try:
         from backend.data.bridge_inputs import fetch_bridge_snapshot
+
+        company_id = _company_id_for(symbol)
+        if not company_id:
+            logger.info(
+                "Peer %s: listed in a market the platform does not onboard, so its "
+                "balance sheet cannot be resolved — dropped rather than published "
+                "with no debt",
+                symbol,
+            )
+            return None
 
         # Absolute currency, because the market capitalisation below is price
         # times shares and is therefore in rupees or dollars. The snapshot's
         # default crores/millions scaling is for the model, and adding it to an
         # absolute market capitalisation understates net debt ten-millionfold.
-        snapshot = fetch_bridge_snapshot(_company_id_for(symbol), in_model_units=False)
+        snapshot = fetch_bridge_snapshot(company_id, in_model_units=False)
         if snapshot is not None and snapshot.as_of:
             claims = (snapshot.terms.get("minority_interest") or 0.0) + (
                 snapshot.terms.get("preferred_stock") or 0.0
@@ -357,6 +374,10 @@ def compute_peer_multiples(
             balance_as_of = snapshot.as_of
     except Exception as exc:
         logger.info("Peer %s: balance sheet snapshot unavailable (%s)", symbol, exc)
+
+    if net_debt is None:
+        logger.info("Peer %s: no balance sheet, so no net debt — dropped", symbol)
+        return None
 
     # Share count: the FILED total, not the provider's summary field.
     #
@@ -445,13 +466,20 @@ def compute_peer_multiples(
         net_debt=round(net_debt, 2),
         enterprise_value=round(enterprise_value, 2),
         revenue_ttm=round(float(revenue), 2),
-        ebitda_ttm=round(float(ebitda), 2) if ebitda else 0.0,
-        net_income_ttm=round(float(net_income), 2) if net_income else 0.0,
+        # `is None` rather than truthiness. A falsy test is false for a
+        # LEGITIMATELY NEGATIVE figure as well as for a missing one, so a peer
+        # with negative trailing earnings was published as 0.0 — a different
+        # company from the one that was measured. For return on invested capital
+        # this published 0.0% where the real figure is negative, which reads as
+        # "earns nothing" instead of "loses money", and is the very confusion
+        # the invested-capital floor exists to avoid.
+        ebitda_ttm=round(float(ebitda), 2) if ebitda is not None else 0.0,
+        net_income_ttm=round(float(net_income), 2) if net_income is not None else 0.0,
         ev_revenue=round(ev_revenue, 4),
-        ev_ebitda=round(ev_ebitda, 4) if ev_ebitda else 0.0,
-        pe_ratio=round(pe, 4) if pe else 0.0,
-        fcf_yield_pct=round(fcf_yield, 4) if fcf_yield else 0.0,
-        roic_pct=round(roic, 4) if roic else 0.0,
+        ev_ebitda=round(ev_ebitda, 4) if ev_ebitda is not None else 0.0,
+        pe_ratio=round(pe, 4) if pe is not None else 0.0,
+        fcf_yield_pct=round(fcf_yield, 4) if fcf_yield is not None else 0.0,
+        roic_pct=round(roic, 4) if roic is not None else 0.0,
         financials_period=str(annual.columns[0])[:10],
         balance_sheet_as_of=balance_as_of,
         price_as_of=str(info.get("regularMarketTime") or ""),
@@ -464,8 +492,21 @@ def _company_id_for(symbol: str) -> str:
 
     The snapshot resolver works from a company id, so the roster symbol is
     converted to the `{ticker}_{exchange}` form the rest of the platform uses.
+
+    Only the two markets the platform actually onboards are mapped. Every other
+    suffix used to fall through to `_us`, so a peer listed in London, Tokyo,
+    Hong Kong or Frankfurt resolved to a company id that does not exist, the
+    snapshot came back empty, and the peer's net debt was published as exactly
+    0.0 — a figure that reads as "carries no debt" rather than "could not be
+    sourced", and one that then flows into an enterprise value and a multiple.
+
+    An unmappable market returns an empty string, and the caller treats that as
+    unavailable rather than as zero.
     """
     base = symbol.split(".")[0].upper()
-    if symbol.endswith(".NS"):
+    suffix = symbol[len(base):] if symbol.startswith(base) else ""
+    if suffix == ".NS":
         return f"{base.lower()}_{base.lower()}"
-    return f"{base.lower()}_us"
+    if suffix == "":
+        return f"{base.lower()}_us"
+    return ""
