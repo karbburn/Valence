@@ -209,6 +209,14 @@ export interface CompanySummary {
   onboarding_status: string
   sector?: string
   /**
+   * Whether a valuation model has actually been compiled for this company, as
+   * opposed to its filings merely being onboarded. Distinct states: a company
+   * can be onboarded with no model, and the ticker page will build one on first
+   * open. Optional because older saved payloads predate it, and absent must be
+   * read as "unknown", never as "ready".
+   */
+  has_model?: boolean
+  /**
    * Public URL segment. Present on every search result so selecting a company
    * can rewrite the address bar to a link that resolves. Optional because
    * locally-saved and legacy payloads may predate it.

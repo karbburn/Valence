@@ -786,6 +786,14 @@ def search_companies(
             "currency": meta.currency,
             "units": meta.units,
             "onboarding_status": c.onboarding_status,
+            # Whether a model snapshot actually exists, which is not the same
+            # thing as being onboarded. Onboarded means the filings are in the
+            # store; has_model means a valuation has been compiled and will be
+            # served without a build. The client badges results on this, and it
+            # was reading onboarding_status instead, so every result came back
+            # "Ready" and the badge claimed a compiled model that mostly did not
+            # exist yet.
+            "has_model": _has_compiled_model(c.company_id),
             # Carried so selecting a result can rewrite the address bar to a
             # canonical link rather than leaving the URL on the previous ticker.
             "slug": c.slug,
