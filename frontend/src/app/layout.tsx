@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 import { SiteJsonLd } from '@/components/JsonLd'
-import { SITE_URL, SITE_NAME, SITE_TITLE, SITE_DESCRIPTION, AUTHOR, SOCIAL } from '@/lib/site'
+import { SITE_URL, SITE_NAME, SITE_TITLE, SITE_DESCRIPTION, AUTHOR, SOCIAL, OG_IMAGE } from '@/lib/site'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -61,6 +61,11 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
     url: SITE_URL,
     locale: 'en_US',
+    // The safety net for any route that does not declare its own openGraph. A
+    // route that DOES declare one replaces this whole object rather than merging
+    // with it, which is why every such route has to repeat `images: [OG_IMAGE]`
+    // beside its own title. See the note on OG_IMAGE.
+    images: [OG_IMAGE],
   },
   twitter: {
     card: 'summary_large_image',
@@ -79,11 +84,6 @@ export const metadata: Metadata = {
     },
   },
   manifest: '/manifest.webmanifest',
-  icons: {
-    icon: '/icon.png',
-    shortcut: '/icon.png',
-    apple: '/icon.png',
-  },
 }
 
 export default function RootLayout({
