@@ -58,6 +58,14 @@ CACHE_TTL_SECONDS = 24 * 60 * 60
 # keystroke on an unauthenticated endpoint.
 FAILED_TTL_SECONDS = 5 * 60
 FETCH_TIMEOUT = 30
+# How long a waiter is willing to wait on someone else's fetch, beyond the two
+# request legs a fetch can consume. `requests` applies `timeout` to the connect
+# and to the read *separately*, and covers neither DNS resolution nor the
+# transfer itself, so the true worst case for a fetch that succeeds is about
+# twice FETCH_TIMEOUT plus the lookup and the 780KB body. The headroom is what
+# keeps a waiter from walking away from a fetch that is about to publish a
+# perfectly good index; see the waiter branch in index_for.
+FETCH_ALLOWANCE_SECONDS = 15
 
 # Only these two markets are supported end to end. An index row outside them is
 # dropped rather than shown as a company the ingestion pipeline cannot service.
@@ -315,9 +323,31 @@ def index_for(market: str) -> dict[str, ListedCompany]:
     if not first:
         # Another thread is fetching this market. Wait for it, bounded, so a
         # hung fetch cannot pin this request open forever.
-        if not gate.wait(timeout=FETCH_TIMEOUT + 5):
-            logger.warning("ticker index still unavailable for %s after waiting", market)
-            return {}
+        #
+        # The bound has to clear what the fetch can actually take, not what one
+        # request leg takes. `FETCH_TIMEOUT + 5` did not: connect and read each
+        # get the full timeout, so a fetch that spends 30s connecting and 30s
+        # reading is 60s and *succeeds*. At that point every waiter had already
+        # returned `{}` and a burst of concurrent searches got an empty result
+        # set with a 200, indistinguishable from "no such company", on exactly
+        # the degraded network this change exists for. The old global lock did
+        # not do that: a waiter queued and received the data. Two timeouts plus
+        # the allowance covers every fetch that will finish, and the bound is
+        # still a ceiling rather than a join, so a fetch that genuinely never
+        # returns is bounded here instead of pinning the request forever.
+        wait_seconds = (FETCH_TIMEOUT * 2) + FETCH_ALLOWANCE_SECONDS
+        if not gate.wait(timeout=wait_seconds):
+            logger.warning(
+                "ticker index fetch for %s still running after %ss",
+                market, wait_seconds,
+            )
+            # The fetch is slow, not unavailable, so the diagnosis in the log
+            # matters as much as the bound. A past-TTL entry is a staler answer
+            # than a fresh index and a far better one than `{}`, which is what
+            # "this company is not listed" looks like to every caller above.
+            with _lock:
+                stale = _cache.get(market)
+            return stale[1] if stale is not None else {}
         with _lock:
             hit = _cache.get(market)
         if hit and (time.time() - hit[0]) < _cache_ttl(hit[2]):
