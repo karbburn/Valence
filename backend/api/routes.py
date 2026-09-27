@@ -21,6 +21,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
+from backend.api import throttle as ingest_throttle
 from backend.export.excel.exporter import export_model_to_excel
 from backend.forecast.engine import run_forecast
 from backend.forecast.pipeline import run as run_forecast_pipeline
@@ -184,11 +185,18 @@ _UNIVERSE_SEEDED: bool = False
 
 
 def _ensure_universe_seeded() -> None:
-    """Seed the master universe once per process instead of per request."""
+    """Seed the master universe once per process instead of per request.
+
+    Re-seeding rewrites the seed rows, and those rows carry no slug, so slugs are
+    reassigned afterwards. Without this a redeploy would leave every /stock route
+    resolving to a 404 until something else happened to write the column.
+    """
     global _UNIVERSE_SEEDED
     if not _UNIVERSE_SEEDED:
         from backend.data.universe.master_list import seed_master_universe
+        from backend.data.universe.store import assign_slugs_to_universe
         seed_master_universe()
+        assign_slugs_to_universe()
         _UNIVERSE_SEEDED = True
 
 
@@ -294,80 +302,113 @@ class _StaleCache(Exception):
 
 
 def _get_or_build_spec(company_id: str = "infy_infy") -> ModelSpecification:
-    if company_id not in _MODEL_CACHE:
-        cache_path = PROJECT_ROOT / "backend" / "data" / "cache" / f"{company_id}.json"
-        if cache_path.exists():
+    if company_id in _MODEL_CACHE:
+        return _lru_get(_MODEL_CACHE, company_id)
+
+    cache_path = PROJECT_ROOT / "backend" / "data" / "cache" / f"{company_id}.json"
+    has_snapshot = cache_path.exists()
+
+    # A company already known to be unsourceable must not be retried on every
+    # request. Once /stock/<ticker> is public an unresolvable slug is something a
+    # crawler will find, and retrying spends the upstream providers' budget on a
+    # request that cannot succeed.
+    if not has_snapshot and ingest_throttle.is_negative(company_id):
+        raise HTTPException(
+            status_code=503,
+            detail="No financial statements could be sourced for this ticker yet. Try again shortly.",
+        )
+
+    # Single-flight: concurrent requests for one uncached ticker produce one
+    # build. The loser does not start a duplicate.
+    with ingest_throttle.single_flight(company_id) as is_first:
+        if not is_first:
+            raise HTTPException(
+                status_code=503,
+                detail="This model is being compiled right now. Retry in a few seconds.",
+            )
+        return _build_spec_locked(company_id, cache_path, has_snapshot)
+
+
+def _build_spec_locked(
+    company_id: str, cache_path: Path, has_snapshot: bool
+) -> ModelSpecification:
+    """Compile or refresh the spec for one company. Caller holds single-flight."""
+    if has_snapshot:
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                spec = ModelSpecification.deserialize(f.read())
+            logger.info("Loaded %s ModelSpecification from precomputed cache.", company_id)
+            # The cache holds a build-time SNAPSHOT of market data (price, shares,
+            # beta, risk-free rate, ERP). Re-run valuation against live providers so
+            # the served model reflects current market prices. The forecast itself is
+            # reused from the cache, so this is a light valuation recompute, not a
+            # full rebuild. If the live fetch fails (provider or network down),
+            # fall back to the snapshot rather than triggering a heavy on-demand
+            # ingestion that could OOM the free tier.
             try:
-                with open(cache_path, "r", encoding="utf-8") as f:
-                    raw_str = f.read()
-                spec = ModelSpecification.deserialize(raw_str)
-                logger.info("Loaded %s ModelSpecification from precomputed cache.", company_id)
-                # The cache holds a build-time SNAPSHOT of market data (price, shares,
-                # beta, risk-free rate, ERP). Re-run valuation against live providers so
-                # the served model reflects current market prices. The forecast itself
-                # is reused from the cache, so this is a light valuation recompute, not
-                # a full rebuild. If the live fetch fails (e.g. provider/network down),
-                # fall back to the snapshot rather than triggering a heavy on-demand
-                # ingestion that could OOM the free tier.
-                try:
-                    if not _cache_matches_database(spec):
-                        logger.info(
-                            "Cache for %s predates current database state; rebuilding.",
-                            company_id,
-                        )
-                        raise _StaleCache()
-                    spec = run_valuation(spec)
-                    spec = run_qa(spec)
-                    logger.info("Refreshed live market data for %s.", company_id)
-                except _StaleCache:
-                    hist_m = _get_hist_model(company_id)
-                    f_spec = run_forecast_pipeline(hist_m)
-                    v_spec = run_valuation(f_spec)
-                    spec = run_qa(v_spec)
-                    try:
-                        cache_path.parent.mkdir(parents=True, exist_ok=True)
-                        with open(cache_path, "w", encoding="utf-8") as f:
-                            f.write(spec.serialize())
-                        logger.info("Wrote refreshed cache for %s.", company_id)
-                    except Exception as e:
-                        logger.warning("Warning: could not write cache for %s: %s", company_id, e)
-                except Exception as refresh_err:
-                    logger.warning(
-                        "Market-data refresh failed for %s; serving cached snapshot: %s",
+                if not _cache_matches_database(spec):
+                    logger.info(
+                        "Cache for %s predates current database state; rebuilding.",
                         company_id,
-                        refresh_err,
                     )
-                _lru_put(_MODEL_CACHE, company_id, spec)
-            except Exception as e:
-                logger.warning("Failed to load cache for %s, compiling live: %s", company_id, e)
-                ensure_company_ingested(company_id)
+                    raise _StaleCache()
+                spec = run_qa(run_valuation(spec))
+                logger.info("Refreshed live market data for %s.", company_id)
+            except _StaleCache:
                 hist_m = _get_hist_model(company_id)
-                f_spec = run_forecast_pipeline(hist_m)
-                v_spec = run_valuation(f_spec)
-                _lru_put(_MODEL_CACHE, company_id, run_qa(v_spec))
-        else:
-            logger.info("No precomputed cache for %s. Ingesting & compiling live...", company_id)
+                spec = run_qa(run_valuation(run_forecast_pipeline(hist_m)))
+                try:
+                    cache_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(cache_path, "w", encoding="utf-8") as f:
+                        f.write(spec.serialize())
+                    logger.info("Wrote refreshed cache for %s.", company_id)
+                except Exception as e:
+                    logger.warning("Warning: could not write cache for %s: %s", company_id, e)
+            except Exception as refresh_err:
+                logger.warning(
+                    "Market-data refresh failed for %s; serving cached snapshot: %s",
+                    company_id,
+                    refresh_err,
+                )
+            _lru_put(_MODEL_CACHE, company_id, spec)
+            return spec
+        except Exception as e:
+            logger.warning("Failed to load cache for %s, compiling live: %s", company_id, e)
+
+    # No usable snapshot. This is the branch that performs live ingestion, so it
+    # is the one the throttle guards.
+    logger.info("No precomputed cache for %s. Ingesting & compiling live...", company_id)
+    with ingest_throttle.ingest_slot(company_id) as got_slot:
+        if not got_slot:
+            raise HTTPException(
+                status_code=503,
+                detail="The engine is busy compiling other models. Retry shortly.",
+            )
+        try:
             ensure_company_ingested(company_id)
             hist_m = _get_hist_model(company_id)
-            f_spec = run_forecast_pipeline(hist_m)
-            v_spec = run_valuation(f_spec)
-            q_spec = run_qa(v_spec)
-            _lru_put(_MODEL_CACHE, company_id, q_spec)
+            q_spec = run_qa(run_valuation(run_forecast_pipeline(hist_m)))
+        except Exception:
+            ingest_throttle.mark_failure(company_id)
+            raise
 
-            try:
-                cache_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(cache_path, "w", encoding="utf-8") as f:
-                    f.write(q_spec.serialize())
-                logger.info("Wrote compiled cache for %s.", company_id)
-            except Exception as e:
-                logger.warning("Warning: could not write cache for %s: %s", company_id, e)
+    _lru_put(_MODEL_CACHE, company_id, q_spec)
 
-            try:
-                update_onboarding_status(company_id, "onboarded", notes="On-demand live ingestion")
-            except Exception:
-                pass
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(cache_path, "w", encoding="utf-8") as f:
+            f.write(q_spec.serialize())
+        logger.info("Wrote compiled cache for %s.", company_id)
+    except Exception as e:
+        logger.warning("Warning: could not write cache for %s: %s", company_id, e)
 
-    return _lru_get(_MODEL_CACHE, company_id)
+    try:
+        update_onboarding_status(company_id, "onboarded", notes="On-demand live ingestion")
+    except Exception:
+        pass
+
+    ingest_throttle.clear_failure(company_id)
+    return q_spec
 
 
 class OverrideRequest(BaseModel):
@@ -611,6 +652,86 @@ def _export_excel_locked(company_id: str) -> Response:
             "Content-Length": str(len(payload)),
         },
     )
+
+
+# Slug shape accepted from the public web tier. Deliberately tighter than
+# COMPANY_ID_PATTERN: a URL segment is untrusted input arriving from the internet,
+# so it is bounded tightly before it is used in a query or a file path.
+SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.\-]{0,31}$")
+
+MODEL_CACHE_DIR = PROJECT_ROOT / "backend" / "data" / "cache"
+
+
+def _has_compiled_model(company_id: str) -> bool:
+    """True when a model snapshot exists on disk for this company.
+
+    Written by _build_spec_locked on every successful build, so it records a
+    model that has genuinely been produced rather than one that could be.
+    """
+    return (MODEL_CACHE_DIR / f"{company_id}.json").exists()
+
+
+def _manifest_record(c) -> Dict[str, Any]:
+    return {
+        "slug": c.slug,
+        "company_id": c.company_id,
+        "ticker": c.ticker,
+        "name": c.name,
+        "market": c.market,
+        "exchange": c.exchange,
+        "sector": c.sector,
+        "cik": c.cik,
+        "has_model": _has_compiled_model(c.company_id),
+    }
+
+
+@router.get("/companies/manifest")
+def get_company_manifest(
+    offset: int = Query(0, ge=0, description="Row offset for paging"),
+    limit: int = Query(500, ge=1, le=5000, description="Max rows per page"),
+) -> Dict[str, Any]:
+    """The public URL universe: every non-financial company that has a slug.
+
+    Backs the /stock index and sitemap generation. Financial-sector rows are
+    excluded because the model engine does not service them, so a slug pointing
+    at one would resolve to a page that can never load.
+    """
+    from backend.data.universe.store import list_slugs
+
+    _ensure_universe_seeded()
+    rows = list_slugs()
+    window = rows[offset : offset + limit]
+    return {
+        "total": len(rows),
+        "offset": offset,
+        "limit": limit,
+        "has_more": offset + limit < len(rows),
+        "companies": [_manifest_record(c) for c in window],
+    }
+
+
+@router.get("/companies/resolve")
+def resolve_company_slug(
+    slug: str = Query(..., description="Public URL slug, e.g. NVDA or INFY-NYSE"),
+) -> Dict[str, Any]:
+    """Resolve one public slug to a company. The allowlist behind every /stock route.
+
+    Returning 404 for an unknown slug is the security boundary, not a
+    convenience: the page route must never pass an unrecognised segment through
+    to /api/model/{company_id}, which would let any well-formed URL trigger live
+    third-party ingestion.
+    """
+    from backend.data.universe.store import get_universe_by_slug
+
+    if not SLUG_PATTERN.match((slug or "").strip()):
+        raise HTTPException(status_code=400, detail="Malformed ticker slug.")
+
+    _ensure_universe_seeded()
+    company = get_universe_by_slug(slug)
+    if company is None:
+        raise HTTPException(status_code=404, detail="Unknown ticker.")
+
+    return _manifest_record(company)
 
 
 @router.get("/companies")
