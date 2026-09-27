@@ -145,7 +145,7 @@ export default async function LandingPage() {
         {/* The clip. Full bleed because its value is legibility: this is a screen
             recording whose whole point is the figures in the KPI bar, and at the
             5-column measure it used to sit in, those numerals rendered around 8px. */}
-        <section className="w-full border-y border-border bg-surface-2/30">
+        <section className="w-full border-y border-border bg-surface">
           <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 py-8 sm:py-10">
             <LaunchVideo />
           </div>
@@ -153,7 +153,7 @@ export default async function LandingPage() {
 
         {/* Rail. Real figures, and framed as what is pre-built rather than as a limit. */}
         {rail.length > 0 && (
-          <section className="border-y border-border bg-surface-2/30">
+          <section className="border-y border-border bg-surface">
             <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 py-12 sm:py-14">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 items-end">
                 <div className="lg:col-span-5">
@@ -244,7 +244,7 @@ export default async function LandingPage() {
         )}
 
         {/* What it does. Two groups: what runs in the browser, what ships in the workbook. */}
-        <section className="border-y border-border bg-surface-2/30">
+        <section className="border-y border-border bg-surface">
           <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 py-14 sm:py-18">
             <Reveal>
               <h2 className="text-[24px] sm:text-[29px] font-bold tracking-tight text-text-main max-w-[26ch]">
@@ -328,11 +328,8 @@ export default async function LandingPage() {
           <section className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 py-14 sm:py-18">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
               <div className="lg:col-span-5">
-                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-dim">
-                  The audit engine
-                </p>
                 <Reveal>
-                  <h2 className="mt-3 text-[24px] sm:text-[29px] font-bold tracking-tight text-text-main leading-[1.12]">
+                  <h2 className="text-[24px] sm:text-[29px] font-bold tracking-tight text-text-main leading-[1.12]">
                     It reports its own failures.
                   </h2>
                   <p className="mt-4 text-[13.5px] text-text-muted leading-relaxed">
