@@ -209,6 +209,60 @@ input[type='range'].driver-range:focus-visible::-moz-range-thumb {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Browser surfaces                                                    */
+/* ------------------------------------------------------------------ */
+/* The parts of the page nobody drew: selection, caret, scrollbars.   */
+/* They ship with the OS defaults, which are light-mode defaults on a  */
+/* near-black page. The ticker rail scrolls horizontally, so its       */
+/* scrollbar is on screen by default and was a bright grey bar across  */
+/* the bottom of a dark band.                                           */
+/* ------------------------------------------------------------------ */
+
+/* Selection. Without this, dragging across any figure on the page
+   produces a system-blue block, which is the one saturated colour on
+   the site that the palette did not choose. */
+::selection {
+  background: var(--c-accent);
+  color: var(--c-canvas);
+}
+
+/* The caret follows the accent, so typing into a driver field or the
+   ticker search does not flash a foreign blue. */
+:root {
+  caret-color: var(--c-accent);
+  accent-color: var(--c-accent);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--c-border-strong) transparent;
+}
+
+/* Chromium and WebKit. `*` rather than `::-webkit-scrollbar` on the
+   root, so the horizontal rail is covered as well as the document. */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--c-border-strong);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--c-text-dim);
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* Sticky first column for wide financial tables */
 .sticky-col {
   position: sticky;
