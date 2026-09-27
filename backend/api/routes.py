@@ -786,6 +786,9 @@ def search_companies(
             "currency": meta.currency,
             "units": meta.units,
             "onboarding_status": c.onboarding_status,
+            # Carried so selecting a result can rewrite the address bar to a
+            # canonical link rather than leaving the URL on the previous ticker.
+            "slug": c.slug,
         })
     return payload
 
