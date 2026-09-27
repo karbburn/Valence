@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { SITE_URL, SITE_NAME, CONTACT_EMAIL } from '@/lib/site'
+import { SITE_URL, SITE_NAME, CONTACT_EMAIL, OG_IMAGE } from '@/lib/site'
 import { SiteFooter } from '@/components/SiteFooter'
 
 export const metadata: Metadata = {
@@ -13,6 +13,7 @@ export const metadata: Metadata = {
     description:
       'Unlevered FCFF at WACC, the enterprise-to-equity bridge, three scenarios, and an audit engine that reports its own failures.',
     url: `${SITE_URL}/methodology`,
+    images: [OG_IMAGE],
   },
 }
 
