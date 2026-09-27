@@ -1,24 +1,36 @@
 # Valence — Equity Valuation & Financial Modeling Workbench
 
 <p align="center">
-  <img src="backend/api/static/icon.png" width="128" height="128" alt="Valence Logo">
+  <img src="backend/api/static/icon.png" width="128" height="128" alt="Valence">
 </p>
 
-Valence is a high-performance equity valuation platform and 3-statement financial modeling workbench. It integrates multi-source financial data ingestion, taxonomy normalization, driver-based 5-year forecasting, WACC estimation via CAPM, dual terminal value methodologies, reverse DCF growth solvers, public trading comps benchmarking, football field valuation range synthesis, PE exit return waterfalls, automated accounting QA validation, a 30-tab Excel model exporter with live dynamic formulas, and a real-time web dashboard.
+Valence is a browser-based equity valuation workbench. It ingests filings, normalizes them into a canonical taxonomy, runs a driver-based five-year three-statement forecast, discounts unlevered FCFF at a CAPM-derived WACC, solves the reverse DCF, benchmarks public comps, runs a ten-check accounting and model audit, and exports the whole thing to a 31-tab Excel workbook with live formulas.
+
+Every company has its own public URL. `valence.sourabhpradhan.in/NVDA` is a deep link that opens with the model already in the HTML, so the figures are readable before any script runs.
 
 ---
 
 ## Key Features
 
-- **Driver-Based 5-Year Forecasting Engine**: Project Income Statement, Balance Sheet, and Cash Flow Statement across **Base**, **Bull**, and **Bear** scenarios driven by operational metrics (Revenue Growth, EBITDA/EBIT Margins, CapEx % Revenue, D&A %, DSO, DPO, Tax Rate).
-- **Institutional DCF & WACC Buildup**: Full Free Cash Flow to Firm (FCFF) build with clean Non-Cash Operating Working Capital ($\Delta NWC$), dynamic WACC estimation (CAPM cost of equity + tax-shielded cost of debt), Gordon Growth & Exit EV/EBITDA Multiple terminal values, and Enterprise Value to Implied Share Price bridge.
-- **Dynamic Reverse DCF & 2D Sensitivity**: Solves for market-implied perpetuity growth rates via exact closed-form inversion formulas, paired with live 2D sensitivity formula grids (WACC vs. Terminal Growth & Exit Multiple).
-- **Public Trading Comps & Football Field Synthesis**: Benchmarks target company against sector peers (EV/Sales, EV/EBITDA, P/E, FCF Yield %, ROIC %) and synthesizes cross-methodology valuation range bars (52-Week Range, DCF Perpetuity, DCF Multiple, Comps P/E, Comps EV/EBITDA, Analyst Consensus).
-- **Private Equity Exit Returns & IRR Waterfall**: Calculates 3-year and 5-year prospective **Exit Equity Value**, **MoIC (Multiple on Invested Capital)**, and **Equity IRR (%)** under Base, Bull, and Bear exit scenarios with entry price sensitivity grids.
-- **Multi-Market & Multi-Currency Support**: Native support for US equities (NASDAQ/NYSE in USD Millions) and Indian equities (NSE/BSE in INR Crores), with dynamic currency and unit localization across all financial statements.
-- **Automated Accounting & Model QA Engine**: Executes 9 rigorous validation checks (Balance Sheet balancing, Cash Flow reconciliation, Debt schedule ties, Share count consistency, DCF bridge tie-out, WACC bounds, and data quality).
-- **30-Tab Interactive Excel Exporter**: Generates 100% dynamic `.xlsx` workbooks where detail schedules drive the forecast operating model (`20_Operating_Model`), featuring live Excel formulas (CAPM, FCFF sums, cross-sheet references, 2D sensitivity grids, and live `=IF(...)` audit checks).
-- **Real-Time Web Workbench**: Single-Page Application (SPA) dashboard inspired by Bloomberg Terminal and TradingView UI. Supports live driver overrides, instant recomputation, scenario switching, company search, and persistent model scenario storage.
+- **Per-ticker deep links.** Every covered company has a canonical page at `/stock/{slug}`, with `/NVDA` as a short form that redirects to it. The model is server-rendered and revalidated hourly, so a shared link is a working link rather than an empty shell.
+- **Driver-Based 5-Year Forecasting Engine**: Income Statement, Balance Sheet, and Cash Flow across **Base**, **Bull**, and **Bear** scenarios, driven by operational metrics (Revenue Growth, EBITDA/EBIT Margins, CapEx % Revenue, D&A %, DSO, DPO, Tax Rate).
+- **Institutional DCF & WACC Buildup**: full Free Cash Flow to Firm build with non-cash operating working capital, dynamic WACC (CAPM cost of equity plus tax-shielded cost of debt), Gordon Growth and Exit EV/EBITDA terminal values, and an Enterprise Value to Implied Share Price bridge.
+- **Dynamic Reverse DCF & 2D Sensitivity**: solves for the market-implied perpetuity growth rate by exact closed-form inversion, paired with live two-way sensitivity grids over WACC against terminal growth and exit multiple. When no growth rate in a sane band can reproduce the market price, the solver returns nothing rather than a number it cannot justify.
+- **Public Trading Comps & Football Field Synthesis**: benchmarks the company against sector peers (EV/Sales, EV/EBITDA, P/E, FCF Yield %, ROIC %) and synthesizes cross-methodology valuation ranges. *Football field and comps are Excel-export features; the web workbench shows the DCF and the scenario matrix.*
+- **Private Equity Exit Returns & IRR Waterfall**: 3-year and 5-year Exit Equity Value, MoIC, and Equity IRR under each exit scenario with entry-price sensitivity grids.
+- **Multi-Market & Multi-Currency Support**: US equities (NASDAQ/NYSE, USD millions) and Indian equities (NSE/BSE, INR crores), with currency and unit localization across all statements.
+- **Ten-Check QA Engine**: balance sheet balancing, cash flow reconciliation, debt schedule ties, share count consistency, DCF bridge tie-out, WACC validity, terminal growth below WACC, missing critical inputs, data provenance quality, and historical reporting coverage. A model with failing checks is still served, with the failures listed. A check that could not run is marked skipped and is never counted as a pass.
+- **31-Tab Interactive Excel Exporter**: detail schedules drive the operating model through live Excel formulas (CAPM, FCFF sums, cross-sheet references, sensitivity grids, and live `=IF(...)` audit checks).
+- **Live Web Workbench**: scenario switching, driver overrides with revert, methodology breakdown, and a model library kept in the browser.
+
+### Deliberate design decisions
+
+These look like gaps and are not. They are recorded here so nobody "fixes" them.
+
+- **Annual filings only.** SEC ingestion accepts facts from annual forms (`10-K`, `20-F`, `40-F` and their amendments) and keeps only duration facts spanning 330 to 400 days, so 10-Q quarters are never read. A DCF built on annual statements is the institutional standard, and mixing quarters into an annual-period forecast would misstate the growth anchor. Statements six to twelve months old is the correct reading, not staleness.
+- **Throttled live ingestion.** `VALENCE_INGEST_CONCURRENCY` defaults to 2. Measured on a single instance: one cached specification costs 1.15 MB resident, so a 50-entry cache is about 58 MB against 512 MB, and a live build costs 2.5 MB over roughly seven seconds. Memory is not the binding constraint. What remains is politeness toward the upstream filing and market-data providers, which rate-limit under concurrency. Raise it alongside a provider measurement, not a memory one.
+- **Single-flight builds.** A slug that is being built is not built twice, an unsourceable slug is negatively cached, and the cache is an LRU of 50.
+- **Prices self-heal.** A live quote failure falls back to the last cached close *preserving the original date*, and the UI says so rather than presenting a stale number as current.
 
 ---
 
@@ -26,63 +38,75 @@ Valence is a high-performance equity valuation platform and 3-statement financia
 
 ```mermaid
 flowchart TB
-    subgraph Ingestion["1. Ingestion & Storage"]
-        A1[SEC EDGAR XBRL]
+    subgraph Public["0. Public Web Tier (Next.js)"]
+        LP[Landing page /]
+        IDX[Ticker index /stock]
+        TKR["Per-ticker /stock/[slug]"]
+        RED["Short form /[ticker] 308"]
+        MET[Methodology /methodology]
+    end
+
+    subgraph Delivery["1. API Layer (FastAPI)"]
+        API[Router]
+        THR[Ingest throttle<br/>semaphore, single-flight, negative cache]
+        API --> THR
+    end
+
+    subgraph Ingestion["2. Ingestion & Storage"]
+        A1[SEC EDGAR XBRL<br/>annual forms only]
         A2[Screener.in Excel]
-        A3[yfinance Live Market Feed]
-        Store[(SQLite Coverage Store)]
+        A3[yfinance market feed]
+        Store[(SQLite universe + datapoints)]
         A1 & A2 & A3 --> Store
     end
 
-    subgraph Normalization["2. Taxonomy & Normalization"]
+    subgraph Normalization["3. Taxonomy & Normalization"]
         Mapping[Unified Taxonomy Mapper]
-        Canonical[Canonical Mapping Registry]
-        Derivation[Derived Financial Metrics]
-        Store --> Mapping
-        Mapping --> Canonical
-        Canonical --> Derivation
+        Canonical[Canonical Registry]
+        Derivation[Derived Metrics]
+        Slugs[Slug + CIK assignment]
+        Store --> Mapping --> Canonical --> Derivation
+        Store --> Slugs
     end
 
-    subgraph CoreEngine["3. 3-Statement & Forecast Engine"]
-        Hist[Historical 3-Statement Assembly]
+    subgraph CoreEngine["4. 3-Statement & Forecast Engine"]
+        Hist[Historical Assembly]
         Fcst[5-Year Driver Roll-forward]
-        Schedules[Schedules: Capex, D&A, NWC, Debt, Tax, Shares]
-        Derivation --> Hist
-        Hist --> Fcst
-        Fcst --> Schedules
+        Schedules[Capex, D&A, NWC, Debt, Tax, Shares]
+        Derivation --> Hist --> Fcst --> Schedules
     end
 
-    subgraph ValuationQA["4. Valuation & QA Core"]
+    subgraph ValuationQA["5. Valuation & QA Core"]
         WACC[CAPM WACC Module]
         DCF[Unlevered FCFF Engine]
         Reverse[Reverse DCF Solver]
-        Comps[Public Comps & Football Field]
-        Returns[PE Returns & IRR Waterfall]
-        QA[9-Point QA Validation Engine]
+        Comps[Comps & Football Field]
+        Returns[PE Returns & IRR]
+        QA[10-Check QA Engine]
         Schedules --> WACC & DCF
         DCF --> Reverse & Comps & Returns
         WACC & DCF & Reverse & Comps & Returns --> QA
     end
 
-    subgraph Delivery["5. Delivery Layer"]
-        API[FastAPI Router & Controller]
-        Web[SPA Web Dashboard]
-        Excel[30-Tab Interactive Excel Exporter]
-        QA --> API
-        API --> Web
-        API --> Excel
+    subgraph Output["6. Output"]
+        XLSX[31-Tab Excel Exporter]
     end
 
-    classDef ing fill:#EFF6FF,stroke:#2563EB,stroke-width:1px,color:#0f172a;
-    classDef norm fill:#F5F3FF,stroke:#7C3AED,stroke-width:1px,color:#0f172a;
-    classDef core fill:#ECFDF5,stroke:#059669,stroke-width:1px,color:#0f172a;
-    classDef val fill:#FFFBEB,stroke:#D97706,stroke-width:1px,color:#0f172a;
-    classDef del fill:#FFF5F5,stroke:#DC2626,stroke-width:1px,color:#0f172a;
-    class A1,A2,A3,Store ing;
-    class Mapping,Canonical,Derivation norm;
+    Public --> API
+    THR --> Ingestion
+    QA --> API
+    QA --> XLSX
+
+    classDef pub fill:#EFF6FF,stroke:#2563EB,color:#0f172a;
+    classDef ing fill:#F5F3FF,stroke:#7C3AED,color:#0f172a;
+    classDef core fill:#ECFDF5,stroke:#059669,color:#0f172a;
+    classDef val fill:#FFFBEB,stroke:#D97706,color:#0f172a;
+    classDef out fill:#FFF5F5,stroke:#DC2626,color:#0f172a;
+    class LP,IDX,TKR,RED,MET,API,THR pub;
+    class A1,A2,A3,Store,Mapping,Canonical,Derivation,Slugs ing;
     class Hist,Fcst,Schedules core;
     class WACC,DCF,Reverse,QA val;
-    class API,Web,Excel del;
+    class XLSX out;
 ```
 
 ---
@@ -90,10 +114,10 @@ flowchart TB
 ## Tech Stack
 
 - **Core Engine**: Python 3.12, Pydantic v2
-- **Web API**: FastAPI, Uvicorn, Requests
+- **API**: FastAPI, Uvicorn, Requests
 - **Excel Renderer**: OpenPyXL (live formulas via OpenXML value patching)
-- **Database & Persistence**: SQLite (`backend/data/valence.db`), precomputed model cache
-- **Frontend Dashboard**: Next.js 16, React 19, Tailwind CSS v4, TypeScript (Bloomberg-terminal design system)
+- **Database & Persistence**: SQLite, precomputed model cache on disk
+- **Frontend**: Next.js 16.3.6 (App Router), React 19, Tailwind CSS v4, TypeScript
 
 ---
 
@@ -102,79 +126,57 @@ flowchart TB
 ```
 Valence/
 ├── backend/
-│   ├── api/                           # FastAPI web service layer
-│   │   ├── static/                    # SPA Web Dashboard (TradingView-style UI)
-│   │   │   ├── index.html             # Main HTML5 entry point
-│   │   │   ├── styles.css             # Glassmorphism dark-theme styling
-│   │   │   ├── app.js                 # Vanilla JS dashboard state & chart controller
-│   │   │   └── icon.png               # Brand icon resource
-│   │   ├── main.py                    # FastAPI server initialization
-│   │   ├── routes.py                  # API endpoints (recompute, revert, export, list)
-│   │   └── self_check.py              # API integration test suite
-│   ├── data/                          # Data ingestion, parsing & persistence
+│   ├── api/
+│   │   ├── main.py                    # FastAPI app factory
+│   │   ├── routes.py                  # Endpoints, slug allowlist, spec build & cache
+│   │   ├── throttle.py                # Ingest semaphore, single-flight, negative cache
+│   │   └── static/                    # Legacy SPA assets and icon
+│   ├── data/
 │   │   ├── ingestion/                 # Source-specific parsers
-│   │   │   ├── sec_edgar.py           # US SEC EDGAR XBRL company facts parser
+│   │   │   ├── sec_edgar.py           # US SEC XBRL company facts (annual forms only)
 │   │   │   ├── screener.py            # India Screener.in Excel parser
-│   │   │   ├── india_live.py          # Live India market data ingestion
-│   │   │   └── us_live.py             # Live US market data ingestion
-│   │   ├── universe/                  # Core coverage universe store
+│   │   │   ├── india_live.py          # Live India market data
+│   │   │   └── us_live.py             # Live US market data
+│   │   ├── universe/
 │   │   │   ├── models.py              # Raw database schemas
-│   │   │   ├── store.py               # SQLite raw datapoint writer/reader
-│   │   │   └── master_list.py         # Onboarded tickers and markets registry
-│   │   ├── pipeline.py                # Ingestion pipeline orchestration
-│   │   └── precompute.py              # Cache precomputation manager
-│   ├── export/                        # Excel exporting layer
-│   │   └── excel/                     # openpyxl workbook renderer
-│   │       ├── builder.py             # Low-level openpyxl utilities & OpenXML string patcher
-│   │       ├── exporter.py            # Main export runner (30-tab orchestrator)
-│   │       ├── render_front.py        # Covers, guides, executive summary sheets
-│   │       ├── render_hist.py         # Historical financials (10_Income_Statement, etc.)
-│   │       ├── render_fcst.py         # Forecast sheets (20_Operating_Model, schedules)
-│   │       ├── render_val.py          # Valuation sheets (WACC, DCF, Comps, Football Field, Returns)
-│   │       ├── render_qa.py           # Documentation and dynamic QA checks
-│   │       └── styles.py              # Standardized IB/PE formatting & color tokens
-│   ├── forecast/                      # Driver-based forecast engine
-│   │   ├── engine.py                  # 3-statement period roll-forward calculation
-│   │   ├── assumptions.py             # Scenario growth & margin parameters loader
-│   │   ├── debt.py                    # Generic debt schedule calculator
-│   │   └── share_count.py             # Basic and diluted share series builder
-│   ├── models/                        # Pydantic contract specifications
-│   │   ├── spec/                      # Valuation model metadata & schemas
-│   │   │   ├── model_specification.py # Top-level ModelSpecification schema
-│   │   │   ├── forecast.py            # Forecast output contracts
-│   │   │   ├── valuation.py           # WACC, TV, DCF, and reverse DCF schemas
-│   │   │   └── qa.py                  # Model audit check contract
-│   │   └── statements/                # Financial statement structure contracts
-│   │       ├── historical_model.py    # Historical database parser
-│   │       ├── income_statement.py    # Income statement mapping schema
-│   │       ├── balance_sheet.py       # Balance sheet mapping schema
-│   │       └── cash_flow.py           # Cash flow statement mapping schema
-│   ├── normalization/                 # Taxonomy normalization & derivation
-│   │   ├── taxonomy/                  # Standardized accounting classifications
-│   │   │   ├── mapping_engine.py      # Raw-to-canonical label mapper
-│   │   │   └── registry.py            # India & US taxonomy definitions
-│   │   └── financials/                # Derived metric calculation logic
-│   │       └── derivation.py          # Derivations (EBITDA, Net NWC, etc.)
-│   ├── validation/                    # QA model verification checks
-│   │   ├── accounting_checks.py       # Double-entry balance sheet checks
-│   │   └── pipeline.py                # QA audit execution & validation rollup
-│   └── valuation/                     # Valuation engines
-│       ├── dcf.py                     # Unlevered FCFF & discounting timing engine
-│       ├── wacc.py                    # CAPM cost of equity & WACC capital weighting
-│       ├── reverse_dcf.py             # Closed-form implied terminal growth solver
-│       ├── comps.py                   # Public trading comparables & peer multiple benchmarks
-│       ├── football_field.py          # Multi-methodology valuation range chart synthesis
-│       ├── returns.py                 # PE / LBO exit returns & IRR waterfall engine
-│       └── sensitivity.py             # Multidimensional sensitivity matrices
-│   └── tests/                          # Pytest suite: engines, exports, layout contracts
-├── frontend/                            # Next.js dashboard (primary web UI)
-│   ├── src/app/                         # App Router entry, SEO metadata, PWA manifest
-│   ├── src/components/                  # Analyst / Quick DCF / 3-Statement views & modals
-│   ├── src/hooks/                       # Model state machine, company search, shortcuts
-│   ├── src/lib/                         # Typed API client, formatters, design tokens
-│   └── public/                          # LLM discovery files, icons, verification assets
-├── .gitignore                           # Local dev caches, output workbooks, and database ignore
-└── README.md                            # Platform description and documentation
+│   │   │   ├── store.py               # SQLite reader/writer, universe queries
+│   │   │   ├── slugs.py               # Public slug + CIK assignment
+│   │   │   └── master_list.py         # Covered tickers and markets
+│   │   ├── pipeline.py                # Ingestion orchestration
+│   │   └── precompute.py              # Model cache precomputation
+│   ├── export/excel/                  # 31-sheet openpyxl renderer
+│   │   ├── builder.py                 # Low-level utilities & OpenXML string patcher
+│   │   ├── exporter.py                # Export runner
+│   │   ├── render_front.py            # Cover, guide, executive summary, tab manifest
+│   │   ├── render_hist.py             # Historical statements
+│   │   ├── render_fcst.py             # Operating model and schedules
+│   │   ├── render_val.py              # WACC, DCF, comps, football field, returns
+│   │   ├── render_qa.py               # Documentation and dynamic QA checks
+│   │   ├── self_check.py              # Sheet contract assertions
+│   │   └── styles.py                  # Formatting and color tokens
+│   ├── forecast/                      # engine, assumptions, debt, share_count
+│   ├── models/                        # Pydantic contracts (spec, statements)
+│   ├── normalization/                 # taxonomy/ and financials/
+│   ├── validation/                    # accounting_checks.py, pipeline.py
+│   ├── valuation/                     # dcf, wacc, reverse_dcf, comps,
+│   │                                  # football_field, returns, sensitivity
+│   └── tests/                         # Pytest suite
+├── frontend/
+│   ├── src/app/
+│   │   ├── page.tsx                   # Landing page
+│   │   ├── layout.tsx                 # Metadata, tokens, browser surfaces
+│   │   ├── stock/page.tsx             # Ticker index
+│   │   ├── stock/[ticker]/            # Per-ticker page, share card, JSON-LD
+│   │   ├── [ticker]/                  # Short-form redirector
+│   │   ├── methodology/page.tsx
+│   │   ├── not-found.tsx
+│   │   ├── sitemap.ts, robots.ts, manifest.ts
+│   │   ├── icon.png, favicon.ico, apple-icon.png
+│   ├── src/components/                # Workbench views, modals, landing blocks
+│   ├── src/lib/                       # API client, formatters, tickers, site config
+│   └── public/media/                  # Launch clip and poster
+├── assets/                            # Gitignored: plans, reviews, screenshots, media sources
+└── README.md
 ```
 
 ---
@@ -184,96 +186,105 @@ Valence/
 ### Prerequisites
 
 - **Python 3.12+**
-- `pip` (Python package manager)
+- **Node.js 20+** (the floor Next.js 16 requires)
+
+There is no `requirements.txt`; the backend's third-party dependencies are:
+
+```bash
+pip install fastapi uvicorn pydantic openpyxl requests pdfplumber yfinance
+```
+
+`pytest` is needed to run the suite.
 
 ### Installation
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/karbburn/Valence.git
-   cd Valence
-   ```
-
-2. Create and activate a virtual environment (optional but recommended):
-   ```bash
-   python -m venv venv
-   # On Windows:
-   venv\Scripts\activate
-   # On macOS/Linux:
-   source venv/bin/activate
-   ```
-
-3. Install required dependencies:
-   ```bash
-   pip install fastapi uvicorn pydantic openpyxl requests pillow python-dotenv
-   ```
-
-4. Configure environment variables (Optional for market data API keys):
-   Create a `.env` file in the project root:
-   ```env
-   TWELVEDATA_API_KEY=your_api_key_here
-   ```
-
----
-
-## Running the Platform
-
-### 1. Launch the Web Dashboard (Next.js) & API
-
-Start the FastAPI application server:
 ```bash
-python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
+git clone https://github.com/karbburn/Valence.git
+cd Valence
+
+python -m venv venv
+# Windows:  venv\Scripts\activate
+# macOS/Linux: source venv/bin/activate
+pip install fastapi uvicorn pydantic openpyxl requests pdfplumber yfinance pytest
+
+cd frontend && npm install
 ```
 
-In a second terminal, start the Next.js dashboard (proxies `/api/*` to the backend):
+### Configuration
+
+Optional. Everything below has a working default.
+
+```env
+# backend/.env
+SEC_CONTACT_EMAIL=you@example.com     # SEC requires a monitored contact in the User-Agent
+TWELVEDATA_API_KEY=                   # optional market-data provider
+VALENCE_INGEST_CONCURRENCY=2          # in-flight live builds
+VALENCE_INGEST_NEGATIVE_TTL=900       # seconds to remember an unsourceable slug
+```
+
+```env
+# frontend/.env.local
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8111
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+```
+
+`NEXT_PUBLIC_API_URL` is read at **build** time, not only at runtime. The pages
+are prerendered, so a build without it will find no companies to prerender and
+the index will render empty.
+
+### Running
+
+Backend:
+
+```bash
+python -m uvicorn backend.api.main:app --host 127.0.0.1 --port 8111
+```
+
+Frontend, in a second terminal:
+
 ```bash
 cd frontend
-npm install
 npm run dev
 ```
-Open your browser and navigate to:
-```
-http://localhost:3000
-```
 
-### 2. Exporting Excel Workbooks via API
+| Route | What it is |
+| :--- | :--- |
+| `/` | Landing page |
+| `/stock` | Covered tickers, searchable |
+| `/stock/NVDA` | A company's model, server-rendered |
+| `/NVDA` | Short form, 308s to the canonical URL |
+| `/methodology` | How the valuation is built, and what it cannot do |
 
-Generate and download a 30-tab financial model for any onboarded company directly via HTTP:
+`/api/*` is proxied from the frontend to `NEXT_PUBLIC_API_URL`, so the browser
+never makes a cross-origin request.
+
+### Excel export
+
 ```bash
-curl -O "http://localhost:8000/api/export/excel?company_id=[company_id]"
+curl -o model.xlsx "http://127.0.0.1:8111/api/export/excel?company_id=nvda_us"
 ```
 
 ---
 
-## Verification & Institutional Audit Suite
-
-Valence includes an automated **Institutional Financial Audit Suite** for post-export verification across any generated `.xlsx` workbook (e.g. `[ticker]_valuation_model.xlsx`):
-
-- **3-Statement Accounting Equality**: Verifies `Total Assets = Total Liabilities + Total Equity` for all historical and forecast periods (FY24–FY31) with zero balance sheet gap.
-- **Financial Math Tie-Outs**:
-  - **EV Tie-out**: `EV = Sum(PV FCFF) + PV(TV)` ($\Delta = 0.0000$).
-  - **Net Debt Cash Bridge**: `Net Debt = Total Debt - Liquid Cash & Investments` ($\Delta = 0.0000$).
-  - **Equity Value Tie-out**: `Equity Value = EV - Net Debt` ($\Delta = 0.0000$).
-  - **Implied Share Price**: `Price = Equity Value / Diluted Shares` ($\Delta < 0.005$).
-- **Live Excel Formula Verification**:
-  - **Forward Operating Model**: `20_Operating_Model` is driven by live formulas linking to Schedules 21–26.
-  - **2D Sensitivity Grids**: `33_Sensitivity` grid cells evaluate live 2D Excel formulas for WACC $\times$ Growth and WACC $\times$ Multiple.
-  - **Reverse DCF Solver**: `34_Reverse_DCF` Row 10 uses a live closed-form algebraic formula.
-  - **Dynamic Model Checks**: `52_Model_Checks` evaluates live `=IF(...)` formulas returning `"PASS"` or `"FAIL"`.
-- **Institutional Visual Branding**:
-  - **`By Sourabh` Signature**: 14pt bold blue signature hyperlink on `00_Cover` cell `B20` hyperlinked to [the Sourabh portfolio](https://www.sourabhpradhan.in/); `B3` links to the live [Valence workbench](https://valence.sourabhpradhan.in/).
-  - **Consolas Formula Code Blocks**: `01_Model_Guide` Column C formulas styled in `Consolas 11pt Bold` with light blue tint fill (`#EFF6FF`).
+## Tests
 
 ```bash
-# Run engine, export, and layout-contract test suite
+# Engine, export and layout contracts
 python -m pytest backend/tests -q
 
-# Run Institutional Financial Audit & Excel Exporter Self-Check
+# Excel exporter self-check: asserts the 31-sheet contract and formula wiring
 python -m backend.export.excel.self_check
 
-# Run Web API & Recomputation Self-Check
+# Web API and recomputation self-check
 python -m backend.api.self_check
+
+# Frontend unit tests, typecheck, lint, production build
+cd frontend && npm test && npx tsc --noEmit && npm run lint && npm run build
 ```
+
+278 backend tests and 20 frontend tests. A commit that touches `backend/` is not
+finished until the backend suite passes; it takes about eight minutes and it is
+the only thing guarding the engine.
 
 ---
 
@@ -281,11 +292,31 @@ python -m backend.api.self_check
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET` | `/api/model/{company_id}` | Fetch full ModelSpecification JSON for a company |
-| `POST` | `/api/model/recompute` | Apply analyst driver overrides and return updated model |
-| `POST` | `/api/model/revert` | Revert driver override back to baseline model state |
-| `GET` | `/api/export/excel` | Download fully-formatted 30-tab `.xlsx` workbook |
-| `GET` | `/api/companies` | List all available onboarded companies |
-| `GET` | `/api/companies/search` | Real-time ticker and company name autocomplete |
+| `GET` | `/api/health` | Liveness |
+| `GET` | `/api/model/{company_id}` | Full `ModelSpecification` JSON |
+| `POST` | `/api/model/recompute` | Apply driver overrides, return updated model |
+| `POST` | `/api/model/revert` | Revert an override to baseline |
+| `GET` | `/api/export/excel` | 31-tab `.xlsx` workbook |
+| `GET` | `/api/companies` | Covered companies |
+| `GET` | `/api/companies/manifest` | Paged universe with `slug` and `has_model` |
+| `GET` | `/api/companies/resolve` | Resolve one public slug to a company |
+| `GET` | `/api/companies/search` | Ticker and name autocomplete |
 
-Saved-model persistence lives in the browser (localStorage) — no server-side model storage.
+`/api/companies/resolve` is the security boundary for the public page routes.
+`/api/model/{company_id}` will attempt live third-party ingestion for any
+pattern-valid id, so a page route that passed unknown segments straight through
+would let any well-formed URL start an ingestion. Unknown slugs 404 rather than
+redirecting somewhere plausible.
+
+Saved models live in the browser (`localStorage`). Nothing is uploaded or
+synchronised.
+
+---
+
+## Licensing & Data
+
+Figures come from public filings (SEC EDGAR, Screener.in) and public market-data
+providers. Prices refresh daily. Valuation output is model-generated and is not
+a recommendation or investment advice.
+
+Built by [Sourabh Pradhan](https://www.sourabhpradhan.in/).
