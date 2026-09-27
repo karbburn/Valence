@@ -66,10 +66,20 @@ export default async function StockIndexPage() {
             </h1>
             <p className="mt-4 text-[14.5px] text-text-muted max-w-[58ch] leading-relaxed">
               The engine reads filings for any listed US or Indian ticker and builds the model on
-              first visit, usually in a few seconds. {withModel.length} of the {companies.length}{' '}
-              below are already built and open with their figures in place, marked{' '}
-              <span className="font-mono text-[13px] text-positive">Ready</span>. The rest build on
-              first open.
+              first visit, usually in a few seconds.{' '}
+              {withModel.length === companies.length ? (
+                <>
+                  All {companies.length} below are already built and open with their figures in
+                  place.
+                </>
+              ) : (
+                <>
+                  {withModel.length} of the {companies.length} below are already built and open
+                  with their figures in place, marked{' '}
+                  <span className="font-mono text-[13px] text-positive">Ready</span>. The rest
+                  build on first open.
+                </>
+              )}
             </p>
           </div>
           <div className="lg:col-span-5">
