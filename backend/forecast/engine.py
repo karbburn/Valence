@@ -365,6 +365,17 @@ def run_forecast(
         items.append(_item("canonical.cf.financing_activities", period, financing_cf, scenario, None, fiscal_end_month=fiscal_end_month, fiscal_end_day=fiscal_end_day))
         items.append(_item("canonical.bs.cash_and_bank", period, cash, scenario, None, fiscal_end_month=fiscal_end_month, fiscal_end_day=fiscal_end_day))
         items.append(_item("canonical.bs.total_equity", period, total_equity, scenario, None, fiscal_end_month=fiscal_end_month, fiscal_end_day=fiscal_end_day))
+        # Total liabilities is emitted, not just used.
+        #
+        # It was computed here and then dropped, so the forecast carried no
+        # liabilities line at all. The workbook rendered the row as zero while
+        # its total-liabilities-and-equity cell was a live formula over equity
+        # plus that zero — so the cached total showed the right figure and the
+        # formula beside it would produce a different one. Pressing recalculate
+        # broke the forecast balance sheet by 58,163 in the first year, rising to
+        # 82,777 by the fifth, for a company carrying tens of billions of debt
+        # and payables.
+        items.append(_item("canonical.bs.total_liabilities", period, total_liabilities, scenario, None, fiscal_end_month=fiscal_end_month, fiscal_end_day=fiscal_end_day))
         items.append(_item("canonical.bs.total_assets", period, total_assets, scenario, None, fiscal_end_month=fiscal_end_month, fiscal_end_day=fiscal_end_day))
         items.append(_item("canonical.bs.total_liabilities_and_equity", period, total_equity_and_liab, scenario, None, fiscal_end_month=fiscal_end_month, fiscal_end_day=fiscal_end_day))
 

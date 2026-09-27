@@ -100,8 +100,16 @@ def test_cover_links_match_current_public_urls():
     assert ws["B20"].value == "By Sourabh"
     assert ws["B20"].hyperlink is not None
     assert ws["B20"].hyperlink.target == AUTHOR_URL
-    assert ws["B3"].hyperlink is not None
-    assert ws["B3"].hyperlink.target == VALENCE_URL
+    # The wordmark is the single place the cover navigates to the platform. The
+    # strapline beneath it is plain text, so the cover offers one target rather
+    # than two adjacent cells linking to the same place.
+    assert ws["B2"].value == "V A L E N C E"
+    assert ws["B2"].hyperlink is not None
+    assert ws["B2"].hyperlink.target == VALENCE_URL
+    assert ws["B3"].hyperlink is None, (
+        "the strapline under the wordmark is also a link, so the cover presents "
+        "two links to the same destination"
+    )
 
 
 def test_balance_sheet_layout_matches_formula_references():
