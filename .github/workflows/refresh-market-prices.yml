@@ -1,14 +1,25 @@
 name: Refresh market prices
 
-# Daily refresh of backend/data/cache/market_data_cache.json — the latest
-# daily close for every onboarded company, fetched from free sources
-# (yfinance daily close -> Stooq free CSV -> TwelveData when keyed).
-# Runs shortly after the US close (22:30 UTC = 18:30 ET / 04:00 IST) and opens
-# a review PR. The API also self-heals per-request (it re-fetches whenever the
-# cached fetch_date != today), so this job only warms the cache ahead of users.
+# Daily refresh of backend/data/cache/market_data_cache.json — the latest daily
+# close for every onboarded company, from free sources (yfinance daily close ->
+# Stooq free CSV -> TwelveData when keyed). Runs shortly after the US close.
+#
+# This job REPORTS. It used to open a review PR, and that was wrong for two
+# reasons:
+#
+#   1. The file is no longer tracked. get_company_market_data() re-fetches
+#      whenever the cached fetch_date is not today, so the API heals itself on
+#      the first request of the day and a committed copy was stale on arrival.
+#   2. A daily automated PR against a file every human PR also touches is a
+#      standing merge conflict. It would have needed rebasing before any review
+#      could start.
+#
+# So the output is a step summary: which quotes refreshed, which went stale, and
+# which providers failed. A human reads that. A ticker that cannot be quoted is
+# a real finding and should page someone, not sit in a diff.
 #
 # No price is hardcoded anywhere in the repo: the registry holds shares/beta
-# only, so this file is the single source of truth for quotes.
+# only, so this cache is the single source of truth for quotes.
 
 on:
   schedule:
@@ -21,8 +32,9 @@ on:
         default: ""
 
 permissions:
-  contents: write
-  pull-requests: write
+  # Read only. This job no longer writes to the repository, and giving it write
+  # access would let a bug in the refresh script commit whatever it liked.
+  contents: read
 
 jobs:
   refresh-prices:
@@ -62,18 +74,20 @@ jobs:
           print("\n".join(rows))
           PY
 
-      - name: Open update PR
-        uses: peter-evans/create-pull-request@v7
-        with:
-          branch: chore/refresh-market-prices
-          delete-branch: true
-          title: "chore(data): refresh daily market closes"
-          body: |
-            Automated daily refresh of `market_data_cache.json` from free
-            quote sources (yfinance daily close / Stooq / TwelveData).
-
-            - No hardcoded prices — quotes only, refreshed once per day.
-            - Failed tickers keep their last-known-good quote (labelled stale
-              in the UI) instead of falling back to a placeholder.
-          commit-message: "chore(data): refresh daily market closes"
-          labels: data, automated
+      - name: Report the refresh
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          p = pathlib.Path("backend/data/cache/market_data_cache.json")
+          if not p.exists():
+              print("No quote cache was written. The API will cold-fetch on demand.")
+              raise SystemExit(0)
+          d = json.loads(p.read_text(encoding="utf-8"))
+          print("## Daily quotes\n")
+          print("| company | close | source | as of |")
+          print("|---|---|---|---|")
+          for c, v in sorted(d.items()):
+              data = v.get("data", {}).get("price", {})
+              print(f"| {c} | {data.get('value')} | {data.get('source')} | {v.get('fetch_date')} |")
+          PY

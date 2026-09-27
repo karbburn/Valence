@@ -13,7 +13,31 @@ backend/data/user_models/
 .env
 AGENTS.md
 valence.egg-info/
-backend/data/cache/
+# backend/data/cache/ held two unrelated kinds of file under one name, and the
+# blanket rule was a lie: gitignore never untracks, so 22 precomputed model
+# specs and the quote cache were both committed while the directory claimed to
+# be ignored. Split, on what each file actually is.
+#
+# TRACKED - backend/data/cache/<company_id>.json
+#   Precomputed ModelSpecification per company. These are the served product, a
+#   deploy reads them at boot, and they are reviewed by hand. They are build
+#   artefacts that must ship, so they stay in version control. The directory is
+#   called "cache" because that is where the loader looks, not because they are
+#   disposable.
+#
+# IGNORED - backend/data/cache/market_data_cache.json
+#   Live quote cache. get_company_market_data() re-fetches whenever the cached
+#   fetch_date is not today, so the API heals itself on the first request of the
+#   day and this file is correct within hours either way. A committed copy is
+#   stale on arrival, and a daily automated PR against it collides with every
+#   human PR. The refresh workflow now verifies and reports rather than
+#   proposing, because there is nothing left to propose.
+#
+# IGNORED - backend/data/cache/ticker_index/
+#   The SEC and NSE listed-universe snapshots, refetched on demand with a 24h
+#   TTL. Purely derived from two public endpoints.
+backend/data/cache/market_data_cache.json
+backend/data/cache/ticker_index/
 backend/export/excel/regenerate_target_models.py
 *.db
 valence.db
