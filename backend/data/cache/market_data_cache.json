@@ -35,7 +35,7 @@
         "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-27T00:55:39.820523"
+      "timestamp": "2026-09-27T00:47:20.834995"
     }
   },
   "amba_us": {
@@ -113,7 +113,7 @@
         "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-27T00:55:55.326664"
+      "timestamp": "2026-09-27T00:47:21.486302"
     }
   },
   "awi_us": {
@@ -269,7 +269,7 @@
         "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-27T00:55:50.251560"
+      "timestamp": "2026-09-27T00:47:22.120650"
     }
   },
   "hcltech_hcltech": {
@@ -359,8 +359,8 @@
       "price": {
         "value": 1000.2,
         "source": "yfinance_history",
-        "fetch_date": "2026-09-25",
-        "provenance_note": "yfinance daily close for INFY.NS (2026-09-25)"
+        "fetch_date": "2026-09-24",
+        "provenance_note": "yfinance daily close for INFY.NS (2026-09-24)"
       },
       "shares_outstanding": {
         "value": 404.9646,
@@ -386,7 +386,7 @@
         "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-27T00:56:02.906832"
+      "timestamp": "2026-09-27T00:47:22.760979"
     }
   },
   "infy_us": {
@@ -425,7 +425,7 @@
         "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-27T00:56:07.846339"
+      "timestamp": "2026-09-27T00:47:23.476925"
     }
   },
   "lt_lt": {
@@ -503,7 +503,7 @@
         "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-27T00:55:44.721814"
+      "timestamp": "2026-09-27T00:47:24.082315"
     }
   },
   "ongc_ongc": {
@@ -515,8 +515,8 @@
       "price": {
         "value": 235.86,
         "source": "yfinance_history",
-        "fetch_date": "2026-09-25",
-        "provenance_note": "yfinance daily close for ONGC.NS (2026-09-25)"
+        "fetch_date": "2026-09-24",
+        "provenance_note": "yfinance daily close for ONGC.NS (2026-09-24)"
       },
       "shares_outstanding": {
         "value": 1258.0279,
@@ -542,7 +542,7 @@
         "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-27T00:56:36.406439"
+      "timestamp": "2026-09-27T00:47:25.193778"
     }
   },
   "reliance_reliance": {
@@ -632,8 +632,8 @@
       "price": {
         "value": 290.45,
         "source": "yfinance_history:successor_ticker",
-        "fetch_date": "2026-09-25",
-        "provenance_note": "yfinance daily close for TMPV.NS (2026-09-25) \u2014 CAUTION: TATAMOTORS was retired by a corporate action; this is the successor entity TMPV, so the quote may not be comparable with this model's historical financials"
+        "fetch_date": "2026-09-24",
+        "provenance_note": "yfinance daily close for TMPV.NS (2026-09-24) \u2014 CAUTION: TATAMOTORS was retired by a corporate action; this is the successor entity TMPV, so the quote may not be comparable with this model's historical financials"
       },
       "shares_outstanding": {
         "value": 367.0,
@@ -659,7 +659,7 @@
         "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-27T00:58:16.620269"
+      "timestamp": "2026-09-27T00:47:26.888410"
     }
   },
   "tatasteel_tatasteel": {
@@ -671,8 +671,8 @@
       "price": {
         "value": 187.97,
         "source": "yfinance_history",
-        "fetch_date": "2026-09-25",
-        "provenance_note": "yfinance daily close for TATASTEEL.NS (2026-09-25)"
+        "fetch_date": "2026-09-24",
+        "provenance_note": "yfinance daily close for TATASTEEL.NS (2026-09-24)"
       },
       "shares_outstanding": {
         "value": 1247.1848,
@@ -698,7 +698,7 @@
         "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-27T00:56:32.586528"
+      "timestamp": "2026-09-27T00:47:27.536065"
     }
   },
   "tcs_tcs": {
@@ -710,14 +710,14 @@
       "price": {
         "value": 2082.0,
         "source": "yfinance_history",
-        "fetch_date": "2026-09-25",
-        "provenance_note": "yfinance daily close for TCS.NS (2026-09-25)"
+        "fetch_date": "2026-09-24",
+        "provenance_note": "yfinance daily close for TCS.NS (2026-09-24)"
       },
       "shares_outstanding": {
         "value": 361.8088,
         "source": "yfinance",
         "fetch_date": "2026-09-27",
-        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-03-31); provider summary agreed at 361.81 = 361.81 Cr"
+        "provenance_note": "filed ordinary shares outstanding (Ordinary Shares Number at 2026-03-31) = 361.81 Cr"
       },
       "beta": {
         "value": 0.85,
@@ -737,7 +737,7 @@
         "fetch_date": "2026-09-27",
         "provenance_note": "INDIA market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-27T00:56:16.846928"
+      "timestamp": "2026-09-27T00:47:28.158306"
     }
   },
   "wipro_wipro": {
@@ -854,7 +854,7 @@
         "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-27T00:55:59.738815"
+      "timestamp": "2026-09-27T00:47:28.811388"
     }
   },
   "adanigreen_adanigreen": {
@@ -932,7 +932,7 @@
         "fetch_date": "2026-09-27",
         "provenance_note": "US market default for erp (Equity Risk Premium %)"
       },
-      "timestamp": "2026-09-27T00:55:36.320192"
+      "timestamp": "2026-09-27T00:47:24.660767"
     }
   },
   "nesr_us": {
