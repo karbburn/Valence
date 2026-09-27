@@ -16,17 +16,14 @@ export const revalidate = 3600
 const PAGE_SIZE = 500
 
 export const metadata: Metadata = {
-  // Deliberately not "every listed ticker". The index is a covered set that
-  // grows, and claiming the whole market in the title tag is the same overclaim
-  // the page copy used to make in the body.
-  title: `Companies covered`,
+  title: `All tickers`,
   description:
-    'The companies Valence covers so far, each already modelled and opening with its figures in place. Any other listed US or Indian ticker can be requested and the engine builds it on demand. Unlevered FCFF DCF, three scenarios and a 31-tab Excel export.',
+    'Every listed US and Indian ticker. Search any of them and the engine builds the model on first open; the pre-built set below opens with its figures already in place. Unlevered FCFF DCF, three scenarios and a 31-tab Excel export.',
   alternates: { canonical: `${SITE_URL}/stock` },
   openGraph: {
-    title: `Companies covered | ${SITE_NAME}`,
+    title: `All tickers | ${SITE_NAME}`,
     description:
-      'Every name on this list is already modelled. It is a covered set that grows, not the whole market, and any other listed ticker can be requested.',
+      'Every listed US and Indian ticker, searchable. The names listed are pre-built; anything else builds on first open.',
     url: `${SITE_URL}/stock`,
     images: [OG_IMAGE],
   },
@@ -66,35 +63,38 @@ export default async function StockIndexPage() {
       <main className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 py-10 sm:py-14">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
           <div className="lg:col-span-7">
-            {/* Not "Every listed ticker". That was an overclaim: this grid is the
-                covered universe, which is a curated list that grows, and calling
-                it every listed ticker made a closed catalogue of a few dozen rows
-                read as the whole market. The number is stated instead, so the
-                page cannot imply a scale it does not have. */}
+            {/* The engine covers every listed US and Indian ticker, so the page
+                says that. What is listed below is the pre-built set, which is a
+                convenience, and the count is stated rather than implied so the
+                two are never confused. The pre-session copy said "All tickers";
+                narrowing it to "a curated list, not the whole market" described
+                a current limitation as if it were the product. */}
             <h1 className="text-[30px] sm:text-[38px] font-bold tracking-tight leading-[1.08] text-text-main">
-              {companies.length} companies, covered so far
+              Every listed US and Indian ticker
             </h1>
             <p className="mt-4 text-[14.5px] text-text-muted max-w-[58ch] leading-relaxed">
-              This is a curated list and it grows, not the whole market. Every name below is
-              modelled already and opens with its figures in place.{' '}
-              {withModel.length < companies.length && (
+              Search any of them, or any other listed ticker, and the engine reads its filings and
+              builds the model on first open. The {companies.length} below are pre-built already
+              and open with their figures in place
+              {withModel.length < companies.length ? (
                 <>
-                  {withModel.length} are marked{' '}
-                  <span className="font-mono text-[13px] text-positive">Ready</span>; the rest
-                  build on first open.
+                  {' '}
+                  {withModel.length} marked{' '}
+                  <span className="font-mono text-[13px] text-positive">Ready</span>, the rest
+                  calculated on first open
                 </>
-              )}{' '}
-              Anything not listed here can be requested, and the engine reads filings for any
-              listed US or Indian ticker it is asked about.
+              ) : null}
+              .
             </p>
             <p className="mt-3 text-[13px] leading-relaxed">
+              Looking for something that is not resolving?{' '}
               <a
                 href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Request a ticker')}`}
                 className="text-accent hover:text-accent-hover transition-colors"
               >
                 Ask for a ticker
               </a>{' '}
-              if one is missing.
+              and it will be added.
             </p>
           </div>
           <div className="lg:col-span-5">
