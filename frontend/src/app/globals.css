@@ -162,6 +162,40 @@ input[type='range'].driver-range:focus-visible::-moz-range-thumb {
 }
 
 /* ------------------------------------------------------------------ */
+/* Scroll reveal                                                      */
+/* ------------------------------------------------------------------ */
+/* Transform only, and never to zero opacity.                          */
+/*                                                                     */
+/* An earlier version faded blocks in from opacity 0 with a JS          */
+/* IntersectionObserver. Any block whose observer had not fired yet     */
+/* rendered as blank space, which is indistinguishable from a broken   */
+/* section in a screenshot, in print, and on a slow connection.         */
+/* Moving without hiding means the worst case is a few pixels of       */
+/* offset rather than missing content.                                 */
+/*                                                                     */
+/* Driven by CSS scroll-driven animation, so it needs no JavaScript.   */
+/* Where animation-timeline is unsupported the block simply renders     */
+/* where it belongs.                                                    */
+@keyframes valence-reveal {
+  from {
+    transform: translateY(16px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal {
+      animation: valence-reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 20%;
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* Reduced motion — respect the OS setting                             */
 /* ------------------------------------------------------------------ */
 @media (prefers-reduced-motion: reduce) {
