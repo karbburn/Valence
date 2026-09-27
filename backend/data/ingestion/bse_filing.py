@@ -66,10 +66,14 @@ def parse_bse_filing(
         records with source="bse_filing" and provenance tagging.
     """
     logger.info("BSE filing stub: %s section=%s (no parser implemented yet)", pdf_path.name, section)
-    # TODO: Implement when BSE data format is available.
-    # The BSE annual report PDFs use the same table structure as NSE filings.
-    # Reuse pdf_tables.parse_predicted_statement_page() with appropriate
-    # page numbers for each company's annual report.
+    # Not yet implemented, and deliberately returning empty rather than guessing.
+    #
+    # The BSE annual report PDFs use the same table structure as the NSE filings,
+    # so the parser is pdf_tables.parse_predicted_statement_page() with the page
+    # numbers for each company's annual report. Until that exists this returns
+    # nothing, which is safe: the source selector treats a source that yields no
+    # datapoints as absent and falls through to the next one, rather than
+    # recording a filing it did not actually read.
     return []
 
 
@@ -97,9 +101,11 @@ def parse_bse_company_filings(
         return []
 
     logger.info("BSE stub: found %d PDFs for %s — no parser implemented yet", len(pdf_files), company_id)
-    # TODO: For each PDF, determine the fiscal year and parse all three sections:
-    #   - BALANCE SHEET
-    #   - PROFIT & LOSS (annual only)
-    #   - CASH FLOW
-    # using parse_bse_filing() or pdf_tables.parse_predicted_statement_page().
+    # A parser would, for each PDF, determine the fiscal year and read three
+    # sections: BALANCE SHEET, PROFIT & LOSS (annual only) and CASH FLOW, through
+    # parse_bse_filing() or pdf_tables.parse_predicted_statement_page().
+    #
+    # Discovering the PDFs without being able to read them is not progress, so
+    # this returns empty and the log line above is the only trace. See the note
+    # in parse_bse_filing() for why empty is the safe answer here.
     return []

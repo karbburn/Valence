@@ -49,7 +49,7 @@ def _record_learned(metric_raw: str, canonical_key: str, statement: str) -> None
 
 
 def _load_learned_mappings(db_path: str | Path = DB_PATH) -> None:
-    """Hydrate the runtime registry with persisted human-confirmed mappings (WR-01)."""
+    """Hydrate the runtime registry with persisted human-confirmed mappings."""
     global _LEARNED_MAPPINGS_LOADED
     if _LEARNED_MAPPINGS_LOADED or not Path(str(db_path)).exists():
         return
