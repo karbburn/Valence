@@ -518,10 +518,19 @@ def discover(query: str, limit: int = 8, market: Optional[str] = None) -> list["
     """
     from backend.data.universe.store import search_universe_companies
 
+    # Identity here is (ticker, market), the same key the caller dedups on, and
+    # the store query is scoped to the same market. A ticker-only key against an
+    # unscoped store query removed the other market's listing one layer earlier
+    # than the caller: with the Indian line of INFY/INFO in the store, the US ADR
+    # was excluded here and `discover` returned nothing, so a user who wanted the
+    # ADR had no way to reach it and no caller-side dedup could put it back.
+    store_market = market if market in ("us", "india") else None
     try:
         known = {
-            c.ticker.upper()
-            for c in search_universe_companies(query=query, limit=100)
+            (c.ticker.upper(), c.market)
+            for c in search_universe_companies(
+                query=query, market=store_market, limit=100
+            )
         }
     except Exception as exc:  # a local store problem must not hide the universe
         logger.warning("discover: local store lookup failed: %s", exc)
@@ -529,7 +538,7 @@ def discover(query: str, limit: int = 8, market: Optional[str] = None) -> list["
 
     out: list[ListedCompany] = []
     for company in search(query, limit=limit * 3, market=market):
-        if company.ticker.upper() in known:
+        if (company.ticker.upper(), company.market) in known:
             continue
         if is_probable_financial(company.name):
             continue
