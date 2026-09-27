@@ -426,8 +426,17 @@ def is_probable_financial(name: str) -> bool:
     The first is a much smaller mistake than the second.
     """
     lowered = f" {(name or '').lower().strip()} "
-    if any(kw in lowered for kw in _FINANCIAL_NAME_HINTS):
-        return True
+    for kw in _FINANCIAL_NAME_HINTS:
+        if len(kw) < 5:
+            # Short hints are matched on word boundaries, never as bare
+            # substrings. "bank" is a substring of "Fairbanks", and Fairbanks
+            # Morse is an industrial manufacturer that was being refused as a
+            # financial. The same reasoning that forced _INSTITUTION_STEMS to be
+            # five characters applies here, and the guard was missing.
+            if f" {kw} " in lowered or f" {kw}s " in lowered:
+                return True
+        elif kw in lowered:
+            return True
     if any(stem in lowered for stem in _INSTITUTION_STEMS):
         return True
     # Whole words only, so "sbi" cannot match inside an unrelated word.

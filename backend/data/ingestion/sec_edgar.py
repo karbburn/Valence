@@ -144,6 +144,26 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
     # year, including the current portion of long-term debt. Together they are
     # total borrowings, and the two never double-count because the non-current
     # tag by construction excludes the current slice.
+    #
+    # Oracle files NEITHER of the three tags above. It reports borrowings as one
+    # combined long-term-and-short-term total and nothing else, so this list
+    # resolves to nothing for Oracle and its entire 121,916 long-term stack
+    # disappeared from the EV -> equity bridge. Verified against
+    # data.sec.gov companyfacts for CIK0001341439 on 2026-09-27:
+    #
+    #   DebtLongtermAndShorttermCombinedAmount  2026-05-31   129,541
+    #   NotesPayableCurrent                     2026-08-31     7,625
+    #   LongTermDebtNoncurrent / LongTermDebtCurrent   ABSENT
+    #
+    # The bridge deducted 14,900 against an obligation above 129,000, and the
+    # engine reported 10 of 10 checks passed with an implied price 66% below
+    # the market.
+    #
+    # The combined tag deliberately is NOT in this list. The valuation pipeline
+    # sums non-current + current + finance leases, so taking a combined figure as
+    # the non-current half would count the current slice twice.
+    # `_derive_noncurrent_borrowings` subtracts it instead, and that is the only
+    # place that arithmetic happens.
     ("Borrowings", [
         "LongTermDebtNoncurrent",
         "LongTermDebtAndCapitalLeaseObligations",
@@ -152,6 +172,10 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
     ("Short term borrowings", [
         "LongTermDebtCurrent",
         "DebtCurrent",
+        # Oracle's current slice. It files no LongTermDebtCurrent at all, and
+        # DebtCurrent stops at the last 10-K, so the most recent quarter carried
+        # no current debt at all until this tag was added.
+        "NotesPayableCurrent",
         "ShortTermBorrowings",
         "OtherShortTermBorrowings",
         "ShortTermBankLoansAndNotesPayable",
@@ -199,6 +223,105 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
         "WeightedAverageNumberOfSharesOutstandingBasic"
     ], "PROFIT & LOSS"),
 ]
+
+# Tags that report borrowings as ONE combined long-term-and-short-term figure
+# rather than splitting the current slice out. A filer using one of these files no
+# non-current borrowings tag at all, so the "Borrowings" line above resolves to
+# nothing and the whole long-term stack silently leaves the bridge. The comment
+# on that line already recorded the symptom ("one large filer's borrowings
+# resolved to nothing at all") without fixing the cause, because there was no tag
+# to fall back to.
+COMBINED_DEBT_TAGS = (
+    "DebtLongtermAndShorttermCombinedAmount",
+    "DebtLongtermAndShorttermCombined",
+    "LongTermDebtAndShortTermCombinedAmount",
+)
+
+# Mirrors the "Short term borrowings" preference order exactly, so the
+# subtraction removes precisely what that line adds back. Typed once and
+# referenced, not typed twice, because two lists that drift apart silently
+# double-count.
+_NONCURRENT_BORROWINGS_TAGS = (
+    "LongTermDebtNoncurrent",
+    "LongTermDebtAndCapitalLeaseObligations",
+    "LongTermDebt",
+)
+_CURRENT_DEBT_TAGS = (
+    "LongTermDebtCurrent",
+    "DebtCurrent",
+    "NotesPayableCurrent",
+    "ShortTermBorrowings",
+    "OtherShortTermBorrowings",
+    "ShortTermBankLoansAndNotesPayable",
+)
+
+
+def _derive_noncurrent_borrowings(
+    us_gaap: dict,
+    target_ends: set,
+) -> Dict[date, float]:
+    """Non-current borrowings derived from a combined debt tag, in millions.
+
+    Returns empty when the filer already tags a non-current borrowings concept,
+    because then the direct tag is authoritative and nothing should be inferred.
+
+    Where a combined tag exists, non-current is the combined total less the
+    current portion. Reporting the combined total as the non-current half would
+    double-count, since the caller sums the two.
+
+    When the current slice cannot be found at all, the combined total is used as
+    it stands. A company with no maturities inside twelve months genuinely has
+    current debt of zero, and at this level that is indistinguishable from the
+    tag simply being absent. Guessing zero in the absent case would understate
+    debt, and understating debt flatters the equity value, so the safer of the
+    two errors is the one that does not invent a number.
+    """
+    # Presence is not enough. Oracle *does* carry a `LongTermDebt` tag, so a
+    # presence test concludes the filer is covered and returns empty, which is
+    # precisely the failure this function exists to correct. What matters is
+    # whether a tag actually carries facts for the periods being built, and that
+    # is the same test the main loop makes.
+    for tag in _NONCURRENT_BORROWINGS_TAGS:
+        if tag not in us_gaap:
+            continue
+        items = us_gaap[tag].get("units", {}).get("USD", [])
+        if _has_period(items, list(target_ends)):
+            return {}
+
+    combined_tag = next((t for t in COMBINED_DEBT_TAGS if t in us_gaap), None)
+    if combined_tag is None:
+        return {}
+
+    combined = _facts_at_period_ends(
+        us_gaap[combined_tag].get("units", {}).get("USD", []), target_ends
+    )
+    if not combined:
+        return {}
+
+    current_items: list = []
+    for tag in _CURRENT_DEBT_TAGS:
+        if tag in us_gaap:
+            current_items = us_gaap[tag].get("units", {}).get("USD", []) or []
+            if current_items:
+                break
+    current = _facts_at_period_ends(current_items, target_ends) if current_items else {}
+
+    out: Dict[date, float] = {}
+    for end, item in combined.items():
+        total = float(item["val"])
+        slice_ = current.get(end)
+        if slice_ is not None:
+            noncurrent = total - float(slice_["val"])
+        else:
+            noncurrent = total
+            logger.info(
+                "no current debt tag found at %s for the combined tag %s; "
+                "reporting the full %s as non-current rather than assuming zero",
+                end, combined_tag, f"{noncurrent:,.0f}",
+            )
+        if noncurrent > 0:
+            out[end] = noncurrent / 1e6
+    return out
 
 
 def resolve_cik(company_id: str) -> str:
@@ -409,6 +532,17 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
     datapoints: list[RawDatapoint] = []
     now = datetime.now()
 
+    # Computed once, before the loop. A filer that tags only a combined debt
+    # total still has to produce a "Borrowings" line, or the long-term debt
+    # leaves the bridge and nothing downstream can tell "no debt" from "no tag".
+    derived_borrowings = _derive_noncurrent_borrowings(us_gaap, set(target_ends))
+    if derived_borrowings:
+        logger.info(
+            "derived non-current borrowings for %s from a combined debt tag: %s",
+            company_id,
+            {target_labels.get(e, e.isoformat()): f"{v:,.0f}" for e, v in sorted(derived_borrowings.items())},
+        )
+
     for metric_label, tag_list, section in US_GAAP_TAG_MAP:
         selected_tag = None
         tag_data = None
@@ -422,21 +556,54 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
                     tag_data = us_gaap[tag]
                     break
 
-        # Fallback to the first tag in tag_list that is present in us_gaap if no tag had target period data
+        # Fallback: accept a tag that is present in us_gaap but carries no fact
+        # for the target periods.
+        #
+        # It used to be "present in us_gaap", full stop. A tag can exist in a
+        # filer's vocabulary and still hold nothing for the years being built,
+        # and accepting it then produced an empty period map, so the metric was
+        # emitted nowhere and nothing said so. Oracle's `LongTermDebt` is exactly
+        # that: present, empty for FY24-FY26, and it was chosen anyway, which is
+        # how the Borrowings line vanished for it while the engine still reported
+        # a clean audit. The line is now only taken when it actually has data.
         if not selected_tag:
             for tag in tag_list:
-                if tag in us_gaap:
+                if tag not in us_gaap:
+                    continue
+                items = us_gaap[tag].get("units", {})
+                probe = (
+                    items.get("USD", [])
+                    or items.get("shares", [])
+                    or items.get("pure", [])
+                )
+                if _has_period(probe, target_ends):
                     selected_tag = tag
                     tag_data = us_gaap[tag]
                     break
 
-        if not selected_tag or not tag_data:
+        use_derived = (
+            (not selected_tag or not tag_data)
+            and metric_label == "Borrowings"
+            and bool(derived_borrowings)
+        )
+        if not use_derived and (not selected_tag or not tag_data):
             continue
 
-        units_dict = tag_data.get("units", {})
-        unit_items = units_dict.get("USD", []) or units_dict.get("shares", []) or units_dict.get("pure", [])
+        if use_derived:
+            # Already in millions; the loop body converts once, on the way in,
+            # so this is scaled back up rather than introducing a second
+            # conversion point that could drift from the first.
+            resolved = {end: {"val": val * 1e6} for end, val in derived_borrowings.items()}
+        else:
+            units_dict = tag_data.get("units", {})
+            unit_items = (
+                units_dict.get("USD", [])
+                or units_dict.get("shares", [])
+                or units_dict.get("pure", [])
+            )
+            resolved = _facts_at_period_ends(unit_items, target_ends)
 
-        for period_end, item in _facts_at_period_ends(unit_items, target_ends).items():
+        for period_end, item in resolved.items():
             period_lbl = target_labels[period_end]
             raw_val = float(item["val"])
 
