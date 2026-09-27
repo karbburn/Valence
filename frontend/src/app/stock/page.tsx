@@ -1,10 +1,12 @@
+import { Suspense } from 'react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getManifestServer } from '@/lib/serverApi'
 import { stockPath } from '@/lib/tickers'
-import { SITE_URL, SITE_NAME } from '@/lib/site'
+import { SITE_URL, SITE_NAME, OG_IMAGE } from '@/lib/site'
 import type { ResolvedSlug } from '@/lib/tickers'
+import { TickerSearch } from '@/components/landing/TickerSearch'
 
 // Segment config must be a literal: Next reads it statically, so an imported
 // constant is rejected. Keep in step with REVALIDATE_SECONDS in lib/site.ts.
@@ -13,14 +15,16 @@ export const revalidate = 3600
 const PAGE_SIZE = 500
 
 export const metadata: Metadata = {
-  title: `All tickers`,
+  title: `Every listed ticker`,
   description:
-    'Every listed company Valence can build a valuation model for, across US and Indian markets. Open any ticker for a full unlevered FCFF DCF, three scenarios and a 31-tab Excel export.',
+    'Every listed US and Indian ticker Valence covers, with the ones already modelled marked. Search any other listed ticker and the engine builds it on demand. Unlevered FCFF DCF, three scenarios and a 31-tab Excel export.',
   alternates: { canonical: `${SITE_URL}/stock` },
   openGraph: {
-    title: `All tickers · ${SITE_NAME}`,
-    description: 'Browse every company with a working valuation model.',
+    title: `Every listed ticker | ${SITE_NAME}`,
+    description:
+      'Every listed US and Indian ticker Valence covers. Already-modelled names are marked, and anything else builds on first open.',
     url: `${SITE_URL}/stock`,
+    images: [OG_IMAGE],
   },
 }
 
@@ -54,36 +58,43 @@ export default async function StockIndexPage() {
     <div className="min-h-screen bg-canvas text-text-main font-sans">
       <SiteHeader />
 
-      <main className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 py-10">
-        <header className="mb-8">
-          <h1 className="text-[28px] sm:text-[34px] font-bold tracking-tight text-text-main">
-            All tickers
-          </h1>
-          <p className="mt-2 text-[14px] text-text-muted max-w-[65ch] leading-relaxed">
-            {withModel.length} of {companies.length} listed companies have a compiled valuation
-            model. Opening a ticker loads its model on the server, so the figures are in the page
-            before any script runs.
-          </p>
-        </header>
+      <main className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 py-10 sm:py-14">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
+          <div className="lg:col-span-7">
+            <h1 className="text-[30px] sm:text-[38px] font-bold tracking-tight leading-[1.08] text-text-main">
+              Every listed ticker
+            </h1>
+            <p className="mt-4 text-[14.5px] text-text-muted max-w-[58ch] leading-relaxed">
+              The engine reads filings for any listed US or Indian ticker and builds the model on
+              first visit, usually in a few seconds. {withModel.length} of the {companies.length}{' '}
+              below are already built and open with their figures in place, marked{' '}
+              <span className="font-mono text-[13px] text-positive">Ready</span>. The rest build on
+              first open.
+            </p>
+          </div>
+          <div className="lg:col-span-5">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-dim mb-3">
+              Jump to one
+            </p>
+            <Suspense fallback={<div className="h-12 rounded-sm bg-surface border border-border" />}>
+              <TickerSearch />
+            </Suspense>
+            <p className="mt-2.5 text-[11.5px] text-text-dim leading-relaxed">
+              Search any ticker. If a model cannot be built from the filings available, the page
+              says so rather than showing an empty result.
+            </p>
+          </div>
+        </div>
 
-        {withModel.length > 0 && (
-          <section className="mb-10">
-            <h2 className="text-[13px] font-semibold uppercase tracking-[0.12em] text-text-dim mb-3">
-              Models ready
-            </h2>
-            <TickerGrid companies={withModel} />
-          </section>
-        )}
-
-        <section className="mb-10">
-          <h2 className="text-[13px] font-semibold uppercase tracking-[0.12em] text-text-dim mb-3">
+        <section className="mt-12">
+          <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-dim pb-2 border-b border-border">
             India ({india.length})
           </h2>
           <TickerGrid companies={india} />
         </section>
 
-        <section>
-          <h2 className="text-[13px] font-semibold uppercase tracking-[0.12em] text-text-dim mb-3">
+        <section className="mt-10">
+          <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-dim pb-2 border-b border-border">
             United States ({us.length})
           </h2>
           <TickerGrid companies={us} />
@@ -137,9 +148,6 @@ function SiteHeader() {
           Valence
         </Link>
         <nav className="flex items-center gap-4 text-[12px] text-text-muted">
-          <Link href="/" className="hover:text-text-main transition-colors">
-            Home
-          </Link>
           <Link href="/methodology" className="hover:text-text-main transition-colors">
             Methodology
           </Link>
