@@ -870,7 +870,7 @@ def search_companies(
                 # row per keystroke is not an option. Resolve returns the real
                 # slug, which can differ if a collision appeared in between, and
                 # the client navigates to whatever resolve says.
-                "slug": _preview_slug(listed.ticker),
+                "slug": _preview_slug(listed.ticker, listed.market, listed.exchange, listed.cik),
             })
     return payload
 

@@ -115,6 +115,45 @@ def _suffix_for(company, taken: set[str], base: str) -> str:
     return f"{ticker}-{n}"
 
 
+def resolve_unique_slug(
+    ticker: str, exchange: str, cik: Optional[str], taken: set
+) -> str:
+    """The slug one listing of `ticker` should get, given what is already taken.
+
+    Shared by ``assign_slugs`` and the search preview. They have to agree: the
+    preview is the URL a user clicks, and a preview that disagrees with the
+    register sends them to a company that is not the one they picked.
+
+    Preference order is the same as the existing sibling rule: the bare ticker
+    when it is free, then ``TICKER-EXCHANGE`` for a real exchange, then
+    ``TICKER-CIK7`` for two EDGAR filers that cannot be told apart by exchange,
+    then a numeric suffix as the last resort.
+    """
+    base = sanitize_slug(ticker)
+    if not base:
+        return ""
+    if base.upper() not in taken:
+        return base
+
+    ex = (exchange or "").upper()
+    if ex in REAL_EXCHANGES:
+        candidate = f"{base}-{ex}"
+        if candidate.upper() not in taken:
+            return candidate
+
+    if cik:
+        digits = re.sub(r"\D", "", str(cik))
+        if digits:
+            candidate = f"{base}-{digits[-7:]}"
+            if candidate.upper() not in taken:
+                return candidate
+
+    n = 2
+    while f"{base}-{n}".upper() in taken:
+        n += 1
+    return f"{base}-{n}"
+
+
 def assign_slugs(companies: Iterable) -> Dict[str, str]:
     """Map company_id -> slug for a set of universe companies.
 
