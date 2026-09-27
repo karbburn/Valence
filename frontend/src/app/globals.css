@@ -263,6 +263,59 @@ input[type='range'].driver-range:focus-visible::-moz-range-thumb {
   background: transparent;
 }
 
+/* ------------------------------------------------------------------ */
+/* Horizontal scroller edge fade                                      */
+/* ------------------------------------------------------------------ */
+/* A scroller that clips mid-card reads as a broken layout, not as     */
+/* more content. Fading the cut edge is the difference. The mask is on */
+/* the element itself, so it moves with the scroll and costs nothing    */
+/* per frame; `to right` keeps the left edge of the first card crisp.  */
+/* ------------------------------------------------------------------ */
+.rail-fade {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 24px,
+    #000 calc(100% - 56px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 24px,
+    #000 calc(100% - 56px),
+    transparent 100%
+  );
+}
+
+/* Below the breakpoint the rail is not a scroller in the same way, and a
+   mask on a non-overflowing box just dims the left edge for nothing. */
+@media (max-width: 767px) {
+  .rail-fade {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Section rhythm                                                      */
+/* ------------------------------------------------------------------ */
+/* Measured: the gap between every consecutive block on the landing    */
+/* page was 0px. Six transitions in a row, all of them the same        */
+/* hairline, so the page had no vertical structure at all and the        */
+/* hairlines were doing a job they are too thin to do. The bands now    */
+/* separate themselves, and the hairline only marks where a band ends.   */
+/* ------------------------------------------------------------------ */
+.section-band {
+  padding-block: 3.5rem;
+}
+
+@media (min-width: 640px) {
+  .section-band {
+    padding-block: 4.5rem;
+  }
+}
+
 /* Sticky first column for wide financial tables */
 .sticky-col {
   position: sticky;

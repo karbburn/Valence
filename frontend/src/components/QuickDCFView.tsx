@@ -9,9 +9,22 @@ export interface QuickDCFViewProps {
   spec: ModelSpecification | null
   scenario: ScenarioLabel
   onOpenMethodology?: () => void
+  /**
+   * Drop the sensitivity matrix. The landing page embeds this to prove the
+   * product is real, and a preview has to stay preview-sized: the matrix alone
+   * is the tallest block on that page and it is the one part a visitor cannot
+   * do anything with without opening the full workbench. The ticker page leaves
+   * it on, which is where someone actually reads it.
+   */
+  compact?: boolean
 }
 
-export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFViewProps) {
+export function QuickDCFView({
+  spec,
+  scenario,
+  onOpenMethodology,
+  compact = false,
+}: QuickDCFViewProps) {
   const valuation =
     spec?.valuation?.find((v) => v.scenario === scenario) || spec?.valuation?.[0]
 
@@ -325,8 +338,8 @@ export function QuickDCFView({ spec, scenario, onOpenMethodology }: QuickDCFView
         </div>
       </div>
 
-      {/* 2-Way Sensitivity Table */}
-      {sensTable && (
+      {/* 2-Way Sensitivity Table. Suppressed in compact mode; see `compact`. */}
+      {sensTable && !compact && (
         <div className="bg-surface border border-border rounded-[4px] p-4 space-y-3 shadow-sm">
           <div className="flex items-center justify-between border-b border-border pb-2">
             <div>
