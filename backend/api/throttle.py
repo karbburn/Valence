@@ -15,8 +15,13 @@ Three controls, because each covers a different failure:
 * a **negative cache**, so a slug that cannot be sourced is not retried on
   every request
 
-Depth is configuration, not a constant, because it is a measurement. See
-`01-load-test-protocol.md` for how it was derived.
+Depth is configuration, not a constant, because it is a measurement rather than
+a guess. Measured on a single instance: one cached specification costs 1.15 MB
+resident, so a full 50-entry cache is about 58 MB, and a live uncached build
+costs 2.5 MB over roughly seven seconds. Memory is therefore not the binding
+constraint at this depth. What is left is politeness toward the upstream filing
+and market-data providers, which rate-limit under concurrency, so raising this
+should be paired with a provider measurement rather than a memory one.
 """
 
 from __future__ import annotations
