@@ -130,7 +130,7 @@ def render_model_guide(wb: Workbook, spec: ModelSpecification) -> Worksheet:
 
     ws["B2"] = "WORKBOOK MODEL GUIDE & DASHBOARD"
     ws["B2"].font = FONT_TITLE
-    ws["B3"] = "Complete 30-Tab Architecture, Interactive Navigation & Financial User Guide"
+    ws["B3"] = "Complete 31-Tab Architecture, Interactive Navigation & Financial User Guide"
     ws["B3"].font = FONT_SUBTITLE
 
     # ------------------------------------------------------------------ #
@@ -162,10 +162,10 @@ def render_model_guide(wb: Workbook, spec: ModelSpecification) -> Worksheet:
             ws.cell(row=r, column=c).border = BORDER_BOX
 
     # ------------------------------------------------------------------ #
-    # 2. Complete 30-Tab Architecture Directory
+    # 2. Complete 31-Tab Architecture Directory
     # ------------------------------------------------------------------ #
     dir_start = 6 + len(quick_jumps) + 2
-    ws.cell(row=dir_start, column=2, value="COMPLETE 30-TAB WORKBOOK DIRECTORY").font = FONT_TITLE
+    ws.cell(row=dir_start, column=2, value="COMPLETE 31-TAB WORKBOOK DIRECTORY").font = FONT_TITLE
     ws.cell(row=dir_start + 1, column=2, value="Full list of all 30 worksheets grouped by model section with clickable navigation links.").font = FONT_SUBTITLE
 
     write_table_header(ws, dir_start + 3, ["Section / Group", "Tab Name", "Worksheet Purpose & Content Description"], start_col=2)

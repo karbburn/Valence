@@ -7,7 +7,7 @@ Provides API endpoints for:
 - GET /api/model/{company_id}: Fetch current ModelSpecification
 - POST /api/model/recompute: Apply driver override, re-run engine, return updated spec
 - POST /api/model/revert: Revert driver override back to model-generated state
-- GET /api/export/excel: Trigger openpyxl exporter and download 30-tab .xlsx workbook
+- GET /api/export/excel: Trigger openpyxl exporter and download 31-tab .xlsx workbook
 """
 
 import logging
