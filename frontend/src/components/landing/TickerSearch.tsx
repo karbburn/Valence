@@ -26,6 +26,7 @@ export function TickerSearch() {
   const uid = useId().replace(/:/g, '')
   const inputId = `ticker-input-${uid}`
   const listboxId = `ticker-listbox-${uid}`
+  const errorId = `ticker-error-${uid}`
 
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -47,12 +48,33 @@ export function TickerSearch() {
   // synchronously: two clicks in the same tick both read the state value from
   // the render they were bound to, and both would proceed.
   const resolvingRef = useRef(false)
+  // True when the last search failed, as distinct from finding nothing. Without
+  // the distinction a network failure renders identically to "no such ticker",
+  // which sends the visitor off looking for a typo that is not there.
+  const [failed, setFailed] = useState(false)
+  // Set when a deliberate click could not be completed. Cleared on the next
+  // attempt so a retry is not blocked by the previous failure.
+  const [resolveError, setResolveError] = useState<string | null>(null)
+  // The request for the current query, so it can be aborted rather than left to
+  // land on top of a newer one.
+  const inFlight = useRef<AbortController | null>(null)
 
-  const search = useCallback(async (q: string): Promise<CompanySummary[]> => {
-    const res = await fetch(`/api/companies/search?q=${encodeURIComponent(q)}&limit=8`)
-    if (!res.ok) return []
-    return res.json()
-  }, [])
+  // A failed search used to return an empty list, which is indistinguishable
+  // from a ticker nobody lists. On a dead network the dropdown simply never
+  // opened and the field looked broken. It now distinguishes the two, and takes
+  // an AbortSignal so a slow response for an old query cannot overwrite the
+  // results for the one the user is actually looking at.
+  const search = useCallback(
+    async (q: string, signal?: AbortSignal): Promise<CompanySummary[]> => {
+      const res = await fetch(
+        `/api/companies/search?q=${encodeURIComponent(q)}&limit=8`,
+        { signal },
+      )
+      if (!res.ok) throw new Error(`search failed: ${res.status}`)
+      return res.json()
+    },
+    [],
+  )
 
   // Prefill from ?q= and take focus, so a search-engine or AI-assistant result
   // lands the visitor one keystroke from a model.
@@ -65,14 +87,21 @@ export function TickerSearch() {
   useEffect(() => {
     if (!prefill) return
     inputRef.current?.focus()
+    const controller = new AbortController()
     let cancelled = false
-    void search(prefill).then((found) => {
-      if (cancelled || found.length === 0) return
-      setResults(found)
-      setOpen(true)
-    })
+    void search(prefill, controller.signal)
+      .then((found) => {
+        if (cancelled || found.length === 0) return
+        setResults(found)
+        setOpen(true)
+      })
+      // A prefill that fails is not worth reporting. The visitor has not typed
+      // anything yet, so an error banner here would be noise about a request
+      // they never asked for.
+      .catch(() => undefined)
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [prefill, search])
 
@@ -87,23 +116,54 @@ export function TickerSearch() {
   const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const q = e.target.value
     setQuery(q)
+    setResolveError(null)
     if (timer.current) clearTimeout(timer.current)
+    // Abort the in-flight request for the previous query. Without this a slow
+    // response could land after a newer one and repopulate the list with results
+    // for a ticker the visitor had already typed past.
+    inFlight.current?.abort()
+    inFlight.current = null
     if (!q.trim()) {
       setResults([])
       setOpen(false)
       setLoading(false)
+      setFailed(false)
       return
     }
     setLoading(true)
+    setFailed(false)
     timer.current = setTimeout(() => {
-      void search(q).then((found) => {
-        setResults(found)
-        setHighlight(0)
-        setOpen(found.length > 0)
-        setLoading(false)
-      })
+      const controller = new AbortController()
+      inFlight.current = controller
+      void search(q, controller.signal)
+        .then((found) => {
+          if (controller.signal.aborted) return
+          setResults(found)
+          setHighlight(0)
+          setOpen(found.length > 0)
+          setLoading(false)
+        })
+        .catch(() => {
+          if (controller.signal.aborted) return
+          // Leave the field usable and say what happened, rather than closing
+          // silently and leaving the visitor to conclude the ticker is unknown.
+          setResults([])
+          setOpen(true)
+          setLoading(false)
+          setFailed(true)
+        })
     }, 200)
   }
+
+  // The debounce timer and any in-flight request both have to die with the
+  // component. A timer that fires after unmount calls setState on a dead tree
+  // and, on a fast route change, can overwrite the next page's state.
+  useEffect(() => {
+    return () => {
+      if (timer.current) clearTimeout(timer.current)
+      inFlight.current?.abort()
+    }
+  }, [])
 
   const choose = async (c: CompanySummary) => {
     setOpen(false)
@@ -123,17 +183,30 @@ export function TickerSearch() {
     if (resolvingRef.current) return
     resolvingRef.current = true
     setResolving(true)
+    setResolveError(null)
     try {
       const res = await fetch(`/api/companies/resolve?slug=${encodeURIComponent(c.ticker)}`)
       if (!res.ok) {
-        router.push('/stock')
+        // 404 is the resolver refusing a ticker no exchange lists, which is a
+        // real answer rather than a fault. Anything else is a fault.
+        setResolveError(
+          res.status === 404
+            ? `${c.ticker} is not listed on the SEC or NSE feeds, so there is nothing to model.`
+            : `Could not reach the engine for ${c.ticker}. Try again in a moment.`,
+        )
         return
       }
       const record = (await res.json()) as { slug?: string | null }
-      if (record.slug) router.push(stockPath(record.slug))
-      else router.push('/stock')
+      if (record.slug) {
+        router.push(stockPath(record.slug))
+      } else {
+        setResolveError(`${c.ticker} resolved without a page. Try searching for it again.`)
+      }
     } catch {
-      router.push('/stock')
+      // Previously this redirected to the index, which threw away a deliberate
+      // click with no explanation: the visitor picked a company and was sent
+      // somewhere that did not contain it.
+      setResolveError(`Could not reach the engine for ${c.ticker}. Check your connection and try again.`)
     } finally {
       resolvingRef.current = false
       setResolving(false)
@@ -182,7 +255,8 @@ export function TickerSearch() {
           name="ticker"
           type="text"
           role="combobox"
-          aria-expanded={open && results.length > 0}
+          aria-expanded={open}
+          aria-describedby={errorId}
           aria-controls={listboxId}
           aria-autocomplete="list"
           aria-label="Search a ticker or company"
@@ -191,16 +265,33 @@ export function TickerSearch() {
           onChange={onChange}
           onKeyDown={onKeyDown}
           onFocus={() => results.length > 0 && setOpen(true)}
+          aria-invalid={Boolean(resolveError) || undefined}
           className="w-full h-12 bg-surface border border-border-interactive rounded-sm pl-10 pr-4 text-[14px] text-text-main placeholder:text-text-faint focus:border-accent-border transition-colors"
         />
       </div>
+
+      {/* Failure surfaces, announced rather than only drawn. Both are
+          role="status" so a screen reader reads them without stealing focus,
+          and neither is dismissible-by-accident: both clear when the visitor
+          types again. */}
+      {(resolveError || (open && failed)) && (
+        <div
+          id={errorId}
+          role="status"
+          className="absolute left-0 right-0 top-[52px] z-50 rounded-sm border border-border bg-surface px-3.5 py-2.5 text-[12.5px] text-text-muted"
+        >
+          {resolveError ?? 'Could not reach the engine. Check your connection and try again.'}
+        </div>
+      )}
 
       {open && results.length > 0 && (
         <ul
           id={listboxId}
           role="listbox"
           aria-label="Matching companies"
-          className="absolute left-0 right-0 top-[52px] z-50 max-h-[320px] overflow-y-auto bg-surface border border-border rounded-sm shadow-pop divide-y divide-border list-none m-0 p-0"
+          className={`absolute left-0 right-0 top-[52px] z-50 max-h-[320px] ${
+            failed ? 'hidden' : ''
+          } overflow-y-auto bg-surface border border-border rounded-sm shadow-pop divide-y divide-border list-none m-0 p-0`}
         >
           {results.map((c, i) => {
             const sym = getCurrencySymbol(c.currency)
