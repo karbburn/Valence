@@ -2,11 +2,17 @@ import { ImageResponse } from 'next/og'
 import { notFound } from 'next/navigation'
 import { getModelSpecServer, resolveSlugServer } from '@/lib/serverApi'
 import { isValidSlug, normalizeSlug } from '@/lib/tickers'
-import { } from '@/lib/site'
 
 // Segment config must be a literal: Next reads it statically, so an imported
 // constant is rejected. Keep in step with REVALIDATE_SECONDS in lib/site.ts.
 export const revalidate = 3600
+
+// The file-based image convention only writes og:image:width and og:image:height
+// if the segment declares them, and the root pages do declare theirs. Without
+// these a share card is served at an unknown size to anything that would rather
+// not fetch it first. Must match the size passed to ImageResponse below.
+export const size = { width: 1200, height: 630 }
+export const contentType = 'image/png'
 
 type Params = { params: Promise<{ ticker: string }> }
 
