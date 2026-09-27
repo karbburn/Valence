@@ -17,11 +17,19 @@ interface UseModelSpecReturn {
   resetAll: (scenario?: string) => Promise<void>
 }
 
-export function useModelSpec(initialCompanyId = 'infy_infy'): UseModelSpecReturn {
-  const [spec, setSpec] = useState<ModelSpecification | null>(null)
+export function useModelSpec(
+  initialCompanyId = 'infy_infy',
+  initialSpec: ModelSpecification | null = null
+): UseModelSpecReturn {
+  // Seeded from the server payload when one exists, so a deep link renders
+  // complete on first paint with no client fetch. Null keeps the client fetch
+  // for a ticker whose model is not compiled yet.
+  const [spec, setSpec] = useState<ModelSpecification | null>(initialSpec)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [companyId, setCompanyId] = useState(initialCompanyId)
+  const [companyId, setCompanyId] = useState(
+    initialSpec?.metadata?.company_id ?? initialCompanyId
+  )
 
   const companyIdRef = useRef(companyId)
   useEffect(() => {
