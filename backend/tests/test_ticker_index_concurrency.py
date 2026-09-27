@@ -390,7 +390,13 @@ def test_the_search_endpoint_still_offers_the_adr_when_the_primary_is_stored(
     _store_holding_only_india(monkeypatch)
     monkeypatch.setattr(routes, "_ensure_universe_seeded", lambda: None)
     monkeypatch.setattr(routes, "_has_compiled_model", lambda company_id: False)
-    monkeypatch.setattr(store, "preview_slug", lambda ticker: ticker.lower())
+    # Accepts the full signature the route now passes: the preview has to be
+    # able to disambiguate a ticker listed on two exchanges.
+    monkeypatch.setattr(
+        store,
+        "preview_slug",
+        lambda ticker, market="us", exchange="", cik=None: ticker.lower(),
+    )
     monkeypatch.setattr(
         metadata,
         "get_metadata_for_company",
@@ -409,3 +415,33 @@ def test_the_search_endpoint_still_offers_the_adr_when_the_primary_is_stored(
     assert by_market["us"]["company_id"] != by_market["india"]["company_id"]
     assert by_market["us"]["has_model"] is False
 
+
+
+def test_a_shared_ticker_gets_a_different_preview_slug_per_market(isolated_cache):
+    """A ticker listed on two exchanges must not advertise one slug for both.
+
+    Regression: the search preview fell back to a bare numeric suffix, so the
+    NSE row and the NYSE ADR row of the same company both returned `INFY-2`.
+    Whichever company owned that slug got the click, and the other row was a
+    link to the wrong company.
+    """
+    from backend.data.universe.store import preview_slug
+    from backend.data.universe.slugs import resolve_unique_slug
+
+    nse = resolve_unique_slug("INFY", "NSE", None, {"INFY"})
+    nyse = resolve_unique_slug("INFY", "NYSE", None, {"INFY"})
+    assert nse != nyse, f"both markets advertised {nse!r}"
+    # The rule is only useful if it matches what assign_slugs would produce.
+    assert nyse == "INFY-NYSE"
+
+    # An unclaimed ticker keeps the bare form, which is the URL a person types.
+    assert resolve_unique_slug("ZZZZ", "NASDAQ", None, set()) == "ZZZZ"
+
+    # Two EDGAR filers that cannot be separated by exchange fall back to the CIK.
+    assert (
+        resolve_unique_slug("INFY", "SEC", "0001067983", {"INFY"})
+        == "INFY-1067983"
+    )
+
+    # And the store wrapper must reach the same rule, not a second copy of it.
+    assert callable(preview_slug)

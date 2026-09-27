@@ -294,12 +294,18 @@ def register_universe_company(
     return company
 
 
-def preview_slug(ticker: str, db_path: str | Path = DB_PATH) -> Optional[str]:
+def preview_slug(
+    ticker: str,
+    market: str = "us",
+    exchange: str = "",
+    cik: Optional[str] = None,
+    db_path: str | Path = DB_PATH,
+) -> Optional[str]:
     """The slug a ticker would be given, without writing anything.
 
     Search results are expected to carry a slug so the client can navigate
-    straight to a company page, but a search runs on every keystroke and writing a
-    row per keystroke would seed the universe with fragments. So the slug is
+    straight to a company page, but a search runs on every keystroke and writing
+    a row per keystroke would seed the universe with fragments. So the slug is
     computed and returned, and the row is written on resolve.
 
     That makes the answer provisional rather than reserved. Between the search and
@@ -307,8 +313,28 @@ def preview_slug(ticker: str, db_path: str | Path = DB_PATH) -> Optional[str]:
     hands back a different slug and the client navigates to that instead. The
     alternative, returning nothing, pushes the problem to the client and is the
     behaviour this replaced.
+
+    `exchange` and `cik` exist because a ticker can be listed more than once.
+    A bare ticker is only the right answer when it is unclaimed. Returning a
+    numeric fallback to both the NSE row and the NYSE ADR row sent the ADR to
+    whichever company owned that slug, so the preview disagreed with the register
+    it was previewing. The rule itself lives in ``slugs.resolve_unique_slug``,
+    shared with ``assign_slugs``, so the two cannot drift.
     """
-    return claim_slug(ticker, db_path)
+    from backend.data.universe.slugs import resolve_unique_slug
+
+    conn = _connect(db_path)
+    try:
+        taken = {
+            r[0].upper()
+            for r in conn.execute(
+                "SELECT slug FROM company_universe WHERE slug IS NOT NULL"
+            ).fetchall()
+        }
+    finally:
+        conn.close()
+    slug = resolve_unique_slug(ticker, exchange, cik, taken)
+    return slug or None
 
 
 def list_slugs(db_path: str | Path = DB_PATH) -> list[UniverseCompany]:
