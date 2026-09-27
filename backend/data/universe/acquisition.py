@@ -8,6 +8,7 @@ applies non-financial sector filtering, and enforces canonical company_id unique
 """
 
 import logging
+import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -18,12 +19,20 @@ import requests
 from backend.data.pipeline import DB_PATH
 from backend.data.universe.models import UniverseCompany
 from backend.data.universe.sector_filter import is_financial_sector
+from backend.data.universe.slugs import build_company_id, dedupe_company_ids
 from backend.data.universe.store import save_universe_companies
 
 logger = logging.getLogger(__name__)
 
+# SEC EDGAR's fair-access policy requires a User-Agent carrying a real, monitored
+# contact address. Requests bearing an unmonitored or non-existent domain risk
+# throttling or blocking, which at full-universe scale is the difference between
+# a complete sweep and a silent partial one. Configured, not hardcoded, so the
+# address is correct in every environment without a code change.
+SEC_CONTACT_EMAIL = os.getenv("SEC_CONTACT_EMAIL", "karbburn@gmail.com")
+
 SEC_HEADERS = {
-    "User-Agent": "ValencePlatform team@valence.com",
+    "User-Agent": f"Valence equity-valuation-platform {SEC_CONTACT_EMAIL}",
     "Accept-Encoding": "gzip, deflate",
 }
 
@@ -44,7 +53,10 @@ def acquire_india_universe() -> List[UniverseCompany]:
 
     for item in INDIA_EQUITIES:
         sym = item["symbol"].strip().upper()
-        cid = f"{sym.lower()}_{sym.lower()}"
+        cid = build_company_id(sym, "india")
+        if not cid:
+            logger.warning("Skipping India symbol with no usable company_id: %r", sym)
+            continue
         is_fin, reason = is_financial_sector(item["sector"], item["industry"])
 
         c = UniverseCompany(
@@ -87,12 +99,18 @@ def acquire_us_universe() -> List[UniverseCompany]:
                 if any(x in ticker for x in ["-P", ".P", "-W", ".W", "-U", ".U", "/"]):
                     continue
 
-                cid = f"{ticker.lower()}_us"
-                
+                cid = build_company_id(ticker, "us")
+                if not cid:
+                    logger.warning("Skipping EDGAR ticker with no usable company_id: %r", ticker)
+                    continue
+
+                cik = entry.get("cik_str")
+                cik = str(cik) if cik is not None else None
+
                 # Check financial keywords in title
                 name_upper = name.upper()
                 is_fin = any(kw in name_upper for kw in [
-                    " BANK", " BANC", "BANCSHARES", "FINANCIAL", "CAPITAL CORP", 
+                    " BANK", " BANC", "BANCSHARES", "FINANCIAL", "CAPITAL CORP",
                     "INSURANCE", "REIT", "REAL ESTATE INVESTMENT", "MORTGAGE", "TRUST", "FUNDS"
                 ])
                 reason = "Financial Institution Filter" if is_fin else "Non-Financial Filer"
@@ -107,8 +125,9 @@ def acquire_us_universe() -> List[UniverseCompany]:
                     industry="Financial" if is_fin else "Corporate 10-K Filer",
                     is_financial=is_fin,
                     onboarding_status="onboarded" if cid in ONBOARDED_SEEDS else "not_yet_attempted",
-                    onboarding_notes=f"Acquired via SEC EDGAR (CIK: {entry.get('cik_str')}) - {reason}",
+                    onboarding_notes=f"Acquired via SEC EDGAR (CIK: {cik}) - {reason}",
                     last_updated=now,
+                    cik=cik,
                 )
                 companies.append(c)
     except Exception as e:
@@ -147,8 +166,16 @@ def acquire_us_universe() -> List[UniverseCompany]:
 
 
 def acquire_full_universe(db_path: str | Path = DB_PATH) -> List[UniverseCompany]:
-    """Acquire full universe (India + US), enforce company_id uniqueness, and persist to store."""
-    from backend.data.universe.store import clean_corrupted_legacy_universe_ids, save_universe_companies
+    """Acquire full universe (India + US), enforce company_id uniqueness, and persist to store.
+
+    Every row is sanitized and given a public slug before it is written, so the
+    table lands in its final shape. Re-running is idempotent.
+    """
+    from backend.data.universe.store import (
+        assign_slugs_to_universe,
+        clean_corrupted_legacy_universe_ids,
+        save_universe_companies,
+    )
 
     clean_corrupted_legacy_universe_ids(db_path=db_path)
     india_c = acquire_india_universe()
@@ -156,12 +183,14 @@ def acquire_full_universe(db_path: str | Path = DB_PATH) -> List[UniverseCompany
 
     all_companies = india_c + us_c
 
-    # Deduplicate by company_id (keep first)
-    seen: Dict[str, UniverseCompany] = {}
-    for c in all_companies:
-        if c.company_id not in seen:
-            seen[c.company_id] = c
+    # Sanitizing is lossy (BRK.B and BRK-B both want brk_b_us), so a collision
+    # gets a deterministic suffix instead of the earlier behaviour, which kept
+    # the first row and silently deleted a real company from the universe.
+    unique_companies, renamed = dedupe_company_ids(all_companies)
+    if renamed:
+        logger.warning("Renamed %d universe rows whose sanitized company_id collided", renamed)
 
-    unique_companies = list(seen.values())
     save_universe_companies(unique_companies, db_path=db_path)
+    assigned = assign_slugs_to_universe(db_path=db_path)
+    logger.info("Acquired %d companies, assigned %d slugs", len(unique_companies), assigned)
     return unique_companies

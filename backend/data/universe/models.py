@@ -22,6 +22,13 @@ class UniverseCompany(BaseModel):
     onboarding_status: OnboardingStatus = "not_yet_attempted"
     onboarding_notes: Optional[str] = None
     last_updated: datetime = Field(default_factory=datetime.now)
+    # Public URL segment, assigned by backend.data.universe.slugs.assign_slugs.
+    # Absent until a slug pass has run over the universe.
+    slug: Optional[str] = None
+    # SEC Central Index Key. Populated for EDGAR-acquired rows. Doubles as the
+    # disambiguator when two filers share a ticker, because every EDGAR row
+    # carries exchange="SEC_EDGAR" and exchange cannot separate them.
+    cik: Optional[str] = None
 
 
 class MappingConfidenceResult(BaseModel):
