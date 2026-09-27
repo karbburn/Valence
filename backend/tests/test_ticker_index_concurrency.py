@@ -87,6 +87,7 @@ def test_one_market_slow_fetch_does_not_block_the_other_market(
     us_started = threading.Event()
     us_result: dict = {}
     india_latency: list[float] = []
+    india_result: dict = {}
 
     def genuinely_slow_us_fetch():
         us_started.set()
@@ -105,7 +106,12 @@ def test_one_market_slow_fetch_does_not_block_the_other_market(
         t0 = time.time()
         got = ti.index_for("india")
         india_latency.append(time.time() - t0)
-        assert got == {"INR": india_entry}
+        # Recorded, not asserted. An assert in a non-main thread is swallowed:
+        # pytest reports the failure as a warning and the test passes, which is
+        # how a waiter returning `{}` — the exact regression this suite exists to
+        # catch — could leave this green. The claim under test below is about
+        # latency, and it is only half a claim without the data being right.
+        india_result["value"] = got
 
     us_thread = threading.Thread(target=fetch_us)
     india_thread = threading.Thread(target=fetch_india)
@@ -115,12 +121,20 @@ def test_one_market_slow_fetch_does_not_block_the_other_market(
     us_thread.join(timeout=30)
     india_thread.join(timeout=30)
 
+    assert not us_thread.is_alive(), "the US fetch never finished"
+    assert not india_thread.is_alive(), "the India caller never finished"
     assert india_latency, "the India caller never ran"
     # A global lock blocks India for the full 2.5s of the US fetch. Per-market
     # in-flight markers make it independent, so it is milliseconds.
     assert india_latency[0] < 0.5, (
         f"an unrelated market was blocked for {india_latency[0]:.2f}s by a US fetch"
     )
+    assert india_result.get("value") == {"INR": india_entry}, (
+        f"India got {india_result.get('value')!r}, which is not the fetched index"
+    )
+    assert us_result.get("value") == {
+        "ZZZ": ti.ListedCompany("ZZZ", "Slow Co", "us", "SEC")
+    }, f"the US fetch returned {us_result.get('value')!r}"
 
 
 def test_concurrent_callers_share_one_fetch(isolated_cache, monkeypatch):
