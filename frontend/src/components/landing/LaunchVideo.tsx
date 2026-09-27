@@ -63,21 +63,26 @@ export function LaunchVideo() {
           .
         </video>
 
-        {/* Play affordance. The whole frame stays a click target, but there is no
-            dimming scrim behind it. A 40% near-black wash over the frame was
-            tuned for a dark screen recording and turned a light title card into
-            a grey one. The pill carries its own background, so it stays legible
-            over any frame without touching the image. */}
+        {/* Play affordance. The whole frame stays a click target, but the pill is
+            anchored top-left rather than centred. Centred put it straight over
+            the 12.45%, which is the one number the card exists to show. Top-left
+            also clears the native control bar, which Chrome keeps on screen for
+            a paused video and which owns the bottom strip.
+
+            No dimming scrim. A 40% near-black wash over the frame was tuned for a
+            dark screen recording and turned this light card grey. The pill
+            carries its own background, so it reads over any frame without
+            touching the image. */}
         {!started && (
           <button
             type="button"
             onClick={() => videoRef.current?.play()}
-            className="absolute inset-0 group flex items-center justify-center"
+            className="absolute inset-0 group flex items-start justify-start p-3 sm:p-4"
             aria-label="Play the clip"
           >
-            <span className="flex items-center gap-3 h-12 pl-4 pr-6 rounded-sm bg-canvas/90 border border-border group-hover:border-accent-border group-hover:bg-surface-2 transition-colors">
-              <Play className="w-5 h-5 text-accent fill-accent" aria-hidden />
-              <span className="text-[13px] font-semibold text-text-main">Play the clip</span>
+            <span className="inline-flex items-center gap-2.5 h-10 pl-3.5 pr-4 rounded-sm bg-canvas/90 border border-border group-hover:border-accent-border group-hover:bg-surface-2 transition-colors">
+              <Play className="w-4 h-4 text-accent fill-accent" aria-hidden />
+              <span className="text-[12.5px] font-semibold text-text-main">Play the clip</span>
             </span>
           </button>
         )}
