@@ -256,8 +256,13 @@ export default function Workbench({ companyId, initialSpec, syncUrl = true }: Wo
 
   return (
     <div className="min-h-screen bg-canvas text-text-main flex flex-col font-sans">
-      {/* Mobile Viewport Guard (<900px) */}
-      <MobileGuard />
+      {/* Mobile Viewport Guard (<900px). Given the company, because under that
+          width this overlay is the entire page and a deep-link visitor has no
+          other way to tell which ticker they landed on. */}
+      <MobileGuard
+        companyName={spec?.metadata?.name}
+        ticker={spec?.metadata?.ticker}
+      />
 
       {/* Page Loading Overlay */}
       <LoadingOverlay
