@@ -30,7 +30,14 @@ export const metadata: Metadata = {
 }
 
 const RAIL_LIMIT = 8
-const PREVIEW_TICKER = 'NVDA'
+// A company whose audit is not a clean sweep. NVDA passes 10 of 10, which
+// makes a section headed "it reports its own failures" look like a screenshot.
+// 15 of the 22 listed companies skip at least one check, and for most of them
+// it is cash_flow_reconciles: the reported cash flow statement does not
+// articulate with balance sheet cash across the historical periods. That is a
+// real finding, it is the reason the check exists, and showing it is the whole
+// argument. Apple is the most recognisable of them.
+const PREVIEW_TICKER = 'AAPL'
 
 interface RailItem {
   company: ResolvedSlug
@@ -54,14 +61,27 @@ async function loadRail(): Promise<RailItem[]> {
   const page = await getManifestServer(0, 500)
   if (!page) return []
 
-  const ready = page.companies.filter((c) => c.has_model).slice(0, RAIL_LIMIT)
+  const ready = page.companies.filter((c) => c.has_model)
   // Sequential on purpose. These are several large payloads against a
   // single-instance backend, and firing them together buys nothing but a
   // thundering herd against a free tier.
+  //
+  // Overshoot the limit, because a company whose DCF values equity below zero
+  // is not a result and is dropped below, and the rail still has to fill.
   const items: RailItem[] = []
   for (const company of ready) {
+    if (items.length >= RAIL_LIMIT) break
     const spec = await getModelSpecServer(company.company_id)
-    items.push({ company, ...summarise(spec) })
+    const summary = summarise(spec)
+    // A non-positive implied share price means the enterprise came out worth
+    // less than its net debt, so the model is reporting a degenerate solve
+    // rather than a valuation. Two listed companies are in that state, one of
+    // them at -215% against market. Set beside valid results in the same
+    // implied-versus-market format it reads as an opinion, and it is the same
+    // mistake this page argues against elsewhere: printing a number the engine
+    // could not defend. Excluded here, and the /stock index marks them.
+    if (summary.implied != null && summary.implied <= 0) continue
+    items.push({ company, ...summary })
   }
   return items
 }
@@ -100,7 +120,7 @@ export default async function LandingPage() {
             text against a full-bleed media band below it. */}
         <section className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 pt-14 sm:pt-16 lg:pt-20 pb-10 sm:pb-12">
           <div className="max-w-[760px]">
-            <h1 className="text-[40px] sm:text-[54px] lg:text-[62px] font-bold tracking-[-0.025em] leading-[1.02] text-text-main">
+            <h1 className="text-balance text-[40px] sm:text-[54px] lg:text-[62px] font-bold tracking-[-0.025em] leading-[1.02] text-text-main">
               A DCF you can argue with.
             </h1>
             <p className="mt-5 text-[15px] sm:text-[16px] text-text-muted leading-relaxed max-w-[46ch]">
@@ -375,9 +395,16 @@ export default async function LandingPage() {
                             <span className="block font-mono text-[11.5px] text-text-main truncate">
                               {c.check_name}
                             </span>
-                            <span className="block text-[11px] text-text-dim leading-relaxed line-clamp-2">
-                              {c.detail}
-                            </span>
+                            {/* Most passing checks carry no detail, because there is
+                                nothing to report. Rendering the empty element anyway
+                                left a blank second line and made nine rows a
+                                different height from the one that had something to
+                                say. */}
+                            {c.detail ? (
+                              <span className="block text-[11px] text-text-dim leading-relaxed line-clamp-2">
+                                {c.detail}
+                              </span>
+                            ) : null}
                           </span>
                         </li>
                       )
