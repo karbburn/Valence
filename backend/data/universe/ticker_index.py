@@ -53,6 +53,10 @@ SEC_HEADERS = {
 
 CACHE_DIR = Path(__file__).resolve().parents[2] / "data" / "cache" / "ticker_index"
 CACHE_TTL_SECONDS = 24 * 60 * 60
+# How long a failed fetch is trusted as "still down". Short, so a blip clears
+# quickly, long enough that an outage does not cost one 30s timeout per
+# keystroke on an unauthenticated endpoint.
+FAILED_TTL_SECONDS = 5 * 60
 FETCH_TIMEOUT = 30
 
 # Only these two markets are supported end to end. An index row outside them is
@@ -137,7 +141,11 @@ assert all(len(s) >= 5 for s in _INSTITUTION_STEMS), (
 )
 
 _lock = threading.Lock()
-_cache: dict[str, tuple[float, dict[str, "ListedCompany"]]] = {}
+# market -> (cached_at, entries, is_failed)
+_cache: dict[str, tuple[float, dict[str, "ListedCompany"], bool]] = {}
+# One in-flight marker per market, so concurrent callers wait on the market
+# they actually want instead of on a single global lock held across the network.
+_inflight: dict[str, threading.Event] = {}
 
 
 @dataclass(frozen=True)
@@ -275,28 +283,77 @@ _FETCHERS = {"us": _fetch_us, "india": _fetch_india}
 
 
 def index_for(market: str) -> dict[str, ListedCompany]:
-    """The whole listed set for one market, from cache when it is fresh."""
+    """The whole listed set for one market, from cache when it is fresh.
+
+    The fetch happens OUTSIDE the lock. Holding a process-global lock across a
+    30-second network call meant the first search after a cold start blocked
+    every other request in the process for up to 30 seconds per market, and
+    because `search` reads both markets, a single user request could hold a
+    search open for 60. Worse, the failure path returned `{}` without caching
+    it, so when the upstream was down the *next* request paid the same 30
+    seconds again, forever, and on an unauthenticated endpoint.
+
+    So: lock only to read the cache and claim the in-flight marker, release it
+    for the fetch, then re-lock to publish. A second caller that arrives while a
+    fetch is in flight waits on that market's own event rather than on a global
+    lock, and a failure is cached for a short negative TTL so an outage costs one
+    timeout per market per window instead of one per keystroke.
+    """
     if market not in SUPPORTED:
         return {}
+
+    now = time.time()
     with _lock:
         hit = _cache.get(market)
-        if hit and (time.time() - hit[0]) < CACHE_TTL_SECONDS:
+        if hit and (now - hit[0]) < _cache_ttl(hit[2]):
             return hit[1]
+        gate = _inflight.get(market)
+        first = gate is None
+        if first:
+            gate = _inflight[market] = threading.Event()
+
+    if not first:
+        # Another thread is fetching this market. Wait for it, bounded, so a
+        # hung fetch cannot pin this request open forever.
+        if not gate.wait(timeout=FETCH_TIMEOUT + 5):
+            logger.warning("ticker index still unavailable for %s after waiting", market)
+            return {}
+        with _lock:
+            hit = _cache.get(market)
+        if hit and (time.time() - hit[0]) < _cache_ttl(hit[2]):
+            return hit[1]
+        return {}
+
+    try:
         cached = _read_cache(market)
         if cached is not None:
-            _cache[market] = (time.time(), cached)
+            with _lock:
+                _cache[market] = (time.time(), cached, False)
             return cached
-        try:
-            fetched = _FETCHERS[market]()
-        except Exception as exc:
-            # Never take the search down because an upstream list is
-            # unreachable. The curated companies still resolve; the wider
-            # universe is simply unavailable for now.
-            logger.warning("ticker index fetch failed for %s: %s", market, exc)
-            return {}
+        fetched = _FETCHERS[market]()
+    except Exception as exc:
+        # A short negative TTL. The curated companies still resolve and the
+        # endpoint still answers; the wider universe is simply unavailable for
+        # the next few minutes rather than costing every request a full timeout.
+        with _lock:
+            _cache[market] = (time.time(), {}, True)
+        logger.warning("ticker index fetch failed for %s: %s", market, exc)
+        return {}
+    else:
         _write_cache(market, fetched)
-        _cache[market] = (time.time(), fetched)
+        with _lock:
+            _cache[market] = (time.time(), fetched, False)
         return fetched
+    finally:
+        with _lock:
+            gate = _inflight.pop(market, None)
+        if gate is not None:
+            gate.set()
+
+
+def _cache_ttl(failed: bool) -> int:
+    """How long a cache entry is trusted. A failure gets a much shorter window."""
+    return FAILED_TTL_SECONDS if failed else CACHE_TTL_SECONDS
 
 
 def lookup(ticker: str) -> Optional[ListedCompany]:
@@ -316,7 +373,7 @@ def lookup(ticker: str) -> Optional[ListedCompany]:
     return None
 
 
-def search(query: str, limit: int = 8) -> list["ListedCompany"]:
+def search(query: str, limit: int = 8, market: Optional[str] = None) -> list["ListedCompany"]:
     """Ticker and company-name search over the listed universe.
 
     Four tiers, strictest first: the exact ticker, a ticker prefix, a company
@@ -347,9 +404,13 @@ def search(query: str, limit: int = 8) -> list["ListedCompany"]:
     name_contains: list[tuple[tuple, ListedCompany]] = []
     seen: set[tuple[str, str]] = set()
 
-    for market in ("us", "india"):
-        for ticker, company in index_for(market).items():
-            marker = (ticker, market)
+    # Scope decides what gets ranked. Filtering after the fact spends the limit
+    # on rows that are about to be discarded, so a request scoped to one market
+    # could return far fewer than the limit it asked for.
+    markets = (market,) if market in ("us", "india") else ("us", "india")
+    for mkt in markets:
+        for ticker, company in index_for(mkt).items():
+            marker = (ticker, mkt)
             if marker in seen:
                 continue
             if ticker == key:
@@ -443,7 +504,7 @@ def is_probable_financial(name: str) -> bool:
     return any(f" {abbr} " in lowered for abbr in _INSTITUTION_ABBREVIATIONS)
 
 
-def discover(query: str, limit: int = 8) -> list["ListedCompany"]:
+def discover(query: str, limit: int = 8, market: Optional[str] = None) -> list["ListedCompany"]:
     """Listed companies matching a query that the local store does not hold.
 
     The local store is the source of truth for what Valence already models, so it
@@ -467,7 +528,7 @@ def discover(query: str, limit: int = 8) -> list["ListedCompany"]:
         known = set()
 
     out: list[ListedCompany] = []
-    for company in search(query, limit=limit * 3):
+    for company in search(query, limit=limit * 3, market=market):
         if company.ticker.upper() in known:
             continue
         if is_probable_financial(company.name):

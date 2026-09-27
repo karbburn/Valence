@@ -827,16 +827,26 @@ def search_companies(
         })
 
     if len(payload) < limit and q.strip():
-        # Market-filtered the same way as the local pass, so a UI that scopes
-        # search to one market does not get the other market leaking in.
-        found = ticker_index.discover(q, limit=limit - len(payload))
-        known = {row["ticker"].upper() for row in payload}
+        # The market is passed INTO discovery rather than filtered out after it.
+        #
+        # Filtering afterwards spent the result budget on a market-blind ranking
+        # and then discarded the rows that did not match, so `market=us&limit=3`
+        # returned one row because three Indian names filled the budget first.
+        # The scope now decides what gets ranked.
+        found = ticker_index.discover(q, limit=limit - len(payload), market=m_filter)
+
+        # Dedup on (ticker, market), which is the key `search` itself uses. A
+        # ticker-only key silently deleted a genuinely distinct company: the
+        # Indian and US lines of one name differ by market, and dropping the
+        # second because the ticker matched left a user who wanted the ADR with
+        # no way to reach it. The local pass can also hold both listings, so the
+        # two passes have to agree on identity.
+        known = {(row["ticker"].upper(), row["market"]) for row in payload}
         for listed in found:
-            if listed.market != (m_filter or listed.market):
+            marker = (listed.ticker.upper(), listed.market)
+            if marker in known:
                 continue
-            if listed.ticker.upper() in known:
-                continue
-            known.add(listed.ticker.upper())
+            known.add(marker)
             payload.append({
                 # The id the ingestion pipeline will key on, built the same way
                 # as every stored company so opening the result needs no second
