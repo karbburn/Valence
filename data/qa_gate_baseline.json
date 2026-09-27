@@ -1,0 +1,50 @@
+{
+  "aapl_us": [
+    "implied_price_deviation_is_explainable"
+  ],
+  "amba_us": [
+    "equity_value_positive",
+    "implied_price_deviation_is_explainable"
+  ],
+  "amzn_us": [
+    "bridge_inputs_plausible",
+    "implied_price_deviation_is_explainable"
+  ],
+  "awi_us": [],
+  "bhartiartl_bhartiartl": [],
+  "dox_us": [],
+  "googl_us": [
+    "implied_price_deviation_is_explainable"
+  ],
+  "hcltech_hcltech": [
+    "bridge_inputs_plausible"
+  ],
+  "idea_idea": [
+    "equity_value_positive",
+    "implied_price_deviation_is_explainable"
+  ],
+  "infy_infy": [],
+  "infy_us": [
+    "implied_price_deviation_is_explainable"
+  ],
+  "lt_lt": [],
+  "msft_us": [],
+  "nvda_us": [],
+  "ongc_ongc": [],
+  "reliance_reliance": [
+    "implied_price_deviation_is_explainable"
+  ],
+  "sunpharma_sunpharma": [
+    "bridge_inputs_plausible",
+    "implied_price_deviation_is_explainable"
+  ],
+  "tatamotors_tatamotors": [],
+  "tatasteel_tatasteel": [
+    "implied_price_deviation_is_explainable"
+  ],
+  "tcs_tcs": [],
+  "tsm_us": [
+    "bridge_inputs_plausible"
+  ],
+  "wipro_wipro": []
+}

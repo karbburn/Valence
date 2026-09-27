@@ -22,6 +22,11 @@ from backend.validation.data_quality import (
     check_data_provenance_quality,
     check_historicals_are_reported,
 )
+from backend.validation.input_plausibility import (
+    check_bridge_inputs_plausible,
+    check_equity_value_positive,
+    check_implied_price_deviation_is_explainable,
+)
 from backend.validation.model_checks import (
     check_dcf_bridge_reconciles,
     check_no_missing_critical_inputs,
@@ -45,6 +50,14 @@ CHECK_SUITE: List[Tuple[str, Callable[[ModelSpecification], ModelCheckResult]]] 
     ("data_quality", check_no_missing_critical_inputs),
     ("data_quality", check_data_provenance_quality),
     ("data_quality", check_historicals_are_reported),
+    # Plausibility of the inputs themselves. Every check above asks whether the
+    # arithmetic ties or whether a field is populated. None of them ask whether
+    # the number that was read is believable, which is how Oracle came out with
+    # 10 of 10 checks passed and an implied price 66% below the market, carrying
+    # total debt of 14,900 beside a reported lease liability of 30,594.
+    ("data_quality", check_bridge_inputs_plausible),
+    ("data_quality", check_equity_value_positive),
+    ("data_quality", check_implied_price_deviation_is_explainable),
 ]
 
 

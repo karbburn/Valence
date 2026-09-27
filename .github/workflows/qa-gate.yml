@@ -1,0 +1,131 @@
+name: QA gate
+
+# The plausibility gate over every covered company, on every push and on a weekly
+# schedule.
+#
+# This is the loop's guard rail. `backend/validation/input_plausibility.py` asks
+# whether the *inputs* are believable, which none of the original ten checks
+# did. Measured on 2026-09-27 those checks let through:
+#
+#   ORCL     total debt 14,900 beside a reported lease liability of 30,594,
+#            producing net cash of 22,177 and an implied price 66% below market
+#   WMT      implied $29.68 against a $107.98 market
+#   INFY (NYSE ADR) implied +445% against the traded price
+#
+# all three at "10 of 10 checks passed".
+#
+# The gate compares against `data/qa_gate_baseline.json` rather than demanding a
+# clean run, because 11 of the 22 covered models already fail and a permanently
+# red gate is one nobody reads. A model that *starts* failing fails this job. A
+# model that *stops* failing is reported so the baseline can be tightened.
+#
+# See scripts/qa_gate.py for why the baseline records passing models too.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/validation/**"
+      - "backend/models/spec/**"
+      - "backend/valuation/**"
+      - "backend/data/**"
+      - "scripts/qa_gate.py"
+      - "data/qa_gate_baseline.json"
+      - ".github/workflows/qa-gate.yml"
+  schedule:
+    # Mondays 05:00 UTC, before the Indian market opens. Scheduled workflows can
+    # be delayed by GitHub's own queue, so this is a nudge, not a deadline.
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      update_baseline:
+        description: "Accept the current failures as the new baseline"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  # Never let two runs race to write the baseline.
+  group: qa-gate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install openpyxl pdfplumber yfinance requests
+
+      # The build path reaches out to SEC EDGAR and to the NSE, and a cold CI
+      # runner has no model cache, so this run rebuilds every company from
+      # filings. That is the point: the gate must exercise the same cold path a
+      # first-time visitor does, not a warm cache that hides an ingestion break.
+      #
+      # tee rather than a bare run: the pipeline is the only thing that makes the
+      # step fail, and the step summary is the only place a human reads why.
+      - name: Run the plausibility gate
+        run: |
+          set -o pipefail
+          if [ "${{ inputs.update_baseline }}" = "true" ]; then
+            python scripts/qa_gate.py --update-baseline 2>&1 | tee gate_output.txt
+          else
+            python scripts/qa_gate.py 2>&1 | tee gate_output.txt
+          fi
+
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo "## QA gate"
+            echo
+            echo '```'
+            grep -E 'checked|failing|baseline|regressions|fixed|REGRESSION|no regressions' gate_output.txt || echo "(no summary line: the run failed before the gate reported)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the gate output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-gate-output
+          path: |
+            data/qa_gate_baseline.json
+            gate_output.txt
+          retention-days: 30
+
+      # Only runs when the gate was asked to accept the current state, so an
+      # ordinary red gate never rewrites the baseline and quietly declares the
+      # regression acceptable.
+      - name: Open a PR to tighten the baseline
+        if: github.event_name == 'workflow_dispatch' && inputs.update_baseline
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: chore/qa-gate-baseline
+          delete-branch: true
+          title: "chore(qa): tighten the plausibility baseline"
+          commit-message: "chore(qa): tighten the plausibility baseline"
+          labels: data, automated
+          body: |
+            Some models stopped failing a plausibility check.
+
+            These were previously recorded as failing and now pass, so the
+            baseline is being narrowed. The PR body above shows which checks
+            were fixed and for which companies.
+
+            Review whether each fix is a real input correction and not a
+            threshold that was loosened to make a failure disappear.
