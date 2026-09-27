@@ -41,6 +41,24 @@ V1_CHECK_NAMES = [
         "Every historical period traces to a figure that was actually published, "
         "not to a hand-entered projection.",
     ),
+    (
+        "bridge_inputs_plausible",
+        "data_quality",
+        "Debt, cash and lease figures on the bridge can coexist; total debt is not "
+        "smaller than a lease component the note says it already contains.",
+    ),
+    (
+        "equity_value_positive",
+        "data_quality",
+        "Equity value is positive, so the model does not publish a negative implied "
+        "share price as if it were a valuation.",
+    ),
+    (
+        "implied_price_deviation_is_explainable",
+        "data_quality",
+        "Implied price is not an implausible distance from the traded price, which "
+        "would point at a misread input rather than a valuation view.",
+    ),
 ]
 
 
