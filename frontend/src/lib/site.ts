@@ -4,7 +4,7 @@ export const SITE_URL =
 export const SITE_NAME = 'Valence'
 
 export const SITE_DESCRIPTION =
-  'Browser-based equity valuation and 3-statement financial modeling workbench for US and Indian equities: DCF, WACC, trading comps, PE returns, and a 30-tab Excel exporter.'
+  'Browser-based equity valuation and 3-statement financial modeling workbench for US and Indian equities: DCF, WACC, trading comps, PE returns, and a 31-tab Excel exporter.'
 
 /**
  * Default page title. Uses a colon rather than a dash.
@@ -16,6 +16,36 @@ export const SITE_DESCRIPTION =
 export const SITE_TITLE = `${SITE_NAME}: Equity Valuation & Financial Modeling Workbench`
 
 export const AUTHOR = { name: 'Sourabh', url: 'https://www.sourabhpradhan.in/' }
+
+/**
+ * The brand share card, and the reason it is referenced rather than co-located.
+ *
+ * A file-based `opengraph-image` in a route segment is applied to that segment
+ * and to its descendants — but a descendant that declares its own `openGraph`
+ * object REPLACES the inherited image instead of merging with it, and silently
+ * ships with no `og:image` at all. `/stock` and `/methodology` both declare
+ * their own title, description and URL, so both were doing exactly that: correct
+ * text, no picture, on every share of both pages.
+ *
+ * Referencing one public asset from a constant fixes it for any route and cannot
+ * regress, because a route that adds its own `openGraph` has to spread this in
+ * and so is looking at the block anyway. A new page should therefore always
+ * write `images: [OG_IMAGE]` alongside its own title and description.
+ *
+ * The per-ticker card is the deliberate exception: it is generated from that
+ * company's own valuation, so it stays a dynamic `opengraph-image` in its own
+ * segment and deliberately does not use this.
+ *
+ * Must stay 1200x630. That is the canonical Open Graph card size, and the
+ * dimensions are published alongside the URL so crawlers need not download the
+ * file to learn them.
+ */
+export const OG_IMAGE = {
+  url: `${SITE_URL.replace(/\/$/, '')}/opengraph.png`,
+  width: 1200,
+  height: 630,
+  alt: `${SITE_NAME}: equity valuation and financial modeling workbench`,
+}
 
 // Single source of truth for the author's profiles. The footer renders from
 // this rather than hardcoding URLs, and SOCIAL feeds the Organization
