@@ -154,7 +154,27 @@ def run_valuation(
         cash_and_bank = constants.resolve(
             snapshot.terms.get("cash_and_bank"), cash_and_bank
         )
+        # Whether short-term investments were MEASURED or are the leftover.
+        #
+        # The snapshot's own total is used rather than a second sum of its terms,
+        # because a feed's total already contains components the separate lines
+        # also carry. When the feed does not name a short-term investment line at
+        # all, the balance below is the difference between its liquid total and
+        # its cash — a residual, not a reported balance. It is still the right
+        # number for the bridge, since the liquid total is what the accounts
+        # support, but it must not be published as though a line had been read.
+        mkt_sec_derived = "marketable_securities" not in (snapshot.terms or {})
         current_inv = max(0.0, snapshot.total_liquid_assets - cash_and_bank)
+        mkt_sec_derivation = (
+            f"DERIVED, not reported. The source states total liquid assets of "
+            f"{snapshot.total_liquid_assets:,.0f} and cash of "
+            f"{cash_and_bank:,.0f}, and does not break out short-term "
+            f"investments. This line is the difference: "
+            f"{snapshot.total_liquid_assets:,.0f} - {cash_and_bank:,.0f} = "
+            f"{current_inv:,.0f}. It is whatever the source folded into its "
+            f"liquid total without naming, and is not a balance a reader will "
+            f"find in the accounts."
+        ) if mkt_sec_derived else ""
         minority_int = constants.resolve(snapshot.terms.get("minority_interest"), minority_int)
         pref_stock = constants.resolve(snapshot.terms.get("preferred_stock"), pref_stock)
         debt_cr = snapshot.total_debt
@@ -170,6 +190,10 @@ def run_valuation(
         debt_cr = annual_total_debt
         bridge_as_of = latest_hist
         bridge_source = "filed_annual_balance_sheet"
+        # The filed annual statement carries investments as their own line, so
+        # the balance is reported rather than residual.
+        mkt_sec_derived = False
+        mkt_sec_derivation = ""
     logger.info("%s bridge balance sheet: %s (%s)", company_id, bridge_as_of, bridge_note)
 
     # Liquid cash used in WACC weights
@@ -313,6 +337,8 @@ def run_valuation(
                 "balance_sheet_as_of": bridge_as_of,
                 "balance_sheet_source": bridge_source,
                 "debt_basis_note": DEBT_BASIS_NOTE,
+                "marketable_securities_derived": mkt_sec_derived,
+                "marketable_securities_derivation": mkt_sec_derivation,
             }
         )
 

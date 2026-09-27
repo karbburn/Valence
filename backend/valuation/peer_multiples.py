@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import warnings
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional
 
 from backend.data.providers.run_rate import (
@@ -120,6 +121,7 @@ class PeerMultiples:
     balance_sheet_as_of: str
     price_as_of: str
     shares_basis: str = ""
+    price_source: str = ""
 
     def as_dict(self) -> dict:
         return self.__dict__.copy()
@@ -203,6 +205,78 @@ _SHARE_ROWS = (
 )
 
 
+def _peer_price(handle, symbol: str, info: dict) -> tuple[Optional[float], str, str]:
+    """A peer's share price, from whichever source answers.
+
+    Order matters and `.info` is LAST. The provider's quote-summary call needs a
+    session crumb, and crumbs are rate-limited per requesting address; a shared
+    host address is refused regularly, returning no summary at all. When the peer
+    path read its price only from that call, every peer was dropped on such a host
+    and the comparables tab shipped empty — with the reason "only 0 of 5 peers
+    could be sourced", which is true and tells a reader nothing about why.
+
+    The daily price history and the chart endpoint need no crumb, and a daily
+    exchange close is the better price anyway: the quote summary reports a
+    last-trade print, which is a different number for the same day.
+
+    Returns (price, as_of, source).
+    """
+    # 1. Daily close from the price history. Newest session last, and the
+    #    history is what a market capitalisation is conventionally struck on.
+    try:
+        history = handle.history(period="5d", auto_adjust=False)
+        if history is not None and len(history) > 0:
+            closes = [c for c in history["Close"].tolist() if c == c and c and float(c) > 0]
+            if closes:
+                stamps = history.index
+                as_of = ""
+                for stamp in reversed(list(stamps)):
+                    try:
+                        as_of = stamp.date().isoformat()
+                        break
+                    except Exception:
+                        continue
+                return float(closes[-1]), as_of, "daily close (price history)"
+    except Exception as exc:
+        logger.info("Peer %s: price history unavailable (%s)", symbol, exc)
+
+    # 2. The chart endpoint directly, which is a different call path from the
+    #    quote summary and carries no crumb requirement.
+    try:
+        import requests
+
+        response = requests.get(
+            f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}",
+            params={"range": "5d", "interval": "1d"},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=20,
+        )
+        payload = response.json() if response.status_code == 200 else None
+        result = ((payload or {}).get("chart") or {}).get("result") or []
+        if result:
+            closes = [c for c in result[0]["indicators"]["quote"][0]["close"] if c]
+            if closes:
+                stamps = result[0].get("timestamp") or []
+                as_of = ""
+                if stamps:
+                    as_of = datetime.utcfromtimestamp(stamps[-1]).date().isoformat()
+                return float(closes[-1]), as_of, "daily close (chart endpoint)"
+    except Exception as exc:
+        logger.info("Peer %s: chart endpoint unavailable (%s)", symbol, exc)
+
+    # 3. Last, the quote summary, for the crumb-dependent case only.
+    for key in ("currentPrice", "regularMarketPrice", "previousClose"):
+        value = info.get(key) if isinstance(info, dict) else None
+        if value and isinstance(value, (int, float)) and float(value) > 0:
+            as_of = ""
+            raw = info.get("regularMarketTime") if isinstance(info, dict) else None
+            if isinstance(raw, (int, float)):
+                as_of = datetime.utcfromtimestamp(float(raw)).date().isoformat()
+            return float(value), as_of, f"quote summary ({key})"
+
+    return None, "", ""
+
+
 def _resolve_peer_shares(
     handle, info: dict, symbol: str
 ) -> tuple[Optional[float], str]:
@@ -278,10 +352,15 @@ def compute_peer_multiples(
     try:
         info = handle.info or {}
     except Exception:
+        # `.info` is the one call that needs a session crumb, and a crumb fetch
+        # is rate-limited per address. A shared host address therefore loses
+        # `.info` routinely while the statement endpoints, which need no crumb,
+        # carry on working. It must not be load-bearing.
         info = {}
-    price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
-    if not price or not isinstance(price, (int, float)) or price <= 0:
-        logger.info("Peer %s: no live price", symbol)
+
+    price, price_as_of, price_source = _peer_price(handle, symbol, info)
+    if not price:
+        logger.info("Peer %s: no price from any source", symbol)
         return None
 
     annual = getattr(handle, "income_stmt", None)
@@ -482,7 +561,8 @@ def compute_peer_multiples(
         roic_pct=round(roic, 4) if roic is not None else 0.0,
         financials_period=str(annual.columns[0])[:10],
         balance_sheet_as_of=balance_as_of,
-        price_as_of=str(info.get("regularMarketTime") or ""),
+        price_as_of=price_as_of,
+        price_source=price_source,
         shares_basis=shares_basis,
     )
 

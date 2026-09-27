@@ -15,12 +15,28 @@ class WACCBreakdown(BaseModel):
     CAPM is used for the cost of equity.
     """
     risk_free_rate: Optional[float] = None          # % e.g. 7.1 for India 10Y Gsec
-    beta: Optional[float] = None
+    beta: Optional[float] = None                   # the beta actually USED
+    # The beta as published, before any adjustment, and whether one was applied.
+    #
+    # `beta` alone is not enough to describe itself. A Blume-adjusted beta is
+    # defensible, but publishing 1.449 under a note crediting a source that says
+    # 1.67 leaves a reader checking the page against the source and finding a
+    # discrepancy with nothing on the sheet to explain it. Carrying the raw value
+    # and the flag lets the workbook show both figures and name the method.
+    raw_beta: Optional[float] = None                # before adjustment
+    beta_adjusted: bool = False                     # True when Blume was applied
+    beta_adjustment: str = ""                       # the method, in words
     equity_risk_premium: Optional[float] = None     # country + market ERP, e.g. Damodaran
     cost_of_equity: Optional[float] = None          # CAPM = rfr + beta * erp
     pre_tax_cost_of_debt: Optional[float] = None    # % — debt schedule rate (after-tax applied)
     tax_rate: Optional[float] = None                # % — for after-tax cost of debt
     cost_of_debt: Optional[float] = None            # pre_tax * (1 - tax_rate)
+    # True when no cost of debt could be measured for this company and the
+    # published rate is a floor rather than an observation. A rate of zero is
+    # never published against an outstanding borrowing: it is not what the
+    # company pays and it understates the discount rate by the whole after-tax
+    # cost of the debt. The workbook must say which of the two it is showing.
+    cost_of_debt_estimated: bool = False
     equity_weight: Optional[float] = None           # mkt_cap / (mkt_cap + debt)
     debt_weight: Optional[float] = None             # debt / (mkt_cap + debt)
     wacc: Optional[float] = None                    # final WACC %
@@ -105,6 +121,20 @@ class DCFBridge(BaseModel):
     balance_sheet_as_of: Optional[str] = None       # ISO date or period label
     balance_sheet_source: Optional[str] = None      # reported_quarter | filed_annual_balance_sheet
     debt_basis_note: Optional[str] = None           # what counts as debt, in words
+
+    # Whether `marketable_securities` is a REPORTED balance or a residual, and how
+    # the residual was struck.
+    #
+    # When a feed does not break short-term investments out of its liquid-assets
+    # total, the platform takes the difference between that total and cash so the
+    # liquid-assets figure still reconciles. That difference is not a measured
+    # balance of investments — it is whatever the feed folded into the total and
+    # did not name. Publishing it under the label "Marketable Securities" claims
+    # a filing was read that never was, and it is a figure a reader checking
+    # against the accounts will not find. When it is a residual the line says so
+    # and shows the arithmetic.
+    marketable_securities_derived: bool = False
+    marketable_securities_derivation: str = ""
 
 
 class ReverseDCF(BaseModel):

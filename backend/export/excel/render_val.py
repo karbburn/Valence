@@ -47,7 +47,7 @@ from backend.export.excel.styles import (
 )
 from backend.models.spec.forecast import FORECAST_PERIODS
 from backend.models.spec.model_specification import ModelSpecification
-from backend.export.excel.render_fcst import op_row
+from backend.export.excel.render_fcst import WACC_ROW_OFFSET, WACC_ROWS, op_row, wacc_ref
 
 # Named fallbacks
 FALLBACK_WACC = 12.0
@@ -79,6 +79,13 @@ def render_wacc_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
 
     rfr = wacc_b.risk_free_rate if (wacc_b and wacc_b.risk_free_rate) else get_assumption_value(spec, "wacc.risk_free_rate", "all")
     beta = wacc_b.beta if (wacc_b and wacc_b.beta is not None) else get_assumption_value(spec, "wacc.beta", "all")
+    # The beta before any adjustment, and the adjustment itself. Where the
+    # breakdown does not carry them the used figure is also the raw one, so the
+    # page shows a single honest number rather than two identical ones with a
+    # claim that an adjustment happened.
+    raw_beta = wacc_b.raw_beta if (wacc_b and wacc_b.raw_beta is not None) else beta
+    beta_adj_note = (wacc_b.beta_adjustment if wacc_b else "") or ""
+    kd_is_estimate = bool(wacc_b and wacc_b.cost_of_debt_estimated)
     erp = wacc_b.equity_risk_premium if (wacc_b and wacc_b.equity_risk_premium) else get_assumption_value(spec, "wacc.equity_risk_premium", "all")
     debt_pre = wacc_b.pre_tax_cost_of_debt if (wacc_b and wacc_b.pre_tax_cost_of_debt is not None) else get_assumption_value(spec, "wacc.cost_of_debt", "all")
     tax = wacc_b.tax_rate if (wacc_b and wacc_b.tax_rate is not None) else get_assumption_value(spec, "tax_rate", "FY27")
@@ -131,30 +138,66 @@ def render_wacc_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     else:
         wacc_val = FALLBACK_WACC / 100.0
 
+    W = WACC_ROWS
     wacc_rows = [
         ("Risk-Free Rate (Rf) %", rfr / 100.0, None, FMT_PERCENT_PRECISION, True, rfr_note),
-        ("Equity Beta (β)", beta, None, "0.00", True, beta_note),
+        # Both betas, so the page can be checked against its own source.
+        #
+        # The adjusted figure alone contradicted the source named beside it: 1.449
+        # published under a note crediting a registry value of 1.67, with nothing
+        # on the sheet to explain the difference. The adjustment is standard, so
+        # it is shown rather than hidden.
+        (
+            "Equity Beta (β) — as published",
+            raw_beta, None, "0.00", True,
+            beta_note if not beta_adj_note else f"{beta_note}; {beta_adj_note}",
+        ),
+        ("Equity Beta (β) — used in CAPM", beta, None, "0.00", True, beta_note),
         ("Equity Risk Premium (ERP) %", erp / 100.0, None, FMT_PERCENT_PRECISION, True, erp_note),
         (
             "Cost of Equity (r_e) %",
-            ke_val if ke_is_override else "=C6+(C7*C8)",
+            ke_val if ke_is_override
+            else f"=C{W['risk_free_rate']}+(C{W['beta_used']}*C{W['equity_risk_premium']})",
             ke_val,
             FMT_PERCENT_PRECISION,
             ke_is_override,
             "Analyst-set cost of equity (overrides CAPM)"
             if ke_is_override
-            else "CAPM formula: r_e = Rf + Beta * ERP",
+            else "CAPM formula: r_e = Rf + Beta (used) x ERP",
         ),
-        ("Pre-Tax Cost of Debt %", debt_pre / 100.0, None, FMT_PERCENT_PRECISION, True, f"{spec.metadata.ticker} pre-tax cost of borrowings"),
+        (
+            "Pre-Tax Cost of Debt %",
+            debt_pre / 100.0, None, FMT_PERCENT_PRECISION, True,
+            f"{spec.metadata.ticker} pre-tax cost of borrowings"
+            if not kd_is_estimate else
+            "ESTIMATE, not measured. The company does not break a finance cost "
+            "out of its income statement, so no carrying rate can be taken from "
+            "it. This is floored at the "
+            f"{spec.metadata.market.upper()} sovereign 10-year yield, the bound "
+            "that holds by construction: no borrower pays less than its own "
+            "long-dated government bond. It understates the rate a riskier "
+            "borrower would pay, and the debt weight is small enough that the "
+            "effect on WACC is correspondingly small.",
+        ),
         ("Effective Tax Rate %", tax / 100.0, None, FMT_PERCENT_PRECISION, True, "Forecast average tax rate"),
-        ("After-Tax Cost of Debt (r_d) %", "=C10*(1-C11)", kd_val, FMT_PERCENT_PRECISION, False, "Pre-tax * (1 - tax_rate)"),
+        (
+            "After-Tax Cost of Debt (r_d) %",
+            f"=C{W['pre_tax_cost_of_debt']}*(1-C{W['tax_rate']})",
+            kd_val, FMT_PERCENT_PRECISION, False, "Pre-tax * (1 - tax_rate)",
+        ),
         ("Equity Market Weight %", eq_weight, None, FMT_PERCENT, False, "Market Cap / Total Capital"),
         ("Debt Market Weight %", debt_weight, None, FMT_PERCENT, False, "Total Debt / Total Capital"),
-        ("WEIGHTED AVERAGE COST OF CAPITAL (WACC) %", "=(C13*C9)+(C14*C12)", wacc_val, FMT_PERCENT_PRECISION, False, "Total WACC = Equity Weight * r_e + Debt Weight * r_d"),
+        (
+            "WEIGHTED AVERAGE COST OF CAPITAL (WACC) %",
+            f"=(C{W['equity_weight']}*C{W['cost_of_equity']})"
+            f"+(C{W['debt_weight']}*C{W['after_tax_cost_of_debt']})",
+            wacc_val, FMT_PERCENT_PRECISION, False,
+            "Total WACC = Equity Weight x r_e + Debt Weight x r_d",
+        ),
     ]
 
     for idx, (label, val, c_val, fmt, is_inp, note) in enumerate(wacc_rows):
-        r = 6 + idx
+        r = WACC_ROW_OFFSET + idx
         is_tot = idx == len(wacc_rows) - 1
         ws.cell(row=r, column=2, value=label).font = FONT_TOTAL if is_tot else FONT_SUBHEADER
         
@@ -378,7 +421,7 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         c_val = p.discount_factor if p else None
         write_formula_cell(
             ws, 13, c,
-            formula=f"=1/((1+'30_WACC'!C15)^({t}-0.5))",
+            formula=f"=1/((1+{wacc_ref('wacc')})^({t}-0.5))",
             cached_value=c_val,
             num_format="0.000000",
             font=FONT_FORMULA,
@@ -526,6 +569,7 @@ def render_ev_bridge_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     basis = (b_obj.debt_basis_note if b_obj else None) or "not stated"
     bs_note = f"{as_of} balance sheet, {src}"
     pv_note = "Sum of mid-year discounted FCFF, 31_DCF"
+    mkt_sec_is_derived = bool(b_obj and getattr(b_obj, "marketable_securities_derived", False))
 
     write_table_header(
         ws, 5, ["DCF Bridge Line Item", f"Value ({ccy} {unit_lbl})", "Source / Basis"], start_col=2
@@ -543,8 +587,22 @@ def render_ev_bridge_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
          "PV of forecast FCFF plus PV of terminal value"),
         ("cash_and_equivalents", "Plus: Cash & Cash Equivalents", cash_val, cash_val,
          FMT_CURRENCY_INT, bs_note),
-        ("marketable_securities", "Plus: Marketable Securities", mkt_sec_val, mkt_sec_val,
-         FMT_CURRENCY_INT, bs_note),
+        # Whether this is a reported balance or the leftover from a total the
+        # source did not break up decides what the line may be called. A residual
+        # published as "Marketable Securities" claims a line item was read off a
+        # filing that was never opened.
+        (
+            "marketable_securities",
+            "Plus: Marketable Securities"
+            if not mkt_sec_is_derived
+            else "Plus: Other Liquid Assets (derived, not reported)",
+            mkt_sec_val, mkt_sec_val, FMT_CURRENCY_INT,
+            bs_note if not mkt_sec_is_derived
+            else (b_obj.marketable_securities_derivation or
+                  f"{bs_note}; the source does not report short-term "
+                  f"investments separately, so this is the difference between "
+                  f"its total liquid assets and its cash"),
+        ),
         ("non_current_investments", "Plus: Non-Current Investments", non_curr_inv_val,
          non_curr_inv_val, FMT_CURRENCY_INT,
          # A reported zero is not the same as an unreported line, and the two
@@ -641,11 +699,11 @@ def render_terminal_value_tab(wb: Workbook, spec: ModelSpecification) -> Workshe
     tv_rows = [
         ("Terminal Growth Rate %", tgr / 100.0, None, FMT_PERCENT, True, "Perpetuity growth rate (must be < WACC)"),
         (f"FY31 Final Year FCFF ({ccy})", "='31_DCF'!G12", tv.final_year_fcff if tv else 0, FMT_AMOUNT, False, "Final forecast year FCFF"),
-        ("Gordon Growth Undiscounted TV", "=(C7*(1+C6)/('30_WACC'!C15-C6))", tv.terminal_value_undiscounted if tv else 0, FMT_CURRENCY_INT, False, "TV = FCFF_n * (1+g) / (WACC - g)"),
+        ("Gordon Growth Undiscounted TV", f"=(C7*(1+C6)/({wacc_ref('wacc')}-C6))", tv.terminal_value_undiscounted if tv else 0, FMT_CURRENCY_INT, False, "TV = FCFF_n * (1+g) / (WACC - g)"),
         ("Exit Multiple (EV/EBITDA)", exit_mult, None, FMT_MULTIPLE, True, "Exit EV/EBITDA multiple"),
         (f"FY31 Final Year EBITDA ({ccy})", f"='20_Operating_Model'!G{op_row('canonical.is.ebitda')}", tv.final_year_ebitda if tv else 0, FMT_AMOUNT, False, "Final forecast year EBITDA"),
         ("Exit Multiple Undiscounted TV", "=C9*C10", tv.exit_multiple_tv_undiscounted if tv else 0, FMT_CURRENCY_INT, False, "TV = EBITDA_n * Exit Multiple"),
-        ("Discount Factor (t=5)", "=1/((1+'30_WACC'!C15)^5)", tv.discount_factor if tv else 0, "0.000000", False, "Discount factor for Year 5"),
+        ("Discount Factor (t=5)", f"=1/((1+{wacc_ref('wacc')})^5)", tv.discount_factor if tv else 0, "0.000000", False, "Discount factor for Year 5"),
         ("DISCOUNTED TERMINAL VALUE (PV)", "=C8*C12", base_val.dcf_bridge.pv_terminal_value if base_val else 0, FMT_CURRENCY_INT, False, "Gordon Growth PV of Terminal Value"),
         ("Terminal Year NOPAT (Quality Check)", tv.terminal_nopat if (tv and tv.terminal_nopat is not None) else "-", None, FMT_CURRENCY_INT if (tv and tv.terminal_nopat) else "@", False, "Terminal NOPAT = EBIT_5 * (1+g) * (1 - Tax)"),
         ("Implied Reinvestment Rate %", reinvest_val, None, reinvest_fmt, False, "Reinvestment Rate = (Terminal NOPAT - Terminal FCFF) / NOPAT"),
@@ -847,7 +905,7 @@ def render_reverse_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         # can silently drift from the bridge.
         (f"Market Implied EV ({ccy})", f"=C7-{bridge_ref('net_non_operating_debt')}", ev_mkt, FMT_CURRENCY_INT, False, f"Implied Equity Value − net debt (from {bridge_ref('net_non_operating_debt')})"),
         (f"Market Implied PV of TV ({ccy})", f"=C8-{bridge_ref('sum_pv_fcff')}", pv_tv_mkt, FMT_CURRENCY_INT, False, f"Implied EV − cumulative PV(FCFF) (from {bridge_ref('sum_pv_fcff')})"),
-        ("MARKET IMPLIED TERMINAL GROWTH %", "=((C9*(1+'30_WACC'!C15)^5*'30_WACC'!C15 - '31_DCF'!G12)/(C9*(1+'30_WACC'!C15)^5 + '31_DCF'!G12))", implied_g, FMT_PERCENT_PRECISION, False, rev_dcf.method_note if rev_dcf and rev_dcf.method_note else "Exact solved implied perpetuity growth rate"),
+        ("MARKET IMPLIED TERMINAL GROWTH %", f"=((C9*(1+{wacc_ref('wacc')})^5*{wacc_ref('wacc')} - '31_DCF'!G12)/(C9*(1+{wacc_ref('wacc')})^5 + '31_DCF'!G12))", implied_g, FMT_PERCENT_PRECISION, False, rev_dcf.method_note if rev_dcf and rev_dcf.method_note else "Exact solved implied perpetuity growth rate"),
     ]
 
     for idx, (lbl, val, c_val, fmt, is_inp, note) in enumerate(rows):
@@ -993,7 +1051,7 @@ def render_scenario_analysis_tab(wb: Workbook, spec: ModelSpecification) -> Work
         2: f"={bridge_ref('net_non_operating_debt')}*(-1)",
         3: f"={bridge_ref('equity_value')}",
         4: "='27_Share_Count'!E6",
-        5: "='30_WACC'!C15",
+        5: f"={wacc_ref('wacc')}",
         6: "='32_Terminal_Value'!C6",
         7: f"='20_Operating_Model'!G{op_row('canonical.is.revenue')}",
         8: "='22_Cost_Build'!G6",

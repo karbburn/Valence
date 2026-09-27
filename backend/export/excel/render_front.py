@@ -52,6 +52,7 @@ from backend.export.excel.styles import (
     FONT_TOTAL,
 )
 from backend.export.excel.links import AUTHOR_URL, VALENCE_URL
+from backend.export.excel.render_val import wacc_ref
 from backend.models.spec.model_specification import ModelSpecification
 
 
@@ -421,7 +422,7 @@ def render_executive_summary(wb: Workbook, spec: ModelSpecification) -> Workshee
 
     write_formula_cell(ws, 6, 3, "='35_Scenario_Analysis'!C6", cached_value=base_price, num_format=FMT_PRICE)
     write_formula_cell(ws, 6, 4, '=IF(B6=0,"N/A",(C6-B6)/B6)', cached_value=(upside_pct / 100.0), num_format=FMT_PERCENT)
-    write_formula_cell(ws, 6, 5, "='30_WACC'!C15", cached_value=wacc_pct, num_format=FMT_PERCENT)
+    write_formula_cell(ws, 6, 5, f"={wacc_ref('wacc')}", cached_value=wacc_pct, num_format=FMT_PERCENT)
 
     ws["F6"] = _model_status_label(spec)
 
