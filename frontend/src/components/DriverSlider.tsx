@@ -111,7 +111,7 @@ export function DriverSlider({
             type="text"
             inputMode="decimal"
             name={`driver-${driverKey}`}
-            aria-label={`${label} — exact value`}
+            aria-label={`${label}, exact value`}
             value={draftText ?? formatReadout(localVal)}
             onChange={(e) => setDraftText(e.target.value)}
             onBlur={commitDraft}

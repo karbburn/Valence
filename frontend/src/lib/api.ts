@@ -29,7 +29,7 @@ function writeSavedModels(entries: SavedModelEntry[]): void {
     window.localStorage.setItem(SAVED_MODELS_KEY, JSON.stringify(entries))
   } catch (e) {
     if (e instanceof DOMException && e.name === 'QuotaExceededError') {
-      throw new Error('Storage full — delete some saved models to make room.')
+      throw new Error('Storage full. Delete some saved models to make room.')
     }
     throw e
   }

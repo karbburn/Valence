@@ -19,7 +19,7 @@ export function SaveModal({
   scenario,
   onSave,
 }: SaveModalProps) {
-  const defaultName = `${companyName || 'Model'} – ${scenario.toUpperCase()} – ${new Date().toISOString().slice(0, 10)}`
+  const defaultName = `${companyName || 'Model'} - ${scenario.toUpperCase()} - ${new Date().toISOString().slice(0, 10)}`
   const [name, setName] = useState(defaultName)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -55,7 +55,7 @@ export function SaveModal({
             disabled={saving}
             data-autofocus
             className="w-full h-9 bg-surface-3 border border-border-interactive rounded-sm px-3 text-[13px] text-text-main placeholder:text-text-faint transition-colors"
-            placeholder="e.g. Infosys — bull case, higher margins"
+            placeholder="e.g. Infosys bull case, higher margins"
           />
         </div>
 

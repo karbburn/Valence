@@ -127,7 +127,7 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
         </div>
 
         <div className="text-[11px] font-mono text-text-dim">
-          All figures in <span className="font-semibold text-[#f8fafc]">{unit}</span> · FY24–FY26 (Historical) / FY27–FY31 (Forecast: {scenario})
+          All figures in <span className="font-semibold text-[#f8fafc]">{unit}</span> · FY24-FY26 (Historical) / FY27-FY31 (Forecast: {scenario})
         </div>
       </div>
 
