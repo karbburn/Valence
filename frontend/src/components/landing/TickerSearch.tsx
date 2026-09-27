@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Search, Loader2 } from 'lucide-react'
 import type { CompanySummary } from '@/lib/types'
@@ -19,6 +19,14 @@ import { getCurrencySymbol } from '@/lib/formatters'
  * working target rather than a declared one.
  */
 export function TickerSearch() {
+  // The landing page mounts two of these and /stock mounts one, all on the same
+  // document. A fixed id duplicated every <label for> target and left
+  // aria-controls pointing at the wrong listbox on all but one instance.
+  // Colons are legal in an id but break querySelector, so they are stripped.
+  const uid = useId().replace(/:/g, '')
+  const inputId = `ticker-input-${uid}`
+  const listboxId = `ticker-listbox-${uid}`
+
   const router = useRouter()
   const searchParams = useSearchParams()
   const prefill = searchParams.get('q') ?? ''
@@ -117,7 +125,7 @@ export function TickerSearch() {
 
   return (
     <div ref={rootRef} className="relative w-full max-w-[440px]">
-      <label htmlFor="hero-ticker-search" className="sr-only">
+      <label htmlFor={inputId} className="sr-only">
         Search a ticker or company
       </label>
       <div className="relative">
@@ -134,12 +142,12 @@ export function TickerSearch() {
         )}
         <input
           ref={inputRef}
-          id="hero-ticker-search"
+          id={inputId}
           name="ticker"
           type="text"
           role="combobox"
           aria-expanded={open && results.length > 0}
-          aria-controls="hero-ticker-listbox"
+          aria-controls={listboxId}
           aria-autocomplete="list"
           aria-label="Search a ticker or company"
           placeholder="Search a ticker, e.g. NVDA or TCS"
@@ -153,7 +161,7 @@ export function TickerSearch() {
 
       {open && results.length > 0 && (
         <ul
-          id="hero-ticker-listbox"
+          id={listboxId}
           role="listbox"
           aria-label="Matching companies"
           className="absolute left-0 right-0 top-[52px] z-50 max-h-[320px] overflow-y-auto bg-surface border border-border rounded-sm shadow-pop divide-y divide-border list-none m-0 p-0"
