@@ -7,6 +7,7 @@ import { stockPath } from '@/lib/tickers'
 import { SITE_URL, SITE_NAME, OG_IMAGE } from '@/lib/site'
 import type { ResolvedSlug } from '@/lib/tickers'
 import { TickerSearch } from '@/components/landing/TickerSearch'
+import { SiteFooter } from '@/components/SiteFooter'
 
 // Segment config must be a literal: Next reads it statically, so an imported
 // constant is rejected. Keep in step with REVALIDATE_SECONDS in lib/site.ts.
@@ -110,6 +111,13 @@ export default async function StockIndexPage() {
           <TickerGrid companies={us} />
         </section>
       </main>
+
+      {/* This route was the only public page without the footer, so it shipped
+          without the legal line, the data-provenance note, or the profile links.
+          Those are the statements that make the figures on the page
+          attributable, which matters most on the index where the figures are
+          densest. */}
+      <SiteFooter />
     </div>
   )
 }
@@ -158,6 +166,9 @@ function SiteHeader() {
           Valence
         </Link>
         <nav className="flex items-center gap-4 text-[12px] text-text-muted">
+          <Link href="/" className="hover:text-text-main transition-colors">
+            Home
+          </Link>
           <Link href="/methodology" className="hover:text-text-main transition-colors">
             Methodology
           </Link>
