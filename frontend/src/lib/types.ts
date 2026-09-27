@@ -208,6 +208,12 @@ export interface CompanySummary {
   fiscal_year_end: string
   onboarding_status: string
   sector?: string
+  /**
+   * Public URL segment. Present on every search result so selecting a company
+   * can rewrite the address bar to a link that resolves. Optional because
+   * locally-saved and legacy payloads may predate it.
+   */
+  slug?: string
 }
 
 export interface SavedModelHeader {
