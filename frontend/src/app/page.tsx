@@ -372,8 +372,18 @@ export default async function LandingPage() {
               <div className="lg:col-span-7">
                 <Reveal className="border border-border rounded-sm bg-surface overflow-hidden">
                   <div className="px-4 py-3 border-b border-border bg-surface-2/60 flex items-center justify-between gap-3">
+                    {/* Named and dated. A report headed only "AAPL audit report"
+                        reads as current. Every figure on this page was struck
+                        against one balance sheet on one date, and stating it is
+                        the difference between a snapshot and a live number. */}
                     <span className="font-mono text-[11px] text-text-main">
                       {previewCompany?.ticker} audit report
+                      {previewSpec?.valuation?.[0]?.reverse_dcf?.market_price_date && (
+                        <span className="text-text-dim">
+                          {' @ '}
+                          {previewSpec.valuation[0].reverse_dcf.market_price_date}
+                        </span>
+                      )}
                     </span>
                     <span className="font-mono text-[10.5px] text-text-dim">
                       {passedCount} of {checks.length} passed
