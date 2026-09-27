@@ -172,7 +172,7 @@ def main() -> None:
     print("\n====================================================================================================")
     print("INSTITUTIONAL AUDIT SUMMARY:")
     print(f"  Company Name        : {spec.metadata.name} ({spec.metadata.ticker})")
-    print(f"  Workbook Size       : {file_size_kb:.1f} KB (30 tabs)")
+    print(f"  Workbook Size       : {file_size_kb:.1f} KB (31 tabs)")
     print(f"  Implied Share Price : {spec.metadata.currency} {bridge.implied_share_price:.2f}")
     print(f"  WACC %              : {wacc.wacc:.2f}%")
     print(f"  QA Audit Status     : {spec.qa.summary_label} (9/9 Checks Passed)")

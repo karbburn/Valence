@@ -158,7 +158,7 @@ def _run_checks(client_factory) -> None:
     print(f"    FastAPI Endpoints    : GET /api/model, POST /api/recompute, POST /api/revert, GET /api/export/excel verified")
     print(f"    Driver Edit Flow     : Revenue Growth 7.82% -> 15.0% moved price INR {initial_price:.2f} -> INR {new_price:.2f}")
     print(f"    Revert Flow          : Reverted price back to INR {reverted_price:.2f} exact match")
-    print(f"    Excel Export API     : 30-tab .xlsx download verified")
+    print(f"    Excel Export API     : 31-tab .xlsx download verified")
     print(f"    Web Dashboard UI     : Analyst Mode, Quick DCF, Full Model Mode HTML/CSS/JS ready")
 
     print("\nALL STAGE 10 SELF-CHECKS PASSED SUCCESSFULLY!")
