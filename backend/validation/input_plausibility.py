@@ -88,6 +88,15 @@ def check_bridge_inputs_plausible(spec: ModelSpecification) -> ModelCheckResult:
     keys: List[str] = []
 
     for val in spec.valuation:
+        # Base only, for the same reason as the other two checks, plus a second
+        # reason specific to this one: debt, cash and lease do not vary by
+        # scenario, so a single contradiction reported once per scenario blamed
+        # all three for one input. It also made the net-cash ratio
+        # scenario-dependent, because a bear case that shrinks enterprise value
+        # by two thirds can push an identical balance sheet past the threshold
+        # on its own.
+        if val.scenario != "base":
+            continue
         b = val.dcf_bridge
         debt = b.total_debt or 0.0
         leases = b.operating_lease_liabilities or 0.0
@@ -165,10 +174,18 @@ def check_equity_value_positive(spec: ModelSpecification) -> ModelCheckResult:
         if equity is None:
             continue
         if equity <= 0:
+            # enterprise_value and less_net_debt are Optional. Formatting them
+            # unguarded raised TypeError on any spec where either is null, which
+            # surfaced as a crashed check rather than a reported one - and the
+            # pipeline's exception handler names the fallback record after the
+            # function, so a crash was differenced against the baseline as both
+            # a regression and a fix at once.
+            ev_txt = "n/a" if b.enterprise_value is None else f"{b.enterprise_value:,.0f}"
+            nd_txt = "n/a" if b.less_net_debt is None else f"{b.less_net_debt:,.0f}"
             errors.append(
                 f"base: equity value {equity:,.0f} is not positive "
-                f"(enterprise value {b.enterprise_value:,.0f}, net debt "
-                f"{b.less_net_debt:,.0f}). A negative implied price of {price} is not a "
+                f"(enterprise value {ev_txt}, net debt "
+                f"{nd_txt}). A negative implied price of {price} is not a "
                 f"usable valuation. Confirm the debt and cash figures on the bridge "
                 f"before this model is served. A negative equity value is correct for a "
                 f"company whose net worth really is negative, so this is a request to "
