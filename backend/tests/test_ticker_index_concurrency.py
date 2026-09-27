@@ -19,6 +19,7 @@ import pathlib
 import tempfile
 import threading
 import time
+import types
 
 import pytest
 
@@ -286,21 +287,125 @@ def test_market_scope_is_applied_before_the_limit(isolated_cache, monkeypatch):
     assert len(unscoped) == 3, "an unscoped search still has to fill its budget"
 
 
-def test_a_ticker_listed_on_two_markets_is_not_deduplicated_away(
-    isolated_cache, monkeypatch
-):
-    """(ticker, market) is the identity. Ticker alone collapses two companies."""
+def _install_dual_listed_info(monkeypatch) -> None:
+    """The index lists INFO on both exchanges, as SEC and the NSE both do."""
     monkeypatch.setitem(
         ti._FETCHERS,
         "us",
-        lambda: {"INFO": ti.ListedCompany("INFO", "Infosys ADR", "us", "SEC")},
+        lambda: {
+            "INFO": ti.ListedCompany(
+                "INFO", "Infosys ADR", "us", "SEC", cik="0001067983"
+            )
+        },
     )
     monkeypatch.setitem(
         ti._FETCHERS,
         "india",
-        lambda: {"INFO": ti.ListedCompany("INFO", "Infosys Ltd", "india", "NSE")},
+        lambda: {
+            "INFO": ti.ListedCompany(
+                "INFO", "Infosys Ltd", "india", "NSE", isin="INE009A08021"
+            )
+        },
     )
 
-    both = ti.search("INFO", limit=10)
-    markets = sorted(c.market for c in both)
-    assert markets == ["india", "us"], f"collapsed to {markets}"
+
+def _store_holding_only_india(monkeypatch) -> None:
+    """The local store holds the Indian line of INFO and nothing else.
+
+    The other exchange lists the same ticker, which is the case that matters:
+    `slugs.LISTING_PRIMARY` makes the Indian line the primary, so it is the one
+    a search registers first, and the ADR is the one a later user is left
+    unable to reach. `search_universe_companies` honours `market`, which is the
+    point — a store stub that ignored the filter could not tell a scoped query
+    from an unscoped one.
+    """
+    from backend.data.universe import store
+    from backend.data.universe.models import UniverseCompany
+
+    stored = UniverseCompany(
+        company_id="info_info",
+        ticker="INFO",
+        name="Infosys Ltd",
+        market="india",
+        exchange="NSE",
+        sector="",
+        industry="",
+    )
+
+    def search_universe_companies(query, market=None, limit=50, **kwargs):
+        if market == "us":
+            return []
+        return [stored]
+
+    monkeypatch.setattr(store, "search_universe_companies", search_universe_companies)
+
+
+def test_discover_keeps_the_other_market_when_one_listing_is_stored(
+    isolated_cache, monkeypatch
+):
+    """(ticker, market) is the identity, in the exclusion set as well as the dedup.
+
+    The previous version of this test called `search`, whose key was already
+    (ticker, market) before the change, so it passed on the code it was written
+    to cover. `discover` is where the exclusion actually happens: it drops the
+    index rows the local store already holds, and it was doing that by ticker
+    alone against a store query spanning both markets. So the Indian INFO in the
+    store removed the US ADR, `discover` returned nothing, and the caller's own
+    (ticker, market) dedup could not put back a row it never saw — which is the
+    "a user who wanted the ADR has no way to reach it" case, unfixed.
+    """
+    _install_dual_listed_info(monkeypatch)
+    _store_holding_only_india(monkeypatch)
+
+    # Precondition: both listings are in the index. Without this, an empty result
+    # below could be a missing fixture rather than a broken exclusion.
+    assert sorted(c.market for c in ti.search("INFO", limit=10)) == ["india", "us"]
+
+    found = ti.discover("INFO", limit=10)
+    assert [(c.ticker, c.market) for c in found] == [("INFO", "us")], (
+        f"discover returned {[(c.ticker, c.market) for c in found]}, so the stored "
+        f"Indian line took the US listing with it"
+    )
+
+    scoped = ti.discover("INFO", limit=10, market="us")
+    assert [(c.ticker, c.market) for c in scoped] == [("INFO", "us")]
+
+
+def test_the_search_endpoint_still_offers_the_adr_when_the_primary_is_stored(
+    isolated_cache, monkeypatch
+):
+    """The endpoint has to reach both listings, and so does its own dedup key.
+
+    Driven through `search_companies` rather than `discover`, because the
+    endpoint is where a user meets this: the local pass runs first and the index
+    fills the remaining room, and both passes have to agree that INFO-on-NSE and
+    INFO-on-SEC are two companies. A ticker-only key on either side of that
+    boundary costs the user one of them.
+    """
+    from backend.api import routes
+    from backend.data.universe import store
+    from backend.models.spec import metadata
+
+    _install_dual_listed_info(monkeypatch)
+    _store_holding_only_india(monkeypatch)
+    monkeypatch.setattr(routes, "_ensure_universe_seeded", lambda: None)
+    monkeypatch.setattr(routes, "_has_compiled_model", lambda company_id: False)
+    monkeypatch.setattr(store, "preview_slug", lambda ticker: ticker.lower())
+    monkeypatch.setattr(
+        metadata,
+        "get_metadata_for_company",
+        lambda company_id: types.SimpleNamespace(
+            currency="INR", units="ones", fiscal_year_end=None
+        ),
+    )
+
+    rows = routes.search_companies("INFO", limit=10)
+    by_market = {row["market"]: row for row in rows}
+
+    assert "us" in by_market, (
+        "the ADR is missing from the response: "
+        f"{[(r['ticker'], r['market']) for r in rows]}"
+    )
+    assert by_market["us"]["company_id"] != by_market["india"]["company_id"]
+    assert by_market["us"]["has_model"] is False
+
