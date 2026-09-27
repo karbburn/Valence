@@ -235,6 +235,82 @@ def get_universe_by_slug(slug: str, db_path: str | Path = DB_PATH) -> Optional[U
     return _row_to_company(row)
 
 
+def claim_slug(preferred: str, db_path: str | Path = DB_PATH) -> Optional[str]:
+    """Reserve a slug for a company being registered on demand, or return None.
+
+    On-demand registration is the one place a slug is minted for a single company
+    rather than derived from a whole-universe pass, so the collision check has to
+    happen against the database instead of within a batch. The bare ticker is
+    preferred, because that is the URL a person would type; a numeric suffix is
+    only spent when the bare form is genuinely taken by a different company.
+    """
+    from backend.data.universe.slugs import sanitize_slug
+
+    base = sanitize_slug(preferred)
+    if not base:
+        return None
+    conn = _connect(db_path)
+    try:
+        taken = {
+            r[0].upper()
+            for r in conn.execute(
+                "SELECT slug FROM company_universe WHERE slug IS NOT NULL"
+            ).fetchall()
+        }
+    finally:
+        conn.close()
+    if base.upper() not in taken:
+        return base
+    n = 2
+    while f"{base}-{n}".upper() in taken:
+        n += 1
+    return f"{base}-{n}"
+
+
+def register_universe_company(
+    company: UniverseCompany, db_path: str | Path = DB_PATH
+) -> Optional[UniverseCompany]:
+    """Insert one company discovered in the listed universe, idempotently.
+
+    Registration is deliberately a *record only*. It writes the row that makes the
+    company resolvable and gives it a public URL; it does not fetch filings, and
+    it does not set ``onboarding_status`` to anything implying filings are
+    present. A discovered company starts at ``not_yet_attempted`` so the UI can
+    tell "listed and buildable" apart from "filings already ingested", which is
+    the same distinction ``has_model`` makes on top of it.
+
+    The company_id is taken from the caller because it is derived from the
+    exchange's own ticker, which is what makes the row stable across restarts: a
+    second request for the same ticker lands on the same primary key rather than
+    creating a duplicate that the slug pass would then have to disambiguate.
+    """
+    if not company.slug:
+        company = company.model_copy(update={"slug": claim_slug(company.ticker, db_path)})
+    if not company.slug:
+        # No slug means no public URL, and /companies/resolve would 404 it, so
+        # the registration is refused rather than made invisible.
+        return None
+    save_universe_companies([company], db_path)
+    return company
+
+
+def preview_slug(ticker: str, db_path: str | Path = DB_PATH) -> Optional[str]:
+    """The slug a ticker would be given, without writing anything.
+
+    Search results are expected to carry a slug so the client can navigate
+    straight to a company page, but a search runs on every keystroke and writing a
+    row per keystroke would seed the universe with fragments. So the slug is
+    computed and returned, and the row is written on resolve.
+
+    That makes the answer provisional rather than reserved. Between the search and
+    the click another company can take the bare ticker, in which case resolve
+    hands back a different slug and the client navigates to that instead. The
+    alternative, returning nothing, pushes the problem to the client and is the
+    behaviour this replaced.
+    """
+    return claim_slug(ticker, db_path)
+
+
 def list_slugs(db_path: str | Path = DB_PATH) -> list[UniverseCompany]:
     """Every non-financial company that has a slug assigned, in slug order."""
     conn = _connect(db_path)

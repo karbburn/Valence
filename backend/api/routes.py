@@ -720,7 +720,17 @@ def resolve_company_slug(
     convenience: the page route must never pass an unrecognised segment through
     to /api/model/{company_id}, which would let any well-formed URL trigger live
     third-party ingestion.
+
+    The boundary is unchanged in kind, only in width. A slug that matches no
+    stored company is looked up in the exchange index and, if the exchange lists
+    it, registered on the spot. So the allowlist is no longer a list someone
+    curated by hand: it is every company SEC or the NSE publishes, which is the
+    same authority that made the original 22 safe. What is still refused is
+    anything neither exchange lists, and a near-miss, because
+    ``ticker_index.lookup`` is an exact match and a fuzzy one would hand a page
+    route a company_id whose filings belong to somebody else.
     """
+    from backend.data.universe import ticker_index
     from backend.data.universe.store import get_universe_by_slug
 
     if not SLUG_PATTERN.match((slug or "").strip()):
@@ -728,6 +738,9 @@ def resolve_company_slug(
 
     _ensure_universe_seeded()
     company = get_universe_by_slug(slug)
+    if company is None:
+        # Exact match, so a slug that merely resembles a ticker still 404s.
+        company, _created = ticker_index.resolve_or_register(slug)
     if company is None:
         raise HTTPException(status_code=404, detail="Unknown ticker.")
 
@@ -765,16 +778,30 @@ def search_companies(
     market: Optional[str] = Query(None, description="Filter by market ('india' or 'us')"),
     limit: int = Query(20, ge=1, le=100, description="Max search results"),
 ) -> List[Dict[str, Any]]:
-    """Real-time autocomplete search across ticker and company name for universe companies."""
+    """Search the companies Valence already models, then the listed universe.
+
+    Two passes, deliberately ordered. The local store comes first and without a
+    cap, so a company that has a compiled model is never displaced by an
+    alphabetical neighbour from the index. The index then fills the remaining
+    room, and those rows carry ``has_model: false`` and a sector of ``""``,
+    which is the honest description: listed, not yet built.
+
+    Discovered rows are not written here. Registering on a keystroke would mean a
+    search request mutates the universe, and a visitor typing three letters
+    would seed three junk rows. Registration happens on resolve, which is a
+    deliberate act.
+    """
+    from backend.data.universe import ticker_index
+    from backend.data.universe.store import preview_slug as _preview_slug
     from backend.data.universe.store import search_universe_companies
     from backend.models.spec.metadata import get_metadata_for_company
 
     _ensure_universe_seeded()
     m_filter = market if market in ("india", "us") else None
-    results = search_universe_companies(query=q, market=m_filter, limit=limit)
+    local = search_universe_companies(query=q, market=m_filter, limit=limit)
 
     payload = []
-    for c in results:
+    for c in local:
         meta = get_metadata_for_company(c.company_id)
         payload.append({
             "company_id": c.company_id,
@@ -798,6 +825,43 @@ def search_companies(
             # canonical link rather than leaving the URL on the previous ticker.
             "slug": c.slug,
         })
+
+    if len(payload) < limit and q.strip():
+        # Market-filtered the same way as the local pass, so a UI that scopes
+        # search to one market does not get the other market leaking in.
+        found = ticker_index.discover(q, limit=limit - len(payload))
+        known = {row["ticker"].upper() for row in payload}
+        for listed in found:
+            if listed.market != (m_filter or listed.market):
+                continue
+            if listed.ticker.upper() in known:
+                continue
+            known.add(listed.ticker.upper())
+            payload.append({
+                # The id the ingestion pipeline will key on, built the same way
+                # as every stored company so opening the result needs no second
+                # round trip to discover its id.
+                "company_id": listed.company_id,
+                "ticker": listed.ticker,
+                "name": listed.name,
+                "market": listed.market,
+                "exchange": listed.exchange,
+                "sector": "",
+                # Unknown until the filings are read, so the units are not
+                # guessed from the exchange. A currency shown before anyone has
+                # seen the statements is a claim the engine has not made yet.
+                "currency": None,
+                "units": None,
+                "onboarding_status": "not_yet_attempted",
+                "has_model": False,
+                # The slug this ticker will be given, computed but not reserved.
+                # Search results are contractually required to carry one so the
+                # client can navigate straight to the company page, and writing a
+                # row per keystroke is not an option. Resolve returns the real
+                # slug, which can differ if a collision appeared in between, and
+                # the client navigates to whatever resolve says.
+                "slug": _preview_slug(listed.ticker),
+            })
     return payload
 
 
