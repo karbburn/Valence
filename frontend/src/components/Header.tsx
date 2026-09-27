@@ -2,6 +2,7 @@
 
 import React, { useRef } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { Save, Bookmark, FileSpreadsheet, CheckCircle2, AlertTriangle, Copy } from 'lucide-react'
 import { ModelSpecification, ScenarioLabel, CompanySummary } from '@/lib/types'
 import { fmtPct } from '@/lib/formatters'
@@ -92,26 +93,48 @@ export function Header({
     <header className="sticky top-0 z-40 h-[48px] w-full bg-surface/95 backdrop-blur-md border-b border-border px-2.5 sm:px-3 md:px-4 flex items-center justify-between text-sans select-none gap-2 md:gap-3 overflow-visible">
       {/* Left section: Logo, Search, Company Badge */}
       <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
-        <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
+        {/* The wordmark is the way out of the workbench. These pages are the
+            indexable surface, so most visitors arrive here from a search result
+            with no site navigation above them, and without this the deep link is
+            a dead end: nothing on the page reached the homepage, the ticker
+            index, or the methodology. */}
+        <Link
+          href="/"
+          className="flex items-center space-x-1.5 sm:space-x-2 shrink-0 group"
+          aria-label="Valence home"
+        >
           <div className="h-8 px-1.5 bg-white rounded-sm flex items-center justify-center shadow-pop overflow-hidden">
-            <Image src="/logo.png" alt="" width={28} height={28} priority className="h-6 w-auto object-contain" />
+            <Image
+              src="/logo.png"
+              alt=""
+              width={28}
+              height={28}
+              priority
+              className="h-6 w-auto object-contain"
+            />
           </div>
-          <span className="font-bold text-[16px] sm:text-[17px] tracking-[0.05em] text-text-main">
+          <span className="font-bold text-[16px] sm:text-[17px] tracking-[0.05em] text-text-main group-hover:text-accent-hover transition-colors">
             Valence
           </span>
-        </div>
+        </Link>
 
         <CompanySearch onSelectCompany={onSelectCompany} />
 
+        {/* The page's subject, so the h1. Broken at 900px rather than Tailwind's
+            lg, because that is exactly where the mobile guard takes over: the
+            guard carries its own h1 for the viewport it owns, and matching the
+            breakpoints means exactly one of the two is ever exposed. At lg they
+            disagreed, which both left a 900 to 1024 band with no heading at all
+            and put two h1s in the accessibility tree on a phone. */}
         {metadata && (
-          <div className="hidden lg:flex items-center space-x-1.5 bg-surface-3 border border-border rounded-sm px-2 py-1 max-w-[150px] lg:max-w-[190px]">
+          <h1 className="hidden min-[900px]:flex items-center space-x-1.5 bg-surface-3 border border-border rounded-sm px-2 py-1 max-w-[190px]">
             <span className="font-bold text-[11px] uppercase tracking-[0.03em] text-text-main truncate">
               {metadata.name}
             </span>
-            <span className="font-mono font-bold text-[10px] text-accent-hover bg-accent-subtle border border-accent-border rounded-sm px-1 py-0.5 shrink-0">
+            <span className="font-mono font-bold text-[10px] text-accent-hover bg-accent-subtle border border-accent-border rounded-sm px-1.5 py-0.5 shrink-0">
               {metadata.ticker}
             </span>
-          </div>
+          </h1>
         )}
       </div>
 
@@ -242,7 +265,10 @@ export function Header({
         </button>
 
         {/* Action buttons — Excel is the primary export; the rest are quiet */}
-        <div className="flex items-center space-x-1 sm:space-x-1.5 shrink-0">
+        {/* A nav landmark. This cluster and the mode tabs are the only regions
+            past the KPI bar that a screen reader can jump to; header, main and
+            footer alone gave no way past the bar itself. */}
+        <nav aria-label="Model actions" className="flex items-center space-x-1 sm:space-x-1.5 shrink-0">
           <button
             type="button"
             onClick={onCopySummary}
@@ -281,7 +307,7 @@ export function Header({
             <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" aria-hidden />
             <span>{exporting ? 'Exporting…' : 'Excel'}</span>
           </button>
-        </div>
+        </nav>
       </div>
     </header>
   )
