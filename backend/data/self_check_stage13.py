@@ -21,7 +21,7 @@ Acceptance criteria:
      All 4 companies reach 'MODEL VALID' status in QA engine validation checks.
 
   4. Excel Workbook Exporter:
-     Generates valid 27-tab .xlsx workbooks for all 4 companies in backend/export/output/.
+     Generates valid 31-tab .xlsx workbooks for all 4 companies in backend/export/output/.
 
   5. Inflow Non-Regression:
      Confirms Infosys pilot metrics and QA status remain unaffected by multi-company extensions.
@@ -131,7 +131,7 @@ def _main_body() -> None:
         _assert(cache_path.stat().st_size > 10000, f"Cache payload non-empty for {cid}")
 
     # 5. Excel Export Verification
-    print("\n5. Multi-Company 27-Tab Excel Workbook Export...")
+    print("\n5. Multi-Company 31-Tab Excel Workbook Export...")
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     for cid, spec in compiled_specs.items():
         excel_path = OUTPUT_DIR / f"{cid}_valuation_model.xlsx"
@@ -150,7 +150,7 @@ def _main_body() -> None:
     print(f"    Companies Processed : {len(companies)} (INFY, TCS, Tata Motors, Tata Steel)")
     print(f"    QA Engine Rollup    : ALL 4 COMPANIES MODEL VALID")
     print(f"    Real Debt WACC Test : Tata Motors ({tm_val.wacc.debt_weight*100:.2f}%), Tata Steel ({ts_val.wacc.debt_weight*100:.2f}%)")
-    print(f"    Excel Export        : 4 Workbooks Generated (27 Tabs each)")
+    print(f"    Excel Export        : 4 Workbooks Generated (31 Tabs each)")
     print("=" * 65)
     print("\nALL MULTI-COMPANY SELF-CHECKS PASSED SUCCESSFULLY!")
 
