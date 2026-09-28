@@ -1,0 +1,121 @@
+name: Tests
+
+# The suite, on every push that could break it.
+#
+# Until this existed, the 310 backend tests and the frontend tests ran only when
+# a human remembered to run them. The plausibility gate in qa-gate.yml runs on
+# push too, but it compares against a baseline of recorded failures and asks a
+# narrower question: did anything that already failed start failing further? A
+# change that broke forty assertions and moved no baseline entry passed it.
+#
+# So a merge could reach users having broken the engine, and the only signal was
+# a developer noticing afterwards. This closes that.
+#
+# Two jobs so a frontend failure does not hide a backend one, and both are
+# required. Nothing here talks to a data provider or to the deployed backend: the
+# suite is hermetic, and a rate limit or an outage at an upstream must not be
+# able to fail a build.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # A new push to the same branch supersedes the run in flight. Without this a
+  # rapid series of pushes queues every one of them and reports the oldest
+  # result last, which is the least useful ordering.
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        # The dependencies are read out of pyproject.toml and installed, rather
+        # than written out again here.
+        #
+        # `pip install -e .` is not available: the file declares [project] and
+        # its dependencies but carries no [build-system] table, so there is no
+        # backend for pip to invoke and the install fails before a single test
+        # runs. Adding a build backend to satisfy one CI line would claim a
+        # package layout this project does not have. Copying the list instead
+        # would work today and drift by the first dependency bump, silently, in
+        # the one place that decides what CI actually tests.
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+          python - <<'PY' > /tmp/deps.txt
+          import tomllib, pathlib
+          deps = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["dependencies"]
+          print("\n".join(deps))
+          PY
+          pip install -r /tmp/deps.txt
+
+      - name: Test
+        run: python -m pytest backend/tests -q
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Type check
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Unit tests
+        working-directory: frontend
+        run: npm test
+
+      - name: Production build
+        working-directory: frontend
+        # The build is the only thing that catches a server/client boundary
+        # violation, a bad generateStaticParams, and most of the ways a change
+        # that type-checks still fails to ship. It is the slowest step here and
+        # the one most worth keeping.
+        #
+        # The API URL points at a closed port on purpose. Every server-side fetch
+        # degrades to null by design, so the build completes either way and never
+        # fails for a reason unrelated to the change under test. Left unset it
+        # falls through to the deployed host, and every run would spend that
+        # instance's minutes and pay a cold start to do it.
+        #
+        # The cost is that no ticker page is prerendered here, because the
+        # manifest comes back empty. That is not what this job is for; the
+        # deployed build fetches for real.
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:9
