@@ -85,16 +85,25 @@ def ensure_company_ingested(
         return
 
     if company_id.endswith("_us"):
+        # Fall through the providers on the typed "there is nothing there" error
+        # only, not on any exception.
+        #
+        # A catch-all here means a KeyError from a statement shape the parser did
+        # not expect is treated as an outage: the chain walks to the end, finds no
+        # export, and reports that no financials are available. The user is told
+        # to retry, the company is negatively cached, and the bug is never seen.
+        # That is strictly worse than the fault this change set out to fix, and it
+        # only became possible once the outcome was given its own type.
         try:
             from backend.data.ingestion.sec_edgar import fetch_and_parse_sec_edgar
             dps = fetch_and_parse_sec_edgar(company_id=company_id)
-        except Exception as e:
-            logger.info("Live SEC EDGAR fetch for %s unavailable, trying yfinance live: %s", company_id, e)
+        except NoFinancialsAvailable as e:
+            logger.info("SEC EDGAR has no statements for %s, trying yfinance live: %s", company_id, e)
             try:
                 from backend.data.ingestion.us_live import fetch_and_parse_us_live
                 dps = fetch_and_parse_us_live(company_id=company_id)
-            except Exception as e2:
-                logger.info("yfinance live for %s unavailable, falling back to local source file fixture: %s", company_id, e2)
+            except NoFinancialsAvailable as e2:
+                logger.info("yfinance live has no statements for %s, falling back to local source file fixture: %s", company_id, e2)
                 # The local export is the last resort, and it has to stay one.
                 # A transient outage at both live providers is exactly the case it
                 # exists for, and several companies ship one. Replacing the call

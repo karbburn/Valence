@@ -27,6 +27,7 @@ from typing import Dict, List, Optional, Tuple
 import openpyxl
 import requests
 
+from backend.data.errors import NoFinancialsAvailable
 from backend.data.store import RawDatapoint, Source, Status
 
 logger = logging.getLogger(__name__)
@@ -517,7 +518,9 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
     facts_data = resp.json()
     us_gaap = facts_data.get("facts", {}).get("us-gaap", {})
     if not us_gaap:
-        raise ValueError(f"No us-gaap facts found in SEC EDGAR response for CIK {cik}")
+        raise NoFinancialsAvailable(
+          f"No us-gaap facts found in SEC EDGAR response for CIK {cik}"
+      )
 
     # ------------------------------------------------------------------ #
     # Period discovery
@@ -540,7 +543,7 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
     annual_period_ends = _discover_annual_period_ends(us_gaap)
 
     if not annual_period_ends:
-        raise ValueError(
+        raise NoFinancialsAvailable(
             f"No annual fiscal periods found in SEC EDGAR facts for {company_id} (CIK {cik})"
         )
 
@@ -694,7 +697,9 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
             )
 
     if not datapoints:
-        raise ValueError(f"Failed to parse any valid 10-K datapoints from SEC EDGAR for {company_id}")
+        raise NoFinancialsAvailable(
+          f"Failed to parse any valid 10-K datapoints from SEC EDGAR for {company_id}"
+      )
 
     return datapoints
 

@@ -206,18 +206,39 @@ from backend.data.universe.store import update_onboarding_status
 
 
 def _get_hist_model(company_id: str = "infy_infy") -> HistoricalModel:
-    """Return cached HistoricalModel for the given company_id."""
+    """Return cached HistoricalModel for the given company_id.
+
+    A company with nothing behind it answers 503 here rather than letting the
+    error surface as a 500. This is the one place every endpoint that needs a
+    company's statements goes through, so the conversion lives here rather than
+    being repeated at each caller.
+
+    That matters because the two driver-override endpoints call this directly.
+    They were answering 500 on exactly the condition the model endpoint had
+    already learned to answer 503, and the state where it bites is ordinary: the
+    compiled snapshots are tracked while the database they were built from is
+    not, so a fresh deploy reads a model from disk and then fails on the first
+    edit of a driver, because the statements behind it were never in the
+    checkout.
+    """
     global _HIST_MODEL_CACHE
     if company_id not in _HIST_MODEL_CACHE:
-        ensure_company_ingested(company_id)
-        _lru_put(
-            _HIST_MODEL_CACHE,
-            company_id,
-            run_historical(
-                target_periods=DEFAULT_HIST_PERIODS,
-                company_id=company_id,
-            ),
-        )
+        try:
+            ensure_company_ingested(company_id)
+            _lru_put(
+                _HIST_MODEL_CACHE,
+                company_id,
+                run_historical(
+                    target_periods=DEFAULT_HIST_PERIODS,
+                    company_id=company_id,
+                ),
+            )
+        except NoFinancialsAvailable as e:
+            logger.info("No financials available for %s: %s", company_id, e)
+            raise HTTPException(
+                status_code=503,
+                detail="No financial statements could be sourced for this ticker yet. Try again shortly.",
+            )
     return _lru_get(_HIST_MODEL_CACHE, company_id)
 
 
