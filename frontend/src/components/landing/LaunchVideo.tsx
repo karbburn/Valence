@@ -27,7 +27,7 @@ import { Pause, Play } from 'lucide-react'
  *
  * Set it to the date of the new cut, or any value that changes with it.
  */
-const MEDIA_REV = '2026-09-27a'
+const MEDIA_REV = '2026-09-28a'
 
 const VIDEO_SRC = `/media/valence-launch.mp4?v=${MEDIA_REV}`
 const POSTER_SRC = `/media/valence-launch-poster.jpg?v=${MEDIA_REV}`
@@ -65,7 +65,7 @@ export function LaunchVideo() {
 
         {/* Play affordance. The whole frame stays a click target, but the pill is
             anchored top-left rather than centred. Centred put it straight over
-            the 12.45%, which is the one number the card exists to show. Top-left
+            the -52.0%, which is the one number the card exists to show. Top-left
             also clears the native control bar, which Chrome keeps on screen for
             a paused video and which owns the bottom strip.
 
