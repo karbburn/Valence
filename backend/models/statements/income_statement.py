@@ -107,9 +107,34 @@ def assemble_income_statement(
                 )
             )
 
-    # Derivation Fallback: Ensure canonical.is.operating_profit exists if missing
+    # Derivation fallback: fill in any period that has no reported operating profit.
+    #
+    # This has to be per period, not all-or-nothing. It used to run only when the
+    # line was missing for *every* period, so a filer that tagged operating income
+    # in one year and not the others ended up with a line populated in one year
+    # and empty in the rest, and nothing downstream noticed.
+    #
+    # The derivation is gross profit less the operating expense lines, and only
+    # where those lines are actually itemised.
+    #
+    # An earlier version also offered profit before tax plus finance cost less
+    # other income, on the reasoning that the three lines form an identity. They
+    # are not an identity in the way it assumed. A filer whose "Other (income)
+    # expense, net" already contains its interest expense double counts the whole
+    # interest charge when finance cost is added back on top, and one large-cap
+    # pharma does present it that way, noting so explicitly in the filing. The
+    # error lands on the single year the filer does tag, and the arithmetic still
+    # reconciles, so nothing catches it.
+    #
+    # The second derivation is kept only where the expense lines are genuinely
+    # present. An absent line is not a zero line: treating a filer that does not
+    # break out its operating expenses as having none returns gross profit, and a
+    # 100% margin, which is how a company ends up valued at a hundredth of its
+    # worth while every check passes. Better to leave the figure absent and say so.
     op_item = next((i for i in items if i.canonical_key == "canonical.is.operating_profit"), None)
-    if op_item is None or not op_item.values_by_period:
+    if op_item is None or any(
+        op_item.values_by_period.get(p) is None for p in periods
+    ):
         rev_item = next((i for i in items if i.canonical_key == "canonical.is.revenue"), None)
         cos_item = next((i for i in items if i.canonical_key == "canonical.is.cost_of_sales"), None)
         gp_item = next((i for i in items if i.canonical_key == "canonical.is.gross_profit"), None)
@@ -117,31 +142,48 @@ def assemble_income_statement(
         selling_admin_item = next((i for i in items if i.canonical_key == "canonical.is.selling_admin_exp"), None)
 
         derived_op: Dict[str, float] = {}
+
         for p in periods:
+            if op_item is not None and op_item.values_by_period.get(p) is not None:
+                continue
+
             r_val = rev_item.values_by_period.get(p) if rev_item else None
             gp_val = gp_item.values_by_period.get(p) if gp_item else None
             cos_val = cos_item.values_by_period.get(p) if cos_item else None
             if gp_val is None and r_val is not None and cos_val is not None:
                 gp_val = r_val - cos_val
 
-            oe_val = (other_exp_item.values_by_period.get(p) if other_exp_item else 0.0) or 0.0
-            sa_val = (selling_admin_item.values_by_period.get(p) if selling_admin_item else 0.0) or 0.0
-            opex = oe_val + sa_val
+            if other_exp_item is None and selling_admin_item is None:
+                continue
+
+            oe_val = other_exp_item.values_by_period.get(p) if other_exp_item else None
+            sa_val = selling_admin_item.values_by_period.get(p) if selling_admin_item else None
+            if oe_val is None and sa_val is None:
+                continue
+            opex = (oe_val or 0.0) + (sa_val or 0.0)
 
             if gp_val is not None and opex > 0:
                 derived_op[p] = round(gp_val - opex, 2)
 
         if derived_op:
-            items.append(
-                IncomeStatementLineItem(
-                    canonical_key="canonical.is.operating_profit",
-                    display_label="Operating Profit / EBIT",
-                    values_by_period=derived_op,
-                    currency=items[0].currency if items else "USD",
-                    units=items[0].units if items else "millions",
-                    lineage_ids_by_period={},
+            if op_item is not None:
+                for period, value in derived_op.items():
+                    op_item.values_by_period.setdefault(period, value)
+            else:
+                items.append(
+                    IncomeStatementLineItem(
+                        canonical_key="canonical.is.operating_profit",
+                        display_label="Operating Profit / EBIT",
+                        values_by_period=derived_op,
+                        currency=items[0].currency if items else "USD",
+                        units=items[0].units if items else "millions",
+                        lineage_ids_by_period={},
+                    )
                 )
-            )
+        elif op_item is not None and not op_item.values_by_period:
+            # Nothing to derive. Drop the empty line so callers see an absent
+            # figure rather than a present one that is silently zero.
+            items = [i for i in items if i.canonical_key != "canonical.is.operating_profit"]
 
     return IncomeStatement(
         company_id=company_id,

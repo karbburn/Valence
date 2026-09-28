@@ -90,7 +90,29 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
         "DepreciationAndAmortization",
         "Depreciation"
     ], "PROFIT & LOSS"),
-    ("Finance cost", ["InterestExpense", "InterestAndDebtExpense"], "PROFIT & LOSS"),
+    # A filer may use the operating or the non-operating interest tag and switch
+    # between them across years.
+    #
+    # Net measures are deliberately excluded. InterestIncomeExpenseNet is already
+    # net of interest income, and finance cost is added to profit before tax when
+    # EBITDA is derived, so admitting it here would count a net figure as a gross
+    # one. A tag that does not mean the same thing as its neighbours does not
+    # belong in the list. One large-cap pharma tags InterestExpense
+    # through 2023 and InterestExpenseNonoperating from 2024 onward, so reading
+    # only the first tag fills the earlier years and leaves the recent ones
+    # empty. That in turn leaves operating profit unbridgeable, because the PBT
+    # identity needs finance cost, and the forecast then anchors on whatever
+    # single year was left. Both spellings are listed so the years join up.
+    (
+        "Finance cost",
+        [
+            "InterestExpense",
+            "InterestExpenseNonoperating",
+            "InterestAndDebtExpense",
+            "InterestExpenseDebt",
+        ],
+        "PROFIT & LOSS",
+    ),
     ("Other Income", ["NonoperatingIncomeExpense", "OtherNonoperatingIncomeExpense"], "PROFIT & LOSS"),
     ("Profit before tax", [
         "IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeTaxes",
@@ -593,7 +615,12 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
             # Already in millions; the loop body converts once, on the way in,
             # so this is scaled back up rather than introducing a second
             # conversion point that could drift from the first.
-            resolved = {end: {"val": val * 1e6} for end, val in derived_borrowings.items()}
+            resolved = {end: val * 1e6 for end, val in derived_borrowings.items()}
+            # Provenance for a figure computed from two tags is a description of
+            # how it was built, not a single tag. Anything reading this on the
+            # derived path was getting an unbound name.
+            tag_of_period = {}
+            tag_of_period = {}
         else:
             units_dict = tag_data.get("units", {})
             unit_items = (
@@ -602,6 +629,35 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
                 or units_dict.get("pure", [])
             )
             resolved = _facts_at_period_ends(unit_items, target_ends)
+
+            # A filer may spell one concept several ways and switch between them
+            # partway through its history. Picking the first tag that has *any*
+            # target year, then reading only that tag, leaves the other years
+            # empty, so a line looks reported for one year and absent for two.
+            #
+            # One large-cap pharma tags InterestExpense through 2023 and
+            # InterestExpenseNonoperating from 2024. Reading the first tag alone
+            # gave finance cost for FY23 only, which made operating profit
+            # unbridgeable in the two recent years, which left the forecast
+            # anchoring a "three-year average" operating margin on that single
+            # year. The years the chosen tag does not cover are therefore topped
+            # up from its siblings in preference order, and never overwritten, so
+            # the primary tag keeps ownership of every year it can supply.
+            tag_by_period = {end: (selected_tag, item) for end, item in resolved.items()}
+            for alt_tag in tag_list:
+                if alt_tag == selected_tag or alt_tag not in us_gaap:
+                    continue
+                alt_units = us_gaap[alt_tag].get("units", {})
+                alt_items = (
+                    alt_units.get("USD", [])
+                    or alt_units.get("shares", [])
+                    or alt_units.get("pure", [])
+                )
+                for end, item in _facts_at_period_ends(alt_items, target_ends).items():
+                    if end not in tag_by_period:
+                        tag_by_period[end] = (alt_tag, item)
+            resolved = {end: item for end, (_, item) in tag_by_period.items()}
+            tag_of_period = {end: tag for end, (tag, _) in tag_by_period.items()}
 
         for period_end, item in resolved.items():
             period_lbl = target_labels[period_end]
@@ -627,7 +683,8 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
                     units="millions",
                     source="sec_edgar",
                     source_location=(
-                        f"SEC_EDGAR_CompanyFacts!us-gaap:{selected_tag}"
+                        f"SEC_EDGAR_CompanyFacts!us-gaap:"
+                        f"{tag_of_period.get(period_end) or selected_tag or 'derived'}"
                         f"[period_end={end_d.isoformat()};form={item.get('form')}"
                         f";filed={item.get('filed')}]"
                     ),

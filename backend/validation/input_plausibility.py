@@ -317,6 +317,13 @@ def check_year_one_growth_is_plausible(spec: ModelSpecification) -> ModelCheckRe
     )
 
 
+# A company sells for less than it collects, so an operating margin cannot reach
+# 100%. The ceiling is set where a genuine software or trading business sits, with
+# headroom, and it exists to catch a line that was never read rather than to judge
+# a business.
+MAX_PLAUSIBLE_OPERATING_MARGIN = 0.90
+
+
 def check_income_statement_is_coherent(spec: ModelSpecification) -> ModelCheckResult:
     """A company's income statement must be possible, not merely self-consistent.
 
@@ -387,6 +394,34 @@ def check_income_statement_is_coherent(spec: ModelSpecification) -> ModelCheckRe
                 f"so the statement foots."
             )
             failing_periods.append(period)
+
+        # A margin at or near 100% is not a good business, it is a missing line.
+        # A filer that reports no operating income and no itemised operating
+        # expenses leaves the line empty, and a fallback that treats absent
+        # expense lines as zero returns gross profit, which reads as a margin of
+        # 100% rather than as an absent figure. The bridge then reconciles, the
+        # audit passes, and the number that comes out is wrong by a multiple.
+        #
+        # There is deliberately no floor on the other side. A loss larger than
+        # revenue is possible: a biotechnology company writing off an acquired
+        # programme in a single year reports an operating margin well below
+        # minus 100%, and that is a real filing rather than a misread line. A
+        # check that fires on a legitimate company teaches people to ignore it,
+        # which costs more than the check is worth.
+        #
+        # The three checks above all miss it, because 100% is not negative and
+        # cost of sales did not exceed revenue. A business cannot sell for what it
+        # collects, so the margin has a ceiling far below 100 and anything near it
+        # is a line that was never read.
+        if ebit is not None and revenue:
+            margin = ebit / revenue
+            if margin > MAX_PLAUSIBLE_OPERATING_MARGIN:
+                errors.append(
+                    f"{period}: operating margin is {margin:.0%} of revenue, above the "
+                    f"{MAX_PLAUSIBLE_OPERATING_MARGIN:.0%} ceiling. A filer that reports no "
+                    f"operating income leaves this line empty rather than equal to revenue."
+                )
+                failing_periods.append(period)
 
         # Positive operating profit on a negative gross profit means the expense
         # lines between them are negative. Whichever line is wrong, the statement
