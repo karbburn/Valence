@@ -34,7 +34,6 @@ from backend.data.universe.store import DB_PATH
 
 
 def _store_has_company() -> bool:
-    """True when the ingested store holds at least one company's statements."""
     if not DB_PATH.exists():
         return False
     try:
@@ -60,3 +59,48 @@ requires_store = pytest.mark.skipif(
         "populate it. See the note in backend/tests/conftest.py."
     ),
 )
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limit():
+    """Clear the rate limiter's per-client state between tests.
+
+    The limiter is process-global by design, which is what makes it cheap, and
+    that is a problem for a test suite: the API tests drive the real app through
+    a test client, they all share one client identity, and the budget is
+    aggregate across reads. Left alone, the earlier tests in the run spend the
+    budget and every later test receives 429 for a reason that has nothing to do
+    with what it is checking. Those failures passed in isolation and failed in
+    the suite, which is the worst kind.
+
+    Only the tests that exercise the limiter itself assert on its behaviour, and
+    they set the budget they need themselves.
+    """
+    from backend.api import ratelimit
+
+    ratelimit.reset()
+    yield
+    ratelimit.reset()
+
+
+@pytest.fixture
+def unlimited_budget(monkeypatch):
+    """Remove the rate limit for a test that is not about the rate limit.
+
+    A handful of tests sweep an entire collection in one test: every manifest
+    slug round-trips to its own company, and there are over a hundred of them.
+    That is more requests than a person makes in a session by design, so the
+    limiter correctly refuses partway through and the test fails for a reason
+    that has nothing to do with the round-trip it is checking.
+
+    Raising the budget rather than disabling the limiter keeps the code path
+    under test. Disabling it would also let a real bug in the wiring pass, since
+    nothing would be enforcing anything.
+    """
+    from backend.api import ratelimit
+
+    monkeypatch.setattr(ratelimit, "READ_BUDGET", 1_000_000)
+    monkeypatch.setattr(ratelimit, "WRITE_BUDGET", 1_000_000)
+    ratelimit.reset()
+    yield
+    ratelimit.reset()

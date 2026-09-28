@@ -131,8 +131,13 @@ def test_manifest_paging_is_consistent(client):
     )
 
 
-def test_every_manifest_slug_resolves_back_to_its_own_company(client):
-    """Round-trip: nothing listed may be unresolvable."""
+def test_every_manifest_slug_resolves_back_to_its_own_company(client, unlimited_budget):
+    """Round-trip: nothing listed may be unresolvable.
+
+    Sweeps every slug the manifest lists, which is more requests than a person
+    makes in a sitting. The budget is raised rather than the limiter removed, so
+    the middleware still runs underneath.
+    """
     listed = client.get("/api/companies/manifest", params={"limit": 500}).json()["companies"]
     for c in listed:
         r = client.get("/api/companies/resolve", params={"slug": c["slug"]})
