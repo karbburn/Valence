@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from backend.data.errors import NoFinancialsAvailable
 from backend.data.store import query_canonical_datapoints, query_datapoints
 from backend.models.statements.historical_model import HistoricalModel, build_historical_model
 from backend.normalization.taxonomy.models import CanonicalDatapoint
@@ -74,14 +75,26 @@ def run(target_periods: list[str] | None = None, company_id: str = "infy_infy") 
 
     canonical_dps = query_canonical_datapoints(DB_PATH, company_id)
     if not canonical_dps:
-        raise ValueError(f"No canonical datapoints found in database for company '{company_id}'.")
+        # The same user-facing situation as no revenue line below: nothing behind
+        # this company. Twelve lines further down this raised a plain ValueError
+        # and answered 500, so the two identical conditions were answered
+        # differently depending on which one was reached first.
+        raise NoFinancialsAvailable(
+            f"No financial statements could be sourced for {company_id} "
+            f"(ingestion produced no canonical datapoints)"
+        )
 
     raw_dps = query_datapoints(DB_PATH, company_id)
 
     wanted = len(target_periods) if target_periods else DEFAULT_HIST_PERIOD_COUNT
     resolved = select_complete_periods(wanted, canonical_dps)
     if not resolved:
-        raise ValueError(
+        # Statements were ingested but carry no revenue line, so there is nothing
+        # to forecast from. That is the same user-facing situation as a ticker
+        # with no statements at all, and it was answering as a 500 because it was
+        # an ordinary ValueError. It is a normal outcome for a foreign ordinary
+        # or a recent listing, not a fault, so it gets the same answer.
+        raise NoFinancialsAvailable(
             f"No income statement reported for company '{company_id}' — the ingested "
             "filings carry no revenue line, so no model can be built from them."
         )

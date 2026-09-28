@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from backend.data.pipeline import DB_PATH
 from backend.data.precompute import run_precompute
+from backend.data.errors import NoFinancialsAvailable
 from backend.data.universe.store import update_onboarding_status, get_universe_company
 
 logger = logging.getLogger(__name__)
@@ -94,7 +95,35 @@ def ensure_company_ingested(
                 dps = fetch_and_parse_us_live(company_id=company_id)
             except Exception as e2:
                 logger.info("yfinance live for %s unavailable, falling back to local source file fixture: %s", company_id, e2)
-                src_file = _source_file_for(company_id)
+                # The local export is the last resort, and it has to stay one.
+                # A transient outage at both live providers is exactly the case it
+                # exists for, and several companies ship one. Replacing the call
+                # here with a raise made those unavailable during an outage, which
+                # is the opposite of what a fallback is for.
+                #
+                # What was actually wrong was only the type escaping: a
+                # FileNotFoundError raised from inside an exception handler
+                # reached the API as a 500, on a condition the user experiences as
+                # "not yet" rather than "broken". A 500 now has to mean the build
+                # broke, so the absence of an export is reported as the ordinary
+                # outcome it is, with the reason kept for the log.
+                #
+                # Both markets had this fault, not just this one. The Indian
+                # branch guarded its source-file lookup with a handler but left the
+                # live fetch unguarded, so a provider that returned nothing raised
+                # a plain ValueError straight to the API.
+                try:
+                    src_file = _source_file_for(company_id)
+                except FileNotFoundError as e3:
+                    # Chained from the provider failure rather than the missing
+                    # file, so the reason the live fetch did not work is still the
+                    # one in the traceback. Chaining from the missing file made a
+                    # real ingestion fault look like an absent export.
+                    raise NoFinancialsAvailable(
+                        f"No financial statements could be sourced for {company_id} "
+                        f"(SEC EDGAR and yfinance both returned nothing, and there is "
+                        f"no local export)"
+                    ) from e2
                 dps = parse_sec_edgar_export(src_file, company_id=company_id)
         save_datapoints(db_path, dps, clear_existing=True)
         run_norm(company_id=company_id)
@@ -110,6 +139,12 @@ def ensure_company_ingested(
         except FileNotFoundError:
             logger.info("Local source file for %s not found, attempting live Indian equity ingestion", company_id)
             from backend.data.ingestion.india_live import fetch_and_parse_india_live
+            # Nothing is caught here. The ingestion module raises the typed error
+            # when the exchange genuinely has nothing, and a KeyError from a shape
+            # it did not expect is a real fault that has to stay visible: wrapping
+            # this in a bare except answered a bug as "not available yet", told
+            # the user to retry, and then negatively cached the ticker so the
+            # failure could not be found from the outside.
             dps = fetch_and_parse_india_live(company_id=company_id)
             save_datapoints(db_path, dps, clear_existing=True)
             run_norm(company_id=company_id)

@@ -201,6 +201,7 @@ def _ensure_universe_seeded() -> None:
 
 
 from backend.data.batch import ensure_company_ingested
+from backend.data.errors import NoFinancialsAvailable
 from backend.data.universe.store import update_onboarding_status
 
 
@@ -388,6 +389,16 @@ def _build_spec_locked(
             ensure_company_ingested(company_id)
             hist_m = _get_hist_model(company_id)
             q_spec = run_qa(run_valuation(run_forecast_pipeline(hist_m)))
+        except NoFinancialsAvailable as e:
+            # A listed ticker with nothing behind it yet. Recorded as a failure so
+            # it is not re-attempted on every request, and answered 503 because
+            # that is a temporary condition rather than a broken build.
+            ingest_throttle.mark_failure(company_id)
+            logger.info("No financials available for %s: %s", company_id, e)
+            raise HTTPException(
+                status_code=503,
+                detail="No financial statements could be sourced for this ticker yet. Try again shortly.",
+            )
         except Exception:
             ingest_throttle.mark_failure(company_id)
             raise
