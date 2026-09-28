@@ -17,6 +17,7 @@ import pytest
 from fastapi import HTTPException
 
 from backend.api import routes
+from backend.data import batch as batch_module
 from backend.data.errors import NoFinancialsAvailable
 
 
@@ -74,11 +75,11 @@ class TestNoFinancialsIsNotAFault:
         )
         monkeypatch.setattr(
             "backend.data.ingestion.sec_edgar.fetch_and_parse_sec_edgar",
-            _raises(RuntimeError("provider down")),
+            _raises(NoFinancialsAvailable("SEC EDGAR returned nothing")),
         )
         monkeypatch.setattr(
             "backend.data.ingestion.us_live.fetch_and_parse_us_live",
-            _raises(RuntimeError("provider down")),
+            _raises(NoFinancialsAvailable("yfinance returned nothing")),
         )
         captured = {}
 
@@ -100,14 +101,60 @@ class TestNoFinancialsIsNotAFault:
 
         assert captured.get("file") == export, "the local export was never read"
 
-    def test_it_carries_the_reason(self):
-        # The message has to survive to the log, otherwise "why is this ticker not
-        # available" is unanswerable.
-        with pytest.raises(NoFinancialsAvailable) as caught:
-            raise NoFinancialsAvailable(
-                "No financial statements could be sourced for x (no local export)"
+    def test_a_bug_in_the_ingestion_is_not_reported_as_a_missing_ticker(
+        self, tmp_path, monkeypatch
+    ):
+        # The guarantee that is easy to lose. The provider chain falls through on
+        # the typed error, so a shape the parser did not expect must NOT be
+        # mistaken for an outage: caught broadly, it walks to the end of the
+        # chain, finds no export, tells the user to retry, and gets the company
+        # negatively cached. The bug is then invisible.
+        #
+        # The condition is not rare in the way it looks. A provider being down and
+        # a parser meeting a shape it did not expect both arrive as an exception,
+        # and only one of them is the engine's fault.
+        class Boom(Exception):
+            pass
+
+        monkeypatch.setattr(
+            "backend.data.ingestion.sec_edgar.fetch_and_parse_sec_edgar",
+            _raises(Boom("a shape the parser did not expect")),
+        )
+        monkeypatch.setattr(
+            "backend.data.ingestion.us_live.fetch_and_parse_us_live",
+            _raises(Boom("the same fault on the other provider")),
+        )
+        monkeypatch.setattr(
+            "backend.data.store.query_canonical_datapoints", lambda *a, **k: []
+        )
+
+        with pytest.raises(Boom):
+            batch_module.ensure_company_ingested(
+                "fictional_us", db_path=tmp_path / "db.sqlite"
             )
-        assert "no local export" in str(caught.value)
+
+    def test_the_reason_survives_to_the_log(self, tmp_path, monkeypatch):
+        # The message has to survive, otherwise "why is this ticker not
+        # available" is unanswerable from the outside.
+        def _raise_nothing(cid):
+            raise NoFinancialsAvailable("no statements behind this ticker")
+
+        monkeypatch.setattr(batch_module, "_source_file_for", _raise_nothing)
+        monkeypatch.setattr(
+            "backend.data.ingestion.sec_edgar.fetch_and_parse_sec_edgar",
+            _raises(NoFinancialsAvailable("SEC has nothing")),
+        )
+        monkeypatch.setattr(
+            "backend.data.ingestion.us_live.fetch_and_parse_us_live",
+            _raises(NoFinancialsAvailable("yfinance has nothing")),
+        )
+        monkeypatch.setattr("backend.data.store.query_canonical_datapoints", lambda *a, **k: [])
+
+        with pytest.raises(NoFinancialsAvailable) as caught:
+            batch_module.ensure_company_ingested(
+                "fictional_us", db_path=tmp_path / "db.sqlite"
+            )
+        assert "no statements behind this ticker" in str(caught.value)
 
 
 def _raises(exc):
