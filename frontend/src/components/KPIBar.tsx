@@ -103,6 +103,21 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
     .filter((c) => INPUT_DEFECT_CHECKS.includes(c.check_name) && !c.passed)
     .map((c) => `${c.check_name}: ${c.detail}`)
     .join('\n\n') || 'The engine could not verify the inputs to this model.'
+
+  // A valuation this far from the traded price is still an opinion and is still
+  // shown, because disagreeing with the market is what the product is for. What
+  // was missing is any signal that the engine itself wants a second look at where
+  // the number came from, so a reader saw "+180.2% vs mkt" in green and took it
+  // as a recommendation.
+  //
+  // The colour follows the sign, as it always has. This adds the caveat beside
+  // it rather than changing what the number means, which is the line between
+  // saying less about a valuation and saying something untrue about it.
+  const deviationCheck = (spec.qa?.checks ?? []).find(
+    (c) => c.check_name === 'implied_price_deviation_is_explainable',
+  )
+  const deviationFlagged = deviationCheck != null && !deviationCheck.passed
+  const deviationTitle = deviationCheck?.detail || undefined
   const marketPrice = reverseDcf?.market_price ?? null
 
   let upsidePct: number | null = null
@@ -192,9 +207,15 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
                 Not comparable
               </span>
             ) : upsidePct != null ? (
-              <span className={upsidePct >= 0 ? 'text-[#10b981]' : 'text-[#ef4444]'}>
+              <span
+                className={upsidePct >= 0 ? 'text-[#10b981]' : 'text-[#ef4444]'}
+                title={deviationFlagged ? deviationTitle : undefined}
+              >
                 {upsidePct >= 0 ? '+' : ''}
                 {fmtPct(upsidePct, 1)} vs mkt
+                {deviationFlagged && (
+                  <span className="text-[#f59e0b]"> · check inputs</span>
+                )}
               </span>
             ) : (
               <span className="text-text-dim">Intrinsic Value</span>
