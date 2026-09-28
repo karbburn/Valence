@@ -36,9 +36,9 @@ def select_primary_datapoints(
         #
         # Most derivations are guarded so they only fill a key the filer left
         # empty, and for those there is nothing to arbitrate. This applies to the
-        # one that is not: a filer that reports both an itemised securities line
-        # and a catch-all containing it, where the derivation is written to
-        # replace the reported catch-all with the net figure. Selection used to be
+        # one that is not: a filer whose itemised non-current lines overlap its
+        # catch-all, where the derivation is written to replace the reported
+        # catch-all with the figure net of the overlap. Selection used to be
         # decided entirely by source authority and label, so the two rows tied and
         # the reported one won on order, which put back the double count the
         # derivation existed to prevent.

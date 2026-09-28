@@ -8,15 +8,20 @@ import re
 
 from openpyxl import Workbook
 
+from backend.export.excel.builder import row_of_label
 from backend.export.excel.links import AUTHOR_URL, VALENCE_URL
-from backend.export.excel.render_fcst import render_debt_schedule
+from backend.export.excel.render_fcst import render_debt_schedule, wacc_ref
 from backend.export.excel.render_front import render_cover
 from backend.export.excel.render_hist import (
     render_historical_balance_sheet,
     render_historical_cash_flow,
 )
 from backend.export.excel.render_qa import render_model_checks_tab
-from backend.export.excel.render_val import render_dcf_tab, render_sensitivity_tab
+from backend.export.excel.render_val import (
+    render_dcf_tab,
+    render_sensitivity_tab,
+    render_wacc_tab,
+)
 from backend.models.spec.historicals import HistoricalLineItem, Historicals
 from backend.models.spec.metadata import ModelMetadata
 from backend.models.spec.model_specification import ModelSpecification
@@ -182,6 +187,66 @@ def test_dcf_working_capital_reads_the_working_capital_lines_by_label():
         f"the formula references balance sheet rows {sorted(referenced)} against the "
         f"four working capital lines {sorted(expected)}"
     )
+
+
+def test_wacc_checks_read_the_wacc_and_not_the_debt_weight():
+    """The discount rate checks must read the discount rate.
+
+    Both read row 15 of the WACC tab, which is the debt market weight, and have
+    done since that tab gained a line. A company carrying debt has a debt weight
+    of about one percent, so the sanity band of three to thirty percent rejected it
+    and reported FAIL, and the terminal growth check compared two and a quarter
+    percent of perpetual growth against seven tenths of a percent of debt weighting
+    and concluded growth exceeded the discount rate. A company with no debt reads
+    zero, so both checks reported N/A and quietly stopped testing anything, which
+    reads as an absent check rather than a broken one.
+    """
+    wb = Workbook()
+    spec = _spec_with_historicals(BS_KEYS, CF_KEYS)
+    spec.qa = QAResults(
+        checks=[
+            ModelCheckResult(check_name="wacc_valid", category="valuation", passed=True),
+            ModelCheckResult(
+                check_name="terminal_growth_lt_wacc", category="valuation", passed=True
+            ),
+        ]
+    )
+    render_historical_balance_sheet(wb, spec)
+    render_wacc_tab(wb, spec)
+    qa = render_model_checks_tab(wb, spec)
+
+    wacc = wb["30_WACC"]
+    debt_weight_row = row_of_label(wacc, "Debt Market Weight %")
+    wacc_row = row_of_label(wacc, "WEIGHTED AVERAGE COST OF CAPITAL (WACC) %")
+    assert f"'30_WACC'!C{wacc_row}" == wacc_ref("wacc"), (
+        "wacc_ref points somewhere other than the WACC line"
+    )
+    assert wacc_row != debt_weight_row, (
+        "the WACC line and the debt weight are the same row, so the tests below "
+        "cannot distinguish them"
+    )
+
+    text = _all_formula_text(qa)
+    for name in ("wacc_valid", "terminal_growth_lt_wacc"):
+        formula = _formula_for(qa, name)
+        assert f"'30_WACC'!C{wacc_row}" in formula, (
+            f"{name} does not read the WACC at row {wacc_row}"
+        )
+        assert f"'30_WACC'!C{debt_weight_row}\b" not in formula, (
+            f"{name} still reads the debt market weight at row {debt_weight_row}"
+        )
+    assert f"'30_WACC'!C{wacc_row}" in text
+
+
+def _formula_for(ws, check_name: str) -> str:
+    for r in range(1, (ws.max_row or 0) + 1):
+        if str(ws.cell(row=r, column=2).value or "").strip() != check_name:
+            continue
+        for c in range(3, (ws.max_column or 0) + 1):
+            v = ws.cell(row=r, column=c).value
+            if isinstance(v, str) and v.startswith("=IF"):
+                return v
+    raise AssertionError(f"no formula found for check {check_name!r}")
 
 
 def test_audit_formulas_follow_the_balance_sheet_lines_they_name():

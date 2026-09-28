@@ -385,20 +385,20 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
             # the workbook was recalculated and disagreed with its own cached
             # figures. See row_of_label.
             #
-            # A workbook built without the balance sheet is not a thing a reader
-            # receives, but it is a thing tests render, and an absent sheet is not
-            # a reason to fail a tab that is otherwise fine. The working capital
-            # line falls back to zero against the forecast, which is the same
-            # figure a filer with no working capital produces.
-            prior_level = "0"
-            if "11_Balance_Sheet" in wb.sheetnames:
-                bs = wb["11_Balance_Sheet"]
-                prior_level = (
-                    f"(N('11_Balance_Sheet'!{hist_period_col}{row_of_label(bs, 'Trade Receivables')})"
-                    f"+N('11_Balance_Sheet'!{hist_period_col}{row_of_label(bs, 'Unbilled Revenue')})"
-                    f"+N('11_Balance_Sheet'!{hist_period_col}{row_of_label(bs, 'Inventory')})"
-                    f"-N('11_Balance_Sheet'!{hist_period_col}{row_of_label(bs, 'Trade Payables')}))"
-                )
+            # A workbook without a balance sheet has no opening working capital to
+            # read, and substituting a zero would not be a smaller error, it would
+            # be a different one: the year-one change would become the whole
+            # forecast working capital level rather than the movement in it, and
+            # free cash flow would carry that instead. The export always renders
+            # the balance sheet first, so this is a case worth refusing rather
+            # than guessing at.
+            bs = wb["11_Balance_Sheet"]
+            prior_level = (
+                f"(N('11_Balance_Sheet'!{hist_period_col}{row_of_label(bs, 'Trade Receivables')})"
+                f"+N('11_Balance_Sheet'!{hist_period_col}{row_of_label(bs, 'Unbilled Revenue')})"
+                f"+N('11_Balance_Sheet'!{hist_period_col}{row_of_label(bs, 'Inventory')})"
+                f"-N('11_Balance_Sheet'!{hist_period_col}{row_of_label(bs, 'Trade Payables')}))"
+            )
             form = f"='23_Working_Capital'!{col_let}12-{prior_level}"
         else:
             prev_col_let = chr(67 + idx - 1)

@@ -234,49 +234,7 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
                     new_derived.append(ci_dp)
                     lookup[ci_key] = ci_dp
 
-            # 5. Non-Current Investments Against the Filer's Catch-All
-            #
-            # A filer reports its other non-current assets either itemised or as a
-            # catch-all, and sometimes as both. When the itemised securities line is
-            # smaller than the catch-all, it is already inside that catch-all and
-            # publishing both counts it twice. This filer tags 77,723 of marketable
-            # securities against an 83,727 catch-all, and another tags 2,900 of
-            # equity securities inside a 40,565 catch-all; naming both made the
-            # named lines exceed the subtotal they belong to, which is worse than
-            # naming neither.
-            #
-            # The comparison is the evidence, not a taxonomy rule, because a filer
-            # tags these inconsistently: the same tag is a separate line at one
-            # filer and a component of the catch-all at another. So the catch-all
-            # absorbs the itemised line wherever the itemised line does not exceed
-            # it, which is exactly the case where it cannot be a separate caption.
-            nci_key = (company_id, period, "canonical.bs.non_current_investments")
-            other_nca_key = (company_id, period, "canonical.bs.other_non_current_assets")
-            nci = lookup.get(nci_key)
-            other_nca = lookup.get(other_nca_key)
-            if nci is not None and other_nca is not None and nci.value <= other_nca.value:
-                absorbed = CanonicalDatapoint(
-                    company_id=company_id,
-                    canonical_key="canonical.bs.other_non_current_assets",
-                    metric_raw="Other Non-Current Assets (Net of Itemised Securities)",
-                    period_label=period,
-                    period_end_date=other_nca.period_end_date,
-                    value=other_nca.value - nci.value,
-                    currency=other_nca.currency,
-                    units=other_nca.units,
-                    status="derived",
-                    source_datapoint_ids=sorted(
-                        set(other_nca.source_datapoint_ids + nci.source_datapoint_ids)
-                    ),
-                    derivation_rule=(
-                        "other_non_current_assets = filer catch-all - securities "
-                        "already included in it"
-                    ),
-                )
-                new_derived.append(absorbed)
-                lookup[other_nca_key] = absorbed
-
-            # 6. Total Non-Current Assets Derivation Fallback
+            # 5. Total Non-Current Assets Derivation Fallback
             #
             # Section 7 derives total assets from non-current plus current. The
             # reverse was never derived, so a filer that reports total assets and
@@ -313,6 +271,78 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
                     )
                     new_derived.append(nca_dp)
                     lookup[tnca_key] = nca_dp
+
+            # 6. Non-Current Assets Against the Filer's Own Subtotal
+            #
+            # A filer reports its other non-current assets either itemised or as a
+            # catch-all, and the catch-all often already contains one of the lines
+            # named beside it. Publishing both then counts that line twice, and the
+            # named lines come to exceed the subtotal they belong to: one filer's
+            # named lines totalled 226,869 against a reported 209,017, which is
+            # worse than naming nothing, because the reader is told the company
+            # holds more than it does.
+            #
+            # Which line is the duplicate is settled by the filer's own subtotal,
+            # not by comparing sizes. Sizes cannot distinguish a line that sits
+            # inside the catch-all from one that merely happens to be smaller, and
+            # guessing nets an unrelated pair: one filer's deferred tax of 17,852
+            # was subtracted from a catch-all that did contain it, while its
+            # 100,544 of marketable securities, which that catch-all never
+            # contained, was left standing. The statement then came up 56,946
+            # short, having previously been over.
+            #
+            # So the itemised lines are added up and compared with the reported
+            # subtotal. Where they exceed it, the catch-all is reduced by the
+            # amount that closes the difference, being the part of it already
+            # itemised among the others. The reduction is bounded by the catch-all,
+            # so a filer whose lines really are disjoint is left untouched.
+            # Without a reported subtotal nothing is assumed, and the section above derives
+            # one for the following period to be compared against.
+            nci_key = (company_id, period, "canonical.bs.non_current_investments")
+            other_nca_key = (company_id, period, "canonical.bs.other_non_current_assets")
+            nci = lookup.get(nci_key)
+            other_nca = lookup.get(other_nca_key)
+            reported_nca = lookup.get(
+                (company_id, period, "canonical.bs.total_non_current_assets")
+            )
+            if nci is not None and other_nca is not None and reported_nca is not None:
+                # The lines a filer itemises beside its catch-all. The catch-all is
+                # not among them, being the line the question is about.
+                itemised = (
+                    "canonical.bs.ppe",
+                    "canonical.bs.cwip",
+                    "canonical.bs.goodwill",
+                    "canonical.bs.intangible_assets",
+                    "canonical.bs.non_current_investments",
+                    "canonical.bs.deferred_tax_assets",
+                )
+                named = 0.0
+                for key in itemised:
+                    dp = lookup.get((company_id, period, key))
+                    if dp is not None:
+                        named += dp.value
+                excess = (named + other_nca.value) - reported_nca.value
+                if excess > 0.0:
+                    absorbed = CanonicalDatapoint(
+                        company_id=company_id,
+                        canonical_key="canonical.bs.other_non_current_assets",
+                        metric_raw="Other Non-Current Assets (Net of Overlap)",
+                        period_label=period,
+                        period_end_date=other_nca.period_end_date,
+                        value=max(0.0, other_nca.value - excess),
+                        currency=other_nca.currency,
+                        units=other_nca.units,
+                        status="derived",
+                        source_datapoint_ids=sorted(
+                            set(other_nca.source_datapoint_ids + nci.source_datapoint_ids)
+                        ),
+                        derivation_rule=(
+                            "other_non_current_assets = filer catch-all less the part "
+                            "of it already itemised among the named lines"
+                        ),
+                    )
+                    new_derived.append(absorbed)
+                    lookup[other_nca_key] = absorbed
 
             # 7. Total Assets Reconciliation Derivation
             ta_key = (company_id, period, "canonical.bs.total_assets")

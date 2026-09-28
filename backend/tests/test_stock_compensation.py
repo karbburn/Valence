@@ -5,6 +5,7 @@ from datetime import date
 import pytest
 from openpyxl import Workbook
 
+from backend.export.excel.render_hist import render_historical_balance_sheet
 from backend.export.excel.render_val import render_dcf_tab
 from backend.forecast.engine import run_forecast
 from backend.models.spec.metadata import ModelMetadata
@@ -122,9 +123,22 @@ def _spec_with_sbc(sbc_value: float) -> ModelSpecification:
     )
 
 
+def _dcf_with_balance_sheet(spec):
+    """The DCF tab needs the balance sheet: year-one working capital opens from it.
+
+    The tab resolves the receivables, unbilled revenue, inventory and payables rows
+    by label, and it refuses to guess a substitute. A workbook a reader receives
+    always carries the balance sheet, so the dependency is real and the test
+    builds the same thing the exporter does rather than a tab in isolation.
+    """
+    wb = Workbook()
+    render_historical_balance_sheet(wb, spec)
+    return render_dcf_tab(wb, spec), wb
+
+
 def test_excel_dcf_tab_renders_memo_row_and_extended_fcff_formula():
     spec = _spec_with_sbc(sbc_value=8.0)
-    ws = render_dcf_tab(Workbook(), spec)
+    ws, _wb = _dcf_with_balance_sheet(spec)
 
     label = ws.cell(row=15, column=2).value
     cached = ws.cell(row=15, column=3).value
@@ -137,5 +151,5 @@ def test_excel_dcf_tab_renders_memo_row_and_extended_fcff_formula():
 
 def test_excel_dcf_tab_defaults_missing_sbc_to_zero():
     spec = _spec_with_sbc(sbc_value=0.0)
-    ws = render_dcf_tab(Workbook(), spec)
+    ws, _wb = _dcf_with_balance_sheet(spec)
     assert ws.cell(row=15, column=3).value == 0.0
