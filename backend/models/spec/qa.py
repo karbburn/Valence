@@ -54,6 +54,12 @@ V1_CHECK_NAMES = [
         "share price as if it were a valuation.",
     ),
     (
+        "terminal_value_is_not_carrying_the_model",
+        "data_quality",
+        "The explicit forecast period contributes to the enterprise value, so the "
+        "terminal is not being asked to explain a negative explicit period.",
+    ),
+    (
         "income_statement_is_coherent",
         "data_quality",
         "The income statement is possible: cost of sales does not exceed revenue, "

@@ -415,6 +415,82 @@ def check_income_statement_is_coherent(spec: ModelSpecification) -> ModelCheckRe
         implicated_scenarios=[],
     )
 
+
+# A terminal value worth more than the whole enterprise value means the explicit
+# forecast period subtracted value. The Gordon growth and exit-multiple paths both
+# assume a business that is cash generative by the end of the horizon; fed a
+# business that is not, they produce a number that is arithmetically fine and
+# economically empty.
+#
+# The threshold is where a reader should start asking. Terminal value above 80% of
+# enterprise value is common and often legitimate for a stable, compounding
+# business. Above 100% the explicit period is a net drag, which is a statement
+# about the model rather than about the company.
+MAX_TERMINAL_SHARE_OF_EV = 1.00
+
+# A negative explicit period is the other half of the same problem, reported
+# separately because it is the more direct signal: a company with positive EBIT
+# whose free cash flow is negative every year has a forecast worth checking before
+# the terminal value is allowed to explain the answer.
+NEGATIVE_EXPLICIT_FCFF_PERIODS = 3
+
+
+def check_terminal_value_is_not_carrying_the_model(
+    spec: ModelSpecification,
+) -> ModelCheckResult:
+    """The explicit forecast period must contribute, not just subtract.
+
+    Catches the structural failure where a company with real operating profit
+    produces negative free cash flow in every forecast year, usually through
+    capital expenditure or working capital, and the terminal value then accounts
+    for more than the entire enterprise value. The reported number reconciles and
+    reconciles perfectly, because a negative explicit period and an inflated
+    terminal are exactly complementary.
+    """
+    errors: List[str] = []
+    failing_scenarios: List[str] = []
+
+    for val in getattr(spec, "valuation", []) or []:
+        if getattr(val, "scenario", "") != "base":
+            continue
+        bridge = val.dcf_bridge
+        ev = bridge.enterprise_value
+        explicit = bridge.sum_pv_fcff
+        terminal = bridge.pv_terminal_value
+        if ev is None or ev <= 0:
+            continue
+
+        share = (terminal / ev) if terminal is not None else None
+        if share is not None and share > MAX_TERMINAL_SHARE_OF_EV:
+            errors.append(
+                f"base: the terminal value is {share:.0%} of the {ev:,.0f} enterprise "
+                f"value, so the explicit forecast period contributes nothing and the "
+                f"terminal carries the whole model."
+            )
+            failing_scenarios.append(val.scenario)
+
+        periods = getattr(val, "fcff_by_period", None) or []
+        negative = [p for p in periods if (getattr(p, "fcff", None) or 0.0) < 0]
+        if len(negative) >= NEGATIVE_EXPLICIT_FCFF_PERIODS:
+            errors.append(
+                f"base: free cash flow is negative in {len(negative)} of "
+                f"{len(periods)} forecast years, summing to {explicit:,.0f} against a "
+                f"positive operating profit. Capital expenditure or working capital is "
+                f"absorbing the business, and the terminal value is compensating."
+            )
+            failing_scenarios.append(val.scenario)
+
+    passed = not errors
+    return ModelCheckResult(
+        check_name="terminal_value_is_not_carrying_the_model",
+        category="data_quality",
+        passed=passed,
+        detail="" if passed else "; ".join(errors),
+        implicated_canonical_keys=["sum_pv_fcff", "pv_terminal_value", "enterprise_value"],
+        implicated_periods=[],
+        implicated_scenarios=sorted(set(failing_scenarios)),
+    )
+
 def run_all(spec: ModelSpecification) -> List[ModelCheckResult]:
     return [
         check_bridge_inputs_plausible(spec),
@@ -422,4 +498,5 @@ def run_all(spec: ModelSpecification) -> List[ModelCheckResult]:
         check_implied_price_deviation_is_explainable(spec),
         check_year_one_growth_is_plausible(spec),
         check_income_statement_is_coherent(spec),
+        check_terminal_value_is_not_carrying_the_model(spec),
     ]

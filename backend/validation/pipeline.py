@@ -28,6 +28,7 @@ from backend.validation.input_plausibility import (
     check_implied_price_deviation_is_explainable,
     check_year_one_growth_is_plausible,
     check_income_statement_is_coherent,
+    check_terminal_value_is_not_carrying_the_model,
 )
 from backend.validation.model_checks import (
     check_dcf_bridge_reconciles,
@@ -62,6 +63,7 @@ CHECK_SUITE: List[Tuple[str, Callable[[ModelSpecification], ModelCheckResult]]] 
     ("data_quality", check_implied_price_deviation_is_explainable),
     ("data_quality", check_year_one_growth_is_plausible),
     ("data_quality", check_income_statement_is_coherent),
+    ("data_quality", check_terminal_value_is_not_carrying_the_model),
 ]
 
 
