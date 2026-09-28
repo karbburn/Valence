@@ -22,10 +22,13 @@ Balance sheet closure convention:
 """
 
 import calendar
+import logging
 from datetime import date
 from typing import Dict, List, Optional
 
 from backend import constants
+
+logger = logging.getLogger(__name__)
 from backend.models.spec.assumptions import AssumptionObject
 from backend.models.spec.forecast import FORECAST_PERIODS, Forecast, ForecastLineItem
 from backend.models.spec.metadata import ModelMetadata, parse_fiscal_year_end
@@ -175,14 +178,43 @@ def run_forecast(
     other_income = constants.resolve(hist_is.get_value("canonical.is.other_income", last_p), 0.0)
     finance_cost = constants.resolve(hist_is.get_value("canonical.is.finance_cost", last_p), 0.0)
 
-    # Compute historical gross margin from last historical period
+    # Compute historical gross margin from last historical period.
+    #
+    # The margin is only usable if the statement that produced it is possible. A
+    # market feed reported one company's cost of revenue at 2.1x its revenue, so
+    # gross profit came out at -112% and this calculation carried a gross margin
+    # of MINUS 121% into the forecast. From there it did the damage three times
+    # over: EBIT is bounded above by gross profit, so EBIT went negative; cost of
+    # sales scales inventory and payables, so working capital was invented; and a
+    # negative gross margin is what a negative enterprise value is made of.
+    #
+    # The check is on the MARGIN, not on the statement, because that is the value
+    # this function actually consumes. Gross margin is bounded above because a
+    # cost above its own revenue is not cost of sales, and bounded below because
+    # a company with positive operating profit cannot be running a gross loss
+    # that its operating expenses then climb out of.
     hist_gp = hist_is.get_value("canonical.is.gross_profit", last_p)
     hist_rev = hist_is.get_value("canonical.is.revenue", last_p)
-    gross_margin_hist = (
-        (hist_gp / hist_rev * 100.0)
-        if hist_gp is not None and hist_rev is not None and hist_rev > 0
-        else constants.DEFAULT_GROSS_MARGIN
-    )
+    hist_ebit = hist_is.get_value("canonical.is.operating_profit", last_p)
+
+    gross_margin_hist = constants.DEFAULT_GROSS_MARGIN
+    gross_margin_usable = False
+    if hist_gp is not None and hist_rev is not None and hist_rev > 0:
+        candidate = hist_gp / hist_rev * 100.0
+        gross_loss_while_profitable = hist_gp < 0 and hist_ebit is not None and hist_ebit > 0
+        if 0.0 <= candidate <= 100.0 and not gross_loss_while_profitable:
+            gross_margin_hist = candidate
+            gross_margin_usable = True
+        else:
+            logger.warning(
+                "%s reported a gross margin of %.1f%% for %s (gross profit %s on "
+                "revenue %s). That is not a cost of sales, so it is not used as a "
+                "forecast anchor; the operating margin drives EBIT instead. The DCF "
+                "needs EBIT, so this is recoverable, but the cost of sales line in "
+                "this statement is wrong and the workbook will show it.",
+                hist_is.company_id if hasattr(hist_is, "company_id") else "?",
+                candidate, last_p, hist_gp, hist_rev,
+            )
 
     # Dividend payout. Absent a reported dividend line the company has not been
     # observed to pay one, so the neutral reading is 0 — NOT a 40% payout, which
@@ -261,7 +293,15 @@ def run_forecast(
         # independently-averaged margin drivers disagree, and the income
         # statement then fails to foot (EBITDA − D&A ≠ EBIT) by a material
         # amount. Deriving EBITDA makes the identity structural.
-        ebit = min(revenue * ebit_margin / 100.0, gross_profit)
+        # EBIT cannot exceed gross profit when the expense lines between them
+        # are costs. That ceiling is only sound when gross profit is itself
+        # sound; with an unusable cost of sales it is a fabricated negative, and
+        # min() against it would drive EBIT negative no matter what the operating
+        # margin says. The operating margin is the driver here, so where the
+        # bound is not trustworthy the driver stands on its own.
+        ebit = revenue * ebit_margin / 100.0
+        if gross_margin_usable:
+            ebit = min(ebit, gross_profit)
         ebitda = ebit + da
 
         # PBT = EBIT + other_income − finance_cost
@@ -289,8 +329,11 @@ def run_forecast(
         # A zero DIO/DPO means "the filings report no such balance", not "the
         # balance goes to zero". Zeroing a real opening balance deletes the
         # whole account and breaks the cash roll-forward; carry it flat.
-        inventory = (cost_of_sales * dio / 365.0) if dio > 0 else prior_inventory
-        trade_payables = (cost_of_sales * dpo / 365.0) if dpo > 0 else prior_trade_pay
+        # Scaled by cost of sales, so an unusable cost of sales invents working
+        # capital as well. Falling back to the prior balance carries the last
+        # credible figure forward instead of compounding a bad one.
+        inventory = (cost_of_sales * dio / 365.0) if (dio > 0 and gross_margin_usable) else prior_inventory
+        trade_payables = (cost_of_sales * dpo / 365.0) if (dpo > 0 and gross_margin_usable) else prior_trade_pay
 
         # PPE: prior PPE + capex − D&A
         capex = revenue * capex_pct / 100.0
