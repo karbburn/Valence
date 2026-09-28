@@ -34,10 +34,12 @@ All datapoints record explicit provenance notes and dates.
 import json
 import logging
 import os
+import time
 import warnings
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Literal, Optional
+from typing import Dict, List, Literal, Optional, Tuple
+from zoneinfo import ZoneInfo
 from pydantic import BaseModel, Field
 
 from backend.data.providers.share_count import resolve_share_count
@@ -87,6 +89,27 @@ MarketType = Literal["india", "us"]
 PROVIDERS_DIR = Path(__file__).resolve().parent
 CACHE_FILE = PROVIDERS_DIR.parent / "cache" / "market_data_cache.json"
 
+# When each exchange's close has printed, as a wall-clock time in the exchange's
+# own timezone.
+#
+# Resolved through the zone database rather than stored as a UTC hour, because a
+# UTC hour is wrong for one market or the other for part of the year: the US close
+# is 21:00 UTC under standard time and 20:00 under daylight saving, while India
+# keeps one time all year. Taking the later of the two was worse than either,
+# because an Indian price read at 11:57 UTC can never satisfy a 20:00 UTC test and
+# so is refetched on every single call.
+_EXCHANGE_CLOSES: Dict[str, Tuple[str, str]] = {
+    # NYSE and Nasdaq, 16:00 Eastern.
+    "us": ("America/New_York", "16:00"),
+    # NSE and BSE, 15:30 Indian Standard Time.
+    "india": ("Asia/Kolkata", "15:30"),
+}
+
+# A single shared cutoff for the fallback path, used only when the exchange is not
+# one this table knows about. It is the later of the two, so an unknown market is
+# refetched rather than trusted mid-session.
+_CLOSE_HOUR_UTC = 20
+
 
 class MarketDataPoint(BaseModel):
     value: float
@@ -104,7 +127,21 @@ class CompanyMarketData(BaseModel):
     beta: MarketDataPoint
     risk_free_rate: MarketDataPoint
     equity_risk_premium: MarketDataPoint
-    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
+    # The session the price was read from, as the exchange itself dated it.
+    #
+    # This is the field the freshness rule needs, and it is recorded here at the
+    # point where the source states it rather than being recovered later from a
+    # human-readable note. A rule that has to parse a sentence to learn which
+    # session a price belongs to breaks the day anyone rewords the note, and
+    # breaks silently: the parse fails, the rule sees nothing, and the price is
+    # refetched forever or trusted blindly.
+    session_date: Optional[str] = None
+    # Timezone-aware, so it says when this was written in terms that do not depend
+    # on the machine. It was naive local time, which made it a day out for half the
+    # evening and, under daylight saving, an hour out twice a year.
+    timestamp: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
 
 
 # ----------------------------------------------------------------------
@@ -453,6 +490,135 @@ def _save_cache(cache_data: dict) -> None:
         logger.warning("Failed to save market data cache: %s", e)
 
 
+def _exchange_close_instant(market: str, session: date) -> Optional[datetime]:
+    """The moment this exchange's close printed for a session, in UTC.
+
+    Resolved from the exchange's own timezone so daylight saving is handled by the
+    zone database rather than by a table someone has to remember to update. The
+    US close is 16:00 Eastern, which is 21:00 UTC under standard time and 20:00
+    under daylight saving, so any fixed UTC hour is wrong for half the year.
+    """
+    zone_name, clock = _EXCHANGE_CLOSES.get(market, (None, None))
+    if not zone_name:
+        return None
+    try:
+        tz = ZoneInfo(zone_name)
+    except Exception:  # noqa: BLE001 - a missing zone is a missing calendar
+        return None
+    hour, minute = (int(part) for part in clock.split(":"))
+    local_close = datetime(session.year, session.month, session.day, hour, minute, tzinfo=tz)
+    return local_close.astimezone(timezone.utc)
+
+
+def last_completed_session(market: str, now: Optional[datetime] = None) -> date:
+    """The most recent session on this exchange that has finished trading.
+
+    A session counts only if the exchange is open that weekday and the close has
+    passed. Weekends are handled by the weekday test rather than by counting days
+    back, which is what turns "one day stale" into a two-day blackout across a
+    weekend.
+
+    Exchange holidays are not enumerated. A holiday therefore behaves as a day
+    the market was shut, so the previous session's close remains the last
+    completed one and is still served. That is the right answer on a holiday, and
+    it is also right on the first trading day after one, because the new session
+    is the last completed one only once it has closed. The cost is that on the
+    morning after a holiday the previous close is served a little longer than
+    ideal, which is the direction a stale price should err.
+    """
+    now = now or datetime.now(timezone.utc)
+    session = now.date()
+    # Today counts only if the exchange trades today and has already closed. The
+    # weekday test comes first because a Saturday has no close at all, and without
+    # it Saturday would report itself as the last completed session, which is how
+    # counting days back turns a one-day staleness rule into a two-day refusal
+    # across every weekend.
+    if session.weekday() < 5:
+        close = _exchange_close_instant(market, session)
+        if close is not None and now >= close:
+            return session
+    probe = session - timedelta(days=1)
+    while probe.weekday() >= 5:
+        probe -= timedelta(days=1)
+    return probe
+
+
+def _entry_session_date(cached: Dict) -> Optional[date]:
+    """The session a cached price was read from.
+
+    Read from the field recorded when the price was written, and only from the
+    prose note as a fallback for entries written before that field existed. A rule
+    that has to parse a sentence to learn which session a price belongs to breaks
+    the day anyone rewords the note, and breaks silently.
+    """
+    data = cached.get("data") or {}
+    raw = data.get("session_date")
+    if not raw:
+        note = (data.get("price") or {}).get("provenance_note") or ""
+        raw = _bar_date_from_note(note)
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(str(raw))
+    except ValueError:
+        return None
+
+
+def _cache_is_settled(
+    cached: Dict, market: str = "us", now: Optional[datetime] = None
+) -> bool:
+    """Whether a cached price is the close of the last completed session.
+
+    The question is not how recently the entry was written but which session it
+    belongs to. Those came apart, and asking the wrong one produced a live price
+    frozen into a valuation: a quote taken at 00:19 local on the Tuesday after a
+    Monday session is 18:49 UTC on Monday, mid-session, labelled with Monday's
+    date. The local calendar had already ticked over to Tuesday, so a freshness
+    test on the local date passed and the live price stood for the rest of the
+    day. Five of the largest companies were frozen that way, each between 0.3 and
+    1.0 percent from its own close.
+
+    Comparing the session the price names against the session that has actually
+    finished settles that without consulting a clock at all. The write time is
+    not consulted because it cannot help: a feed labels a live print with the
+    session it is trading in, so once the session has ended the label is
+    indistinguishable from a genuine close, and an entry written at 18:49 UTC on
+    Monday and one written at 22:00 UTC on Monday carry the same evidence. What
+    separates them is only the passage of the close, which the calendar already
+    knows.
+
+    The comparison is for equality, not for "at least as recent". A price dated
+    today is a live print whenever today's session has not closed, and a price
+    dated before the last completed session is stale. Only the last completed
+    session itself is settled, so anything else is refetched.
+
+    The instant is a parameter so both sides of the close can be exercised. A
+    rule that reads the clock itself passes its test in the evening and fails in
+    the morning, which is the worst way for a freshness check to be wrong.
+    """
+    session = _entry_session_date(cached)
+    if session is None:
+        # The entry does not say which session it read, so there is no way to tell
+        # a close from a live print. One request is cheaper than a wrong number.
+        return False
+    return session == last_completed_session(market, now)
+
+
+def _bar_date_from_note(provenance_note: str) -> Optional[str]:
+    """The session a price was read from, as recorded in a legacy provenance note.
+
+    Entries written before the session_date field existed carry the date only in
+    this sentence, so it is still read as a fallback. It is a fallback rather than
+    the source because prose is not a contract.
+    """
+    if "(" not in provenance_note or ")" not in provenance_note:
+        return None
+    tail = provenance_note.rsplit("(", 1)[1].split(")", 1)[0].strip()
+    try:
+        return date.fromisoformat(tail).isoformat()
+    except ValueError:
+        return None
+
 def get_company_market_data(
     company_id: str,
     ticker: Optional[str] = None,
@@ -469,7 +635,24 @@ def get_company_market_data(
     if not force_refresh:
         cache = _load_cache()
         cached = cache.get(company_id)
-        if cached and cached.get("fetch_date") == today_str:
+        # Fresh enough only if it holds a price from a session that has actually
+        # closed, and only if the entry was written during the session it names.
+        #
+        # Validating on fetch_date alone let a mid-session quote stand for the rest
+        # of the day. An entry written at 00:19 UTC carries the live price of a
+        # session still trading, and the comparison against the exchange close for
+        # the implied upside is then against a number the market never printed at
+        # the close. Five of the largest companies were frozen this way, each one
+        # between 0.3 and 1.0 percent away from its own close.
+        #
+        # Two dates are involved and they are not the same question. fetch_date is
+        # when the entry was written, and the local date it is written under is not
+        # the exchange's: at 22:39 UTC on a US session's Monday, a machine east of
+        # UTC+2 has already ticked over to Tuesday, so an entry written then claims
+        # Tuesday while holding Monday's unfinished price. The bar date is the only
+        # date that says what the price is, and it is the one that is compared to
+        # the session's own close.
+        if cached and _cache_is_settled(cached, resolved_market):
             try:
                 return CompanyMarketData(**cached["data"])
             except Exception:
@@ -607,6 +790,10 @@ def get_company_market_data(
         beta=b_dp,
         risk_free_rate=rfr_dp,
         equity_risk_premium=erp_dp,
+        # Recorded from the price itself, so the field says which session this
+        # price belongs to rather than when it was written. The two come apart in
+        # the evening, and only the session decides whether a price is settled.
+        session_date=p_dp.fetch_date,
     )
 
     if p_dp.source == "market_default":
