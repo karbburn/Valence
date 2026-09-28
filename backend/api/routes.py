@@ -14,6 +14,7 @@ import logging
 import re
 import threading
 from collections import OrderedDict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -770,6 +771,29 @@ def _has_compiled_model(company_id: str) -> bool:
     return (MODEL_CACHE_DIR / f"{company_id}.json").exists()
 
 
+def _model_built_at(company_id: str) -> str | None:
+    """When this company's model was last compiled, as an ISO date.
+
+    Read from the same snapshot `_has_compiled_model` already looks at, so the
+    two cannot disagree about whether a model exists.
+
+    This exists so the sitemap can state a real last-modified date. It was
+    stamping every URL with the moment the sitemap was generated instead, so
+    twenty-two pages that had not changed in months all claimed to have been
+    edited in the same millisecond, and the methodology page claimed to change
+    every time the sitemap revalidated. A last-modified value is how a crawler
+    decides what is worth re-fetching, and one that is always "now" is a signal to
+    re-fetch everything or to stop trusting the field, which loses the distinction
+    the field exists to carry.
+    """
+    path = PROJECT_ROOT / "backend" / "data" / "cache" / f"{company_id}.json"
+    try:
+        stamp = path.stat().st_mtime
+    except OSError:
+        return None
+    return datetime.fromtimestamp(stamp, tz=timezone.utc).date().isoformat()
+
+
 def _manifest_record(c) -> Dict[str, Any]:
     return {
         "slug": c.slug,
@@ -781,6 +805,11 @@ def _manifest_record(c) -> Dict[str, Any]:
         "sector": c.sector,
         "cik": c.cik,
         "has_model": _has_compiled_model(c.company_id),
+        # The date the compiled model was written, for the sitemap's lastmod.
+        # A date and not a timestamp: the sitemap is revalidated far more often
+        # than any model changes, and a value that moves on every revalidation
+        # says nothing.
+        "model_built_at": _model_built_at(c.company_id),
     }
 
 
