@@ -20,6 +20,7 @@ from backend.export.excel.builder import (
     write_formula_cell,
     write_table_header,
 )
+from backend.export.excel.render_fcst import wacc_ref
 from backend.export.excel.styles import (
     ALIGN_CENTER,
     ALIGN_LEFT,
@@ -189,6 +190,9 @@ def render_model_checks_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet
     bs_assets = _balance_sheet_row(wb, "TOTAL ASSETS")
     bs_le = _balance_sheet_row(wb, "TOTAL LIABILITIES & EQUITY")
     bs_cash = _balance_sheet_row(wb, "Cash & Cash Equivalents")
+    # The WACC cell comes from the WACC tab's own row map, so a line added there
+    # cannot leave these checks reading whatever now sits on the row they named.
+    wacc_cell = wacc_ref("wacc")
 
     formula_map = {
         "balance_sheet_balances": (
@@ -236,8 +240,26 @@ def render_model_checks_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet
             f"ABS({_br('implied_share_price')}-({_br('equity_value')}/{_br('diluted_shares')}))<=0.01"
             '),"PASS","FAIL"))'
         ),
-        "wacc_valid": '=IF(N(\'30_WACC\'!C15)=0,"N/A",IF(AND(\'30_WACC\'!C15>0.03,\'30_WACC\'!C15<0.30),"PASS","FAIL"))',
-        "terminal_growth_lt_wacc": '=IF(OR(N(\'32_Terminal_Value\'!C6)=0,N(\'30_WACC\'!C15)=0),"N/A",IF(\'32_Terminal_Value\'!C6<\'30_WACC\'!C15,"PASS","FAIL"))',
+        # The WACC is row 16. These two checks read row 15, which is the debt
+        # market weight, and have done since the WACC tab gained a line. Both
+        # reported FAIL for every company carrying debt, because a debt weight of
+        # one percent is not between three and thirty percent, and the terminal
+        # growth check compared 2.25% of perpetual growth against 0.69% of debt
+        # weighting and concluded growth exceeded the discount rate. A filer with
+        # no debt reads zero, so both checks reported N/A and stopped testing
+        # anything at all, which reads as an absent check rather than a broken one.
+        #
+        # The cached verdict beside each formula was written by the engine, which
+        # had the rate in hand, so the workbook showed PASS until it was
+        # recalculated and disagreed with itself.
+        "wacc_valid": (
+            f'=IF(N({wacc_cell})=0,"N/A",'
+            f'IF(AND({wacc_cell}>0.03,{wacc_cell}<0.30),"PASS","FAIL"))'
+        ),
+        "terminal_growth_lt_wacc": (
+            f'=IF(OR(N(\'32_Terminal_Value\'!C6)=0,N({wacc_cell})=0),"N/A",'
+            f'IF(\'32_Terminal_Value\'!C6<{wacc_cell},"PASS","FAIL"))'
+        ),
         "no_missing_critical_inputs": f'=IF(N({_br("implied_share_price")})=0,"N/A",IF({_br("implied_share_price")}>0,"PASS","FAIL"))',
         "data_provenance_quality": '=IF(COUNTA(\'50_Data_Sources\'!B6:B11)>0,"PASS","FAIL")',
         # Cannot be recomputed from workbook cells — the provenance status lives

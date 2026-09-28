@@ -237,41 +237,60 @@ def test_gross_property_plant_and_equipment_is_not_published_as_the_net_block():
     )
 
 
-def test_itemised_securities_are_not_counted_twice_inside_the_filer_catch_all():
-    """A securities line smaller than the catch-all is already inside it.
+def test_itemised_lines_inside_the_catch_all_are_not_counted_twice():
+    """The filer's own subtotal says which lines are duplicated.
 
-    One filer tags 77,723 of marketable securities against an 83,727 catch-all, and
-    another 2,900 of equity securities against a 40,565 catch-all. Naming both made
-    the named lines exceed the subtotal they belong to, which overstates the
-    balance sheet by the securities figure.
+    A filer's catch-all often already contains a line named beside it. This
+    filer's named lines come to 226,869 against a reported subtotal of 209,017, so
+    one of them is inside the catch-all and the catch-all is reduced by the 17,852
+    that closes the difference. Left unreduced, the statement tells the reader the
+    company holds more than it does.
     """
     points = [
-        _dp("inside_us", "canonical.bs.total_non_current_assets", 211_284.0),
-        _dp("inside_us", "canonical.bs.other_non_current_assets", 83_727.0),
-        _dp("inside_us", "canonical.bs.non_current_investments", 77_723.0),
+        _dp("overlap_us", "canonical.bs.ppe", 43_715.0),
+        _dp("overlap_us", "canonical.bs.non_current_investments", 100_544.0),
+        _dp("overlap_us", "canonical.bs.deferred_tax_assets", 17_852.0),
+        _dp("overlap_us", "canonical.bs.other_non_current_assets", 64_758.0),
+        _dp("overlap_us", "canonical.bs.total_non_current_assets", 209_017.0),
     ]
     out = points + derive_canonical_metrics(points)
     other = _value(out, "canonical.bs.other_non_current_assets")
-    investments = _value(out, "canonical.bs.non_current_investments")
-    assert investments == 77_723.0
-    assert other == 83_727.0 - 77_723.0
+    # 43,715 + 100,544 + 17,852 + other must now equal the reported 209,017.
+    assert other == 209_017.0 - (43_715.0 + 100_544.0 + 17_852.0)
+    assert 43_715.0 + 100_544.0 + 17_852.0 + other == 209_017.0
 
 
-def test_securities_exceeding_the_catch_all_stay_a_separate_line():
-    """The same tag is a separate caption at one filer and a component at another.
+def test_disjoint_lines_are_left_exactly_as_the_filer_reported_them():
+    """A filer whose lines do not overlap is not adjusted.
 
-    This filer holds 100,544 of securities against a 64,758 catch-all, so the
-    catch-all plainly does not contain it and both are named. Comparing sizes is
-    what distinguishes the two presentations; a taxonomy rule could not.
+    Sizes cannot tell a line inside the catch-all from one that merely happens to
+    be smaller, so the rule was a comparison that picked the wrong pair on a filer
+    whose deferred tax was the overlapping line. Comparing the named lines with the
+    filer's own subtotal identifies the overlap without guessing, and when there is
+    no overlap the reported figures stand.
     """
     points = [
-        _dp("outside_us", "canonical.bs.total_non_current_assets", 209_017.0),
-        _dp("outside_us", "canonical.bs.other_non_current_assets", 64_758.0),
-        _dp("outside_us", "canonical.bs.non_current_investments", 100_544.0),
+        _dp("clean_us", "canonical.bs.ppe", 45_680.0),
+        _dp("clean_us", "canonical.bs.non_current_investments", 91_479.0),
+        _dp("clean_us", "canonical.bs.deferred_tax_assets", 19_499.0),
+        _dp("clean_us", "canonical.bs.other_non_current_assets", 74_834.0),
+        _dp("clean_us", "canonical.bs.total_non_current_assets", 300_000.0),
     ]
     out = points + derive_canonical_metrics(points)
-    assert _value(out, "canonical.bs.other_non_current_assets") == 64_758.0
-    assert _value(out, "canonical.bs.non_current_investments") == 100_544.0
+    assert _value(out, "canonical.bs.other_non_current_assets") == 74_834.0
+    assert _value(out, "canonical.bs.non_current_investments") == 91_479.0
+
+
+def test_the_catch_all_is_never_reduced_below_zero():
+    """A subtotal far below the named lines must not produce a negative asset."""
+    points = [
+        _dp("odd_us", "canonical.bs.ppe", 40_000.0),
+        _dp("odd_us", "canonical.bs.other_non_current_assets", 10_000.0),
+        _dp("odd_us", "canonical.bs.non_current_investments", 5_000.0),
+        _dp("odd_us", "canonical.bs.total_non_current_assets", 1_000.0),
+    ]
+    out = points + derive_canonical_metrics(points)
+    assert _value(out, "canonical.bs.other_non_current_assets") == 0.0
 
 
 def test_derived_operating_profit_deducts_research_and_development():
@@ -312,6 +331,35 @@ def test_derived_operating_profit_deducts_research_and_development():
     )
 
 
+def test_research_alone_does_not_recover_operating_profit():
+    """A filer tagging only research must not get a figure at all.
+
+    Research is a real operating expense, and omitting it overstated the profit by
+    its whole amount. But recovering operating profit as gross profit less research
+    alone leaves out every other expense there is, and yields a near-100% operating
+    margin that then anchors the forecast. Gross profit less research plus selling
+    and administrative is the filed identity, so both must be present or neither.
+    """
+    from backend.models.statements.income_statement import assemble_income_statement
+
+    points = [
+        _dp("rd_us", "canonical.is.revenue", 215_938.0),
+        _dp("rd_us", "canonical.is.gross_profit", 153_463.0),
+        _dp("rd_us", "canonical.is.research_development", 18_497.0),
+    ]
+    statement = assemble_income_statement(points)
+    operating = next(
+        (i for i in statement.line_items if i.canonical_key == "canonical.is.operating_profit"),
+        None,
+    )
+    if operating is not None:
+        assert operating.values_by_period.get("FY25") is None, (
+            f"recovered {operating.values_by_period.get('FY25')} from research alone, "
+            f"which is a {(1 - operating.values_by_period['FY25'] / 153_463) * 100:.0f}% "
+            f"operating margin"
+        )
+
+
 def test_a_single_tagged_half_is_not_published_as_the_total():
     """One half is not the whole of selling and administrative expense.
 
@@ -332,31 +380,32 @@ def test_derived_lines_outrank_the_reported_line_they_replace():
     """A derivation must not lose a tie against the figure it was written to fix.
 
     Selection scored a derived row and a reported row identically, so the first one
-    won and every such correction was discarded. The reported 83,727 was published
-    in place of the derived 6,004, and the double count it was written to prevent
-    came back. A derivation is computed from reported figures, so preferring it
-    cannot invent a number.
+    won and every such correction was discarded. The reduction was written to
+    remove an overlap between the filer's itemised lines and its catch-all, and
+    publishing the reported figure instead put the double count straight back. A
+    derivation is computed from reported figures, so preferring it cannot introduce
+    a figure from outside the filing.
     """
     from backend.models.statements.selector import select_primary_datapoints
 
-    reported = _dp("sel_us", "canonical.bs.other_non_current_assets", 83_727.0)
+    reported = _dp("sel_us", "canonical.bs.other_non_current_assets", 64_758.0)
     derived = CanonicalDatapoint(
         company_id="sel_us",
         canonical_key="canonical.bs.other_non_current_assets",
-        metric_raw="Other Non-Current Assets (Net of Itemised Securities)",
+        metric_raw="Other Non-Current Assets (Net of Overlap)",
         period_label="FY25",
         period_end_date=_PERIOD_END,
-        value=6_004.0,
+        value=46_906.0,
         currency="USD",
         units="millions",
         status="derived",
         source_datapoint_ids=["sel_us-derivation"],
     )
     chosen = select_primary_datapoints([reported, derived], "bs")
-    assert chosen[("canonical.bs.other_non_current_assets", "FY25")].value == 6_004.0
+    assert chosen[("canonical.bs.other_non_current_assets", "FY25")].value == 46_906.0
     # And with the derived row second, which is how the pipeline emits them.
     chosen = select_primary_datapoints([derived, reported], "bs")
-    assert chosen[("canonical.bs.other_non_current_assets", "FY25")].value == 6_004.0
+    assert chosen[("canonical.bs.other_non_current_assets", "FY25")].value == 46_906.0
 
 
 def test_non_current_assets_are_not_derived_from_a_missing_total():

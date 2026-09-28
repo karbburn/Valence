@@ -155,24 +155,30 @@ def assemble_income_statement(
             if gp_val is None and r_val is not None and cos_val is not None:
                 gp_val = r_val - cos_val
 
-            if other_exp_item is None and selling_admin_item is None and research_item is None:
-                continue
-
             oe_val = other_exp_item.values_by_period.get(p) if other_exp_item else None
             sa_val = selling_admin_item.values_by_period.get(p) if selling_admin_item else None
             rd_val = research_item.values_by_period.get(p) if research_item else None
-            if oe_val is None and sa_val is None and rd_val is None:
+
+            # Selling and administrative expense is the one line a filer cannot
+            # report operating profit without: gross profit less research alone
+            # leaves out every other operating expense there is, and the result is
+            # a near-100% operating margin that anchors the forecast on a company
+            # with no costs. Research alone is not enough to recover the profit
+            # from, so the period is skipped and the profit left absent, which is
+            # the choice the rest of this module already makes.
+            #
+            # Research and development does belong in the sum once there is
+            # something to sum it with. It used to be omitted because no filer's
+            # line ever populated it, so leaving it out was inert. Now that it
+            # carries real figures, omitting it overstates operating profit by the
+            # whole research expense for a filer that does not tag operating income
+            # directly, and the statement stays internally consistent throughout,
+            # so the coherence checks cannot see it: the error is that the profit
+            # is too high, not that it fails to add up.
+            if sa_val is None:
                 continue
 
-            # Research and development belongs in the sum. It used to be omitted
-            # because no filer's line ever populated it, so leaving it out was
-            # inert. Now that the line carries real figures, omitting it overstates
-            # operating profit by the whole research expense for any filer that
-            # does not tag operating income directly, and that profit anchors the
-            # forecast. The statement stays internally consistent throughout, so
-            # the coherence checks do not see it: the error is that the profit is
-            # too high, not that it fails to add up.
-            opex = (oe_val or 0.0) + (sa_val or 0.0) + (rd_val or 0.0)
+            opex = (oe_val or 0.0) + sa_val + (rd_val or 0.0)
 
             if gp_val is not None and opex > 0:
                 derived_op[p] = round(gp_val - opex, 2)
