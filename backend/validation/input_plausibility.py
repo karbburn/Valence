@@ -56,11 +56,19 @@ from backend.models.spec.qa import ModelCheckResult
 # input, not a strong view, so it is worth a human look before the number is
 # served as a valuation.
 #
-# -60% / +200% is wide on purpose. Everything I found wrong was outside it:
-# -58.7%, -66%, -72.5%, -123.8%. Nothing correct was inside it in the wrong
-# direction.
+# -60% / +200% used to be the band, on the reasoning that every wrong figure
+# found up to that point was an understatement. That is a property of the sample,
+# not of the problem, and it left the whole upper half unguarded: two large-caps
+# came in at +178% and +176%, both passing every check, because a ceiling twice
+# as wide as the floor on the other side is not a band.
+#
+# The floor stays where it is, because a misread debt, share count or working
+# capital line makes a company look cheap and that is what every understated case
+# turned out to be. The ceiling now matches it at +60%. A DCF claiming a stock is
+# worth less than a third of its price is making a specific, checkable claim, and
+# at that distance the inputs are the first place to look, in either direction.
 IMPLIED_DEVIATION_FLOOR = -0.60
-IMPLIED_DEVIATION_CEILING = 2.00
+IMPLIED_DEVIATION_CEILING = 0.60
 
 # A company with negative book equity can still be worth something, so this is
 # not an error in itself. But an equity value that has gone negative on a
@@ -205,6 +213,7 @@ def check_equity_value_positive(spec: ModelSpecification) -> ModelCheckResult:
     )
 
 
+
 def check_implied_price_deviation_is_explainable(spec: ModelSpecification) -> ModelCheckResult:
     """The DCF should not sit an implausible distance from the traded price.
 
@@ -237,9 +246,15 @@ def check_implied_price_deviation_is_explainable(spec: ModelSpecification) -> Mo
             continue
         deviation = (implied - market) / market
         if deviation < IMPLIED_DEVIATION_FLOOR or deviation > IMPLIED_DEVIATION_CEILING:
+            # The bound the figure actually breached, not a fixed one. The message
+            # used to quote the floor whatever the direction, so a model that came
+            # in far too high was told it had passed the lower bound.
+            breached = (
+                IMPLIED_DEVIATION_FLOOR if deviation < 0 else IMPLIED_DEVIATION_CEILING
+            )
             errors.append(
                 f"base: implied {implied:,.2f} against a market price of "
-                f"{market:,.2f} is {deviation:+.1%}. Past {IMPLIED_DEVIATION_FLOOR:+.0%} the "
+                f"{market:,.2f} is {deviation:+.1%}. Past {breached:+.0%} the "
                 f"probable cause is a misread input rather than a valuation view; check the "
                 f"debt, share count and terminal assumptions before serving this. "
                 f"Bull and bear are excluded on purpose: they are meant to disagree."
