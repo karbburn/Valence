@@ -426,11 +426,22 @@ class RevertRequest(BaseModel):
 
 @router.get("/model/{company_id}")
 def get_model_spec(company_id: str = "infy_infy") -> Dict[str, Any]:
-    """Fetch complete ModelSpecification JSON for company."""
+    """The complete ModelSpecification, stamped with its publish decision.
+
+    The audit is a report, not a gate. A model whose inputs are known to be wrong
+    was being served with the failures listed underneath a professional headline,
+    which asks a reader to discount a number rather than refusing to present it.
+    That is the wrong way round: the reader cannot see which of the figures to
+    discount, and the headline is the only thing most of them will read.
+
+    The specification now carries a `publication` verdict saying whether this model
+    is fit to present as a valuation. The full specification is still returned,
+    because the audit and the raw figures are the evidence for the verdict, and
+    withholding them would make it unfalsifiable.
+    """
     _require_valid_company_id(company_id)
     try:
         spec = _get_or_build_spec(company_id)
-        return spec.model_dump(mode="json")
     except HTTPException:
         raise
     except Exception as e:
@@ -440,6 +451,62 @@ def get_model_spec(company_id: str = "infy_infy") -> Dict[str, Any]:
             status_code=status_code,
             detail="Failed to build model. See server logs for details.",
         )
+
+    payload = spec.model_dump(mode="json")
+    payload["publication"] = _publication_verdict(spec)
+    return payload
+
+
+# A failing check that makes the INPUTS implausible, rather than one that makes
+# the arithmetic disagree, is what disqualifies a model. A model that reconciles
+# and is merely far from the market is an opinion, and opinions are the product.
+# A model built on a cost of revenue that exceeds its revenue is not an opinion,
+# it is a broken number, and presenting it as a valuation is a defect.
+_INPUT_DEFECT_CHECKS = frozenset(
+    {
+        "bridge_inputs_plausible",
+        "income_statement_is_coherent",
+        "year_one_growth_is_plausible",
+        "terminal_value_is_not_carrying_the_model",
+        "equity_value_positive",
+    }
+)
+
+
+def _publication_verdict(spec) -> Dict[str, Any]:
+    """Whether this model may be presented as a valuation, and why not."""
+    checks = getattr(getattr(spec, "qa", None), "checks", None) or []
+    failed = [c for c in checks if not getattr(c, "passed", True)]
+    defect_checks = sorted(
+        {c.check_name for c in failed if c.check_name in _INPUT_DEFECT_CHECKS}
+    )
+    other_failures = sorted(
+        {c.check_name for c in failed if c.check_name not in _INPUT_DEFECT_CHECKS}
+    )
+    reasons = [
+        f"{c.check_name}: {c.detail}"
+        for c in failed
+        if c.check_name in _INPUT_DEFECT_CHECKS and c.detail
+    ]
+
+    publishable = not defect_checks
+    return {
+        # "publishable" when the inputs are believable. "opinion_only" when the
+        # arithmetic reconciles but the inputs do not support a valuation.
+        "status": "publishable" if publishable else "opinion_only",
+        "publishable": publishable,
+        "input_defect_checks_failed": defect_checks,
+        "other_checks_failed": other_failures,
+        "reasons": reasons,
+        "summary": (
+            "Inputs pass every plausibility check."
+            if publishable
+            else (
+                f"{len(defect_checks)} input check(s) failed, so these figures are "
+                "not presented as a valuation. The audit and the raw numbers are below."
+            )
+        ),
+    }
 
 
 @router.post("/model/recompute")
