@@ -318,11 +318,23 @@ def _newest_date(frame) -> str:
 # would otherwise be taken as fact and would set a growth rate that is arithmetically
 # valid and economically absurd.
 #
-# The upper edge is EXCLUSIVE. At exactly 4x the floor would publish a year-one
-# growth rate of +300%, which is arithmetically what the ratio says and not a
-# thing a business does inside a year. Past the band the reading is not a fast
-# company; it is a different unit or a different company.
-_RUN_RATE_SANE_BAND = (0.25, 4.0)
+# The band was (0.25, 4.0), and that looseness was not theoretical. Measured
+# across 33 built models on 2026-09-28, every credible reading fell between
+# 1.04x and 1.40x, while two sat at 2.48x and 3.61x and were admitted.
+#
+# A 3.61x reading becomes a year-one growth rate of +261%, which compounds over
+# five forecast years into an enterprise value of -103,337,561 crore for a
+# hospital chain earning 440 crore of operating profit. The share count and the
+# historicals were both correct; one input reading did all of it.
+#
+# The upper edge is now 2.0x, which is a company growing 100% in a year. Still
+# generous for a real business, and it refuses every reading actually observed to
+# be wrong. Past that edge the reading is not a fast company; it is a different
+# unit, a different entity, or a different line item wearing a revenue label.
+#
+# The lower edge is unchanged. A business shrinking to a quarter of its revenue
+# in a year is rare but real, and a divestiture does it.
+_RUN_RATE_SANE_BAND = (0.25, 2.0)
 
 
 def run_rate_is_comparable(run_rate: Optional[float], reported: Optional[float]) -> bool:
