@@ -42,6 +42,32 @@ CACHED_FORMULA_VALUES: dict[tuple[str, int, int], Any] = {}
 _PATCHED = False
 
 
+def row_of_label(ws: Worksheet, label: str, column: int = 2) -> int:
+    """Row on a sheet carrying a line, found by the label written in that column.
+
+    Formulas on other tabs reference these sheets by row number, and a row number
+    is a statement of how many lines the sheet happened to have. Adding a line
+    silently moves every row beneath it, so the formula keeps returning a value
+    and stops referring to what it names: the balance sheet's year-one working
+    capital came to read the non-current subtotal as trade receivables, add
+    inventory nowhere, and subtract total equity in place of trade payables, and
+    the workbook then showed the engine's cached number on open and a different
+    one after recalculation.
+
+    Resolving by label costs one pass over the sheet at build time and makes the
+    reference independent of the layout. The label column is a parameter because
+    the historical statements label in column B while other sheets label in
+    column A.
+    """
+    for r in range(1, (ws.max_row or 0) + 1):
+        if str(ws.cell(row=r, column=column).value or "").strip() == label:
+            return r
+    raise KeyError(
+        f"sheet {ws.title!r} has no line labelled {label!r} in column {column}; a "
+        f"formula cannot reference a line that is not there"
+    )
+
+
 def _ensure_formula_writer_patched() -> None:
     global _PATCHED
     if _PATCHED:

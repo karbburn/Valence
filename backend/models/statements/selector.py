@@ -32,6 +32,29 @@ def select_primary_datapoints(
     def _score(dp: CanonicalDatapoint) -> int:
         score = 0
 
+        # A derivation outranks a reported figure for the same key.
+        #
+        # Most derivations are guarded so they only fill a key the filer left
+        # empty, and for those there is nothing to arbitrate. This applies to the
+        # one that is not: a filer that reports both an itemised securities line
+        # and a catch-all containing it, where the derivation is written to
+        # replace the reported catch-all with the net figure. Selection used to be
+        # decided entirely by source authority and label, so the two rows tied and
+        # the reported one won on order, which put back the double count the
+        # derivation existed to prevent.
+        #
+        # Preferring a derived row cannot introduce a figure from outside the
+        # filing, because a derivation is computed from reported figures. It can
+        # only produce a different arrangement of figures the filing itself
+        # supplied, which is the whole purpose of deriving anything. The cost is
+        # that this rule is unscoped: an unguarded derivation added later would
+        # silently outrank a reported figure. That is the safe direction, since
+        # the alternative is a correction being discarded, but it does mean a
+        # derivation that should defer to the filing has to say so by not being
+        # written as a derivation.
+        if dp.status == "derived":
+            score += 1000
+
         # Source-authority boost (regulatory > aggregator > market feed)
         if raw_datapoints_map:
             sources = {raw_datapoints_map[rid].source for rid in dp.source_datapoint_ids if rid in raw_datapoints_map}

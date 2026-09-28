@@ -55,6 +55,7 @@ def render_historical_income_statement(wb: Workbook, spec: ModelSpecification) -
         ("canonical.is.revenue", "Revenue from Operations", True, FMT_AMOUNT),
         ("canonical.is.cost_of_sales", "Cost of Sales", False, FMT_AMOUNT),
         ("canonical.is.gross_profit", "Gross Profit", True, FMT_AMOUNT),
+        ("canonical.is.research_development", "Research and Development", False, FMT_AMOUNT),
         ("canonical.is.employee_cost", "Employee Benefit Expense", False, FMT_AMOUNT),
         ("canonical.is.selling_admin_exp", "Selling & Administrative Expense", False, FMT_AMOUNT),
         ("canonical.is.other_mfr_exp", "Other Operating Expense", False, FMT_AMOUNT),
@@ -127,6 +128,12 @@ def render_historical_balance_sheet(wb: Workbook, spec: ModelSpecification) -> W
         ("canonical.bs.intangible_assets", "Intangible Assets", False),
         ("canonical.bs.non_current_investments", "Non-Current Investments", False),
         ("canonical.bs.deferred_tax_assets", "Deferred Tax Assets", False),
+        # The filer's own catch-all for the non-current assets this statement does
+        # not itemise, which is most of them: right-of-use assets, long-term
+        # investments, and whatever else the filing carries. Without it the named
+        # lines stop short of the subtotal and the balance sheet does not visibly
+        # add up, and a reader is left to assume the filer holds nothing else.
+        ("canonical.bs.other_non_current_assets", "Other Non-Current Assets", False),
         ("canonical.bs.total_non_current_assets", "Total Non-Current Assets", True),
         ("canonical.bs.trade_receivables", "Trade Receivables", False),
         ("canonical.bs.unbilled_revenue", "Unbilled Revenue", False),

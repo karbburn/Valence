@@ -15,6 +15,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from backend.export.excel.builder import (
     apply_tab_defaults,
+    row_of_label,
     set_col_widths,
     write_formula_cell,
     write_table_header,
@@ -135,6 +136,26 @@ def _last_historical_col(spec: ModelSpecification) -> str:
     return chr(ord("C") + count - 1)
 
 
+def _balance_sheet_row(wb: Workbook, label: str) -> int:
+    """Row on the balance sheet carrying a line, found by its label.
+
+    The reconciliation formulas used to name rows by number: 19 for total assets,
+    23 for total liabilities and equity, 16 for cash. Those numbers are a
+    statement of how many lines the balance sheet happened to have, so adding a
+    line moved the totals under the formulas and the checks went on comparing the
+    wrong cells while still reporting a verdict. A line that names nothing is
+    harmless to add precisely because it is not load-bearing, and here the very
+    lines added to complete the statement are the ones the checks read.
+
+    Resolving by label removes the coupling. A missing label raises rather than
+    falling back to a remembered row, because a reference to the wrong cell still
+    returns a verdict and a reference to a blank one reports FAIL, and both are
+    worse than refusing. See row_of_label, which is shared with the valuation
+    tabs so there is one implementation of the lookup rather than two.
+    """
+    return row_of_label(wb["11_Balance_Sheet"], label)
+
+
 def render_model_checks_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     ws = wb.create_sheet(title="52_Model_Checks")
     apply_tab_defaults(ws, freeze_cell="A5")
@@ -164,17 +185,23 @@ def render_model_checks_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet
     hist_col = _last_historical_col(spec)
     prev_col = chr(ord(hist_col) - 1) if hist_col > "C" else "C"
 
+    # Resolved by label, not by number: see _balance_sheet_row.
+    bs_assets = _balance_sheet_row(wb, "TOTAL ASSETS")
+    bs_le = _balance_sheet_row(wb, "TOTAL LIABILITIES & EQUITY")
+    bs_cash = _balance_sheet_row(wb, "Cash & Cash Equivalents")
+
     formula_map = {
         "balance_sheet_balances": (
-            f'=IF(N(\'11_Balance_Sheet\'!{hist_col}19)=0,"N/A",'
-            f'IF(ABS(N(\'11_Balance_Sheet\'!{hist_col}19)-N(\'11_Balance_Sheet\'!{hist_col}23))'
-            f'<=0.01*MAX(ABS(N(\'11_Balance_Sheet\'!{hist_col}19)),1),"PASS","FAIL"))'
+            f'=IF(N(\'11_Balance_Sheet\'!{hist_col}{bs_assets})=0,"N/A",'
+            f'IF(ABS(N(\'11_Balance_Sheet\'!{hist_col}{bs_assets})'
+            f'-N(\'11_Balance_Sheet\'!{hist_col}{bs_le}))'
+            f'<=0.01*MAX(ABS(N(\'11_Balance_Sheet\'!{hist_col}{bs_assets})),1),"PASS","FAIL"))'
         ),
         "cash_flow_reconciles": (
             f'=IF(N(\'12_Cash_Flow\'!{hist_col}12)=0,"N/A",'
-            f'IF(ABS(N(\'12_Cash_Flow\'!{hist_col}12)-(N(\'11_Balance_Sheet\'!{hist_col}16)'
-            f'-N(\'11_Balance_Sheet\'!{prev_col}16)))'
-            f'<=0.01*MAX(ABS(N(\'11_Balance_Sheet\'!{hist_col}16)),1),"PASS","FAIL"))'
+            f'IF(ABS(N(\'12_Cash_Flow\'!{hist_col}12)-(N(\'11_Balance_Sheet\'!{hist_col}{bs_cash})'
+            f'-N(\'11_Balance_Sheet\'!{prev_col}{bs_cash})))'
+            f'<=0.01*MAX(ABS(N(\'11_Balance_Sheet\'!{hist_col}{bs_cash})),1),"PASS","FAIL"))'
         ),
         # Closing debt must equal opening plus drawdowns less repayments. This
         # can fail, unlike comparing a total to the sum that defines it.

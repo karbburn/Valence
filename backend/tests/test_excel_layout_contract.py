@@ -4,6 +4,8 @@ These tests fail loudly when a renderer shifts a row/column that live formulas
 in other tabs depend on — the class of silent breakage this suite exists to stop.
 """
 
+import re
+
 from openpyxl import Workbook
 
 from backend.export.excel.links import AUTHOR_URL, VALENCE_URL
@@ -14,7 +16,7 @@ from backend.export.excel.render_hist import (
     render_historical_cash_flow,
 )
 from backend.export.excel.render_qa import render_model_checks_tab
-from backend.export.excel.render_val import render_sensitivity_tab
+from backend.export.excel.render_val import render_dcf_tab, render_sensitivity_tab
 from backend.models.spec.historicals import HistoricalLineItem, Historicals
 from backend.models.spec.metadata import ModelMetadata
 from backend.models.spec.model_specification import ModelSpecification
@@ -114,12 +116,111 @@ def test_cover_links_match_current_public_urls():
 
 def test_balance_sheet_layout_matches_formula_references():
     ws = render_historical_balance_sheet(Workbook(), _spec_with_historicals(BS_KEYS, []))
-    assert _row_of(ws, "Trade Receivables") == 13
-    assert _row_of(ws, "Unbilled Revenue") == 14
-    assert _row_of(ws, "Inventory") == 15
-    assert _row_of(ws, "Cash & Cash Equivalents") == 16
-    assert _row_of(ws, "TOTAL ASSETS") == 19
-    assert _row_of(ws, "TOTAL LIABILITIES & EQUITY") == 23
+    # Pinned as an ordering, not as row numbers. These rows are referenced by the
+    # audit formulas on 52_Model_Checks, but those formulas resolve their rows by
+    # label, so what matters here is that the statement reads in the right order
+    # and that every line the checks need is present.
+    order = [
+        "Property, Plant & Equipment",
+        "Goodwill",
+        "Intangible Assets",
+        "Non-Current Investments",
+        "Deferred Tax Assets",
+        "Other Non-Current Assets",
+        "Total Non-Current Assets",
+        "Trade Receivables",
+        "Unbilled Revenue",
+        "Inventory",
+        "Cash & Cash Equivalents",
+        "Current Investments",
+        "Total Current Assets",
+        "TOTAL ASSETS",
+        "Total Equity / Net Worth",
+        "Trade Payables",
+        "TOTAL LIABILITIES & EQUITY",
+    ]
+    rows = [_row_of(ws, label) for label in order]
+    assert rows == sorted(rows), "the balance sheet is not in filed order"
+    assert len(set(rows)) == len(rows), "two lines share a row"
+
+
+def test_dcf_working_capital_reads_the_working_capital_lines_by_label():
+    """Year-one working capital must open from the four lines it names.
+
+    These were rows 13, 14, 15 and 22, describing the balance sheet as it stood
+    when they were written. Adding a line to that statement moved every row beneath
+    it, so the formula read the non-current subtotal as trade receivables, left
+    inventory out of the working capital base entirely, and subtracted total
+    equity in place of trade payables. It still returned a number, so the workbook
+    showed the engine's cached figure on open and a different one after
+    recalculation. This is the formula that feeds the first forecast year's change
+    in working capital, and through it free cash flow and the enterprise value.
+    """
+    wb = Workbook()
+    spec = _spec_with_historicals(BS_KEYS, CF_KEYS)
+    bs = render_historical_balance_sheet(wb, spec)
+    render_dcf_tab(wb, spec)
+
+    dcf = wb["31_DCF"]
+    text = _all_formula_text(dcf)
+    for label in ("Trade Receivables", "Unbilled Revenue", "Inventory", "Trade Payables"):
+        row = _row_of(bs, label)
+        assert re.search(rf"11_Balance_Sheet'!\w+{row}\b", text), (
+            f"the year-one working capital formula does not reference {label} at "
+            f"its actual row {row}"
+        )
+
+    # And nothing else on the balance sheet may be pulled into the base.
+    referenced = {int(m) for m in re.findall(r"11_Balance_Sheet'!\w{1,2}?(\d+)\b", text)}
+    expected = {
+        _row_of(bs, "Trade Receivables"),
+        _row_of(bs, "Unbilled Revenue"),
+        _row_of(bs, "Inventory"),
+        _row_of(bs, "Trade Payables"),
+    }
+    assert referenced == expected, (
+        f"the formula references balance sheet rows {sorted(referenced)} against the "
+        f"four working capital lines {sorted(expected)}"
+    )
+
+
+def test_audit_formulas_follow_the_balance_sheet_lines_they_name():
+    """The reconciliation checks must reference the rows they claim to.
+
+    They used to name rows by number, so adding a line to the balance sheet moved
+    the totals underneath them and the checks compared unrelated cells while still
+    reporting a verdict. This pins the formulas to the labelled lines.
+    """
+    wb = Workbook()
+    spec = _spec_with_historicals(BS_KEYS, CF_KEYS)
+    spec.qa = QAResults(
+        checks=[
+            ModelCheckResult(check_name="balance_sheet_balances", category="accounting", passed=True),
+            ModelCheckResult(check_name="cash_flow_reconciles", category="accounting", passed=True),
+        ]
+    )
+    bs = render_historical_balance_sheet(wb, spec)
+    render_historical_cash_flow(wb, spec)
+    qa = render_model_checks_tab(wb, spec)
+
+    text = _all_formula_text(qa)
+    # The cash check reads this year's balance and last year's, so any column is
+    # acceptable; what matters is that the row is the one the line occupies.
+
+    for label in ("TOTAL ASSETS", "TOTAL LIABILITIES & EQUITY", "Cash & Cash Equivalents"):
+        row = _row_of(bs, label)
+        assert re.search(rf"11_Balance_Sheet'!\w+{row}\b", text), (
+            f"no audit formula references {label} at its actual row {row}"
+        )
+
+
+def _all_formula_text(ws) -> str:
+    parts = []
+    for row in ws.iter_rows():
+        for cell in row:
+            if isinstance(cell.value, str) and cell.value.startswith("="):
+                parts.append(cell.value)
+    return " ".join(parts)
 
 
 def test_cash_flow_layout_keeps_net_change_on_row_12():
@@ -161,7 +262,10 @@ def test_model_check_formulas_point_at_rendered_cells():
             ModelCheckResult(check_name="debt_schedule_reconciles", category="accounting", passed=True),
         ]
     )
-    ws = render_model_checks_tab(Workbook(), spec)
+    wb = Workbook()
+    bs = render_historical_balance_sheet(wb, spec)
+    render_historical_cash_flow(wb, spec)
+    ws = render_model_checks_tab(wb, spec)
 
     formulas = {}
     for r in range(1, ws.max_row + 1):
@@ -170,12 +274,48 @@ def test_model_check_formulas_point_at_rendered_cells():
         if isinstance(val, str) and val.startswith("=IF"):
             formulas[str(name)] = val
 
+    # Referenced at the rows the balance sheet actually puts those lines on, which
+    # is not a fixed number, and is exactly why the formulas resolve them by label.
+    assets_row = _row_of(bs, "TOTAL ASSETS")
+    le_row = _row_of(bs, "TOTAL LIABILITIES & EQUITY")
+    cash_row = _row_of(bs, "Cash & Cash Equivalents")
+
     bs_formula = formulas["balance_sheet_balances"]
-    assert "'11_Balance_Sheet'!E19" in bs_formula and "'11_Balance_Sheet'!E23" in bs_formula
+    assert f"'11_Balance_Sheet'!E{assets_row}" in bs_formula
+    assert f"'11_Balance_Sheet'!E{le_row}" in bs_formula
 
     cf_formula = formulas["cash_flow_reconciles"]
     assert "'12_Cash_Flow'!E12" in cf_formula
-    assert "'11_Balance_Sheet'!E16" in cf_formula and "'11_Balance_Sheet'!D16" in cf_formula
+    assert f"'11_Balance_Sheet'!E{cash_row}" in cf_formula
+
+    # The tie-out is only meaningful with a prior period to subtract, and a single
+    # period cannot produce one. Asserted here because the row the prior column
+    # points at has to be the same cash row, not a row that shifted with the layout.
+    two = _spec_with_historicals(BS_KEYS, CF_KEYS)
+    two.historicals.periods = ["FY25", "FY26"]
+    wb2 = Workbook()
+    bs2 = render_historical_balance_sheet(wb2, two)
+    render_historical_cash_flow(wb2, two)
+    two.qa = QAResults(
+        checks=[
+            ModelCheckResult(check_name="cash_flow_reconciles", category="accounting", passed=True),
+        ]
+    )
+    qa2 = render_model_checks_tab(wb2, two)
+    cash_row2 = _row_of(bs2, "Cash & Cash Equivalents")
+    text2 = _all_formula_text(qa2)
+    assert re.search(rf"11_Balance_Sheet'!D{cash_row2}\b", text2), (
+        "the cash tie-out does not subtract the prior year's balance at the row the "
+        "cash line actually occupies"
+    )
+    # No reference may point anywhere else on the balance sheet. The prior-column
+    # reference was left hardcoded while the closing one was resolved, so it
+    # silently compared this year's cash with last year's inventory.
+    referenced = {int(m) for m in re.findall(r"11_Balance_Sheet'!\w{1,2}?(\d+)\b", text2)}
+    assert referenced == {cash_row2}, (
+        f"the cash tie-out references balance sheet rows {sorted(referenced)}, but "
+        f"only the cash line at row {cash_row2} belongs in it"
+    )
 
     debt_formula = formulas["debt_schedule_reconciles"]
     for col in "CDEFG":

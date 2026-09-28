@@ -234,7 +234,87 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
                     new_derived.append(ci_dp)
                     lookup[ci_key] = ci_dp
 
-            # 5. Total Assets Reconciliation Derivation
+            # 5. Non-Current Investments Against the Filer's Catch-All
+            #
+            # A filer reports its other non-current assets either itemised or as a
+            # catch-all, and sometimes as both. When the itemised securities line is
+            # smaller than the catch-all, it is already inside that catch-all and
+            # publishing both counts it twice. This filer tags 77,723 of marketable
+            # securities against an 83,727 catch-all, and another tags 2,900 of
+            # equity securities inside a 40,565 catch-all; naming both made the
+            # named lines exceed the subtotal they belong to, which is worse than
+            # naming neither.
+            #
+            # The comparison is the evidence, not a taxonomy rule, because a filer
+            # tags these inconsistently: the same tag is a separate line at one
+            # filer and a component of the catch-all at another. So the catch-all
+            # absorbs the itemised line wherever the itemised line does not exceed
+            # it, which is exactly the case where it cannot be a separate caption.
+            nci_key = (company_id, period, "canonical.bs.non_current_investments")
+            other_nca_key = (company_id, period, "canonical.bs.other_non_current_assets")
+            nci = lookup.get(nci_key)
+            other_nca = lookup.get(other_nca_key)
+            if nci is not None and other_nca is not None and nci.value <= other_nca.value:
+                absorbed = CanonicalDatapoint(
+                    company_id=company_id,
+                    canonical_key="canonical.bs.other_non_current_assets",
+                    metric_raw="Other Non-Current Assets (Net of Itemised Securities)",
+                    period_label=period,
+                    period_end_date=other_nca.period_end_date,
+                    value=other_nca.value - nci.value,
+                    currency=other_nca.currency,
+                    units=other_nca.units,
+                    status="derived",
+                    source_datapoint_ids=sorted(
+                        set(other_nca.source_datapoint_ids + nci.source_datapoint_ids)
+                    ),
+                    derivation_rule=(
+                        "other_non_current_assets = filer catch-all - securities "
+                        "already included in it"
+                    ),
+                )
+                new_derived.append(absorbed)
+                lookup[other_nca_key] = absorbed
+
+            # 6. Total Non-Current Assets Derivation Fallback
+            #
+            # Section 7 derives total assets from non-current plus current. The
+            # reverse was never derived, so a filer that reports total assets and
+            # total current assets but not the non-current subtotal published an
+            # empty row against a balance sheet that visibly did not add up: this
+            # filer showed 206,803 of total assets and 125,605 of current assets,
+            # leaving 81,198 unaccounted for with the only non-current line shown
+            # being 10,383 of property, plant and equipment.
+            #
+            # Reported figures stay authoritative in both directions. A derived
+            # subtotal is only produced where the filer publishes none, which is
+            # what the arithmetic of the two reported lines is actually worth.
+            tnca_key = (company_id, period, "canonical.bs.total_non_current_assets")
+            tca_for_nca = lookup.get((company_id, period, "canonical.bs.total_current_assets"))
+            ta_for_nca = lookup.get((company_id, period, "canonical.bs.total_assets"))
+
+            if tnca_key not in lookup and ta_for_nca is not None and tca_for_nca is not None:
+                derived_nca = ta_for_nca.value - tca_for_nca.value
+                if derived_nca > 0.0:
+                    nca_dp = CanonicalDatapoint(
+                        company_id=company_id,
+                        canonical_key="canonical.bs.total_non_current_assets",
+                        metric_raw="Total Non-Current Assets (Derived)",
+                        period_label=period,
+                        period_end_date=ta_for_nca.period_end_date,
+                        value=derived_nca,
+                        currency=ta_for_nca.currency,
+                        units=ta_for_nca.units,
+                        status="derived",
+                        source_datapoint_ids=sorted(
+                            set(ta_for_nca.source_datapoint_ids + tca_for_nca.source_datapoint_ids)
+                        ),
+                        derivation_rule="total_non_current_assets = total_assets - total_current_assets",
+                    )
+                    new_derived.append(nca_dp)
+                    lookup[tnca_key] = nca_dp
+
+            # 7. Total Assets Reconciliation Derivation
             ta_key = (company_id, period, "canonical.bs.total_assets")
             tnca = lookup.get((company_id, period, "canonical.bs.total_non_current_assets"))
             tca_dp = lookup.get((company_id, period, "canonical.bs.total_current_assets"))
@@ -258,7 +338,61 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
                     new_derived.append(ta_dp)
                     lookup[ta_key] = ta_dp
 
-            # 6. Total Equity Derivation
+            # 8. Selling and Administrative Expense Derivation
+            #
+            # Filers split the same total two ways. One reports a single combined
+            # selling, general and administrative line. Another reports selling and
+            # marketing and general and administrative as two lines, and the
+            # marketing line alone runs to tens of billions. Reading only the
+            # combined tag left the second kind of filer publishing nothing, so
+            # gross profit less operating expense stopped reconciling to reported
+            # operating profit by a gap that grew every year.
+            #
+            # The reported combined figure is always kept as reported. The two
+            # components are summed only where the filer publishes no combined
+            # line at all, and they are summed into the same canonical key rather
+            # than published beside it, because for the filers that do report a
+            # combined line those same tags are a breakdown of it: one technology
+            # issuer's marketing plus administrative is exactly its combined
+            # figure, and adding them would double count the whole amount.
+            sa_key = (company_id, period, "canonical.is.selling_admin_exp")
+            if sa_key not in lookup:
+                sm = lookup.get((company_id, period, "canonical.is.sales_marketing"))
+                ga = lookup.get((company_id, period, "canonical.is.general_admin"))
+                # Both halves, or nothing.
+                #
+                # One half on its own is not the total, and publishing it under a
+                # label that says selling and administrative expense states a
+                # number the filer never reported. A filer that tags only general
+                # and administrative has given half the figure at best, and
+                # whether the other half exists is not knowable from what it
+                # tagged. Deriving from one half therefore understates operating
+                # expense by an unknown amount, which is worse than publishing
+                # nothing and saying so.
+                if sm is not None and ga is not None:
+                    anchor = sm or ga
+                    parts = [p for p in (sm, ga) if p is not None]
+                    sa_dp = CanonicalDatapoint(
+                        company_id=company_id,
+                        canonical_key="canonical.is.selling_admin_exp",
+                        metric_raw="Selling and Admin Expense (Derived)",
+                        period_label=period,
+                        period_end_date=anchor.period_end_date,
+                        value=sum(p.value for p in parts),
+                        currency=anchor.currency,
+                        units=anchor.units,
+                        status="derived",
+                        source_datapoint_ids=sorted(
+                            {sid for p in parts for sid in p.source_datapoint_ids}
+                        ),
+                        derivation_rule=(
+                            "selling_admin_exp = selling_and_marketing + general_and_administrative"
+                        ),
+                    )
+                    new_derived.append(sa_dp)
+                    lookup[sa_key] = sa_dp
+
+            # 9. Total Equity Derivation
             te_key = (company_id, period, "canonical.bs.total_equity")
             if te_key not in lookup:
                 ta_dp = lookup.get(ta_key)
@@ -307,7 +441,7 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
                     new_derived.append(te_dp)
                     lookup[te_key] = te_dp
 
-            # 7. Total Liabilities & Equity Reconciliation Derivation
+            # 10. Total Liabilities & Equity Reconciliation Derivation
             tle_key = (company_id, period, "canonical.bs.total_liabilities_and_equity")
             tl_dp = lookup.get((company_id, period, "canonical.bs.total_liabilities"))
             te_dp = lookup.get((company_id, period, "canonical.bs.total_equity"))
