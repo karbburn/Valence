@@ -11,6 +11,8 @@ normal unit-test suite and cannot pass or fail on a dev server being up.
 
 import pytest
 
+from backend.tests.conftest import requires_store
+
 from backend.forecast.pipeline import run as run_forecast_pipeline
 from backend.models.statements.pipeline import run as run_historical
 from backend.valuation.pipeline import run_valuation
@@ -29,6 +31,8 @@ def _driver(spec, key: str, scenario: str = "base") -> float | None:
             return a.value
     return None
 
+
+pytestmark = requires_store
 
 @pytest.mark.parametrize("company_id", COMPANIES)
 def test_cost_of_equity_driver_matches_the_wacc_used(company_id):
