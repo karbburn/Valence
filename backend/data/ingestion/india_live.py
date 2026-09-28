@@ -20,6 +20,7 @@ with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     import yfinance as yf
 
+from backend.data.errors import NoFinancialsAvailable
 from backend.data.store import RawDatapoint, Source, Status
 
 logger = logging.getLogger(__name__)
@@ -120,7 +121,7 @@ def fetch_and_parse_india_live(company_id: str) -> List[RawDatapoint]:
     cf_df = getattr(tk, "cashflow", None)
 
     if inc_df is None or inc_df.empty:
-        raise ValueError(f"Could not fetch live income statement for {company_id} from NSE/BSE")
+        raise NoFinancialsAvailable(f"Could not fetch live income statement for {company_id} from NSE/BSE")
 
     # Discover and sort available columns (dates) chronologically
     col_dates = []
@@ -135,7 +136,7 @@ def fetch_and_parse_india_live(company_id: str) -> List[RawDatapoint]:
                 pass
 
     if not col_dates:
-        raise ValueError(f"No valid reporting periods found in income statement for {company_id}")
+        raise NoFinancialsAvailable(f"No valid reporting periods found in income statement for {company_id}")
 
     # Sort chronological (oldest to newest)
     sorted_cols = sorted(col_dates)
@@ -224,6 +225,6 @@ def fetch_and_parse_india_live(company_id: str) -> List[RawDatapoint]:
     _extract_from_df(cf_df, YF_CASHFLOW_MAP, "CASH FLOW:")
 
     if not datapoints:
-        raise ValueError(f"Extracted 0 valid datapoints for {company_id} from live source")
+        raise NoFinancialsAvailable(f"Extracted 0 valid datapoints for {company_id} from live source")
 
     return datapoints

@@ -20,6 +20,7 @@ with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     import yfinance as yf
 
+from backend.data.errors import NoFinancialsAvailable
 from backend.data.store import RawDatapoint
 
 logger = logging.getLogger(__name__)
@@ -131,7 +132,7 @@ def fetch_and_parse_us_live(company_id: str) -> List[RawDatapoint]:
     cf_df = getattr(tk, "cashflow", None)
 
     if inc_df is None or inc_df.empty:
-        raise ValueError(f"Could not fetch live income statement for {company_id} via yfinance")
+        raise NoFinancialsAvailable(f"Could not fetch live income statement for {company_id} via yfinance")
 
     # yfinance reports statements in the company's reporting currency; convert
     # to USD so valuation units match the USD market price.
@@ -154,7 +155,7 @@ def fetch_and_parse_us_live(company_id: str) -> List[RawDatapoint]:
                 pass
 
     if not col_dates:
-        raise ValueError(f"No valid reporting periods found for {company_id}")
+        raise NoFinancialsAvailable(f"No valid reporting periods found for {company_id}")
 
     sorted_cols = sorted(col_dates)
     target_cols = sorted_cols[-3:] if len(sorted_cols) >= 3 else sorted_cols
@@ -229,6 +230,6 @@ def fetch_and_parse_us_live(company_id: str) -> List[RawDatapoint]:
     _extract_from_df(inc_df, YF_SHARE_MAP, "PROFIT & LOSS")
 
     if not datapoints:
-        raise ValueError(f"Extracted 0 valid datapoints for {company_id} from yfinance live source")
+        raise NoFinancialsAvailable(f"Extracted 0 valid datapoints for {company_id} from yfinance live source")
 
     return datapoints
