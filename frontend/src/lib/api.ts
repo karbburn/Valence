@@ -35,11 +35,35 @@ function writeSavedModels(entries: SavedModelEntry[]): void {
   }
 }
 
+/**
+ * Why a ticker has no model, in the visitor's terms.
+ *
+ * 503 is the one failure here that is not a fault. It means the filings behind
+ * this company are not retrievable: a foreign ordinary with no filing in reach, a
+ * recent listing with no annual report, a delisted symbol still in the index.
+ * Roughly one in seven tickers drawn at random lands here, so it is a normal
+ * outcome and the person reading it is most likely to have followed a link rather
+ * than to have mistyped anything.
+ *
+ * The API's own wording was written for the API. Shown to a visitor it reads as
+ * a malfunction, and "retry shortly" is the wrong advice when the filings are not
+ * going to appear, so it names the situation and gives somewhere to go instead.
+ */
+function unavailableMessage(companyId: string, detail: string): string {
+  return (
+    `${detail} ${companyId.toUpperCase()} is listed, but no annual filings could be reached ` +
+    'for it, so there is nothing to model. Try another ticker, or ask for this one and ' +
+    'it will be looked at.'
+  )
+}
+
 export async function fetchModelSpec(companyId: string): Promise<ModelSpecification> {
   const res = await fetch(`${BASE}/api/model/${companyId}`)
   if (!res.ok) {
     const detail = await res.json().catch(() => ({ detail: res.status }))
-    throw new Error(detail.detail || `Failed to load ${companyId}`)
+    const message = String(detail.detail || `Failed to load ${companyId}`)
+    if (res.status === 503) throw new Error(unavailableMessage(companyId, message))
+    throw new Error(message)
   }
   return res.json()
 }
