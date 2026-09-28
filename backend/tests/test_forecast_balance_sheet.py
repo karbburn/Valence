@@ -24,6 +24,7 @@ from backend.models.spec.model_specification import ModelSpecification
 from backend.valuation.pipeline import run_valuation
 from backend.validation.pipeline import run_qa
 
+from backend.tests.conftest import requires_store
 from backend.tests.test_excel_recalculation_parity import _model
 
 
@@ -110,8 +111,19 @@ def test_the_published_total_matches_its_own_formula(forecast_book):
         )
 
 
+@requires_store
 def test_the_forecast_carries_the_line_the_engine_computed():
-    """The engine's own output must contain what the workbook needs to publish."""
+    """The engine's own output must contain what the workbook needs to publish.
+
+    The only test in this file that reads the ingested store rather than the
+    synthetic fixture the others share. It is the one that checks a real company's
+    forecast against what the workbook then publishes from it, which is the join
+    worth testing and the reason it cannot be done on a fixture.
+
+    Marking the whole file as store-dependent, which is what happened first, was
+    wrong in the other direction: the other three build from a fixture and were
+    being skipped in CI for a dependency they never had.
+    """
     from backend.forecast.assumptions import suggest_base_assumptions
     from backend.models.statements.pipeline import run as run_historical
 
