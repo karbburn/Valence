@@ -12,7 +12,9 @@
   ],
   "awi_us": [],
   "bhartiartl_bhartiartl": [],
-  "dox_us": [],
+  "dox_us": [
+    "implied_price_deviation_is_explainable"
+  ],
   "googl_us": [
     "implied_price_deviation_is_explainable"
   ],
@@ -30,7 +32,9 @@
   "lt_lt": [],
   "msft_us": [],
   "nvda_us": [],
-  "ongc_ongc": [],
+  "ongc_ongc": [
+    "implied_price_deviation_is_explainable"
+  ],
   "reliance_reliance": [
     "implied_price_deviation_is_explainable"
   ],
@@ -38,7 +42,9 @@
     "bridge_inputs_plausible",
     "implied_price_deviation_is_explainable"
   ],
-  "tatamotors_tatamotors": [],
+  "tatamotors_tatamotors": [
+    "implied_price_deviation_is_explainable"
+  ],
   "tatasteel_tatasteel": [
     "implied_price_deviation_is_explainable"
   ],
