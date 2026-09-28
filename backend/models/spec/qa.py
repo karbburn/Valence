@@ -54,6 +54,19 @@ V1_CHECK_NAMES = [
         "share price as if it were a valuation.",
     ),
     (
+        "income_statement_is_coherent",
+        "data_quality",
+        "The income statement is possible: cost of sales does not exceed revenue, "
+        "expense lines are not negative, and gross and operating profit do not "
+        "have opposite signs.",
+    ),
+    (
+        "year_one_growth_is_plausible",
+        "data_quality",
+        "The first forecast year's revenue growth is defensible, so a misread "
+        "trailing revenue cannot be compounded into the published model.",
+    ),
+    (
         "implied_price_deviation_is_explainable",
         "data_quality",
         "Implied price is not an implausible distance from the traded price, which "
