@@ -61,9 +61,14 @@ export default function Workbench({ companyId, initialSpec, syncUrl = true }: Wo
   const [localError, setLocalError] = useState<string | null>(null)
 
   // Context-aware loading copy
+  // The wait is stated rather than left open. The service sleeps when idle, so
+  // the first request after a quiet period pays a container wake-up before the
+  // build even starts, and a spinner with no expectation attached to it reads as
+  // a hang for the full two minutes. Saying "a minute or two" up front is the
+  // difference between waiting and leaving.
   const [loadingTitle, setLoadingTitle] = useState('Compiling Valuation Model')
   const [loadingSubtitle, setLoadingSubtitle] = useState(
-    'Ingesting live financial statements, normalizing taxonomy, and solving DCF & WACC matrices...'
+    'Reading this company\u2019s filings and building the model. First visit to a ticker takes a minute or two, and later visits are immediate.'
   )
 
   const [exporting, setExporting] = useState(false)
@@ -118,9 +123,9 @@ export default function Workbench({ companyId, initialSpec, syncUrl = true }: Wo
     const isLive = company.onboarding_status !== 'onboarded'
 
     if (isLive) {
-      setLoadingTitle(`Compiling Live Model for ${company.ticker}`)
+      setLoadingTitle(`Compiling ${company.ticker}`)
       setLoadingSubtitle(
-        `Ingesting live financial statements, normalizing taxonomy, and solving DCF matrices...`
+        `Reading its filings and building the model from scratch. This takes a minute or two the first time and is immediate after that.`
       )
     } else {
       setLoadingTitle(`Loading ${company.ticker} Model`)
