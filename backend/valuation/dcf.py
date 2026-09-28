@@ -199,7 +199,21 @@ def compute_terminal_value(
         terminal_nopat = (last_ebit * (1.0 + g_frac)) * (1.0 - eff_tax)
         terminal_fcff = last_fcff * (1.0 + g_frac)
         reinvest = max(0.0, terminal_nopat - terminal_fcff)
-        reinvestment_rate = (reinvest / terminal_nopat * 100.0) if terminal_nopat > 0 else None
+        raw_rate = (reinvest / terminal_nopat * 100.0) if terminal_nopat > 0 else None
+        # A reinvestment rate above 100% means the business must fund growth with
+        # more capital than it earns, indefinitely. That is not a steady state, it
+        # is a company that either raises capital forever or does not grow, so the
+        # ratio carries no meaning above 100 and is reported as absent rather than
+        # published as a number.
+        #
+        # It was reached whenever the final-year free cash flow went negative:
+        # NOPAT minus a negative FCFF exceeds NOPAT. One railway reported 117.94%
+        # on this line, and the implied ROIC derived from it, 3.39%, was published
+        # in the workbook as though it were a finding about the business. The
+        # terminal itself was fine, because the terminal's own reinvestment rate
+        # is clamped separately; this was a diagnostic reporting a value it had no
+        # way to compute.
+        reinvestment_rate = raw_rate if raw_rate is not None and raw_rate <= 100.0 else None
         if reinvestment_rate and reinvestment_rate > 0:
             implied_roic = terminal_growth_rate / (reinvestment_rate / 100.0)
 
