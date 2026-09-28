@@ -25,4 +25,16 @@ EXPOSE 10000
 
 HEALTHCHECK CMD ["python", "-c", "import os,urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\",\"8000\")}/api/health')"]
 
-CMD ["sh", "-c", "uvicorn backend.api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# --no-proxy-headers is load-bearing, not a preference.
+#
+# uvicorn rewrites the peer address from the caller's own X-Forwarded-For by
+# default. The rate limiter keys on that peer, so leaving it on means a client
+# chooses its own identity: rotating the header bought an unlimited budget in
+# testing while one honest visitor was cut off. With it off the peer is the real
+# TCP peer, which is the only address the caller cannot write.
+#
+# Behind the platform's router every caller then shares the router's address, so
+# the request budget is site-wide rather than per-client. That is the honest
+# reading of what this deployment can see, and the limiter documents it as such
+# rather than claiming a separation it does not have.
+CMD ["sh", "-c", "uvicorn backend.api.main:app --host 0.0.0.0 --port ${PORT:-8000} --no-proxy-headers"]

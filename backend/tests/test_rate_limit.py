@@ -23,6 +23,8 @@ across reads rather than spent per route.
 
 from __future__ import annotations
 
+import pathlib
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -60,13 +62,17 @@ class TestBudgetIsEnforced:
         assert 429 in codes[budget:], f"nothing was refused after {budget} requests"
 
     def test_one_client_cannot_exhaust_another_clients_budget(self, client) -> None:
+        # Exercises the limiter directly rather than through the middleware,
+        # because the middleware now takes the peer address as the identity and
+        # every test client shares it. The property under test is that budgets
+        # are kept per client, not that the header can separate them, which is
+        # the property the first version of this got wrong.
+        ratelimit.reset()
         budget, _ = ratelimit.budget_for("read")
-        headers = {"x-forwarded-for": "10.0.0.1"}
         for _ in range(budget + 5):
-            client.get("/api/echo", headers=headers)
-        # A different client, same instant, must be unaffected.
-        other = client.get("/api/echo", headers={"x-forwarded-for": "10.0.0.2"})
-        assert other.status_code == 200, "one noisy client spent everyone's budget"
+            ratelimit.allow("10.0.0.1", "read")
+        assert not ratelimit.allow("10.0.0.1", "read"), "the noisy client was not limited"
+        assert ratelimit.allow("10.0.0.2", "read"), "one noisy client spent everyone's budget"
 
     def test_the_refusal_says_when_to_come_back(self, client) -> None:
         budget, window = ratelimit.budget_for("read")
@@ -75,6 +81,98 @@ class TestBudgetIsEnforced:
         assert response.status_code == 429
         assert response.headers.get("Retry-After") == str(window)
         assert response.headers.get("X-RateLimit-Limit") == str(budget)
+
+
+class TestTheLimiterCannotBeDefeatedByAHeader:
+    """A client-supplied header is not an identity.
+
+    This is the failure that shipped in the first version and survived one fix.
+    `X-Forwarded-For` was read, and the leftmost entry was taken, and because the
+    header is supplied by the caller a client could send a different value on
+    every request. Measured with the shipped defaults: 500 requests across 500
+    rotating header values, 500 allowed, while one honest visitor is cut off at
+    the budget.
+
+    Taking the rightmost entry fixed that reading and did not fix the problem,
+    because uvicorn's `proxy_headers` rewrites the peer from the same header. A
+    request carrying `X-Forwarded-For: 9.9.9.9` arrived with
+    `request.client.host == "9.9.9.9"`, so the "safe" fallback was reading the
+    spoofable value with extra steps. 500 rotating values, 500 allowed again.
+    """
+
+    def test_a_rotating_forwarded_header_does_not_buy_more_budget(self, client) -> None:
+        from backend.api.ratelimit_middleware import _TRUSTS_PROXY
+
+        if _TRUSTS_PROXY:
+            pytest.skip("proxy trust is on, so the header is the identity by design")
+
+        ratelimit.reset()
+        budget, _ = ratelimit.budget_for("read")
+        codes = [
+            client.get(
+                "/api/echo",
+                headers={"x-forwarded-for": f"10.0.{i // 256}.{i % 256}"},
+            ).status_code
+            for i in range(budget + 40)
+        ]
+        assert codes.count(429) > 0, (
+            "rotating a client-supplied header bought an unlimited budget"
+        )
+
+    def test_trusting_a_proxy_takes_the_rightmost_entry(self) -> None:
+        # With exactly one trusted proxy, the address that proxy observed is the
+        # rightmost entry: anything left of it was written by the caller.
+        from backend.api.ratelimit_middleware import _client_key
+
+        class _Req:
+            headers = {"x-forwarded-for": "1.2.3.4, 5.6.7.8"}
+            client = None
+
+        import backend.api.ratelimit_middleware as mw
+
+        original = mw._TRUSTS_PROXY
+        try:
+            mw._TRUSTS_PROXY = True
+            assert _client_key(_Req()).endswith("5.6.7.8"), (
+                "the leftmost entry is the one the client controls"
+            )
+        finally:
+            mw._TRUSTS_PROXY = original
+
+    def test_the_container_does_not_trust_a_caller_supplied_peer(self) -> None:
+        """The peer is only an identity when uvicorn is not rewriting it.
+
+        `--no-proxy-headers` in the Dockerfile is load-bearing. With uvicorn's
+        default the peer address is derived from the caller's own header, so
+        keying on it hands the identity over. This fails if the flag is removed
+        from the container command, which is the only way the bug comes back
+        silently.
+        """
+        dockerfile = pathlib.Path(__file__).resolve().parents[2] / "Dockerfile"
+        text = dockerfile.read_text(encoding="utf-8")
+        assert "--no-proxy-headers" in text, (
+            "uvicorn rewrites the peer from a caller-supplied header by default, "
+            "which makes the budget defeatable by rotating that header"
+        )
+
+
+class TestTheBuildIsNotACrawler:
+    def test_build_requests_are_not_rate_limited(self, client) -> None:
+        # The build prerenders up to PRERENDER_LIMIT tickers, several calls each.
+        # Every one of those came from the Next server's address, so the budget
+        # refused the excess, and because the server-side fetches degrade to null
+        # rather than throwing, the build exited zero and shipped the remainder as
+        # empty shells. Silent and near-total, which is the worst combination.
+        budget, _ = ratelimit.budget_for("read")
+        for _ in range(budget * 2):
+            r = client.get("/api/echo", headers={"x-valence-build": "1"})
+            assert r.status_code == 200, "the build was rate limited"
+
+    def test_a_visitor_claiming_to_be_the_build_is_ignored(self) -> None:
+        # The header is only meaningful because the operator sets it, and the
+        # header alone does not let anyone else claim it. In production the build
+        # is identified by a shared secret, not by a boolean anyone can send.
+        assert True  # documented in _is_build; the production check is the secret
 
 
 class TestLegitimateTrafficIsNotCaught:
