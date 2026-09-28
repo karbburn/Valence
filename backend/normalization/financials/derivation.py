@@ -10,6 +10,10 @@ DERIVATION_RULES: Dict[str, str] = {
         "ebitda = canonical.is.pbt + canonical.is.finance_cost + canonical.is.depreciation_amortization"
     ),
     "canonical.is.operating_profit": "operating_profit = canonical.is.ebitda - canonical.is.depreciation_amortization",
+    # Used when there is no EBITDA to subtract depreciation from. Finance cost is
+    # deliberately absent: it may already sit inside the other income line, and
+    # adding it back counts the interest charge twice. See the note at the call.
+    "canonical.is.operating_profit_from_pbt": "operating_profit = canonical.is.pbt - canonical.is.other_income",
     "canonical.is.gross_profit": "gross_profit = canonical.is.revenue - canonical.is.cost_of_sales",
 }
 
@@ -64,7 +68,6 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
                 ebitda = lookup.get((company_id, period, "canonical.is.ebitda"))
                 da = lookup.get((company_id, period, "canonical.is.depreciation_amortization"))
                 pbt = lookup.get((company_id, period, "canonical.is.pbt"))
-                finance_cost = lookup.get((company_id, period, "canonical.is.finance_cost"))
                 other_income = lookup.get((company_id, period, "canonical.is.other_income"))
 
                 if ebitda is not None and da is not None:
@@ -81,20 +84,57 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
                     )
                     new_derived.append(op_dp)
                     lookup[op_profit_key] = op_dp
-                elif pbt is not None and finance_cost is not None:
-                    other_inc_val = other_income.value if other_income else 0.0
-                    source_ids = pbt.source_datapoint_ids + finance_cost.source_datapoint_ids
-                    if other_income:
-                        source_ids += other_income.source_datapoint_ids
+                elif pbt is not None and other_income is not None:
+                    # Take out the filer's own whole non-operating block and add
+                    # nothing back to it.
+                    #
+                    # This used to also add finance cost, on the reasoning that
+                    # profit before tax is operating profit less interest plus
+                    # other income, so all three had to be undone. That holds only
+                    # when a filer reports interest *outside* its other income
+                    # line. A filer whose "Other (income) expense, net" already
+                    # contains its interest has it inside that block, and adding
+                    # finance cost on top counts the same charge twice.
+                    #
+                    # One large-cap pharma presents it that way and says so in the
+                    # filing: interest expense is a component of other (income)
+                    # expense, net. The double count landed on the only year that
+                    # filer tags operating income, inflating it by exactly the
+                    # interest charge, and because the result is a self-consistent
+                    # identity no check flagged it. The three-year average operating
+                    # margin the forecast then anchored on came out at 5.8% for a
+                    # business earning nearer thirty, and the enterprise value came
+                    # out nineteen times too small.
+                    #
+                    # Removing the whole block does not actually need to know
+                    # which of the two presentations a filer uses. Both were
+                    # checked against filings: one pharma, where interest sits
+                    # inside other (income) expense, net and 19,912 ties to its
+                    # filed total costs; and a software filer, where the same tag
+                    # is a larger net figure and 107,787 - (-1,646) returns
+                    # 109,433, exactly the operating income it reports. Whether
+                    # interest is inside the block stops mattering once the whole
+                    # block is taken out.
+                    #
+                    # The residual risk is a filer that tags only part of the
+                    # non-operating section under this key, which would leave the
+                    # rest deducted and read low by that much. Erring low is the
+                    # recoverable direction: a low figure stays visible and
+                    # drags the valuation down, while an inflated one is
+                    # indistinguishable from a good result once it is published.
+                    finance_cost = lookup.get((company_id, period, "canonical.is.finance_cost"))
+                    source_ids = pbt.source_datapoint_ids + other_income.source_datapoint_ids
+                    if finance_cost is not None:
+                        source_ids += finance_cost.source_datapoint_ids
                     op_dp = _build_derived(
                         company_id=company_id,
                         canonical_key="canonical.is.operating_profit",
                         period=period,
                         metric_raw="Operating Profit (Derived)",
-                        value=pbt.value + finance_cost.value - other_inc_val,
+                        value=pbt.value - other_income.value,
                         anchor=pbt,
                         source_ids=source_ids,
-                        formula="operating_profit = pbt + finance_cost - other_income",
+                        formula=DERIVATION_RULES["canonical.is.operating_profit_from_pbt"],
                     )
                     new_derived.append(op_dp)
                     lookup[op_profit_key] = op_dp
