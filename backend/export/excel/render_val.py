@@ -18,6 +18,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from backend.export.excel.builder import (
     apply_tab_defaults,
     register_formula_value,
+    row_of_label,
     set_col_widths,
     write_formula_cell,
     write_table_header,
@@ -374,10 +375,30 @@ def render_dcf_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
             # Opening level comes from the historical balance sheet: receivables
             # + unbilled revenue + inventory − payables, on the last historical
             # column that actually carries them.
-            prior_level = (
-                f"(N('11_Balance_Sheet'!{hist_period_col}13)+N('11_Balance_Sheet'!{hist_period_col}14)"
-                f"+N('11_Balance_Sheet'!{hist_period_col}15)-N('11_Balance_Sheet'!{hist_period_col}22))"
-            )
+            #
+            # The rows are resolved by label. They were 13, 14, 15 and 22, which
+            # described the balance sheet as it stood when this was written. Adding
+            # a line to that statement moved every row beneath it, so the formula
+            # went on reading the non-current subtotal as trade receivables, left
+            # inventory out entirely, and subtracted total equity in place of trade
+            # payables. It still returned a number, so nothing looked wrong until
+            # the workbook was recalculated and disagreed with its own cached
+            # figures. See row_of_label.
+            #
+            # A workbook built without the balance sheet is not a thing a reader
+            # receives, but it is a thing tests render, and an absent sheet is not
+            # a reason to fail a tab that is otherwise fine. The working capital
+            # line falls back to zero against the forecast, which is the same
+            # figure a filer with no working capital produces.
+            prior_level = "0"
+            if "11_Balance_Sheet" in wb.sheetnames:
+                bs = wb["11_Balance_Sheet"]
+                prior_level = (
+                    f"(N('11_Balance_Sheet'!{hist_period_col}{row_of_label(bs, 'Trade Receivables')})"
+                    f"+N('11_Balance_Sheet'!{hist_period_col}{row_of_label(bs, 'Unbilled Revenue')})"
+                    f"+N('11_Balance_Sheet'!{hist_period_col}{row_of_label(bs, 'Inventory')})"
+                    f"-N('11_Balance_Sheet'!{hist_period_col}{row_of_label(bs, 'Trade Payables')}))"
+                )
             form = f"='23_Working_Capital'!{col_let}12-{prior_level}"
         else:
             prev_col_let = chr(67 + idx - 1)

@@ -85,6 +85,32 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
     ], "PROFIT & LOSS"),
     ("Gross profit", ["GrossProfit"], "PROFIT & LOSS"),
     ("Total operating expenses", ["OperatingExpenses"], "PROFIT & LOSS"),
+    # Operating expense detail.
+    #
+    # The income statement renderer has always carried rows for research and
+    # development, selling and administrative, and other operating expense, and
+    # every one of them exported blank for every company, because no tag here fed
+    # them. A reader seeing "Operating Profit (EBIT)" with nothing above it reads
+    # the profit as unexplained, and on a filer like this one the research line
+    # alone runs to tens of billions.
+    ("Research and development", [
+        "ResearchAndDevelopmentExpense",
+        "ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost",
+    ], "PROFIT & LOSS"),
+    # Selling and administrative expense, in the two shapes filers actually use.
+    #
+    # One filer reports a single combined line, another splits the same total into
+    # selling and marketing plus general and administrative. The combined tag is
+    # read on its own, and the two components are read separately, so that
+    # derivation can publish one line either way.
+    #
+    # The components must not be read as a fallback for the combined line. Doing
+    # so silently dropped the marketing half: the component is a third to a half
+    # of the total, and the workbook went on to show a gross profit and an
+    # operating profit that no longer met, with a gap that grew every year.
+    ("Selling and admin", ["SellingGeneralAndAdministrativeExpense"], "PROFIT & LOSS"),
+    ("Selling and marketing", ["SellingAndMarketingExpense"], "PROFIT & LOSS"),
+    ("General and administrative", ["GeneralAndAdministrativeExpense"], "PROFIT & LOSS"),
     ("Operating profit", ["OperatingIncomeLoss", "OperatingProfit", "IncomeLossFromOperations"], "PROFIT & LOSS"),
     ("Depreciation", [
         "DepreciationDepletionAndAmortization", 
@@ -126,9 +152,21 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
         "ProfitLoss", 
         "NetIncomeLossAvailableToCommonStockholdersBasic"
     ], "PROFIT & LOSS"),
+    # Net block, in the order filers actually tag it.
+    #
+    # Gross property, plant and equipment was the second choice, and gross is not
+    # net: a filer that tags only the gross figure would publish accumulated
+    # depreciation nowhere, so the balance sheet carried the wrong block and
+    # overstated assets by the whole accumulated depreciation. Gross is a worse
+    # answer than absent, so it is not in the list at all.
+    #
+    # The third spelling is the one filers use when they combine the net block
+    # with finance lease right-of-use assets into a single caption. It is carried
+    # after the plain net tag, which the other large filers tag, so reading it
+    # cannot disturb them.
     ("Net Block", [
-        "PropertyPlantAndEquipmentNet", 
-        "PropertyPlantAndEquipmentGross"
+        "PropertyPlantAndEquipmentNet",
+        "PropertyPlantAndEquipmentAndFinanceLeaseRightOfUseAssetAfterAccumulatedDepreciationAndAmortization",
     ], "BALANCE SHEET"),
     ("Cash & Bank", [
         "CashAndCashEquivalentsAtCarryingValue", 
@@ -187,6 +225,57 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
     # the non-current half would count the current slice twice.
     # `_derive_noncurrent_borrowings` subtracts it instead, and that is the only
     # place that arithmetic happens.
+    # Non-current assets.
+    #
+    # The renderer publishes rows for goodwill, intangibles, deferred tax, non-current
+    # investments and a catch-all, and every one of them was blank for every company
+    # because no tag fed them. The visible consequence is a balance sheet that does
+    # not add up on its face: this filer reported 81,198 of non-current assets
+    # against 10,383 of property, plant and equipment, so 70,815 of the balance sheet
+    # was simply absent, including 20,832 of goodwill.
+    #
+    # The subtotal is tagged when the filer publishes one, and derived from total
+    # assets less current assets when it does not, which is the common case. It is
+    # never left blank, because a subtotal no line explains is no more use to a
+    # reader than a missing one.
+    ("Goodwill", ["Goodwill"], "BALANCE SHEET"),
+    ("Intangible assets", [
+        "FiniteLivedIntangibleAssetsNet",
+        "IntangibleAssetsNetExcludingGoodwill",
+    ], "BALANCE SHEET"),
+    ("Deferred income tax assets", ["DeferredIncomeTaxAssetsNet"], "BALANCE SHEET"),
+    # The filer's own catch-all. A filer that itemises nothing else puts its
+    # right-of-use assets, long-term investments and sundry balances here, and
+    # those are the majority of non-current assets at most filers. Naming them
+    # keeps the balance sheet adding up to its own subtotal.
+    ("Other non-current assets", ["OtherAssetsNoncurrent"], "BALANCE SHEET"),
+    # Long-term investments and non-current securities.
+    #
+    # These are not a rounding item. One filer holds a third of its non-current
+    # assets in securities that this statement previously had no line for at all,
+    # so 330,505 of a 389,243 subtotal was carried with nothing naming it.
+    #
+    # The order matters, because a filer may tag several of these and they are not
+    # additive. Debt securities and marketable securities are the same holding
+    # under two captions, and equity securities without a readily determinable
+    # fair value is a subset of other long-term investments. Within a single year
+    # only the first tag carrying that year is taken, so nothing is summed and no
+    # year double counts.
+    #
+    # Across years the behaviour is weaker, and worth stating plainly. Where the
+    # first tag has no fact for a year, the sibling top-up fills it from a later
+    # tag, so a filer that reports debt securities in one year and marketable
+    # securities in another ends up with one row spanning two captions. That is
+    # preferable to a gap, and the two captions are close enough in substance that
+    # the year-on-year movement is not misleading, but the row is not a single
+    # consistent definition and should not be read as one.
+    ("Non-current investments", [
+        "AvailableForSaleSecuritiesDebtSecuritiesNoncurrent",
+        "MarketableSecuritiesNoncurrent",
+        "OtherLongTermInvestments",
+        "EquitySecuritiesWithoutReadilyDeterminableFairValueAmount",
+    ], "BALANCE SHEET"),
+    ("Total non-current assets", ["AssetsNoncurrent"], "BALANCE SHEET"),
     ("Borrowings", [
         "LongTermDebtNoncurrent",
         "LongTermDebtAndCapitalLeaseObligations",

@@ -12,6 +12,7 @@ IS_LINE_ITEM_CONFIG: List[tuple[str, str]] = [
     ("canonical.is.revenue", "Revenue from Operations"),
     ("canonical.is.cost_of_sales", "Cost of Sales"),
     ("canonical.is.gross_profit", "Gross Profit"),
+    ("canonical.is.research_development", "Research and Development"),
     ("canonical.is.employee_cost", "Employee Cost"),
     ("canonical.is.selling_admin_exp", "Selling & Administrative Expenses"),
     ("canonical.is.other_mfr_exp", "Other Manufacturing Expenses"),
@@ -140,6 +141,7 @@ def assemble_income_statement(
         gp_item = next((i for i in items if i.canonical_key == "canonical.is.gross_profit"), None)
         other_exp_item = next((i for i in items if i.canonical_key == "canonical.is.other_exp"), None)
         selling_admin_item = next((i for i in items if i.canonical_key == "canonical.is.selling_admin_exp"), None)
+        research_item = next((i for i in items if i.canonical_key == "canonical.is.research_development"), None)
 
         derived_op: Dict[str, float] = {}
 
@@ -153,14 +155,24 @@ def assemble_income_statement(
             if gp_val is None and r_val is not None and cos_val is not None:
                 gp_val = r_val - cos_val
 
-            if other_exp_item is None and selling_admin_item is None:
+            if other_exp_item is None and selling_admin_item is None and research_item is None:
                 continue
 
             oe_val = other_exp_item.values_by_period.get(p) if other_exp_item else None
             sa_val = selling_admin_item.values_by_period.get(p) if selling_admin_item else None
-            if oe_val is None and sa_val is None:
+            rd_val = research_item.values_by_period.get(p) if research_item else None
+            if oe_val is None and sa_val is None and rd_val is None:
                 continue
-            opex = (oe_val or 0.0) + (sa_val or 0.0)
+
+            # Research and development belongs in the sum. It used to be omitted
+            # because no filer's line ever populated it, so leaving it out was
+            # inert. Now that the line carries real figures, omitting it overstates
+            # operating profit by the whole research expense for any filer that
+            # does not tag operating income directly, and that profit anchors the
+            # forecast. The statement stays internally consistent throughout, so
+            # the coherence checks do not see it: the error is that the profit is
+            # too high, not that it fails to add up.
+            opex = (oe_val or 0.0) + (sa_val or 0.0) + (rd_val or 0.0)
 
             if gp_val is not None and opex > 0:
                 derived_op[p] = round(gp_val - opex, 2)
