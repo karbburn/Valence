@@ -12,6 +12,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from backend.api.ratelimit_middleware import RateLimitMiddleware
 from backend.api.routes import router as api_router
 
 HERE = Path(__file__).resolve().parent
@@ -42,6 +43,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Per-client request budget, applied to the API only. The ingestion throttle
+# bounds how much work runs at once; this bounds how much is asked for, which is
+# the axis a crawler pushes on and the one that decides whether a free tier
+# survives the month. Added after CORS so it runs outside it and its 429 is not
+# rewritten by the CORS layer.
+app.add_middleware(RateLimitMiddleware)
 
 # Allow embedding in portfolio iframe (https://www.sourabhpradhan.in)
 # Modern browsers enforce CSP frame-ancestors; X-Frame-Options is legacy/fallback.
