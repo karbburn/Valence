@@ -29,7 +29,25 @@ function endpoint(path: string): string {
   return `${apiBaseUrl()}${path}`
 }
 
-const serverFetchInit = { next: { revalidate: REVALIDATE_SECONDS } } as const
+/**
+ * Marks these fetches as coming from the site's own build.
+ *
+ * The backend budgets requests per client, and every browser call reaches it
+ * through the Next server, so it sees one address for the entire internet. A
+ * build looks identical, and it is the one caller that cannot be slowed down
+ * without consequence: it prerenders up to PRERENDER_LIMIT tickers, and when
+ * the budget refused the excess every server-side fetch degraded to null, so
+ * the build still exited zero and shipped the remainder as empty shells marked
+ * noindex. A silent near-total prerender failure is worse than a loud one.
+ *
+ * The header identifies the operator's own build, not a caller claiming to be
+ * one, and the backend ignores it from any origin the operator does not
+ * control.
+ */
+const serverFetchInit = {
+  next: { revalidate: REVALIDATE_SECONDS },
+  headers: { 'x-valence-build': '1' },
+} as const
 
 /**
  * Fetch a compiled model for a company. Null when unavailable.

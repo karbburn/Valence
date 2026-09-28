@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import pytest
 
-from backend.tests.conftest import requires_store
 from openpyxl import Workbook, load_workbook
 
 from backend.export.excel.exporter import export_model_to_excel
@@ -27,7 +26,6 @@ from backend.validation.pipeline import run_qa
 
 from backend.tests.test_excel_recalculation_parity import _model
 
-pytestmark = requires_store
 
 FC = "CDEFG"
 FY = ["FY27", "FY28", "FY29", "FY30", "FY31"]
