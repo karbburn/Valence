@@ -798,7 +798,20 @@ def search_companies(
 
     _ensure_universe_seeded()
     m_filter = market if market in ("india", "us") else None
-    local = search_universe_companies(query=q, market=m_filter, limit=limit)
+
+    # Reserve part of the result budget for the wider universe.
+    #
+    # The local pass was uncapped, so for a query like "TATA" it filled all
+    # eight slots with covered companies (TATASTEEL, TATAMOTORS, TCS) and the
+    # discoveries were pushed off the end. The search looked like it only knew
+    # the curated set, which is the opposite of what it does.
+    #
+    # Half the budget is reserved rather than all of it: a visitor searching for
+    # a company they already know is covered should still see it first, but a
+    # visitor searching a common prefix has to be able to see that the wider
+    # universe answered too.
+    local_budget = limit if limit <= 2 else (limit + 1) // 2
+    local = search_universe_companies(query=q, market=m_filter, limit=local_budget)
 
     payload = []
     for c in local:

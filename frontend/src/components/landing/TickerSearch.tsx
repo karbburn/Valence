@@ -294,7 +294,12 @@ export function TickerSearch() {
           } overflow-y-auto bg-surface border border-border rounded-sm shadow-pop divide-y divide-border list-none m-0 p-0`}
         >
           {results.map((c, i) => {
-            const sym = getCurrencySymbol(c.currency)
+            // Guard on the currency itself, not on the symbol.
+            // getCurrencySymbol returns '?' for anything that is not USD,
+            // including a company whose currency is not known yet, so testing
+            // the symbol let a null currency through and printed the literal
+            // word "null" next to the exchange.
+            const sym = c.currency ? getCurrencySymbol(c.currency) : ''
             return (
               <li
                 key={c.company_id}
