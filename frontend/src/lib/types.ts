@@ -240,3 +240,21 @@ export interface RecomputeRequest {
   period?: string
   scenario?: string
 }
+
+
+/**
+ * Whether the engine is willing to present this model as a valuation.
+ *
+ * The distinction is between an opinion and a broken number. A DCF that lands far
+ * from the traded price is an opinion, and publishing it is the product. A model
+ * whose inputs failed a plausibility check is not an opinion, it is a number the
+ * engine does not stand behind, and the headline has to say so.
+ */
+export interface PublicationVerdict {
+  status: 'publishable' | 'opinion_only'
+  publishable: boolean
+  input_defect_checks_failed: string[]
+  other_checks_failed: string[]
+  reasons: string[]
+  summary: string
+}
