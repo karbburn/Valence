@@ -84,6 +84,25 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
   const reverseDcf = valuation?.reverse_dcf
 
   const impliedPrice = bridge?.implied_share_price ?? null
+
+  // The same rule the API applies in its publication verdict, derived from the
+  // checks this component is already given. Kept in step deliberately: the
+  // server decides what may be called a valuation, and the client is only
+  // choosing not to put a number in a headline.
+  const INPUT_DEFECT_CHECKS = [
+    'bridge_inputs_plausible',
+    'income_statement_is_coherent',
+    'year_one_growth_is_plausible',
+    'terminal_value_is_not_carrying_the_model',
+    'equity_value_positive',
+  ]
+  const publishable = !(spec.qa?.checks ?? []).some(
+    (c) => INPUT_DEFECT_CHECKS.includes(c.check_name) && !c.passed,
+  )
+  const publicationTitle = (spec.qa?.checks ?? [])
+    .filter((c) => INPUT_DEFECT_CHECKS.includes(c.check_name) && !c.passed)
+    .map((c) => `${c.check_name}: ${c.detail}`)
+    .join('\n\n') || 'The engine could not verify the inputs to this model.'
   const marketPrice = reverseDcf?.market_price ?? null
 
   let upsidePct: number | null = null
@@ -157,10 +176,18 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
             DCF Implied Price
           </span>
           <div className="font-mono font-bold text-[16px] text-[#7dd3fc] mt-0.5 whitespace-nowrap">
-            {impliedPrice != null ? fmtPrice(impliedPrice, currency, 2) : '—'}
+            {/* A model the engine will not stand behind does not get a headline
+                price. The number is still in the workbench below, where the
+                audit explains it, but presenting it here without qualification
+                is the thing that puts a wrong figure in front of a reader. */}
+            {impliedPrice != null && publishable ? fmtPrice(impliedPrice, currency, 2) : '—'}
           </div>
           <div className="text-[10px] font-semibold mt-0.5 whitespace-nowrap">
-            {isSuccessorQuote ? (
+            {!publishable ? (
+              <span className="text-[#f59e0b]" title={publicationTitle}>
+                Inputs not verified
+              </span>
+            ) : isSuccessorQuote ? (
               <span className="text-[#f59e0b]" title={priceTitle}>
                 Not comparable
               </span>
