@@ -21,6 +21,10 @@ with warnings.catch_warnings():
     import yfinance as yf
 
 from backend.data.errors import NoFinancialsAvailable
+from backend.data.ingestion.feed_borrowings import (
+    index_rows as fb_index_rows,
+    resolve_borrowings as fb_resolve_borrowings,
+)
 from backend.data.store import RawDatapoint, Source, Status
 
 logger = logging.getLogger(__name__)
@@ -54,12 +58,20 @@ YF_INCOME_MAP = [
 YF_BALANCE_MAP = [
     ("Equity Share Capital", ["Share Issued", "Ordinary Shares Number"]),
     ("Reserves", ["Retained Earnings", "Other Equity", "Stockholders Equity"]),
-    # Long-term borrowings only. Short-term debt is mapped separately so the
-    # EV -> equity bridge is not missing the current maturities.
-    ("Borrowings", ["Long Term Debt", "Long Term Debt And Capital Lease Obligation"]),
-    ("Short term borrowings", ["Current Debt", "Current Debt And Capital Lease Obligation", "Other Current Borrowings"]),
-    ("Finance lease liabilities", ["Finance Lease", "Capital Lease Obligation"]),
-    ("Operating lease liabilities", ["Operating Lease Liability"]),
+    # Long-term borrowings and short-term debt are resolved separately rather than
+    # through this map: the same feed bundles lease obligations into both, and for
+    # Infosys each bundled row is entirely a lease, so 923 of lease was entering the
+    # debt the valuation deducts while rent is already inside the EBIT the cash
+    # flows are built from. See _extract_borrowings.
+    #
+    # No finance-lease line is synthesised from the feed either, for the reason
+    # given in us_live: the feed's capital lease rows cannot be told apart from its
+    # operating lease rows. The filed figure is mapped from the exchange filing.
+    ("Operating lease liabilities", [
+        "Operating Lease Liability",
+        "Leases",
+        "Capital Lease Obligations",
+    ]),
     ("Other Liabilities", ["Total Non Current Liabilities Net Minority Interest", "Current Liabilities"]),
     ("Total_Liab", ["Total Liabilities Net Minority Interest", "Total Liabilities"]),
     ("Net Block", ["Net PPE", "Gross PPE", "Properties"]),
@@ -220,7 +232,66 @@ def fetch_and_parse_india_live(company_id: str) -> List[RawDatapoint]:
                     )
                 )
 
+    def _extract_borrowings(df):
+        """Borrowings from the feed, with any bundled lease obligation removed.
+
+        Shares one implementation with the US feed path rather than repeating it,
+        because the two drifted apart: the same bundled row is read here and there,
+        and a rule that has to be written twice is a rule that will be right in only
+        one place.
+        """
+        if df is None or df.empty:
+            return
+        rows = fb_index_rows(df.index)
+
+        for c_d in target_cols:
+            d_str = str(c_d)[:10]
+            period_lbl = period_map.get(d_str)
+            if period_lbl is None:
+                continue
+            col_match = next((c for c in df.columns if str(c)[:10] == d_str), None)
+            if col_match is None:
+                continue
+
+            for row_idx, (metric_label, matched_row, value, unsplit) in enumerate(
+                fb_resolve_borrowings(rows, lambda idx: df.loc[idx, col_match])
+            ):
+                if unsplit:
+                    logger.info(
+                        "%s for %s came from the feed's combined caption %r with no "
+                        "lease split published, so it may include a lease obligation",
+                        metric_label, period_lbl, matched_row,
+                    )
+                dp_id = _datapoint_id(
+                    company_id, metric_label, period_lbl, "yfinance_live",
+                    "BALANCE SHEET", row_idx + 1,
+                )
+                datapoints.append(
+                    RawDatapoint(
+                        id=dp_id,
+                        company_id=company_id,
+                        metric_raw=metric_label,
+                        period_label=period_lbl,
+                        period_end_date=c_d if isinstance(c_d, date) else date.today(),
+                        value=round(value / 1e7, 4),
+                        currency="INR",
+                        units="crores",
+                        source="yfinance_live",
+                        source_location=(
+                            f"yfinance!{matched_row}"
+                            + (
+                                "; lease half not published by the feed"
+                                if unsplit
+                                else ""
+                            )
+                        ),
+                        status="reported",
+                        update_date=now,
+                    )
+                )
+
     _extract_from_df(inc_df, YF_INCOME_MAP, "PROFIT & LOSS")
+    _extract_borrowings(bs_df)
     _extract_from_df(bs_df, YF_BALANCE_MAP, "BALANCE SHEET")
     _extract_from_df(cf_df, YF_CASHFLOW_MAP, "CASH FLOW:")
 
