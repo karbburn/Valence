@@ -38,10 +38,28 @@ SEC_HEADERS = {
 }
 
 # Known CIK lookup table
+# A fallback for when SEC's ticker file cannot be reached, not a source of truth.
+#
+# These are consulted ONLY after SEC has been asked and has failed, and a hit here
+# is logged as a warning. The entry for infy_us was wrong and cost a launch: it held
+# 0001065280, which is NETFLIX, so the "Infosys Limited (NYSE ADR)" page was built
+# from Netflix's 10-K. Revenue 45,183, total assets 55,597, cash 9,033 and equity
+# 26,616 are all Netflix's FY2025 figures, the bridge was Netflix's, and the page
+# published an implied share price of $63.25 against a market price of $10.64 —
+# six times the price of a company the page named. Nothing caught it: the model was
+# internally consistent, every identity held, the workbook agreed with the model, and
+# the tie-out reported the filer as merely "not auditable because it reports under
+# IFRS", which is a statement about the taxonomy and read as though the numbers had
+# been left alone.
+#
+# A hand-kept identifier that is trusted without a check is a company name waiting
+# to be wrong, and nothing downstream can detect it, because every consumer believes
+# it. So SEC's own ticker file decides, and this table only covers for SEC being
+# unreachable.
 CIK_REGISTRY: Dict[str, str] = {
     "aapl_us": "0000320193",
     "msft_us": "0000789019",
-    "infy_us": "0001065280",
+    "infy_us": "0001067491",
 }
 
 
@@ -477,10 +495,19 @@ def _derive_noncurrent_borrowings(
 
 
 def resolve_cik(company_id: str) -> str:
-    """Resolve 10-digit zero-padded CIK string for company_id."""
-    if company_id in CIK_REGISTRY:
-        return CIK_REGISTRY[company_id]
+    """Resolve the 10-digit zero-padded CIK for a company_id, from SEC.
 
+    SEC's own ticker file is the authority, and it is asked first on every call. The
+    fallback table is consulted only when SEC cannot be reached, and a hit there is
+    logged as a warning naming the entry, because a fallback that cannot announce
+    itself is indistinguishable from a verified answer.
+
+    This ordering is the fix. The table used to be consulted first and returned
+    without a check, so a wrong identifier was never questioned by anything
+    downstream: the ingestion read a different company's facts, labelled them with
+    the requested company's ticker, and produced a model that was internally perfect
+    and entirely fictional. See CIK_REGISTRY.
+    """
     ticker = company_id.split("_")[0].upper()
     url = "https://www.sec.gov/files/company_tickers.json"
     try:
@@ -490,9 +517,30 @@ def resolve_cik(company_id: str) -> str:
             for entry in data.values():
                 if entry.get("ticker", "").upper() == ticker:
                     cik_int = entry["cik_str"]
-                    return str(cik_int).zfill(10)
+                    resolved = str(cik_int).zfill(10)
+                    cached = CIK_REGISTRY.get(company_id)
+                    if cached and cached != resolved:
+                        # One request either way, so the table earns nothing. The
+                        # stale value is reported rather than quietly used, which is
+                        # how a wrong identifier stops being invisible.
+                        logger.warning(
+                            "CIK_REGISTRY['%s'] is %s but SEC says %s for ticker %s; "
+                            "using SEC's and the registry entry is stale",
+                            company_id, cached, resolved, ticker,
+                        )
+                    return resolved
     except Exception as e:
         logger.warning("Failed SEC CIK lookup for %s: %s", company_id, e)
+
+    cached = CIK_REGISTRY.get(company_id)
+    if cached:
+        logger.warning(
+            "Falling back to the unverified CIK_REGISTRY entry %s for '%s' because "
+            "SEC's ticker file was unreachable. This identifier has not been "
+            "checked against the filer and must not be relied on.",
+            cached, company_id,
+        )
+        return cached
 
     # Never silently fall back to a different company's CIK — that would fetch the
     # wrong company's financials. Fail loudly so the caller can fix the registry.

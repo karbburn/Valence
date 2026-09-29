@@ -21,3 +21,6 @@ include = ["backend*"]
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
+markers = [
+    "network: reaches out to SEC EDGAR, so it fails when the network is unavailable",
+]
