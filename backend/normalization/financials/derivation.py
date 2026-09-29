@@ -196,6 +196,17 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
                     lookup[gp_key] = gp_dp
 
             # 4. Current Investments Derivation Fallback
+            #
+            # What survives this subtraction is current assets the engine has not
+            # identified, which is a residual, not a security. Publishing it under
+            # the investments key let the enterprise bridge deduct unidentified
+            # current assets as though they were marketable securities: a filer
+            # whose balance sheet printed 23,900 of "other current assets" against
+            # 22,500 of prepayments had the 1,400 difference presented as a
+            # security it does not hold. So a reported other-current-assets line
+            # is subtracted before the residual is computed, and a filer whose
+            # unidentified current assets are genuinely its securities line keeps
+            # them because it publishes no such line to compete with them.
             ci_key = (company_id, period, "canonical.bs.current_investments")
             tca_key = (company_id, period, "canonical.bs.total_current_assets")
             if ci_key not in lookup and tca_key in lookup:
@@ -204,20 +215,26 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
                 rec = lookup.get((company_id, period, "canonical.bs.trade_receivables"))
                 inv = lookup.get((company_id, period, "canonical.bs.inventory"))
                 prep = lookup.get((company_id, period, "canonical.bs.prepayments_other_current_assets"))
-                
+                other_ca = lookup.get((company_id, period, "canonical.bs.other_current_assets"))
+
                 cash_val = cash.value if cash else 0.0
                 rec_val = rec.value if rec else 0.0
                 inv_val = inv.value if inv else 0.0
                 prep_val = prep.value if prep else 0.0
-                
-                derived_ci_val = max(0.0, tca.value - (cash_val + rec_val + inv_val + prep_val))
+                other_ca_val = other_ca.value if other_ca else 0.0
+
+                derived_ci_val = max(
+                    0.0,
+                    tca.value - (cash_val + rec_val + inv_val + prep_val + other_ca_val),
+                )
                 if derived_ci_val > 0.0:
                     source_ids = tca.source_datapoint_ids
                     if cash: source_ids += cash.source_datapoint_ids
                     if rec: source_ids += rec.source_datapoint_ids
                     if inv: source_ids += inv.source_datapoint_ids
                     if prep: source_ids += prep.source_datapoint_ids
-                    
+                    if other_ca: source_ids += other_ca.source_datapoint_ids
+
                     ci_dp = CanonicalDatapoint(
                         company_id=company_id,
                         canonical_key="canonical.bs.current_investments",
@@ -229,7 +246,7 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
                         units=tca.units,
                         status="derived",
                         source_datapoint_ids=sorted(set(source_ids)),
-                        derivation_rule="current_investments = total_current_assets - (cash + receivables + inventory + prepayments)",
+                        derivation_rule="current_investments = total_current_assets - (cash + receivables + inventory + prepayments + other current assets)",
                     )
                     new_derived.append(ci_dp)
                     lookup[ci_key] = ci_dp
