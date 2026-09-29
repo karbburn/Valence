@@ -7,20 +7,15 @@
     "implied_price_deviation_is_explainable"
   ],
   "amzn_us": [
-    "bridge_inputs_plausible",
     "implied_price_deviation_is_explainable"
   ],
   "awi_us": [],
   "bhartiartl_bhartiartl": [],
-  "dox_us": [
-    "implied_price_deviation_is_explainable"
-  ],
+  "dox_us": [],
   "googl_us": [
     "implied_price_deviation_is_explainable"
   ],
-  "hcltech_hcltech": [
-    "bridge_inputs_plausible"
-  ],
+  "hcltech_hcltech": [],
   "idea_idea": [
     "equity_value_positive",
     "implied_price_deviation_is_explainable"
@@ -29,7 +24,9 @@
   "infy_us": [
     "implied_price_deviation_is_explainable"
   ],
-  "lt_lt": [],
+  "lt_lt": [
+    "implied_price_deviation_is_explainable"
+  ],
   "msft_us": [],
   "nvda_us": [],
   "ongc_ongc": [
@@ -46,11 +43,10 @@
     "implied_price_deviation_is_explainable"
   ],
   "tatasteel_tatasteel": [
+    "equity_value_positive",
     "implied_price_deviation_is_explainable"
   ],
   "tcs_tcs": [],
-  "tsm_us": [
-    "bridge_inputs_plausible"
-  ],
+  "tsm_us": [],
   "wipro_wipro": []
 }
