@@ -109,10 +109,10 @@ BRIDGE_TERMS: dict[str, tuple[str, ...]] = {
 # Labels whose value is already the combined figure, so the components must not
 # be added on top or the same money is counted twice.
 #
-# This is a warning about double counting, not a licence to use them. Neither is
-# used as the basis for anything: the combined cash row is a valid liquid figure,
-# and the combined debt row carries a lease the feed cannot identify, so it is not
-# a debt figure. See _build.
+# A warning about double counting, not a licence to use them. The combined cash
+# row is a valid liquid figure and is read as one. The combined debt row carries a
+# lease the feed cannot identify, so it is not a debt figure and is not read; see
+# _build.
 COMBINED_LABELS = frozenset({
     "Cash Cash Equivalents And Short Term Investments",
     "Total Debt",
@@ -142,6 +142,21 @@ class BridgeSnapshot:
 
 
 def _label_value(frame, labels: tuple[str, ...], column) -> Optional[float]:
+    """The first balance carried by any of these aliases, zero included.
+
+    A feed reports an unpopulated cell as NaN, and that is treated as absent rather
+    than as a real zero, so a missing term is visible instead of silently reducing
+    a total.
+
+    A zero on the FIRST alias is not treated as final, though, because on these
+    statements a zero usually means the row is present but unpopulated rather than
+    that the filer holds nothing. A filer carrying 5,000 of available-for-sale
+    securities alongside an "Other Short Term Investments" row left at 0.0 would
+    otherwise have its whole liquid balance discarded, and the term dropped, by a
+    cell nobody filled in. So the aliases are scanned for a balance and a genuine
+    all-zero set still returns zero.
+    """
+    saw_zero = False
     for label in labels:
         if label in frame.index:
             try:
@@ -154,13 +169,12 @@ def _label_value(frame, labels: tuple[str, ...], column) -> Optional[float]:
                 number = float(value)
             except (TypeError, ValueError):
                 continue
-            # A feed reports an unpopulated cell as NaN; treat it as absent
-            # rather than as a real zero, so a missing term is visible instead
-            # of silently reducing the total.
             if number != number:
                 continue
-            return number
-    return None
+            if number != 0.0:
+                return number
+            saw_zero = True
+    return 0.0 if saw_zero else None
 
 
 def _drop_claims_at_or_above_total(values: dict[str, float], total_debt: float) -> None:
@@ -327,12 +341,30 @@ def fetch_bridge_snapshot(company_id: str, in_model_units: bool = True) -> Bridg
         frame = getattr(ticker, attr, None)
         if frame is None or len(getattr(frame, "columns", [])) == 0:
             continue
-        for column in frame.columns:
-            snapshot = _build(frame, column, source)
-            if snapshot is not None:
-                if in_model_units:
-                    _scale_snapshot(snapshot, company_id)
-                return snapshot
+        # Only the most recent period of each statement, never an older one.
+        #
+        # It used to walk back through the columns until one produced a figure,
+        # which silently published a two-year-old balance sheet when the newest one
+        # was refused for want of an established debt figure. Maruti is the case
+        # that produced: FY26 and FY25 refused, FY24 accepted, and the bridge
+        # carried 3.31 crore of debt against a feed total of 102.5 crore. A
+        # figure 26 times out, two years stale, and indistinguishable from a
+        # current one is worse than no figure — the date is published, but a
+        # reader comparing an enterprise value is not looking for a two-year-old
+        # column.
+        #
+        # The fallback to the annual statement below still happens, so a filer that
+        # has not published a quarter is served from its year.
+        snapshot = _build(frame, frame.columns[0], source)
+        if snapshot is not None:
+            if in_model_units:
+                _scale_snapshot(snapshot, company_id)
+            return snapshot
+        logger.info(
+            "No usable %s statement for %s at %s; its most recent period does not "
+            "establish a debt figure.",
+            source, symbol, frame.columns[0],
+        )
 
     return BridgeSnapshot()
 

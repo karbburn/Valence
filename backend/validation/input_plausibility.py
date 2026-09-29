@@ -44,6 +44,8 @@ from __future__ import annotations
 
 from typing import List
 
+from backend import constants
+from backend.forecast.debt import OPENING_BALANCE_KEYS
 from backend.models.spec.model_specification import ModelSpecification
 from backend.models.spec.qa import ModelCheckResult
 
@@ -118,6 +120,45 @@ def check_bridge_inputs_plausible(spec: ModelSpecification) -> ModelCheckResult:
             continue
         b = val.dcf_bridge
         net = b.less_net_debt
+
+        # Debt that has quietly become nothing, on a filer that carried some.
+        #
+        # The bridge has no rule that refuses to deduct a debt figure it cannot
+        # establish, because the DCF needs a number and a missing one silently
+        # becomes a zero. That turns "this statement has no borrowings row" into
+        # "this company carries no debt", which raises equity value by the whole of
+        # the debt and is the single most flattering error available to it.
+        #
+        # It is caught against the company's own history rather than against a
+        # threshold, because the question is not whether zero debt is plausible —
+        # for many filers it is — but whether it is plausible HERE. A filer that
+        # carried debt in each of its preceding reported years and carries none in
+        # the latest has not repaid its way out of it in one period, and the
+        # statement behind the model can be checked.
+        periods = spec.historicals.periods
+        if (b.total_debt or 0.0) <= 0.0 and len(periods) >= 2:
+            latest = periods[-1]
+
+            def _debt_at(period: str) -> float:
+                return sum(
+                    constants.resolve(
+                        spec.historicals.get_value(key, period), 0.0
+                    )
+                    for key in OPENING_BALANCE_KEYS
+                )
+
+            prior = [_debt_at(p) for p in periods[:-1]]
+            if prior and all(v > 0.0 for v in prior):
+                errors.append(
+                    f"{val.scenario}: the bridge deducts no debt, while the filed "
+                    f"statements for {', '.join(periods[:-1])} each carried debt. "
+                    f"The latest period's statement has established no borrowings "
+                    f"figure, which is not the same as the company owing nothing, "
+                    f"and equity value is overstated by the amount it owes."
+                )
+                keys.extend(["total_debt", "less_net_debt"])
+                failing_scenarios.append(val.scenario)
+                continue
 
         # A net cash position is legitimate for a company with genuinely little
         # debt. It is only suspicious when it is large next to the business, and

@@ -18,6 +18,9 @@ it deletes a filer's whole current-debt line rather than the lease part of it, s
 Ambarella's debt went to nothing and its implied price rose. Understating debt
 flatters a valuation, which is the direction that makes a price look better than
 the work supports.
+
+So the lease is subtracted when the feed publishes it and the row is refused when
+it does not. Nothing is taken whole from a combined caption, on either market.
 """
 
 from __future__ import annotations
