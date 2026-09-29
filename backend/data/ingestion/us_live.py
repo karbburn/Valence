@@ -21,6 +21,10 @@ with warnings.catch_warnings():
     import yfinance as yf
 
 from backend.data.errors import NoFinancialsAvailable
+from backend.data.ingestion.feed_borrowings import (
+    index_rows as fb_index_rows,
+    resolve_borrowings as fb_resolve_borrowings,
+)
 from backend.data.store import RawDatapoint
 
 logger = logging.getLogger(__name__)
@@ -62,10 +66,22 @@ YF_BALANCE_MAP = [
     ("Cash & Bank", ["Cash Cash Equivalents And Short Term Investments", "Cash And Cash Equivalents", "Cash Financial"]),
     ("Total assets", ["Total Assets"]),
     # Long-term borrowings and short-term debt are resolved separately rather than
-    # through this map, because the feed bundles leases into them. See
-    # _extract_borrowings.
-    ("Finance lease liabilities", ["Finance Lease", "Capital Lease Obligation"]),
-    ("Operating lease liabilities", ["Operating Lease Liability"]),
+    # through this map, because the feed bundles leases into them and the lease has
+    # to be taken back out. See _extract_borrowings.
+    #
+    # No finance-lease line is synthesised from the feed either. The feed's capital
+    # lease rows cannot be told apart from its operating lease rows: Meta's feed
+    # carries 28,654 of "Capital Lease Obligations" against a filed 1,184 of finance
+    # leases, and Ambarella's 13,435 against a filed 13,435 of operating lease
+    # liability. Reading them as finance leases would put 27,470 of rent into the
+    # debt the valuation deducts at Meta, and inventing a finance lease at Ambarella.
+    # The filed figure is authoritative and is mapped from EDGAR; where a filer has
+    # no filed finance lease, this feed has not established one.
+    ("Operating lease liabilities", [
+        "Operating Lease Liability",
+        "Leases",
+        "Capital Lease Obligations",
+    ]),
     ("Total current liabilities", ["Total Current Liabilities"]),
     ("Total liabilities", ["Total Liabilities Net Minority Interest", "Total Liabilities"]),
     ("Total equity", ["Stockholders Equity", "Total Equity Gross Minority Interest", "Common Stock Equity"]),
@@ -223,93 +239,30 @@ def fetch_and_parse_us_live(company_id: str) -> List[RawDatapoint]:
                     )
                 )
 
-    # Feed rows that bundle borrowings together with lease obligations, and the
-    # rows carrying the lease half on its own.
-    #
-    # The feed publishes both forms: a pure "Long Term Debt" or "Current Debt"
-    # where the two differ, a bundled "...AndCapitalLeaseObligation" row where the
-    # issuer files one combined caption, and the lease portion of that row on its
-    # own. So the lease half is separable and the arithmetic belongs here, once,
-    # rather than in whichever consumer happens to read the row next.
-    #
-    # Reading the bundled row as borrowings wholesale put leases into the debt the
-    # valuation deducts. Meta files no current debt at all and its feed reported
-    # 2,213 of "Current Debt And Capital Lease Obligation", which is exactly the
-    # current portion of its lease liability; Ambarella's entire 2,027 current row
-    # is a capital lease. Both then carried rent into debt while rent is already
-    # inside the EBIT the cash flows are built from.
-    #
-    # Dropping the bundled row instead is the same error pointed the other way, and
-    # worse: it deletes a filer's whole current-debt line rather than the lease
-    # part of it, so Ambarella's debt went from 2.027 to nothing and its implied
-    # price rose. Understating debt flatters the valuation, which is the direction
-    # that makes a price look better than the work supports.
-    _BORROWING_ROWS = (
-        # (canonical label, pure rows in preference order, bundled row, its lease row)
-        (
-            "Borrowings",
-            ("Long Term Debt",),
-            "Long Term Debt And Capital Lease Obligation",
-            "Long Term Capital Lease Obligation",
-        ),
-        (
-            "Short term borrowings",
-            ("Current Debt", "Other Current Borrowings"),
-            "Current Debt And Capital Lease Obligation",
-            "Current Capital Lease Obligation",
-        ),
-    )
-
     def _extract_borrowings(df):
-        """Borrowings, with any bundled lease obligation taken back out."""
+        """Borrowings from the feed, with any bundled lease obligation removed."""
         if df is None or df.empty:
             return
-        rows = {str(idx).strip().lower(): idx for idx in df.index}
+        rows = fb_index_rows(df.index)
 
-        def cell(label, col):
-            idx = rows.get(label.lower())
-            if idx is None:
-                return None
-            raw = df.loc[idx, col]
-            if raw is None or (isinstance(raw, float) and raw != raw):
-                return None
-            try:
-                return float(raw)
-            except (ValueError, TypeError):
-                return None
+        for c_d in target_cols:
+            d_str = str(c_d)[:10]
+            period_lbl = period_map.get(d_str)
+            if period_lbl is None:
+                continue
+            col_match = next((c for c in df.columns if str(c)[:10] == d_str), None)
+            if col_match is None:
+                continue
 
-        for row_idx, (metric_label, pure_rows, bundled, lease_row) in enumerate(_BORROWING_ROWS):
-            for c_d in target_cols:
-                d_str = str(c_d)[:10]
-                period_lbl = period_map.get(d_str)
-                if period_lbl is None:
-                    continue
-                col_match = next(
-                    (col for col in df.columns if str(col)[:10] == d_str), None
-                )
-                if col_match is None:
-                    continue
-
-                matched_row = None
-                for candidate in pure_rows:
-                    if candidate.lower() in rows:
-                        matched_row = candidate
-                        break
-
-                value = cell(matched_row, col_match) if matched_row else None
-                if value is None:
-                    combined = cell(bundled, col_match)
-                    if combined is None:
-                        continue
-                    # The lease half is subtracted rather than the row discarded,
-                    # so a filer whose combined caption is mostly genuine debt
-                    # keeps it.
-                    value = max(0.0, combined - (cell(lease_row, col_match) or 0.0))
-                    matched_row = bundled
-                if value == 0.0:
-                    continue
-
-                final_val = value / 1e6 / fx
+            for row_idx, (metric_label, matched_row, value, unsplit) in enumerate(
+                fb_resolve_borrowings(rows, lambda idx: df.loc[idx, col_match])
+            ):
+                if unsplit:
+                    logger.info(
+                        "%s for %s came from the feed's combined caption %r with no "
+                        "lease split published, so it may include a lease obligation",
+                        metric_label, period_lbl, matched_row,
+                    )
                 dp_id = _datapoint_id(
                     company_id, metric_label, period_lbl, "yfinance_live",
                     "BALANCE SHEET", row_idx + 1,
@@ -321,11 +274,18 @@ def fetch_and_parse_us_live(company_id: str) -> List[RawDatapoint]:
                         metric_raw=metric_label,
                         period_label=period_lbl,
                         period_end_date=c_d if isinstance(c_d, date) else date.today(),
-                        value=round(final_val, 4),
+                        value=round(value / 1e6 / fx, 4),
                         currency="USD",
                         units="millions",
                         source="yfinance_live",
-                        source_location=f"yfinance!{matched_row}",
+                        source_location=(
+                            f"yfinance!{matched_row}"
+                            + (
+                                "; lease half not published by the feed"
+                                if unsplit
+                                else ""
+                            )
+                        ),
                         status="reported",
                         update_date=now,
                     )
