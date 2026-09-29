@@ -15,13 +15,52 @@ export const revalidate = 3600
  * has not been built yet renders an empty shell behind a loading overlay.
  * Because the backend writes a snapshot on every successful build, this list
  * grows on its own as real usage accumulates rather than needing to be curated.
+ *
+ * Last-modified is the date the page's content last actually changed.
+ *
+ * Every URL used to carry the moment the sitemap was generated. That is a
+ * statement about all twenty-two ticker pages and three static pages changing in
+ * the same millisecond, on every regeneration, forever. Last-modified is the
+ * field a crawler reads to decide what is worth re-fetching, and a value that is
+ * always now is either a reason to re-fetch everything or a reason to stop
+ * trusting the field. Both lose the distinction the field exists to carry, and
+ * the methodology page, which changes about once a quarter, was claiming to
+ * change hourly.
+ *
+ * Ticker pages take the date the backend compiled the model. The three static
+ * pages carry fixed dates, which is the honest answer for a page whose content
+ * only changes when someone edits it.
  */
+
+/** The homepage changes when a release ships or the rail gains a model. */
+const HOME_LAST_MODIFIED = new Date('2026-09-29')
+
+/** The index of every covered ticker, which grows as models are compiled. */
+const STOCK_INDEX_LAST_MODIFIED = new Date('2026-09-29')
+
+/** The methodology. It is revised when the engine's method is revised. */
+const METHODOLOGY_LAST_MODIFIED = new Date('2026-09-24')
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const now = new Date()
   const entries: MetadataRoute.Sitemap = [
-    { url: `${SITE_URL}/`, lastModified: now, changeFrequency: 'weekly', priority: 1 },
-    { url: `${SITE_URL}/stock`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
-    { url: `${SITE_URL}/methodology`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
+    {
+      url: `${SITE_URL}/`,
+      lastModified: HOME_LAST_MODIFIED,
+      changeFrequency: 'weekly',
+      priority: 1,
+    },
+    {
+      url: `${SITE_URL}/stock`,
+      lastModified: STOCK_INDEX_LAST_MODIFIED,
+      changeFrequency: 'daily',
+      priority: 0.8,
+    },
+    {
+      url: `${SITE_URL}/methodology`,
+      lastModified: METHODOLOGY_LAST_MODIFIED,
+      changeFrequency: 'monthly',
+      priority: 0.5,
+    },
   ]
 
   const first = await getManifestServer(0, 5000)
@@ -40,8 +79,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     if (!company.has_model) continue
     entries.push({
       url: `${SITE_URL}${stockPath(company.slug)}`,
-      lastModified: now,
-      // Prices refresh daily, so a daily signal matches the actual cadence.
+      // Falls back to the index date rather than to now when the backend has not
+      // said when the model was built. A wrong-but-old date is recoverable; a
+      // date that claims to be this instant is not, and a model that was built
+      // before this sitemap was last generated is not new by being mentioned.
+      lastModified: company.model_built_at
+        ? new Date(company.model_built_at)
+        : STOCK_INDEX_LAST_MODIFIED,
+      // The valuation itself is stable, but the price and the benchmark it is
+      // measured against move every session, so a daily signal is right.
       changeFrequency: 'daily',
       priority: 0.7,
     })

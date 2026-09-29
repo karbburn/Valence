@@ -209,6 +209,16 @@ export interface CompanySummary {
   onboarding_status: string
   sector?: string
   /**
+   * The date this company's model was last compiled, as the backend recorded it.
+   *
+   * This is what lets a sitemap state when a page last changed. The alternative
+   * is stamping every URL with the moment the sitemap was generated, which tells
+   * a crawler that pages it has never read all changed in the same millisecond.
+   * A last-modified value that is always now is a value a crawler learns to
+   * ignore, and the field then carries no information at all.
+   */
+  model_built_at?: string
+  /**
    * Whether a valuation model has actually been compiled for this company, as
    * opposed to its filings merely being onboarded. Distinct states: a company
    * can be onboarded with no model, and the ticker page will build one on first

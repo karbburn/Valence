@@ -76,7 +76,10 @@ export const PRERENDER_LIMIT = 175
 /**
  * Hours a rendered ticker page and its model payload stay fresh.
  *
- * Market prices are refreshed once daily, so an hourly window keeps the page
- * well inside the price refresh cadence without re-rendering on every visit.
+ * A model is revalued when a newer market session closes, so the figure in the
+ * served HTML is at most this stale. The window is shorter than a session on
+ * purpose: it is what stops a page sitting on yesterday's close for the rest of
+ * the day while the engine itself is already quoting today's, which would make
+ * the headline price and the workbench disagree on the same page.
  */
 export const REVALIDATE_SECONDS = 3600

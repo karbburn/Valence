@@ -148,7 +148,7 @@ def render_model_guide(wb: Workbook, spec: ModelSpecification) -> Worksheet:
         ("31_DCF", "DCF Valuation", "Unlevered FCFF model, WACC discount factors & present value by year"),
         ("36_EV_Bridge", "EV Bridge", "Enterprise value to equity value and implied share price, with the basis each term was struck on"),
         ("41_Valuation_Comparison", "Football Field", "Institutional multi-methodology range synthesis (DCF vs Comps vs Market)"),
-        ("52_Model_Checks", "Model Audit Checks", "Automated 9-point accounting equality and financial logic audit rollup"),
+        ("52_Model_Checks", "Model Audit Checks", "Automated accounting, valuation, and data-quality audit rollup"),
     ]
 
     for q_idx, (t_name, label, desc) in enumerate(quick_jumps):

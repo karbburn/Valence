@@ -43,12 +43,19 @@ function valuationLines(spec: Awaited<ReturnType<typeof getModelSpecServer>>) {
   const implied = valuation.dcf_bridge?.implied_share_price
   const market = valuation.reverse_dcf?.market_price
   const wacc = valuation.wacc?.wacc
+  const priceDate = valuation.reverse_dcf?.market_price_date
 
   return {
     currency,
     implied: implied != null ? fmtPrice(implied, currency, 2) : null,
     market: market != null ? fmtPrice(market, currency, 2) : null,
     wacc: wacc != null ? `${wacc.toFixed(1)}%` : null,
+    // The session the market price is the close of. Carried into the meta
+    // description so a figure quoted from a search result or an answer engine
+    // arrives with the date needed to check it. A valuation quoted without one
+    // cannot be verified against anything, and the price it is measured against
+    // moves every session.
+    priceDate: priceDate ?? null,
   }
 }
 
@@ -71,7 +78,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
   const delta =
     v?.implied && v?.market
-      ? ` vs ${v.market} market`
+      ? ` vs ${v.market} market${v.priceDate ? ` (${v.priceDate})` : ''}`
       : ''
 
   const description = v?.implied
