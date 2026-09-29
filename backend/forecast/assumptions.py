@@ -26,8 +26,34 @@ logger = logging.getLogger(__name__)
 
 
 def _avg(values: List[Optional[float]]) -> Optional[float]:
+    """The margin a forecast should carry: the latest year, not the mean.
+
+    A simple mean over the reported years is right for a business whose margin has
+    settled, and wrong for one that is moving — and it is wrong in the direction
+    that produces the most confident-looking answer.
+
+    Ambarella reported EBIT margins of -68.25%, -44.44% and -21.12%: a company
+    recovering quickly from a loss. The three-year mean is -44.60%, so the forecast
+    held it at the second-worst year it had ever reported, made the loss grow
+    against a rising revenue line, and valued the equity at minus 96 a share. Idea
+    was carried at -9.40% against a filed -6.97% for the same reason.
+
+    The most recent reported year is the one the forecast continues from, and every
+    other input in this function already anchors on it, so a margin that is moving
+    is carried at its latest value. Where the reported years agree to within a
+    point there is nothing to choose between them, and the mean is kept because it
+    is less sensitive to any single year's rounding.
+    """
     vals = [v for v in values if v is not None]
-    return round(sum(vals) / len(vals), 4) if vals else None
+    if not vals:
+        return None
+    latest = vals[-1]
+    if len(vals) == 1:
+        return round(latest, 4)
+    spread = max(vals) - min(vals)
+    if spread <= 1.0:
+        return round(sum(vals) / len(vals), 4)
+    return round(latest, 4)
 
 
 def _cagr(start: Optional[float], end: Optional[float], years: int) -> Optional[float]:
