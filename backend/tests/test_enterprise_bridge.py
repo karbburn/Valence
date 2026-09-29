@@ -23,11 +23,7 @@ from __future__ import annotations
 import pytest
 
 from backend.data.bridge_inputs import (
-    SNAPSHOT_MAX_RATIO,
-    SNAPSHOT_MIN_RATIO,
     BridgeSnapshot,
-    _plausible,
-    resolve_bridge_inputs,
 )
 from backend.valuation.dcf import compute_dcf_bridge
 from backend.valuation.dcf import compute_fcff_periods, compute_terminal_value
@@ -145,89 +141,8 @@ def test_bridge_publishes_which_balance_sheet_it_used():
 
 
 # ---------------------------------------------------------------------------
-# Snapshot plausibility
+# Working capital
 # ---------------------------------------------------------------------------
-
-def test_a_wildly_moving_balance_is_refused():
-    """A feed defect must not be allowed into the bridge.
-
-    Statement feeds report in inconsistent units across listings; one came
-    through a hundredfold away from the company's own accounts, which turned a
-    3x multiple into a 790x one. A genuine quarter-on-quarter move in cash or
-    debt stays well inside the band, so a wide band still catches the errors
-    that matter.
-    """
-    assert not _plausible(20_299_000_000.0, 2_015_000_000.0)
-    assert not _plausible(0.0, 1000.0)
-    assert _plausible(950.0, 1000.0)
-    assert _plausible(4000.0, 1000.0)
-    assert SNAPSHOT_MAX_RATIO >= 4.0, "genuine debt issuance of several times must remain admissible"
-    assert SNAPSHOT_MIN_RATIO <= 0.5
-
-
-def test_a_statement_denominated_in_the_wrong_currency_is_refused():
-    """A unit mismatch lands far outside the band, in either direction."""
-    assert not _plausible(2_015_000_000.0, 2_015_000_000_000.0)   # 1000x too small
-    assert not _plausible(2_015_000_000_000_000.0, 2_015_000_000.0)  # 1e6x too large
-
-
-def test_no_snapshot_yields_a_reason_rather_than_a_silent_zero(monkeypatch):
-    """A company with no reported balance sheet must not value at zero net debt."""
-    import backend.data.bridge_inputs as module
-
-    monkeypatch.setattr(
-        module, "fetch_bridge_snapshot", lambda _cid: BridgeSnapshot()
-    )
-    snapshot, reason = module.resolve_bridge_inputs("any_us", {"total_debt": 0.0, "liquid_assets": 0.0})
-    assert snapshot is None
-    assert reason and "no reported balance sheet" in reason
-
-
-def test_refused_terms_fall_back_to_the_filed_accounts(monkeypatch):
-    """A bad line in a snapshot must not poison the good ones beside it.
-
-    Validation is per term: a snapshot whose debt looks wrong does not make its
-    cash wrong, and throwing the whole statement away because of one line
-    discards the freshness that matters most.
-    """
-    import backend.data.bridge_inputs as module
-
-    snapshot = BridgeSnapshot(
-        as_of="2026-06-30",
-        source="reported_quarter",
-        terms={
-            "cash_and_bank": 20_000.0,
-            "marketable_securities": 40_000.0,
-            "debt_non_current": 900_000.0,   # 90x the filed figure: refused
-            "debt_current": 5_000.0,
-        },
-        total_debt=905_000.0,
-        total_liquid_assets=60_000.0,
-    )
-    monkeypatch.setattr(module, "fetch_bridge_snapshot", lambda _cid: snapshot)
-
-    resolved, note = module.resolve_bridge_inputs(
-        "any_us",
-        {
-            "cash_and_bank": 18_000.0,
-            "marketable_securities": 42_000.0,
-            "non_current_investments": 0.0,
-            "debt_non_current": 10_000.0,
-            "debt_current": 5_000.0,
-            "total_debt": 15_000.0,
-            "liquid_assets": 60_000.0,
-        },
-    )
-    assert resolved is not None
-    # Cash and securities survived; the debt term did not.
-    assert "cash_and_bank" in resolved.terms
-    assert "debt_non_current" not in resolved.terms
-    # Debt falls back to the FILED TOTAL, not to a partial sum of the surviving
-    # components. A partial sum would understate the obligation by whatever the
-    # refused piece was, overstating equity value by the same amount.
-    assert resolved.total_debt == pytest.approx(15_000.0, abs=0.01)
-    assert note and "filed accounts" in note
-
 
 def test_working_capital_derivation_matches_the_explicit_line():
     """Without the explicit line the engine must still produce the same figure.

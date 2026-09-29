@@ -670,7 +670,16 @@ def _filed_net_debt(company_id: str) -> Optional[tuple]:
             ).filed_period_end(latest)
             if filed:
                 as_of = filed.isoformat()
-        except Exception:
+        except Exception as exc:
+            # Logged rather than swallowed: an unreadable statement silently
+            # downgrades a peer to the feed's convention, so the benchmark becomes
+            # a median of two bases and nothing says which peers moved.
+            logger.info(
+                "Peer %s: filed statement unreadable (%s) — falling back to the "
+                "market feed, which is a different convention",
+                company_id,
+                exc,
+            )
             return None
 
     if not items:

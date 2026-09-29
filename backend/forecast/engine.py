@@ -27,6 +27,7 @@ from datetime import date
 from typing import Dict, List, Optional
 
 from backend import constants
+from backend.forecast.debt import OPENING_BALANCE_KEYS
 
 logger = logging.getLogger(__name__)
 from backend.models.spec.assumptions import AssumptionObject
@@ -157,19 +158,13 @@ def run_forecast(
     prior_inventory = constants.resolve(hist_bs.get_value("canonical.bs.inventory", last_p), 0.0)
     prior_ppe = constants.resolve(hist_bs.get_value("canonical.bs.ppe", last_p), 0.0)
     prior_cash = constants.resolve(hist_bs.get_value("canonical.bs.cash_and_bank", last_p), 0.0)
-    # Total interest-bearing opening debt, matching the definition the valuation
-    # bridge deducts: non-current borrowings + current borrowings (which include
-    # the current portion of long-term debt) + finance leases. Lease
-    # liabilities carry no cash cost in the modelled periods because finance
-    # cost is held flat at the last actual, so they are not compounded into the
-    # debt schedule either.
+    # Total interest-bearing opening debt, on the same definition the valuation
+    # bridge deducts and the debt schedule opens on. Lease liabilities carry no
+    # cash cost in the modelled periods because finance cost is held flat at the
+    # last actual, so they are not compounded into the debt schedule either.
     prior_borrowings = sum(
         constants.resolve(hist_bs.get_value(key, last_p), 0.0)
-        for key in (
-            "canonical.bs.borrowings",
-            "canonical.bs.short_term_borrowings",
-            "canonical.bs.finance_lease_liabilities",
-        )
+        for key in OPENING_BALANCE_KEYS
     )
 
     # Carry forward quasi-stable items from last historical period (no hardcoded Infosys 4000/416 fallbacks)

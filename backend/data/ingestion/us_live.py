@@ -61,25 +61,9 @@ YF_BALANCE_MAP = [
     ("Total current assets", ["Total Current Assets"]),
     ("Cash & Bank", ["Cash Cash Equivalents And Short Term Investments", "Cash And Cash Equivalents", "Cash Financial"]),
     ("Total assets", ["Total Assets"]),
-    # Long-term borrowings only; short-term debt is mapped separately so current
-    # maturities are not silently excluded from the EV -> equity bridge.
-    #
-    # The two bundled "...AndCapitalLeaseObligation" labels are excluded from the
-    # borrowing rows. They cannot be split from the feed, and the part that is not
-    # debt is a lease. Meta files no current debt at all, and its feed reported
-    # 2,213 of "Current Debt And Capital Lease Obligation", which is exactly the
-    # current portion of its operating lease liability. Reading that as short-term
-    # borrowings put 2,213 of rent into the debt the valuation deducts, while rent
-    # is already inside the EBIT the cash flows are built from: the same obligation,
-    # charged twice, in the one company whose leases are large enough to notice.
-    #
-    # A capital lease obligation is not split either, and it is not counted twice:
-    # it belongs to finance leases, which are interest-bearing and are in debt, and
-    # not to operating leases, which are shown but not deducted. It used to appear
-    # in both lists, so a filer with a capital lease had that liability on the
-    # bridge twice, once inside total debt and once beside it.
-    ("Borrowings", ["Long Term Debt"]),
-    ("Short term borrowings", ["Current Debt", "Other Current Borrowings"]),
+    # Long-term borrowings and short-term debt are resolved separately rather than
+    # through this map, because the feed bundles leases into them. See
+    # _extract_borrowings.
     ("Finance lease liabilities", ["Finance Lease", "Capital Lease Obligation"]),
     ("Operating lease liabilities", ["Operating Lease Liability"]),
     ("Total current liabilities", ["Total Current Liabilities"]),
@@ -238,6 +222,116 @@ def fetch_and_parse_us_live(company_id: str) -> List[RawDatapoint]:
                         update_date=now,
                     )
                 )
+
+    # Feed rows that bundle borrowings together with lease obligations, and the
+    # rows carrying the lease half on its own.
+    #
+    # The feed publishes both forms: a pure "Long Term Debt" or "Current Debt"
+    # where the two differ, a bundled "...AndCapitalLeaseObligation" row where the
+    # issuer files one combined caption, and the lease portion of that row on its
+    # own. So the lease half is separable and the arithmetic belongs here, once,
+    # rather than in whichever consumer happens to read the row next.
+    #
+    # Reading the bundled row as borrowings wholesale put leases into the debt the
+    # valuation deducts. Meta files no current debt at all and its feed reported
+    # 2,213 of "Current Debt And Capital Lease Obligation", which is exactly the
+    # current portion of its lease liability; Ambarella's entire 2,027 current row
+    # is a capital lease. Both then carried rent into debt while rent is already
+    # inside the EBIT the cash flows are built from.
+    #
+    # Dropping the bundled row instead is the same error pointed the other way, and
+    # worse: it deletes a filer's whole current-debt line rather than the lease
+    # part of it, so Ambarella's debt went from 2.027 to nothing and its implied
+    # price rose. Understating debt flatters the valuation, which is the direction
+    # that makes a price look better than the work supports.
+    _BORROWING_ROWS = (
+        # (canonical label, pure rows in preference order, bundled row, its lease row)
+        (
+            "Borrowings",
+            ("Long Term Debt",),
+            "Long Term Debt And Capital Lease Obligation",
+            "Long Term Capital Lease Obligation",
+        ),
+        (
+            "Short term borrowings",
+            ("Current Debt", "Other Current Borrowings"),
+            "Current Debt And Capital Lease Obligation",
+            "Current Capital Lease Obligation",
+        ),
+    )
+
+    def _extract_borrowings(df):
+        """Borrowings, with any bundled lease obligation taken back out."""
+        if df is None or df.empty:
+            return
+        rows = {str(idx).strip().lower(): idx for idx in df.index}
+
+        def cell(label, col):
+            idx = rows.get(label.lower())
+            if idx is None:
+                return None
+            raw = df.loc[idx, col]
+            if raw is None or (isinstance(raw, float) and raw != raw):
+                return None
+            try:
+                return float(raw)
+            except (ValueError, TypeError):
+                return None
+
+        for row_idx, (metric_label, pure_rows, bundled, lease_row) in enumerate(_BORROWING_ROWS):
+            for c_d in target_cols:
+                d_str = str(c_d)[:10]
+                period_lbl = period_map.get(d_str)
+                if period_lbl is None:
+                    continue
+                col_match = next(
+                    (col for col in df.columns if str(col)[:10] == d_str), None
+                )
+                if col_match is None:
+                    continue
+
+                matched_row = None
+                for candidate in pure_rows:
+                    if candidate.lower() in rows:
+                        matched_row = candidate
+                        break
+
+                value = cell(matched_row, col_match) if matched_row else None
+                if value is None:
+                    combined = cell(bundled, col_match)
+                    if combined is None:
+                        continue
+                    # The lease half is subtracted rather than the row discarded,
+                    # so a filer whose combined caption is mostly genuine debt
+                    # keeps it.
+                    value = max(0.0, combined - (cell(lease_row, col_match) or 0.0))
+                    matched_row = bundled
+                if value == 0.0:
+                    continue
+
+                final_val = value / 1e6 / fx
+                dp_id = _datapoint_id(
+                    company_id, metric_label, period_lbl, "yfinance_live",
+                    "BALANCE SHEET", row_idx + 1,
+                )
+                datapoints.append(
+                    RawDatapoint(
+                        id=dp_id,
+                        company_id=company_id,
+                        metric_raw=metric_label,
+                        period_label=period_lbl,
+                        period_end_date=c_d if isinstance(c_d, date) else date.today(),
+                        value=round(final_val, 4),
+                        currency="USD",
+                        units="millions",
+                        source="yfinance_live",
+                        source_location=f"yfinance!{matched_row}",
+                        status="reported",
+                        update_date=now,
+                    )
+                )
+
+    _extract_borrowings(bs_df)
 
     _extract_from_df(inc_df, YF_INCOME_MAP, "PROFIT & LOSS")
     _extract_from_df(bs_df, YF_BALANCE_MAP, "BALANCE SHEET")

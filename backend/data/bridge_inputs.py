@@ -185,17 +185,21 @@ def _build(frame, column, source: str) -> Optional[BridgeSnapshot]:
     )
     combined_debt = _label_value(frame, ("Total Debt",), column)
 
-    # BASIS, matching the convention every market data provider uses for a
-    # headline net cash figure:
-    #   net cash = (cash + short-term investments) - total debt
-    # Non-current investments are NOT netted. They are a real asset but not a
-    # cash-equivalent one, and including them makes the platform's net cash
-    # irreconcilable with the figure a reader is comparing it against.
-    # Reported separately so the amount is still visible.
+    # BASIS, matching the convention the valuation bridge uses:
+    #   net cash = (cash + short-term investments + long-term investments) - debt
+    #
+    # Long-term investments ARE netted here, where the platform's own bridge
+    # deducts them. It used to be excluded on the grounds that a feed's headline
+    # net cash figure leaves them out, so a peer priced on this snapshot was
+    # measured on a different basis from the target it is being compared against,
+    # and a benchmark built from a mix of the two is a median of two conventions.
+    # Whether a data vendor's own net-debt field includes them is a reason to
+    # publish this basis, not a reason to compute a second one.
     if combined_liquid is not None:
         liquid = combined_liquid
     else:
         liquid = values.get("cash_and_bank", 0.0) + values.get("marketable_securities", 0.0)
+    liquid += values.get("non_current_investments", 0.0)
 
     # Total debt.
     #
@@ -301,147 +305,6 @@ def _scale_snapshot(snapshot: BridgeSnapshot, company_id: str) -> None:
     snapshot.total_debt /= divisor
     snapshot.total_liquid_assets /= divisor
     snapshot.net_cash /= divisor
-
-
-# How far a most-recent balance sheet may move from the last filed annual one
-# before it is treated as a feed defect rather than a market movement.
-#
-# Cash, investments and debt do not move by an order of magnitude in two
-# quarters, but a FEED defect does: a statement denominated in the wrong
-# currency lands 30x out, and a half-populated quarterly statement reports a
-# fraction of the real balance. Both were observed, and either one entering the
-# bridge silently would be worse than the staleness the snapshot was introduced
-# to fix. So the snapshot is checked against the filed accounts and refused if
-# it disagrees beyond this band, with the reason recorded.
-SNAPSHOT_MIN_RATIO = 0.30
-SNAPSHOT_MAX_RATIO = 8.00
-
-# Terms that cannot appear from nothing between two filed statements.
-#
-# A zero in the filed accounts is a positive statement that the item does not
-# exist. An equity claim reported by a feed at the next quarter but absent from
-# the most recent filing is a mapping artefact, not a new issue: one large-cap's
-# feed reported 18bn of preferred stock against zero in the filed accounts, and
-# deducting it moved net cash by more than a fifth. Debt is deliberately NOT in
-# this set, because a company really can raise a large amount of it in two
-# quarters, and a genuine 4.5x increase was observed and is legitimate.
-CANNOT_APPEAR_FROM_ZERO = frozenset({"minority_interest", "preferred_stock"})
-
-
-def _plausible(snapshot_value: Optional[float], annual_value: float) -> bool:
-    """Whether a most-recent balance is a believable movement from the last filed one.
-
-    Cash, investments and debt do not move by an order of magnitude in two
-    quarters, but a FEED defect does: a statement denominated in the wrong
-    currency lands tens of times out, and a half-populated quarterly statement
-    reports a fraction of the real balance. Both were observed.
-    """
-    if snapshot_value is None:
-        return False
-    if not isinstance(annual_value, (int, float)) or abs(annual_value) < 1e-6:
-        return True
-    if snapshot_value == 0.0:
-        return False
-    ratio = abs(snapshot_value / annual_value)
-    return SNAPSHOT_MIN_RATIO <= ratio <= SNAPSHOT_MAX_RATIO
-
-
-def resolve_bridge_inputs(
-    company_id: str,
-    annual_terms: dict[str, float],
-) -> tuple[Optional[BridgeSnapshot], str]:
-    """The bridge terms to use, and why.
-
-    Validation is per TERM, not per snapshot. A snapshot whose debt looks wrong
-    does not make its cash and securities wrong, and discarding the whole
-    statement because one line moved unusually throws away the freshness that
-    matters most. So each term is accepted or refused on its own merits, and a
-    refused term falls back to the filed annual figure.
-
-    Returns (None, reason) when nothing usable was found, so the caller can say
-    so rather than silently valuing at zero net debt.
-    """
-    snapshot = fetch_bridge_snapshot(company_id)
-    if not snapshot.as_of:
-        return None, "no reported balance sheet available from the market feed"
-
-    annual_liquid = annual_terms.get("liquid_assets", 0.0)
-    annual_debt = annual_terms.get("total_debt", 0.0)
-
-    refused: list[str] = []
-    for term, annual_value in (
-        ("cash_and_bank", annual_terms.get("cash_and_bank")),
-        ("marketable_securities", annual_terms.get("marketable_securities")),
-        ("non_current_investments", annual_terms.get("non_current_investments")),
-        ("debt_non_current", annual_terms.get("debt_non_current")),
-        ("debt_current", annual_terms.get("debt_current")),
-    ):
-        if term not in snapshot.terms:
-            continue
-        if not _plausible(snapshot.terms[term], annual_value or 0.0):
-            refused.append(
-                f"{term} {snapshot.terms[term]:,.0f} vs filed {annual_value:,.0f}"
-                if annual_value
-                else f"{term} {snapshot.terms[term]:,.0f} vs filed 0"
-            )
-            snapshot.terms.pop(term)
-
-    for term in CANNOT_APPEAR_FROM_ZERO:
-        value = snapshot.terms.get(term)
-        if value and not (annual_terms.get(term) or 0.0):
-            refused.append(
-                f"{term} {value:,.0f} reported by the feed but absent from the "
-                "filed accounts"
-            )
-            snapshot.terms.pop(term)
-
-    # Recompute the aggregates from whichever terms survived, so the published
-    # totals always agree with the terms shown beside them.
-    liquid = snapshot.terms.get("cash_and_bank", 0.0) + snapshot.terms.get("marketable_securities", 0.0)
-    if not _plausible(liquid, annual_liquid):
-        refused.append(f"liquid assets {liquid:,.0f} vs filed {annual_liquid:,.0f}")
-        liquid = annual_liquid
-        snapshot.terms.pop("cash_and_bank", None)
-        snapshot.terms.pop("marketable_securities", None)
-
-    # Debt falls back to the FILED total the moment any component is refused.
-    #
-    # A partial sum of a debt stack is not a debt total: if the long-term
-    # component fails its check, summing the survivors silently understates the
-    # obligation by whatever the refused piece was, which overstates equity
-    # value by the same amount. The filed total is the only safe fallback.
-    debt_terms = (
-        "debt_non_current",
-        "debt_current",
-    )
-    missing = [t for t in debt_terms if t not in snapshot.terms]
-    if missing:
-        refused.append(
-            "debt taken from the filed accounts in full because "
-            + ", ".join(missing)
-            + " could not be verified"
-        )
-        debt = annual_debt
-    else:
-        debt = snapshot.total_debt
-        if not _plausible(debt, annual_debt) and annual_debt:
-            refused.append(f"total debt {debt:,.0f} vs filed {annual_debt:,.0f}")
-            debt = annual_debt
-
-    if not snapshot.terms:
-        return None, (
-            "most recent balance sheet rejected: " + "; ".join(refused)
-            + " — using the filed annual balance sheet instead"
-        )
-
-    snapshot.total_liquid_assets = liquid
-    snapshot.total_debt = debt
-    snapshot.net_cash = liquid - debt
-
-    note = f"most recent reported balance sheet ({snapshot.as_of})"
-    if refused:
-        note += "; terms taken from the filed annual accounts instead: " + "; ".join(refused)
-    return snapshot, note
 
 
 def _ticker_symbol(company_id: str) -> Optional[str]:
