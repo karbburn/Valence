@@ -1,18 +1,54 @@
 # Valence
 
-> Valence is a free, browser-based equity-valuation and 3-statement financial-modeling workbench for US (NASDAQ/NYSE) and Indian (NSE/BSE) equities, with DCF/WACC, trading comps, PE returns, and a 30-tab Excel exporter.
+> Valence is a free, browser-based equity-valuation and 3-statement financial-modeling workbench for US (NASDAQ/NYSE) and Indian (NSE/BSE) equities. It builds a discounted-cash-flow model from a company's own annual filings, runs its own audit before showing a number, and exports the whole thing as a live Excel workbook.
 
-## Overview
-- [Valence Home](https://valence.sourabhpradhan.in/): Interactive valuation dashboard with company search, driver overrides, scenario modeling, QA report, and in-app methodology breakdowns.
+## What it does that a screen cannot answer
+
+Valence runs the valuation backwards. Point it at a market price and it solves for the
+growth rate that price requires, held forever, rather than reporting a number derived
+from a growth rate someone chose. The reverse DCF is the part worth citing: a target
+price implies an opinion about the future, and the growth rate a price implies is
+stated in the same units and can be argued with directly.
 
 ## Capabilities
-- DCF & WACC Engine: unlevered FCFF discounted at a CAPM-based WACC with Gordon-growth and exit-multiple terminal values.
-- Reverse DCF: closed-form solve for market-implied perpetuity growth and revenue CAGR.
-- Trading Comps & Football Field: peer benchmarking (EV/Sales, EV/EBITDA, P/E, FCF yield, ROIC) and cross-method valuation ranges.
-- PE Returns & IRR: 3- and 5-year exit equity value, MoIC, and IRR across Base/Bull/Bear scenarios.
-- Excel Exporter: 30-tab .xlsx workbook with live, dynamic Excel formulas.
-- 9-Point QA Engine: automated balance-sheet, cash-flow, debt, share-count, and DCF bridge validation checks.
+- **Reverse DCF:** closed-form solve for the market-implied perpetuity growth rate and
+  revenue CAGR, from the live market quote.
+- **DCF and WACC:** unlevered FCFF discounted at a CAPM-based WACC, with Gordon-growth
+  and exit-multiple terminal values.
+- **Multiples, excluded on purpose:** trading comps and exit multiples are computed and
+  shown, and are deliberately not averaged into the headline valuation. The two methods
+  disagree, and a blended number hides which one produced the answer.
+- **PE returns:** 3- and 5-year exit equity value, MoIC, and IRR across Base, Bull, and
+  Bear scenarios.
+- **Excel exporter:** 31-tab .xlsx workbook of live formulas, not pasted values, so a
+  reader can change a driver and watch the model move.
+- **16-check audit:** 4 accounting, 3 valuation, and 9 data-quality checks run before a
+  number is shown. A check that cannot run reports N/A and is never counted as a pass.
+
+## Pages
+
+- [Valence Home](https://valence.sourabhpradhan.in/): Search, driver overrides, scenario
+  modeling, the audit report, and per-check methodology breakdowns.
+- [Covered tickers](https://valence.sourabhpradhan.in/stock): Every company with a
+  compiled model, each carrying its own implied price, market price, and audit verdict.
+- [Methodology](https://valence.sourabhpradhan.in/methodology): How the model is built,
+  which data sources are read, and what the engine cannot do.
+- Ticker pages follow `/stock/{TICKER}`, for example
+  [NVDA](https://valence.sourabhpradhan.in/stock/NVDA) and
+  [TCS](https://valence.sourabhpradhan.in/stock/TCS). Each states its market price and
+  the date that price is from, so a quoted figure can be checked against the session it
+  describes.
+
+## How to read a figure from this site
+
+Every price is dated. A ticker page carries the market price, the exchange close it is
+taken from, and the date of that session, because a valuation compared against an
+undated price cannot be checked by anyone. Filings are read from the company's own
+annual reports; where a figure could not be sourced the engine reports it as
+unavailable rather than estimating it.
 
 ## Optional
+- [llms-full.txt](https://valence.sourabhpradhan.in/llms-full.txt): The longer reference,
+  including the method in full.
 - [GitHub](https://github.com/karbburn): Source code and documentation.
-- [Author — Sourabh](https://www.sourabhpradhan.in/): Creator of Valence.
+- [Author - Sourabh](https://www.sourabhpradhan.in/): Creator of Valence.

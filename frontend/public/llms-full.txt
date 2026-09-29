@@ -1,12 +1,9 @@
-# Valence — Equity Valuation & Financial Modeling Workbench
+# Valence: Equity Valuation & Financial Modeling Workbench
 
-Valence is a free, browser-based equity-valuation platform and 3-statement financial
-modeling workbench for US and Indian equities. It integrates multi-source financial
-data ingestion, taxonomy normalization, driver-based 5-year forecasting, WACC estimation
-via CAPM, dual terminal-value methodologies, reverse-DCF growth solvers, public trading
-comps benchmarking, football-field valuation-range synthesis, PE exit-return waterfalls,
-automated accounting QA validation, a 30-tab Excel model exporter with live dynamic
-formulas, and a real-time web dashboard.
+Valence is a free, browser-based equity-valuation and 3-statement financial
+modeling workbench for US and Indian equities. It reads a company's own annual
+filings, builds a model from them, runs its own audit before showing a number,
+and exports the whole thing as a live Excel workbook.
 
 URL: https://valence.sourabhpradhan.in/
 Author: Sourabh (https://www.sourabhpradhan.in/)
@@ -16,97 +13,134 @@ Source: https://github.com/karbburn
 
 ## What Valence does
 
-Valence lets an analyst value a public company end-to-end in the browser:
+An analyst can value a public company end to end in the browser:
 
 - Search any onboarded US (NASDAQ/NYSE) or Indian (NSE/BSE) ticker.
 - Inspect a normalized 3-statement model (Income Statement, Balance Sheet, Cash Flow).
-- Override operating drivers and instantly recompute the model.
+- Override operating drivers and recompute the model.
 - Switch between Base, Bull, and Bear scenarios.
-- Export a 30-tab Excel model with live formulas.
+- Export a 31-tab Excel model with live formulas.
+- Read the audit, check by check, including what each check tests and why.
 
-## Key capabilities
+## The reverse DCF is the distinctive part
+
+Valence runs the valuation backwards. Given a market price it solves for the
+perpetuity growth rate that price requires, in closed form. A DCF normally takes
+a growth rate as an input and produces a price, which means the answer is a
+consequence of the assumption rather than a statement about the market. The
+reverse DCF inverts that: it takes the market's number and returns the assumption
+it embeds, which is the part that can be argued with.
+
+For a target price to be worth anything, the growth it requires has to be
+defensible forever. Stating that requirement in the same units as the forecast is
+what makes it arguable.
+
+## Capabilities
 
 ### Driver-based 5-year forecasting
-Projects the Income Statement, Balance Sheet, and Cash Flow Statement across Base, Bull,
-and Bear scenarios, driven by operational metrics: Revenue Growth, EBITDA/EBIT Margins,
-CapEx % Revenue, D&A %, DSO, DPO, and Tax Rate.
+Projects the Income Statement, Balance Sheet, and Cash Flow Statement across
+Base, Bull, and Bear scenarios, driven by operating metrics: Revenue Growth,
+EBITDA/EBIT Margins, CapEx % Revenue, D&A %, DSO, DPO, and Tax Rate.
 
-### Institutional DCF & WACC buildup
-Full Free Cash Flow to Firm (FCFF) build with clean Non-Cash Operating Working Capital
-(change in NWC), dynamic WACC estimation (CAPM cost of equity + tax-shielded cost of debt),
-Gordon-Growth and Exit EV/EBITDA-Multiple terminal values, and an Enterprise Value to
-Implied Share Price bridge.
+### DCF and WACC build-up
+Full Free Cash Flow to Firm (FCFF) build with Non-Cash Operating Working Capital
+changes, mid-year discounting, dynamic WACC (CAPM cost of equity plus a
+tax-shielded cost of debt), Gordon-Growth and Exit EV/EBITDA terminal values, and
+an Enterprise Value to Implied Share Price bridge that names the basis of each
+term.
 
-### Dynamic reverse DCF & 2D sensitivity
-Solves for market-implied perpetuity growth rates via exact closed-form inversion, paired
-with live 2D sensitivity grids (WACC vs. Terminal Growth, and WACC vs. Exit Multiple).
+### Trading comps, and why they are not averaged in
+Peer benchmarking on EV/Sales, EV/EBITDA, P/E, FCF Yield, and ROIC, presented as a
+football-field range across methods. The multiples are computed and shown, and
+are deliberately kept out of the headline valuation. The methods disagree, and a
+blended number hides which method produced the answer and by how much. Presenting
+the disagreement is more useful than averaging it away.
 
-### Public trading comps & football-field synthesis
-Benchmarks the target against sector peers on EV/Sales, EV/EBITDA, P/E, FCF Yield %, and
-ROIC %, then synthesizes cross-methodology valuation-range bars (52-week range, DCF
-perpetuity, DCF multiple, comps P/E, comps EV/EBITDA, analyst consensus).
+### PE exit returns and IRR
+3-year and 5-year prospective Exit Equity Value, MoIC, and Equity IRR under Base,
+Bull, and Bear exit scenarios, with entry-price sensitivity.
 
-### Private-equity exit returns & IRR waterfall
-Calculates 3-year and 5-year prospective Exit Equity Value, MoIC (Multiple on Invested
-Capital), and Equity IRR (%) under Base, Bull, and Bear exit scenarios, with entry-price
-sensitivity grids.
+### Multi-market and multi-currency
+US equities (NASDAQ/NYSE, USD millions) and Indian equities (NSE/BSE, INR crores),
+with currency and unit localization across all statements.
 
-### Multi-market & multi-currency support
-Native support for US equities (NASDAQ/NYSE, USD millions) and Indian equities
-(NSE/BSE, INR crores), with dynamic currency and unit localization across all statements.
+### Audit engine
+The engine runs its own checks and publishes them: 4 accounting, 3 valuation, and
+9 data-quality checks in total. A check whose inputs are absent reports N/A and
+is never counted as a pass, because a check that did not run has not cleared
+anything. The number of checks is read from the engine rather than fixed in the
+description of it, so the two cannot drift.
 
-### Automated accounting & model QA engine
-Executes nine validation checks: balance-sheet balancing, cash-flow reconciliation, debt
-schedule ties, share-count consistency, DCF bridge tie-out, WACC bounds, and data quality.
-
-### 30-tab interactive Excel exporter
-Generates 100% dynamic .xlsx workbooks where detail schedules drive the forecast operating
-model, featuring live Excel formulas (CAPM, FCFF sums, cross-sheet references, 2D
-sensitivity grids, and live =IF(...) audit checks).
+### 31-tab interactive Excel exporter
+Live .xlsx workbooks where the detail schedules drive the operating model, with
+real Excel formulas rather than pasted values: CAPM, FCFF sums, cross-sheet
+references, 2D sensitivity grids, and live =IF() audit checks. A reader can open
+one, change a driver, and watch the model move.
 
 ## Methodology
 
-### DCF (Discounted Cash Flow)
-Valence builds unlevered FCFF and discounts it at the WACC. Two terminal-value methods are
-supported: Gordon Growth (perpetuity) and an Exit EV/EBITDA Multiple. Enterprise Value
-bridges to Equity Value via net debt, then to an Implied Share Price using diluted shares.
+### DCF
+Unlevered FCFF discounted at WACC. Two terminal methods: Gordon Growth
+(perpetuity) and an Exit EV/EBITDA multiple. Enterprise Value bridges to Equity
+Value via net debt, then to an Implied Share Price on diluted shares.
 
-### WACC (CAPM)
-Cost of equity is estimated with the Capital Asset Pricing Model; cost of debt is
-tax-shielded. Capital weights blend equity and debt at market values.
+### WACC
+Cost of equity by the Capital Asset Pricing Model; cost of debt tax-shielded;
+capital weights at market value.
 
 ### Reverse DCF
-Given the market price, Valence inverts the DCF to solve for the market-implied perpetuity
-growth rate using a closed-form formula.
+Given the market price, Valence inverts the DCF for the market-implied perpetuity
+growth rate in closed form.
 
-### Trading comps & football field
-Relative valuation benchmarks the target to peers on standard multiples and plots a
-football-field range across methods.
+## How to read a figure from this site, and how to check it
 
-### PE returns & IRR
-Models a sponsor entry and exit, returning Exit Equity Value, MoIC, and IRR per scenario.
+Every price is dated. A ticker page states the market price, the exchange close it
+is taken from, and the date of that session. A valuation compared against an
+undated price cannot be checked by anyone, so the date is part of the figure
+rather than a footnote to it.
 
-## Frequently asked questions
+A price is the close of a completed session, never a live print taken mid-session.
+A model is revalued when a newer session closes, so a page does not sit on
+yesterday's close because it was popular enough to stay in a cache.
 
-**What is DCF valuation?** Discounted Cash Flow valuation estimates a company's intrinsic
-value by projecting future free cash flows and discounting them to present value at the
-weighted average cost of capital (WACC).
+Filings are read from the company's own annual reports. Where a figure could not
+be sourced, the engine reports it as unavailable rather than estimating it, and a
+check that could not run is marked N/A rather than passed.
 
-**What is WACC?** The Weighted Average Cost of Capital is the blended required return on a
-company's equity and debt, used as the discount rate in a DCF.
+## Coverage and limits
 
-**Which markets does Valence cover?** US equities (NASDAQ/NYSE, USD) and Indian equities
-(NSE/BSE, INR). Coverage is onboarded per ticker.
+- Coverage is onboarded per ticker, so a listed company is not necessarily present.
+- IFRS filers that report under ifrs-full rather than us-gaap are not yet read, and
+  their tickers report as unavailable rather than being guessed at.
+- Indian coverage depends on exchange and aggregator availability, which is less
+  reliable than SEC EDGAR and degrades for some symbols.
+- Cost of debt is an estimate where a company has no traded debt, and is labelled
+  as an estimate in the workbook.
+- Beta is a published benchmark figure adjusted toward one, not a regression
+  computed from this site's own price history.
 
-**Where does the data come from?** SEC EDGAR XBRL (US), Screener.in (India), and live
-market feeds, normalized into a unified taxonomy.
+## FAQ
 
-**Is Valence free?** Yes. Valence is a free, browser-based workbench.
+**What is DCF valuation?** It estimates a company's intrinsic value by projecting
+future free cash flows and discounting them to present value at the weighted
+average cost of capital.
 
-**Can I export to Excel?** Yes — a 30-tab .xlsx with live, dynamic formulas.
+**What is WACC?** The blended required return on a company's equity and debt,
+used as the discount rate in a DCF.
 
-## Author & technology
+**Which markets does Valence cover?** US equities (NASDAQ/NYSE, USD) and Indian
+equities (NSE/BSE, INR), onboarded per ticker.
 
-Valence is built by Sourabh. The core engine is Python 3.12 with Pydantic v2; the web API
-is FastAPI + Uvicorn; the Excel renderer uses OpenPyXL and Pillow; data is persisted in
-SQLite. The web dashboard is a Next.js application with a custom dark-theme design system.
+**Where does the data come from?** SEC EDGAR XBRL for US filers, exchange and
+aggregator sources for India, and exchange closing prices for the benchmark.
+
+**Is Valence free?** Yes. It is a free, browser-based workbench. Saved models live
+in the browser and are not uploaded to a server.
+
+**Can I export to Excel?** Yes. A 31-tab .xlsx with live formulas.
+
+## Author and technology
+
+Built by Sourabh. The engine is Python 3.12 with Pydantic v2; the API is FastAPI
+and Uvicorn; the Excel renderer uses OpenPyXL; data is persisted in SQLite. The
+dashboard is a Next.js application with a custom dark theme.

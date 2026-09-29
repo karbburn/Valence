@@ -17,7 +17,8 @@ private equity (PE), and equity research audit standards:
 9. Cover Branding & Signature: Cell B20 contains "By Sourabh" 14pt signature link.
 10. Formula Code Block Styling: Model Guide Column C uses Consolas code font and blue tint fill.
 11. DCF Bridge Grid Formatting: DCF Bridge label range B:G merged with no orphan cells.
-12. 9-Point QA Engine Summary: Model QA status is "MODEL VALID".
+12. QA Engine Summary: every check the engine runs reports a verdict, and the
+    rollup states it. The count is read from the engine, not fixed here.
 """
 
 from pathlib import Path
@@ -98,7 +99,7 @@ def main() -> None:
     wacc = base_val.wacc
 
     # Check 1: Balance Sheet Equality in ModelSpecification
-    _assert(spec.qa.all_passed, f"QA Engine 9-Point Audit: {spec.qa.summary_label}")
+    _assert(spec.qa.all_passed, f"QA Engine audit: {spec.qa.summary_label}")
 
     print("\n--- 2. AUDITING DCF VALUATION & FINANCIAL MATH TIE-OUTS ---")
     # Check 2: Sum PV FCFF + PV(TV) == Enterprise Value
@@ -175,7 +176,8 @@ def main() -> None:
     print(f"  Workbook Size       : {file_size_kb:.1f} KB (31 tabs)")
     print(f"  Implied Share Price : {spec.metadata.currency} {bridge.implied_share_price:.2f}")
     print(f"  WACC %              : {wacc.wacc:.2f}%")
-    print(f"  QA Audit Status     : {spec.qa.summary_label} (9/9 Checks Passed)")
+    print(f"  QA Audit Status     : {spec.qa.summary_label} "
+          f"({len(spec.qa.checks)} checks run)")
     print(f"  Financial Math      : 100% Exact Tie-outs Verified across EV, Net Debt, Equity Value, and Price")
     print("====================================================================================================")
     print("\nALL STAGE 9 INSTITUTIONAL FINANCIAL AUDIT CHECKS PASSED SUCCESSFULLY!\n")

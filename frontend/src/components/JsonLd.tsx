@@ -41,6 +41,19 @@ function graph() {
         url: SITE_URL,
         offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
         publisher: { '@id': `${SITE_URL}/#organization` },
+        // Named rather than left to the description, because these are the
+        // capabilities a search engine classifies an application on and a reader
+        // checks for. They match the capability list in llms.txt.
+        featureList: [
+          'Reverse DCF: market-implied perpetuity growth solver',
+          'Discounted cash flow with CAPM WACC',
+          'Gordon growth and exit multiple terminal values',
+          'Trading comparables and football field ranges',
+          'Private equity exit returns, MoIC and IRR',
+          'Three-statement financial model with driver overrides',
+          'Automated accounting, valuation and data quality audit',
+          '31-tab live-formula Excel export',
+        ],
       },
       {
         '@type': 'Person',
@@ -127,6 +140,23 @@ export function StockJsonLd({ company, spec }: StockJsonLdProps) {
   // Only stated when the figures actually came back, so the markup never
   // advertises a number the page does not show.
   if (implied != null || market != null) {
+    // When the model was computed, and the session the benchmark price is from.
+    //
+    // A dataset with no date is a claim nobody can check. A citation engine
+    // asked to quote a valuation has no way to tell a figure computed this
+    // morning from one computed last spring, and a valuation carries a price
+    // benchmark that moves every session, so the date of the two are not
+    // interchangeable. Both are stated when they are known, because both change
+    // what a reader can do with the number.
+    const builtAt = spec?.metadata?.generation_date
+    const priceDate = valuation?.reverse_dcf?.market_price_date
+    const lastModified =
+      builtAt != null
+        ? new Date(builtAt).toISOString()
+        : priceDate != null
+          ? new Date(priceDate).toISOString()
+          : undefined
+
     extra.push({
       '@type': 'Dataset',
       '@id': `${url}#valuation`,
@@ -135,6 +165,8 @@ export function StockJsonLd({ company, spec }: StockJsonLdProps) {
         'Unlevered free cash flow to the firm valuation with base, bull and bear scenarios.',
       creator: { '@id': `${SITE_URL}/#organization` },
       isAccessibleForFree: true,
+      ...(lastModified != null ? { dateModified: lastModified } : {}),
+      ...(priceDate != null ? { temporalCoverage: priceDate } : {}),
       ...(implied != null ? { variableMeasured: 'DCF implied share price' } : {}),
       ...(market != null ? { measurementTechnique: 'Market price comparison' } : {}),
     })
