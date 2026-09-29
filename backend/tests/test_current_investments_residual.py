@@ -34,12 +34,20 @@ _PERIOD_END = dt.date(2025, 12, 31)
 
 # Armstrong World Industries, balance sheet at 2025-12-31, as filed. Total current
 # assets 391.5 of which no part is a security.
+#
+# Note there is ONE current-asset catch-all here, worth 23.9, and that it is the
+# filer's own line. An earlier version of this file also listed 22.5 of prepayments
+# alongside it, which is the trap: `PrepaidExpenseCurrent` is a MEMBER of
+# `OtherAssetsCurrent`, so holding both counted the smaller twice, put the itemised
+# block 22.5 above the filer's own subtotal, and drove the residual to −22.5 — where
+# clamping it to zero published nothing and reported nothing. The test below asserts
+# that the itemised block now RECONCILES, not that the residual happens to vanish,
+# because a clamp satisfies the second and only a reconciliation satisfies the first.
 ARMSTRONG = {
     "canonical.bs.cash_and_bank": 112.7,
     "canonical.bs.trade_receivables": 130.3,
     "canonical.bs.inventory": 124.6,
-    "canonical.bs.prepayments_other_current_assets": 22.5,
-    "canonical.bs.other_current_assets": 23.9,
+    "canonical.bs.prepayments_other_current_assets": 23.9,
     "canonical.bs.total_current_assets": 391.5,
 }
 
@@ -85,23 +93,53 @@ def _derive(figures: dict, company_id: str) -> dict:
 class TestResidualIsNotPublishedAsASecurity:
     def test_armstrong_derives_no_investments(self):
         # 391.5 less every current asset the filing itemises is nil, because the
-        # filing itemises all of them. The 1.4 the old form produced was 23.9 of
-        # other current assets less 22.5 of prepayments.
+        # filing itemises all of them, and a filer that holds no securities gets no
+        # securities published for it.
         out = _derive(ARMSTRONG, "awi_us")
         assert "canonical.bs.current_investments" not in out
 
-    def test_the_old_residual_would_have_been_the_other_current_assets(self):
-        # Pinned so the test above cannot be satisfied by deleting the derivation
-        # rather than by fixing it: the arithmetic it used to do is restated here.
+    def test_the_itemised_block_reconciles_to_the_filed_subtotal(self):
+        # The assertion that matters, and the one the first version of this test
+        # failed to make. A clamp at zero satisfies "no investments derived" while
+        # the 22.5 of double-counted prepayments is still there; only this can tell
+        # the two apart, because it adds the lines up against the filer's own number.
         f = ARMSTRONG
-        old = f["canonical.bs.total_current_assets"] - (
+        itemised = (
             f["canonical.bs.cash_and_bank"]
             + f["canonical.bs.trade_receivables"]
             + f["canonical.bs.inventory"]
             + f["canonical.bs.prepayments_other_current_assets"]
         )
-        assert old == pytest.approx(1.4, abs=0.05)
-        assert old != pytest.approx(f["canonical.bs.other_current_assets"], abs=0.05)
+        assert itemised == pytest.approx(f["canonical.bs.total_current_assets"], abs=0.05)
+
+    def test_the_old_residual_would_have_been_a_pretend_security(self):
+        # Pinned so the test above cannot be satisfied by deleting the derivation
+        # rather than by fixing the overlap: the arithmetic the bug did is restated
+        # here, against a balance sheet that also carries 22.5 of prepayments inside
+        # its 23.9 catch-all.
+        f = ARMSTRONG
+        with_prepayments_also_listed = dict(f)
+        with_prepayments_also_listed["canonical.bs.prepayments_other_current_assets"] = 22.5
+        itemised = (
+            f["canonical.bs.cash_and_bank"]
+            + f["canonical.bs.trade_receivables"]
+            + f["canonical.bs.inventory"]
+            + 22.5
+            + 23.9
+        )
+        assert itemised == pytest.approx(414.0, abs=0.05)
+        assert itemised - f["canonical.bs.total_current_assets"] == pytest.approx(22.5, abs=0.05)
+
+    def test_unbilled_revenue_is_not_published_as_a_security(self):
+        # Unbilled revenue is a rendered line and a mapped key, so the residual has
+        # to subtract it. Without that, a filer carrying unbilled revenue and no
+        # tagged securities line had its unbilled revenue deducted from enterprise
+        # value as though it were a marketable security: the identical defect,
+        # reopened for a different line.
+        figures = dict(NVIDIA)
+        figures["canonical.bs.unbilled_revenue"] = 1_000.0
+        out = _derive(figures, "some_us")
+        assert out["canonical.bs.current_investments"].value == pytest.approx(50_951.0, abs=0.05)
 
     def test_nvidia_keeps_its_securities(self):
         # The same subtraction, for a filer whose remaining current assets really
@@ -122,9 +160,13 @@ class TestResidualIsNotPublishedAsASecurity:
         out = _derive(figures, "dox_us")
         assert "canonical.bs.current_investments" not in out
 
-    def test_the_rule_says_other_current_assets_was_subtracted(self):
+    def test_the_rule_names_what_it_subtracts(self):
         # A formula that does not mention what it subtracts cannot be checked
-        # against the balance sheet by a reader of the workbook.
+        # against the balance sheet by a reader of the workbook. Every line the
+        # renderer prints above the subtotal has to appear here, or the residual
+        # absorbs the missing one and republishes it as a security.
         rule = _derive(NVIDIA, "nvda_us")["canonical.bs.current_investments"].derivation_rule
         assert rule is not None
-        assert "other current assets" in rule
+        for part in ("cash", "receivables", "inventory", "unbilled revenue",
+                     "prepayments and other current assets"):
+            assert part in rule, f"the residual's rule does not mention {part}"

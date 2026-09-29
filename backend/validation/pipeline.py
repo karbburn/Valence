@@ -15,6 +15,7 @@ from backend.models.spec.qa import ModelCheckResult, QAResults
 from backend.validation.accounting_checks import (
     check_balance_sheet_balances,
     check_cash_flow_reconciles,
+    check_current_assets_reconcile,
     check_debt_schedule_reconciles,
     check_share_count_consistent,
 )
@@ -45,6 +46,11 @@ logger = logging.getLogger("valence.validation")
 # unexpected exceptions are converted into a failed check result.
 CHECK_SUITE: List[Tuple[str, Callable[[ModelSpecification], ModelCheckResult]]] = [
     ("accounting", check_balance_sheet_balances),
+    # Whether the lines printed above the current-asset subtotal add up to that
+    # subtotal. The balance sheet can balance in total while this block over-counts
+    # the same money twice or omits a large asset entirely, and no other check looks
+    # here: they all read the subtotals.
+    ("accounting", check_current_assets_reconcile),
     ("accounting", check_cash_flow_reconciles),
     ("accounting", check_debt_schedule_reconciles),
     ("accounting", check_share_count_consistent),

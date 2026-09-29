@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from typing import Dict, List, Tuple
+
+import logging
+
 from backend.normalization.taxonomy.models import CanonicalDatapoint
+
+logger = logging.getLogger(__name__)
 
 
 DERIVATION_RULES: Dict[str, str] = {
@@ -203,10 +208,22 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
             # current assets as though they were marketable securities: a filer
             # whose balance sheet printed 23,900 of "other current assets" against
             # 22,500 of prepayments had the 1,400 difference presented as a
-            # security it does not hold. So a reported other-current-assets line
-            # is subtracted before the residual is computed, and a filer whose
-            # unidentified current assets are genuinely its securities line keeps
-            # them because it publishes no such line to compete with them.
+            # security it does not hold.
+            #
+            # The subtraction has to cover every current-asset line the renderer
+            # prints, or the residual absorbs the ones it misses and republishes
+            # them as a security. Unbilled revenue is on that list: it is a rendered
+            # line, it is in the sheet contract, and it is mapped, so a filer with
+            # unbilled revenue and no tagged securities line had its unbilled
+            # revenue deducted from enterprise value as though it were one.
+            #
+            # There is exactly ONE current-asset catch-all to subtract, and it
+            # carries the filer's own caption. `OtherAssetsCurrent` and
+            # `PrepaidExpenseCurrent` are not two independent lines: the second is
+            # a member of the first, so holding both double-counted the smaller
+            # inside the larger. Armstrong's identified current assets came to
+            # 414.0 against a filed subtotal of 391.5, and the clamp below turned
+            # that 22.5 of overlap into silence rather than a report.
             ci_key = (company_id, period, "canonical.bs.current_investments")
             tca_key = (company_id, period, "canonical.bs.total_current_assets")
             if ci_key not in lookup and tca_key in lookup:
@@ -214,26 +231,28 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
                 cash = lookup.get((company_id, period, "canonical.bs.cash_and_bank"))
                 rec = lookup.get((company_id, period, "canonical.bs.trade_receivables"))
                 inv = lookup.get((company_id, period, "canonical.bs.inventory"))
+                unbilled = lookup.get((company_id, period, "canonical.bs.unbilled_revenue"))
+                vendor = lookup.get((company_id, period, "canonical.bs.vendor_non_trade_receivables"))
                 prep = lookup.get((company_id, period, "canonical.bs.prepayments_other_current_assets"))
-                other_ca = lookup.get((company_id, period, "canonical.bs.other_current_assets"))
 
                 cash_val = cash.value if cash else 0.0
                 rec_val = rec.value if rec else 0.0
                 inv_val = inv.value if inv else 0.0
+                unbilled_val = unbilled.value if unbilled else 0.0
+                vendor_val = vendor.value if vendor else 0.0
                 prep_val = prep.value if prep else 0.0
-                other_ca_val = other_ca.value if other_ca else 0.0
 
-                derived_ci_val = max(
-                    0.0,
-                    tca.value - (cash_val + rec_val + inv_val + prep_val + other_ca_val),
-                )
+                identified = cash_val + rec_val + inv_val + unbilled_val + vendor_val + prep_val
+                derived_ci_val = tca.value - identified
                 if derived_ci_val > 0.0:
-                    source_ids = tca.source_datapoint_ids
-                    if cash: source_ids += cash.source_datapoint_ids
-                    if rec: source_ids += rec.source_datapoint_ids
-                    if inv: source_ids += inv.source_datapoint_ids
-                    if prep: source_ids += prep.source_datapoint_ids
-                    if other_ca: source_ids += other_ca.source_datapoint_ids
+                    # A copy, not the anchor's own list: `source_ids = tca.` followed
+                    # by `+=` extends the very list pydantic holds on the total-current-
+                    # assets model, so that line's published lineage became the union
+                    # of itself and every line subtracted from it.
+                    source_ids = list(tca.source_datapoint_ids)
+                    for anchor in (cash, rec, inv, unbilled, vendor, prep):
+                        if anchor:
+                            source_ids += list(anchor.source_datapoint_ids)
 
                     ci_dp = CanonicalDatapoint(
                         company_id=company_id,
@@ -246,10 +265,21 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
                         units=tca.units,
                         status="derived",
                         source_datapoint_ids=sorted(set(source_ids)),
-                        derivation_rule="current_investments = total_current_assets - (cash + receivables + inventory + prepayments + other current assets)",
+                        derivation_rule="current_investments = total_current_assets - (cash + receivables + inventory + unbilled revenue + vendor non-trade receivables + prepayments and other current assets)",
                     )
                     new_derived.append(ci_dp)
                     lookup[ci_key] = ci_dp
+                elif abs(derived_ci_val) > 0.5:
+                    # The identified lines EXCEED the filer's own subtotal, which
+                    # means two of them overlap. Publishing nothing and saying
+                    # nothing hides a real disagreement between the engine and the
+                    # filing, so it is surfaced here rather than clamped away.
+                    logger.warning(
+                        "%s %s: identified current assets (%.1f) exceed the filed "
+                        "total_current_assets (%.1f) by %.1f — at least two of the "
+                        "subtracted lines are the same money counted twice",
+                        company_id, period, identified, tca.value, -derived_ci_val,
+                    )
 
             # 5. Total Non-Current Assets Derivation Fallback
             #

@@ -32,11 +32,11 @@ BS_LINE_ITEM_CONFIG: List[tuple[str, str, CategoryType]] = [
     # Current Assets
     ("canonical.bs.current_investments", "Current Investments", "current_assets"),
     ("canonical.bs.trade_receivables", "Trade Receivables", "current_assets"),
+    ("canonical.bs.vendor_non_trade_receivables", "Vendor Non-Trade Receivables", "current_assets"),
     ("canonical.bs.unbilled_revenue", "Unbilled Revenue", "current_assets"),
     ("canonical.bs.inventory", "Inventory", "current_assets"),
     ("canonical.bs.cash_and_bank", "Cash & Cash Equivalents", "current_assets"),
     ("canonical.bs.prepayments_other_current_assets", "Prepayments & Other Current Assets", "current_assets"),
-    ("canonical.bs.other_current_assets", "Other Current Assets", "current_assets"),
     ("canonical.bs.total_current_assets", "Total Current Assets", "current_assets"),
 
     # Total Assets
