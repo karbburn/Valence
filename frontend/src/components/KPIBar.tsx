@@ -3,6 +3,7 @@
 import React, { useSyncExternalStore } from 'react'
 import { ModelSpecification, ScenarioLabel } from '@/lib/types'
 import { fmtMoney, fmtPct, fmtPrice } from '@/lib/formatters'
+import { NO_VALUE } from '@/lib/noValue'
 
 export interface KPIBarProps {
   spec: ModelSpecification | null
@@ -195,7 +196,7 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
                 price. The number is still in the workbench below, where the
                 audit explains it, but presenting it here without qualification
                 is the thing that puts a wrong figure in front of a reader. */}
-            {impliedPrice != null && publishable ? fmtPrice(impliedPrice, currency, 2) : '—'}
+            {impliedPrice != null && publishable ? fmtPrice(impliedPrice, currency, 2) : NO_VALUE}
           </div>
           <div className="text-[10px] font-semibold mt-0.5 whitespace-nowrap">
             {!publishable ? (
@@ -208,7 +209,7 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
               </span>
             ) : upsidePct != null ? (
               <span
-                className={upsidePct >= 0 ? 'text-[#10b981]' : 'text-[#ef4444]'}
+                className={upsidePct >= 0 ? 'text-positive' : 'text-negative'}
                 title={deviationFlagged ? deviationTitle : undefined}
               >
                 {upsidePct >= 0 ? '+' : ''}
@@ -229,7 +230,7 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
             Market Price
           </span>
           <div className="font-mono font-bold text-[16px] text-[#f8fafc] mt-0.5 whitespace-nowrap">
-            {marketPrice != null ? fmtPrice(marketPrice, currency, 2) : '—'}
+            {marketPrice != null ? fmtPrice(marketPrice, currency, 2) : NO_VALUE}
           </div>
           <div className={`text-[10px] font-semibold mt-0.5 whitespace-nowrap ${priceSublabelClass}`} title={priceTitle}>
             {priceSublabel}
@@ -242,7 +243,7 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
             Statements
           </span>
           <div className="font-mono font-bold text-[16px] text-[#f8fafc] mt-0.5 whitespace-nowrap">
-            {statements.label ?? '—'}
+            {statements.label ?? NO_VALUE}
           </div>
           <div
             className={`text-[10px] font-semibold mt-0.5 whitespace-nowrap ${
@@ -266,7 +267,7 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
             Enterprise Value
           </span>
           <div className="font-mono font-bold text-[16px] text-[#f8fafc] mt-0.5 whitespace-nowrap">
-            {ev != null ? fmtMoney(ev, currency) : '—'}
+            {ev != null ? fmtMoney(ev, currency) : NO_VALUE}
           </div>
           <div className="text-[10px] font-semibold text-text-dim mt-0.5 whitespace-nowrap">
             PV FCFF + PV TV
@@ -279,7 +280,7 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
             Equity Value
           </span>
           <div className="font-mono font-bold text-[16px] text-[#f8fafc] mt-0.5 whitespace-nowrap">
-            {equityVal != null ? fmtMoney(equityVal, currency) : '—'}
+            {equityVal != null ? fmtMoney(equityVal, currency) : NO_VALUE}
           </div>
           <div className="text-[10px] font-semibold text-text-dim mt-0.5 whitespace-nowrap">
             Net Debt Adjusted
@@ -292,7 +293,7 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
             WACC
           </span>
           <div className="font-mono font-bold text-[16px] text-[#f8fafc] mt-0.5 whitespace-nowrap">
-            {waccVal != null ? fmtPct(waccVal, 2) : '—'}
+            {waccVal != null ? fmtPct(waccVal, 2) : NO_VALUE}
           </div>
           <div className="text-[10px] font-semibold text-text-dim mt-0.5 whitespace-nowrap">
             CAPM / Capital Cost
@@ -305,7 +306,7 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
             Terminal Growth (g)
           </span>
           <div className="font-mono font-bold text-[16px] text-[#f8fafc] mt-0.5 whitespace-nowrap">
-            {terminalGrowthVal != null ? fmtPct(terminalGrowthVal, 2) : '—'}
+            {terminalGrowthVal != null ? fmtPct(terminalGrowthVal, 2) : NO_VALUE}
           </div>
           <div className="text-[10px] font-semibold text-text-dim mt-0.5 whitespace-nowrap">
             Gordon Growth

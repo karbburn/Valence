@@ -25,6 +25,7 @@ import { saveModel, loadSavedModel } from '@/lib/api'
 import { fmtPrice, fmtNum } from '@/lib/formatters'
 import { stockPath, slugFromPath, resolveSlug } from '@/lib/tickers'
 import { DRIVER_CONFIGS } from '@/components/DriverPanel'
+import { NO_VALUE } from '@/lib/noValue'
 
 const driverLabel = (key: string) => DRIVER_CONFIGS.find((c) => c.key === key)
 
@@ -243,9 +244,9 @@ export default function Workbench({ companyId, initialSpec, syncUrl = true }: Wo
     const currency = spec.metadata?.currency || 'INR'
     const valuation = spec.valuation?.find((v) => v.scenario === scenario) || spec.valuation?.[0]
     const bridge = valuation?.dcf_bridge
-    const price = bridge?.implied_share_price != null ? fmtPrice(bridge.implied_share_price, currency, 2) : '—'
-    const mkt = valuation?.reverse_dcf?.market_price != null ? fmtPrice(valuation.reverse_dcf.market_price, currency, 2) : '—'
-    const waccVal = valuation?.wacc?.wacc != null ? `${valuation.wacc.wacc.toFixed(2)}%` : '—'
+    const price = bridge?.implied_share_price != null ? fmtPrice(bridge.implied_share_price, currency, 2) : NO_VALUE
+    const mkt = valuation?.reverse_dcf?.market_price != null ? fmtPrice(valuation.reverse_dcf.market_price, currency, 2) : NO_VALUE
+    const waccVal = valuation?.wacc?.wacc != null ? `${valuation.wacc.wacc.toFixed(2)}%` : NO_VALUE
 
     const text = `${name} (${ticker}) DCF Valuation [${scenario.toUpperCase()} SCENARIO]\nDCF Implied Price: ${price} | Market Price: ${mkt}\nWACC: ${waccVal} | Model: Unlevered FCFF @ WACC`
 

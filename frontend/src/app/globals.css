@@ -29,14 +29,20 @@
   /* Semantic */
   --c-positive: #10b981;
   --c-positive-subtle: rgba(16, 185, 129, 0.10);
-  --c-negative: #ef4444;
-  --c-negative-subtle: rgba(239, 68, 68, 0.10);
+  /* One step lighter than a stock red-500. Red-500 is 4.80:1 on the surface a
+     card sits on, which is 0.3 above the 4.5 line, and 4.28:1 on the raised
+     surface, which is under it. Downside figures are the most-repeated coloured
+     text on the site and they appear on every card background, so the one that
+     fails is the one most often read. Red-400 measures 5.82:1 on the lightest
+     surface it is used on and is still unmistakably red. */
+  --c-negative: #f87171;
+  --c-negative-subtle: rgba(248, 113, 113, 0.10);
   --c-warning: #f59e0b;
   --c-warning-subtle: rgba(245, 158, 11, 0.10);
 
   /* Destructive */
-  --c-destructive: #ef4444;
-  --c-destructive-subtle: rgba(239, 68, 68, 0.10);
+  --c-destructive: #f87171;
+  --c-destructive-subtle: rgba(248, 113, 113, 0.10);
 
   /* Excel */
   --c-excel-bg: #065f46;

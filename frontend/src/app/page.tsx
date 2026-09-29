@@ -133,7 +133,18 @@ export default async function LandingPage() {
             Six and six rather than five and seven, so the search box keeps a
             usable measure, and the headline drops to 54px so it still sets in two
             lines inside 660px. One block instead of two, so the page is six
-            blocks rather than seven. */}
+            blocks rather than seven.
+
+            The hero is three text elements and a field: the headline, one line of
+            subtext, and the search. A fourth paragraph used to sit under the
+            search explaining that the engine reads annual filings and runs its own
+            checks. It was thirty words of reassurance placed directly under the
+            control, where it read as a caption for the field rather than as
+            anything a visitor needed in order to act, and it repeated what two
+            sections below already say in full: the rail explains that a model is
+            built from filings, and the audit section explains that the checks run
+            before a number is shown. Cutting it also stops the page making the
+            same promise three times. */}
         <section className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 pt-14 sm:pt-16 lg:pt-20 pb-12 sm:pb-14">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
             <div className="lg:col-span-6">
@@ -151,11 +162,6 @@ export default async function LandingPage() {
                   <TickerSearch />
                 </Suspense>
               </div>
-              <p className="mt-3.5 text-[12.5px] text-text-dim max-w-[52ch] leading-relaxed">
-                Any listed ticker. The engine reads its annual filings and builds the model from
-                scratch, then runs its own checks before showing you a number. Nothing to install,
-                no account.
-              </p>
             </div>
 
             <div className="lg:col-span-6">
@@ -456,14 +462,24 @@ export default async function LandingPage() {
               No account, no upload, nothing stored on a server. Saved models live in this browser
               and nowhere else.
             </p>
-            <div className="mt-6">
+            {/* The search is centred here, not on the component. TickerSearch is
+                a max-w-[440px] block used in two places, and it is left-aligned
+                in the hero because that sits in the left half of a grid. Adding
+                mx-auto to the component would have centred it there too.
+
+                Its Suspense fallback was centred, so the field appeared centred
+                and then jumped 90px left the moment the client component
+                hydrated. Half of the 620px container less the 440px field is
+                exactly that 90px, which is how the field came to sit visibly
+                left of the heading and the paragraph it belongs with. */}
+            <div className="mt-6 flex justify-center">
               <Suspense
-                fallback={<div className="h-12 max-w-[440px] mx-auto rounded-sm bg-surface border border-border" />}
+                fallback={<div className="h-12 w-full max-w-[440px] rounded-sm bg-surface border border-border" />}
               >
                 <TickerSearch />
               </Suspense>
             </div>
-            <p className="mt-5 text-[13px] text-text-dim leading-relaxed max-w-[52ch] mx-auto">
+            <p className="mt-5 text-[13px] text-text-dim leading-relaxed max-w-[52ch] mx-auto text-balance">
               Prefer to read first, or want a name covered that is not there?{' '}
               <Link href="/methodology" className="text-accent hover:text-accent-hover">
                 How the valuation is built

@@ -4,6 +4,7 @@ import React from 'react'
 import { ArrowUpRight, ArrowDownRight, Layers, Info, GitCompare } from 'lucide-react'
 import { ModelSpecification, ScenarioLabel } from '@/lib/types'
 import { fmtNum, fmtPct, fmtPrice, getCurrencySymbol, fmtMoney } from '@/lib/formatters'
+import { NO_VALUE } from '@/lib/noValue'
 
 export interface QuickDCFViewProps {
   spec: ModelSpecification | null
@@ -122,7 +123,7 @@ export function QuickDCFView({
             )}
           </div>
           <div className="font-mono font-bold text-[30px] text-accent-hover">
-            {impliedPrice != null ? fmtPrice(impliedPrice, currency, 2) : '—'}
+            {impliedPrice != null ? fmtPrice(impliedPrice, currency, 2) : NO_VALUE}
           </div>
           <div className="text-[11px] text-text-dim mt-1 font-mono">
             Per Share ({currency}) · FCFF @ WACC
@@ -135,7 +136,7 @@ export function QuickDCFView({
             Current Market Price
           </div>
           <div className="font-mono font-bold text-[26px] text-text-main">
-            {marketPrice != null ? fmtPrice(marketPrice, currency, 2) : '—'}
+            {marketPrice != null ? fmtPrice(marketPrice, currency, 2) : NO_VALUE}
           </div>
           <div
             className={`text-[11px] mt-1 ${isStaleQuote || isFallbackQuote || isSuccessorQuote ? 'text-[#f59e0b] font-semibold' : 'text-text-dim'}`}
@@ -183,7 +184,7 @@ export function QuickDCFView({
                 </span>
               </>
             ) : (
-              '—'
+              NO_VALUE
             )}
           </div>
           <div className="text-[11px] text-text-dim mt-1">vs current market quote</div>
@@ -237,20 +238,20 @@ export function QuickDCFView({
                 <td className="p-2.5 font-bold text-positive text-right">
                   {fmtPrice(bullVal?.dcf_bridge?.implied_share_price, currency, 2)}
                 </td>
-                <td className="p-2.5 font-bold text-[#ef4444]">
+                <td className="p-2.5 font-bold text-negative">
                   {fmtPrice(bearVal?.dcf_bridge?.implied_share_price, currency, 2)}
                 </td>
               </tr>
               <tr>
                 <td className="p-2.5 font-semibold text-[#cbd5e1]">Implied Upside / Downside</td>
                 <td className="p-2.5 font-semibold text-text-muted text-right">
-                  {getUpside(baseVal) != null ? `${getUpside(baseVal)! >= 0 ? '+' : ''}${fmtPct(getUpside(baseVal), 1)}` : '—'}
+                  {getUpside(baseVal) != null ? `${getUpside(baseVal)! >= 0 ? '+' : ''}${fmtPct(getUpside(baseVal), 1)}` : NO_VALUE}
                 </td>
                 <td className="p-2.5 font-semibold text-positive text-right">
-                  {getUpside(bullVal) != null ? `${getUpside(bullVal)! >= 0 ? '+' : ''}${fmtPct(getUpside(bullVal), 1)}` : '—'}
+                  {getUpside(bullVal) != null ? `${getUpside(bullVal)! >= 0 ? '+' : ''}${fmtPct(getUpside(bullVal), 1)}` : NO_VALUE}
                 </td>
                 <td className="p-2.5 font-semibold text-negative text-right">
-                  {getUpside(bearVal) != null ? `${fmtPct(getUpside(bearVal), 1)}` : '—'}
+                  {getUpside(bearVal) != null ? `${fmtPct(getUpside(bearVal), 1)}` : NO_VALUE}
                 </td>
               </tr>
               <tr>
@@ -314,7 +315,7 @@ export function QuickDCFView({
             <div className="font-bold text-[#7dd3fc] mt-0.5">
               {reverseDcf.implied_terminal_growth != null
                 ? fmtPct(reverseDcf.implied_terminal_growth, 2)
-                : '—'}
+                : NO_VALUE}
             </div>
           </div>
 
@@ -332,7 +333,7 @@ export function QuickDCFView({
             <div className="font-bold text-text-main mt-0.5">
               {reverseDcf.implied_revenue_cagr != null
                 ? fmtPct(reverseDcf.implied_revenue_cagr, 1)
-                : '—'}
+                : NO_VALUE}
             </div>
           </div>
         </div>
@@ -394,9 +395,9 @@ export function QuickDCFView({
                       if (isBase) {
                         cellBg = 'bg-[#0ea5e9]/20 border-2 border-[#0ea5e9] font-bold text-[#7dd3fc]'
                       } else if (marketPrice != null && val != null && val > marketPrice) {
-                        cellBg = 'bg-[#10b981]/10 text-[#6ee7b7]'
+                        cellBg = 'bg-positive-subtle text-[#6ee7b7]'
                       } else if (marketPrice != null && val != null && val < marketPrice) {
-                        cellBg = 'bg-[#ef4444]/10 text-[#fca5a5]'
+                        cellBg = 'bg-negative-subtle text-[#fca5a5]'
                       }
 
                       return (

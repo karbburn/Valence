@@ -4,6 +4,7 @@ import React from 'react'
 import { TableProperties, Info } from 'lucide-react'
 import { ModelSpecification, ScenarioLabel } from '@/lib/types'
 import { fmtNum, fmtMoney, fmtPct, getCurrencySymbol } from '@/lib/formatters'
+import { NO_VALUE } from '@/lib/noValue'
 
 export interface DCFScheduleProps {
   spec: ModelSpecification | null
@@ -78,10 +79,10 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
     { label: 'Tax Rate %', fn: (p: typeof fcffs[0]) => fmtPct(p.tax_rate, 1), bold: false, total: false },
     { label: 'NOPAT', fn: (p: typeof fcffs[0]) => fmtNum(p.nopat), bold: true, total: false },
     { label: '+ D&A', fn: (p: typeof fcffs[0]) => fmtNum(p.da), bold: false, total: false },
-    { label: '− CapEx', fn: (p: typeof fcffs[0]) => p.capex != null ? `(${fmtNum(Math.abs(p.capex))})` : '—', bold: false, total: false },
+    { label: '− CapEx', fn: (p: typeof fcffs[0]) => p.capex != null ? `(${fmtNum(Math.abs(p.capex))})` : NO_VALUE, bold: false, total: false },
     { label: '± ΔNWC', fn: (p: typeof fcffs[0]) => fmtNum(-(p.delta_working_capital || 0)), bold: false, total: false },
     ...fcffs.some((p) => (p.stock_compensation || 0) > 0)
-      ? [{ label: '− Stock Comp', fn: (p: typeof fcffs[0]) => (p.stock_compensation || 0) > 0 ? `(${fmtNum(p.stock_compensation!)})` : '—', bold: false, total: false }]
+      ? [{ label: '− Stock Comp', fn: (p: typeof fcffs[0]) => (p.stock_compensation || 0) > 0 ? `(${fmtNum(p.stock_compensation!)})` : NO_VALUE, bold: false, total: false }]
       : [],
     { label: '= FCFF (Free Cash Flow)', fn: (p: typeof fcffs[0]) => fmtNum(p.fcff), bold: true, total: true },
     { label: 'Discount Factor (Mid-Year)', fn: (p: typeof fcffs[0]) => (p.discount_factor || 0).toFixed(4), bold: false, total: false },
@@ -131,7 +132,7 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
             }
           >
             <span className="text-text-dim">Net: </span>
-            <span className={`font-semibold ${isNetCash ? 'text-[#10b981]' : 'text-[#ef4444]'}`}>
+            <span className={`font-semibold ${isNetCash ? 'text-positive' : 'text-negative'}`}>
               {isNetCash ? `+${currencySym}${fmtNum(Math.abs(netDebt))}` : `-${currencySym}${fmtNum(netDebt)}`}
             </span>
             {/*
@@ -284,7 +285,7 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
               <td
                 colSpan={fcffs.length}
                 className={`px-3 py-1.5 text-right font-bold ${
-                  isNetCash ? 'text-[#10b981]' : 'text-[#ef4444]'
+                  isNetCash ? 'text-positive' : 'text-negative'
                 }`}
               >
                 {isNetCash ? `+ ${currencySym}` : `- ${currencySym}`}
@@ -292,7 +293,7 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
               </td>
             </tr>
 
-            <tr className="bg-[#10b981]/[0.08] border-t border-[#10b981]/30">
+            <tr className="bg-positive-subtle border-t border-positive">
               <td className="sticky-col px-3 py-1.5 font-bold text-[#6ee7b7]">
                 Equity Value → DCF Implied Share Price
               </td>
@@ -317,7 +318,7 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
         </div>
         {tv.implied_roic != null && (
           <div className="text-[#7dd3fc]">
-            Terminal ROIC: {tv.implied_roic.toFixed(1)}% (Reinvest {tv.reinvestment_rate != null ? `${tv.reinvestment_rate.toFixed(1)}%` : '—'})
+            Terminal ROIC: {tv.implied_roic.toFixed(1)}% (Reinvest {tv.reinvestment_rate != null ? `${tv.reinvestment_rate.toFixed(1)}%` : NO_VALUE})
           </div>
         )}
       </div>

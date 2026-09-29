@@ -73,7 +73,7 @@ export function SavedModelsModal({
           <div
             role="alert"
             aria-live="assertive"
-            className="flex items-center space-x-2 text-[11px] text-[#ef4444] font-semibold bg-[#ef4444]/10 border border-[#ef4444]/20 rounded-[3px] p-2.5"
+            className="flex items-center space-x-2 text-[11px] text-negative font-semibold bg-negative-subtle border border-negative rounded-[3px] p-2.5"
           >
             <AlertCircle className="w-4 h-4 shrink-0" aria-hidden />
             <span>{error}</span>
@@ -119,14 +119,14 @@ export function SavedModelsModal({
                 {/* Actions */}
                 <div className="flex items-center space-x-2 shrink-0">
                   {confirmDeleteId === m.model_id ? (
-                    <div className="flex items-center space-x-1.5 bg-[#ef4444]/10 border border-[#ef4444]/30 rounded-[4px] px-2 py-1">
-                      <span className="text-[11px] font-semibold text-[#ef4444]">
+                    <div className="flex items-center space-x-1.5 bg-negative-subtle border border-negative rounded-[4px] px-2 py-1">
+                      <span className="text-[11px] font-semibold text-negative">
                         Delete?
                       </span>
                       <button
                         onClick={() => handleDelete(m.model_id)}
                         disabled={deletingId === m.model_id}
-                        className="px-2 py-0.5 bg-[#ef4444] text-white text-[10px] font-bold rounded-[2px] hover:bg-[#dc2626]"
+                        className="px-2 py-0.5 bg-negative-subtle text-white text-[10px] font-bold rounded-[2px] hover:bg-negative-subtle"
                       >
                         {deletingId === m.model_id ? '...' : 'Yes'}
                       </button>
@@ -148,7 +148,7 @@ export function SavedModelsModal({
                       </button>
                       <button
                         onClick={() => setConfirmDeleteId(m.model_id)}
-                        className="p-1.5 text-text-dim hover:text-[#ef4444] border border-[#1e283d] rounded-[4px] hover:border-[#ef4444]/30 hover:bg-[#ef4444]/10 transition-colors"
+                        className="p-1.5 text-text-dim hover:text-negative border border-[#1e283d] rounded-[4px] hover:border-negative hover:bg-negative-subtle transition-colors"
                         title="Delete model"
                         aria-label={`Delete ${m.name}`}
                       >
