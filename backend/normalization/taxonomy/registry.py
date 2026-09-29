@@ -39,6 +39,12 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Basic (₹)": ("canonical.is.eps_basic", "is"),
     "Basic (in shares) 2.13 4,046,019,309": ("canonical.is.eps_basic", "is"),
     "Basic (in Rs)": ("canonical.is.eps_basic", "is"),
+    # The SEC ingestion emits these for a US filer, in dollars per share. Without
+    # them the diluted share count cannot be derived from the filed figures and
+    # falls through to the live provider, which is where NVIDIA's 24,147m came from
+    # while its filing carried 24,304m shares outstanding.
+    "Basic (in $)": ("canonical.is.eps_basic", "is"),
+    "Diluted (in $)": ("canonical.is.eps_diluted", "is"),
     "Diluted (₹)": ("canonical.is.eps_diluted", "is"),
     "Diluted (in Rs)": ("canonical.is.eps_diluted", "is"),
     "EPS in Rs": ("canonical.is.eps_diluted", "is"),

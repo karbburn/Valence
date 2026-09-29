@@ -338,9 +338,25 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
         "AllocatedShareBasedCompensationExpense"
     ], "CASH FLOW:"),
     ("Basic (in shares)", [
-        "CommonStockSharesOutstanding", 
+        "CommonStockSharesOutstanding",
         "EntityCommonStockSharesOutstanding",
         "WeightedAverageNumberOfSharesOutstandingBasic"
+    ], "PROFIT & LOSS"),
+    # EPS, per share, for both bases.
+    #
+    # The diluted share count is derived from net profit over diluted EPS, and
+    # without these lines that derivation cannot run for a US filer at all, so the
+    # count came from the live provider while the filing held the number. NVIDIA
+    # files 24,304m shares outstanding and the engine was pricing on 24,147m from a
+    # provider, a difference nobody could see because the fallback is silent.
+    #
+    # Per-share, not in shares: the label is what the taxonomy registry maps to
+    # canonical.is.eps_basic and canonical.is.eps_diluted.
+    ("Diluted (in $)", [
+        "EarningsPerShareDiluted",
+    ], "PROFIT & LOSS"),
+    ("Basic (in $)", [
+        "EarningsPerShareBasic",
     ], "PROFIT & LOSS"),
 ]
 
@@ -481,6 +497,30 @@ HISTORICAL_PERIODS = 3
 # 272 days is excluded; the bounds allow for 52/53-week and 4-4-5 calendars.
 MIN_ANNUAL_SPAN_DAYS = 330
 MAX_ANNUAL_SPAN_DAYS = 400
+
+
+# The unit keys a filer's facts arrive under, in the order they are preferred.
+#
+# `USD/shares` is a per-share amount and was missing from this list, so every EPS
+# tag was read as carrying nothing and silently dropped: the lookup found no unit
+# it recognised, produced an empty list, and the diluted share count — which is
+# derived from net profit over diluted EPS — could not be derived at all. It fell
+# through to the live provider instead, so NVIDIA was priced on 24,147m shares
+# while its filing carried 24,304m outstanding.
+_UNIT_KEYS = ("USD", "USD/shares", "shares", "pure")
+
+# Labels carrying an amount PER SHARE rather than a total, so the millions
+# conversion does not apply to them.
+_PER_SHARE_LABELS = frozenset({"Diluted (in $)", "Basic (in $)"})
+
+
+def _unit_items(units_dict: dict) -> List[dict]:
+    """The facts for the first unit this filer actually used."""
+    for key in _UNIT_KEYS:
+        items = units_dict.get(key)
+        if items:
+            return items
+    return []
 
 
 def _span_days(item: dict) -> Optional[int]:
@@ -672,7 +712,7 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
             if tag in us_gaap:
                 # Check if this tag has items for our target period ends
                 units_dict = us_gaap[tag].get("units", {})
-                unit_items = units_dict.get("USD", []) or units_dict.get("shares", []) or units_dict.get("pure", [])
+                unit_items = _unit_items(units_dict)
                 if _has_period(unit_items, target_ends):
                     selected_tag = tag
                     tag_data = us_gaap[tag]
@@ -723,11 +763,7 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
             tag_of_period = {}
         else:
             units_dict = tag_data.get("units", {})
-            unit_items = (
-                units_dict.get("USD", [])
-                or units_dict.get("shares", [])
-                or units_dict.get("pure", [])
-            )
+            unit_items = _unit_items(units_dict)
             resolved = _facts_at_period_ends(unit_items, target_ends)
 
             # A filer may spell one concept several ways and switch between them
@@ -765,7 +801,13 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
 
             # Unit conversion: monetary values to USD millions; share counts are
             # likewise stored in millions so downstream per-share math stays consistent.
-            val = raw_val / 1e6
+            #
+            # A per-share amount is NEITHER. Dividing 4.90 dollars per share by a
+            # million yields 0.0000, and the diluted share count derived from it
+            # then divides by zero and falls through to the provider, which is the
+            # state this line was added to end. EPS is stored as filed, in currency
+            # per share.
+            val = raw_val if metric_label in _PER_SHARE_LABELS else raw_val / 1e6
 
             end_d = period_end
             fy = period_end.year
