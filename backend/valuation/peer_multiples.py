@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 import warnings
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from backend.data.providers.run_rate import (
@@ -623,10 +623,6 @@ def _filed_net_debt(company_id: str) -> Optional[tuple]:
                 for item in historicals.get("line_items") or []:
                     if str(item.get("period_label")) == latest:
                         items.append(item)
-                # The date most of the reported lines agree on, not the latest one
-                # seen: the few lines that carry no filed date fall back to the
-                # fiscal calendar, and a year closing on a Sunday makes that
-                # fallback the later of the two.
                 counts: dict = {}
                 for item in items:
                     stamp = item.get("period_end_date")
@@ -641,7 +637,7 @@ def _filed_net_debt(company_id: str) -> Optional[tuple]:
     if not items:
         try:
             from backend.api.routes import _get_hist_model
-            from backend.models.spec.historicals import Historicals
+            from backend.models.spec.historicals import modal_period_end
 
             model = _get_hist_model(company_id)
             if model is None or not model.periods:
@@ -657,17 +653,11 @@ def _filed_net_debt(company_id: str) -> Optional[tuple]:
                             "period_end_date": item.period_end_dates_by_period.get(latest),
                         }
                     )
-            filed = Historicals(
-                periods=model.periods,
-                line_items=[
-                    {
-                        "canonical_key": i["canonical_key"],
-                        "period_label": latest,
-                        "period_end_date": i["period_end_date"],
-                    }
-                    for i in items
-                ],
-            ).filed_period_end(latest)
+            filed = modal_period_end(
+                i["period_end_date"]
+                for i in items
+                if isinstance(i.get("period_end_date"), date)
+            )
             if filed:
                 as_of = filed.isoformat()
         except Exception as exc:

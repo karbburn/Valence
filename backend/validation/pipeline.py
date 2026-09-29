@@ -20,6 +20,7 @@ from backend.validation.accounting_checks import (
 )
 from backend.validation.data_quality import (
     check_data_provenance_quality,
+    check_cost_of_capital_is_live,
     check_historicals_are_reported,
 )
 from backend.validation.input_plausibility import (
@@ -64,6 +65,7 @@ CHECK_SUITE: List[Tuple[str, Callable[[ModelSpecification], ModelCheckResult]]] 
     ("data_quality", check_year_one_growth_is_plausible),
     ("data_quality", check_income_statement_is_coherent),
     ("data_quality", check_terminal_value_is_not_carrying_the_model),
+    ("data_quality", check_cost_of_capital_is_live),
 ]
 
 

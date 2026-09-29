@@ -44,8 +44,9 @@ V1_CHECK_NAMES = [
     (
         "bridge_inputs_plausible",
         "data_quality",
-        "Debt, cash and lease figures on the bridge can coexist; total debt is not "
-        "smaller than a lease component the note says it already contains.",
+        "The bridge's cash, debt and investments can coexist, and a filer that "
+        "carried debt in every prior reported year has not quietly become "
+        "debt-free because its latest statement carries no borrowings row.",
     ),
     (
         "equity_value_positive",
@@ -58,6 +59,12 @@ V1_CHECK_NAMES = [
         "data_quality",
         "The explicit forecast period contributes to the enterprise value, so the "
         "terminal is not being asked to explain a negative explicit period.",
+    ),
+    (
+        "cost_of_capital_is_live",
+        "data_quality",
+        "The risk-free rate is a live market yield rather than a stored default, so "
+        "two runs of the same model produce the same price.",
     ),
     (
         "income_statement_is_coherent",

@@ -12,6 +12,68 @@ from backend.models.spec.model_specification import ModelSpecification
 from backend.models.spec.qa import ModelCheckResult
 
 
+def check_cost_of_capital_is_live(spec: ModelSpecification) -> ModelCheckResult:
+    """The discount rate must rest on a market rate, not on a stored constant.
+
+    A failed market-data fetch does not produce an error. The risk-free rate falls
+    through a chain — live provider, second provider, per-company registry, market
+    default — and the last of those is a hardcoded figure dated to the month it
+    was written, with a comment saying so. The valuation then completes normally
+    and differs from the same model run an hour later, because the rate moved.
+
+    NVIDIA is the case. Two builds an hour apart produced $161.44 and $150.85 from
+    identical statements: identical income, balance sheet, cash flow, ratios,
+    operating model, revenue, cost, working capital, capex, debt, tax and share
+    count. The only difference in the entire workbook was the risk-free rate —
+    4.64% from the stored default against 5.24% live from the 10-year Treasury.
+    Sixty basis points on a discount rate, 6.6% on the implied price, and nothing
+    on the face of the model said which one you were looking at.
+
+    That is the failure this exists for. A number that changes between two runs of
+    the same model is not reproducible, and a model that is not reproducible cannot
+    be checked by the person reading it. It fails rather than warns, because the
+    whole point is that the reader is not looking for it.
+
+    A per-company registry beta is NOT a fallback here: it is a deliberate,
+    documented calibration choice stated in the workbook's own source column, and
+    treating it as a placeholder would fire on every company that has one.
+    """
+    defaulted: List[str] = []
+    details: List[str] = []
+
+    for val in spec.valuation:
+        if val.scenario != "base":
+            continue
+        w = val.wacc
+        if not isinstance(w, dict):
+            continue
+        notes = str(w.get("source_notes") or "")
+        if "market default for rfr" in notes.lower():
+            defaulted.append("risk-free rate")
+            details.append(
+                f"{val.scenario}: the risk-free rate is a stored market default, not a "
+                f"live yield. The discount rate is therefore a constant, and the "
+                f"implied price will differ from the same model priced on the live "
+                f"rate — 60bp on the risk-free rate is roughly 6% on the price."
+            )
+        if "market default for erp" in notes.lower():
+            defaulted.append("equity risk premium")
+            details.append(
+                f"{val.scenario}: the equity risk premium is a stored market default."
+            )
+
+    passed = not defaulted
+    return ModelCheckResult(
+        check_name="cost_of_capital_is_live",
+        category="data_quality",
+        passed=passed,
+        detail="" if passed else "; ".join(details),
+        implicated_canonical_keys=sorted(set(defaulted)),
+        implicated_periods=[],
+        implicated_scenarios=["base"] if not passed else [],
+    )
+
+
 def check_data_provenance_quality(spec: ModelSpecification) -> ModelCheckResult:
     """Verify historical line items have non-empty status and lineage metadata."""
     errors: List[str] = []

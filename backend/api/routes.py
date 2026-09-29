@@ -556,6 +556,7 @@ _INPUT_DEFECT_CHECKS = frozenset(
         "year_one_growth_is_plausible",
         "terminal_value_is_not_carrying_the_model",
         "equity_value_positive",
+        "cost_of_capital_is_live",
     }
 )
 
