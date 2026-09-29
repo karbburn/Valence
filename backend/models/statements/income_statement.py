@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
@@ -40,6 +41,11 @@ class IncomeStatementLineItem(BaseModel):
     currency: str = "INR"
     units: str = "crores"
     lineage_ids_by_period: Dict[str, List[str]] = Field(default_factory=dict)
+    # The day each period was FILED for. A fiscal calendar gives the month and day
+    # a filer's year ends on, not the date it ended on: a year closing on a Sunday
+    # lands six days before the calendar day. Cash flows are discounted from these
+    # dates, so a six-day error is a real error in the discounting, not a label.
+    period_end_dates_by_period: Dict[str, date] = Field(default_factory=dict)
 
 
 class IncomeStatement(BaseModel):
@@ -87,12 +93,14 @@ def assemble_income_statement(
         lineage: Dict[str, List[str]] = {}
         curr = "INR"
         un = "crores"
+        period_ends: Dict[str, date] = {}
 
         for p in periods:
             dp = dp_map.get((c_key, p))
             if dp is not None:
                 values[p] = dp.value
                 lineage[p] = dp.source_datapoint_ids
+                period_ends[p] = dp.period_end_date
                 curr = dp.currency
                 un = dp.units
 
@@ -105,6 +113,7 @@ def assemble_income_statement(
                     currency=curr,
                     units=un,
                     lineage_ids_by_period=lineage,
+                    period_end_dates_by_period=period_ends,
                 )
             )
 

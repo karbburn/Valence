@@ -262,6 +262,13 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
     # only the first tag carrying that year is taken, so nothing is summed and no
     # year double counts.
     #
+    # `LongTermInvestments` is the aggregate and sits with the aggregates, ahead of
+    # the subsets. Microsoft tags both, and taking the subset instead left 23,948
+    # of its filed investments out of the bridge: its 10-K line "Investments" is
+    # 36,348, of which "Equity investments" is 12,400 and "Equity method
+    # investments" is 12,000, so the subset is neither the caption a reader finds
+    # nor the whole of what is nettable against the debt.
+    #
     # Across years the behaviour is weaker, and worth stating plainly. Where the
     # first tag has no fact for a year, the sibling top-up fills it from a later
     # tag, so a filer that reports debt securities in one year and marketable
@@ -273,6 +280,7 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
         "AvailableForSaleSecuritiesDebtSecuritiesNoncurrent",
         "MarketableSecuritiesNoncurrent",
         "OtherLongTermInvestments",
+        "LongTermInvestments",
         "EquitySecuritiesWithoutReadilyDeterminableFairValueAmount",
     ], "BALANCE SHEET"),
     ("Total non-current assets", ["AssetsNoncurrent"], "BALANCE SHEET"),

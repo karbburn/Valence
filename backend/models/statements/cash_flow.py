@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import date
 from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
@@ -34,6 +35,9 @@ class CashFlowLineItem(BaseModel):
     currency: str = "INR"
     units: str = "crores"
     lineage_ids_by_period: Dict[str, List[str]] = Field(default_factory=dict)
+    # The day each period was FILED for, so the forecast that grows out of these
+    # periods inherits the filer's own calendar rather than a constructed one.
+    period_end_dates_by_period: Dict[str, date] = Field(default_factory=dict)
 
 
 class CashFlowStatement(BaseModel):
@@ -83,12 +87,14 @@ def assemble_cash_flow(
         lineage: Dict[str, List[str]] = {}
         curr = "INR"
         un = "crores"
+        period_ends: Dict[str, date] = {}
 
         for p in periods:
             dp = dp_map.get((c_key, p))
             if dp is not None:
                 values[p] = dp.value
                 lineage[p] = dp.source_datapoint_ids
+                period_ends[p] = dp.period_end_date
                 curr = dp.currency
                 un = dp.units
 
@@ -102,6 +108,7 @@ def assemble_cash_flow(
                     currency=curr,
                     units=un,
                     lineage_ids_by_period=lineage,
+                    period_end_dates_by_period=period_ends,
                 )
             )
 

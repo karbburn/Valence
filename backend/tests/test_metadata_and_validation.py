@@ -64,8 +64,28 @@ def _historical_model(company_id: str):
     return build_historical_model([dp], target_periods=["FY24"])
 
 
-def test_spec_period_ends_follow_company_fiscal_calendar():
+def test_spec_period_ends_prefer_the_filed_date_over_the_fiscal_calendar():
+    """The day a period ENDED is not the day a calendar says it ends.
+
+    A fiscal calendar gives the month and day a filer's year closes on, which is
+    right on average and wrong on the day: NVIDIA's FY2026 ended 25 January 2026,
+    the last Sunday of the month, not the 31st the month/day default produces.
+    Publishing that instead dates the balance sheet six days after the quarter
+    closed, which reads as a data error to anyone holding the filing, and the
+    forecast's periods are dated from the same field.
+    """
     model = _historical_model("x_us")
+    spec = ModelSpecification.from_historical_model(model, _metadata("Mar 31", "x_us"))
+    item = next(i for i in spec.historicals.line_items if i.canonical_key == "canonical.is.revenue")
+    assert item.period_end_date == date(2024, 3, 31)
+
+
+def test_spec_period_ends_fall_back_to_the_fiscal_calendar_when_nothing_was_filed():
+    """A statement with no filed period end still needs one, and the company's
+    fiscal calendar is the best available answer rather than no date at all."""
+    model = _historical_model("x_us")
+    for item in model.income_statement.line_items:
+        item.period_end_dates_by_period.clear()
     spec = ModelSpecification.from_historical_model(model, _metadata("Sep 30", "x_us"))
     item = next(i for i in spec.historicals.line_items if i.canonical_key == "canonical.is.revenue")
     assert item.period_end_date == date(2024, 9, 30)

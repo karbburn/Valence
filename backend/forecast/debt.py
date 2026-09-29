@@ -16,6 +16,31 @@ from typing import List
 from pydantic import BaseModel
 
 
+# The components of the debt this engine deducts from enterprise value, and which
+# the debt schedule opens on.
+#
+# This is one tuple read by both sides of the model. It used to be two literal
+# tuples in two modules that happened to agree, with a comment at the forecast
+# site asserting they must: "Must match the definition the valuation bridge
+# deducts, or the schedule's interest and the bridge's obligation are two
+# different numbers for the same debt". Two lists cannot be kept in step by a
+# comment, and they were not: the bridge took a market feed's total, which
+# capitalises leases, so the schedule serviced 8,468 for NVIDIA while the
+# valuation deducted 38,351, and Microsoft's schedule opened 50,062 above what
+# the valuation charged for.
+#
+# Operating leases are absent and must stay absent. Rent already sits in
+# operating expense under US GAAP, so it is inside the EBIT the cash flows are
+# built from; deducting the liability as well charges for the same obligation
+# twice. The balance is still reported on the bridge so a reader who prefers the
+# market convention can see it and apply it.
+OPENING_BALANCE_KEYS = (
+    "canonical.bs.borrowings",
+    "canonical.bs.short_term_borrowings",
+    "canonical.bs.finance_lease_liabilities",
+)
+
+
 class DebtPeriod(BaseModel):
     period: str
     opening_balance: float

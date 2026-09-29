@@ -146,16 +146,22 @@ def test_nothing_is_dropped_when_debt_is_unknown():
 def test_the_basis_note_does_not_claim_leases_are_added_to_debt():
     """The note described a convention the engine does not apply.
 
-    Saying debt is borrowings plus lease liabilities, when the engine uses the
-    reported total, gives a reader a reconciliation that cannot succeed.
+    The basis used to be a market feed's debt total, which capitalises every
+    lease it can find while the note claimed leases were not added on top. It now
+    says what is actually deducted: the filed borrowings, with finance and capital
+    leases in because they are interest-bearing, and operating leases out because
+    rent is already inside the EBIT these cash flows are built from.
     """
     lowered = DEBT_BASIS_NOTE.lower()
 
-    assert "reported total" in lowered or "own reported total" in lowered, (
-        f"the note must say debt is the issuer's reported total: {DEBT_BASIS_NOTE!r}"
+    assert "operating lease liabilities are excluded" in lowered, (
+        f"the note must say operating leases are excluded from debt: {DEBT_BASIS_NOTE!r}"
     )
-    assert "not added on top" in lowered or "double count" in lowered, (
-        f"the note must say leases are not added on top of the reported total: "
+    assert "finance and capital lease" in lowered, (
+        f"the note must say finance and capital leases are debt: {DEBT_BASIS_NOTE!r}"
+    )
+    assert "double count" in lowered or "rent already sits in operating expense" in lowered, (
+        f"the note must say why operating leases are not also deducted: "
         f"{DEBT_BASIS_NOTE!r}"
     )
 

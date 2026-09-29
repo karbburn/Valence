@@ -164,7 +164,29 @@ def compute_trading_comps(
     elif "epc" in sec_lower or "lt" in sec_lower or "larsen" in sec_lower or "construct" in sec_lower or "capital" in sec_lower or "infra" in sec_lower:
         sector_key = "capital_goods_epc"
 
-    peers_data = SECTOR_PEERS.get(sector_key, SECTOR_PEERS["technology"])
+    # A comparable table measures the target against its peers. The target in the
+    # table measures the target against itself, and because the target is the
+    # subject of the valuation it enters the statistics as an observation of its
+    # own multiple rather than as a reference point. It was not cosmetic: with
+    # NVIDIA in its own technology peer set at 18.16x EV/Revenue against a peer
+    # median of 10.69x, it dragged the EV/EBITDA median from 21.27x to 23.60x and
+    # moved the implied comps price by roughly a quarter. A median containing the
+    # subject is not a peer median.
+    target_key = target_ticker.strip().upper()
+    peers_data = [
+        entry
+        for entry in SECTOR_PEERS.get(sector_key, SECTOR_PEERS["technology"])
+        if entry["ticker"].strip().upper() != target_key
+    ]
+    if not peers_data:
+        # Every name in the group is the target. Falling back to the wider roster
+        # beats returning an empty table with an undefined median, and the target
+        # is still excluded from it.
+        peers_data = [
+            entry
+            for entry in SECTOR_PEERS["technology"]
+            if entry["ticker"].strip().upper() != target_key
+        ]
 
     peers: List[PeerComp] = []
     ev_revs: List[float] = []
