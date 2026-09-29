@@ -65,6 +65,10 @@ _EXCHANGE_SUFFIX = {
     "DE": ".DE",
 }
 
+# The roster's codes for Indian listings, accepted alongside their long names so a
+# peer set written either way takes the same branch.
+_INDIA_EXCHANGES = {"NS", "NSE", "BO", "BSE", "IN", "INDIA"}
+
 # PLAUSIBILITY BOUNDS for a published multiple.
 #
 # These are not valuation opinions. They are the point beyond which a number
@@ -416,7 +420,12 @@ def compute_peer_multiples(
         net_income = _ttl(annual, _NET_INCOME_ROWS, quarterly)
         financials_period = str(annual.columns[0])[:10] if len(getattr(annual, "columns", [])) else ""
         results_basis = "market feed, on the feed's own reporting scale"
-        if revenue is not None and market and market.lower() == "india":
+        # The listing is `exchange`; there is no `market` in scope here. Naming one
+        # that does not exist raises NameError at run time, not at import, so the
+        # module passed every test and the failure only appeared when an Indian
+        # peer with no filed statement was priced — which took out the whole
+        # trading-comps tab, and with it Larsen's workbook export.
+        if revenue is not None and str(exchange or "").strip().upper() in _INDIA_EXCHANGES:
             logger.info(
                 "Peer %s: no filed statement, so results come from the feed, whose "
                 "scale for Indian listings is not consistent between companies.",
