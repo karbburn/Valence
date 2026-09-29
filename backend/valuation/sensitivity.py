@@ -21,6 +21,18 @@ from backend.models.spec.valuation import (
 FALLBACK_SENSITIVITY_WACC = 13.0
 
 
+def _last_period(forecast: Forecast) -> str:
+    """The final year this forecast actually contains.
+
+    `FORECAST_PERIODS[-1]` is a fixed label and is not necessarily in it. The
+    horizon now begins after each company's last reported year, so a company ending
+    FY30 has no FY31, and a lookup on the fixed label returned nothing — the
+    sensitivity grid was being built on a zero final-year margin.
+    """
+    periods = list(forecast.periods)
+    return periods[-1] if periods else FORECAST_PERIODS[-1]
+
+
 def compute_sensitivity_tables(
     forecast: Forecast,
     wacc_breakdown: WACCBreakdown,
@@ -70,7 +82,7 @@ def compute_sensitivity_tables(
     # from the headline DCF — measured at $32.59 per share, with the sign
     # flipping. The grid must reproduce the headline calculation exactly at its
     # centre, or it is not a sensitivity analysis of that DCF.
-    last_ebit = forecast.get_value("canonical.is.operating_profit", FORECAST_PERIODS[-1], scenario) or 0.0
+    last_ebit = forecast.get_value("canonical.is.operating_profit", _last_period(forecast), scenario) or 0.0
 
     grid1: List[List[Optional[float]]] = []
     for w in wacc_steps:
@@ -79,7 +91,7 @@ def compute_sensitivity_tables(
             forecast, w, scenario, timing_convention=timing_convention, opening_working_capital=opening_working_capital
         )  # type: ignore
         last_fcff = fcffs[-1].fcff if fcffs and fcffs[-1].fcff else 0.0
-        last_ebitda = forecast.get_value("canonical.is.ebitda", FORECAST_PERIODS[-1], scenario) or 0.0
+        last_ebitda = forecast.get_value("canonical.is.ebitda", _last_period(forecast), scenario) or 0.0
 
         for g in g_steps:
             if g >= w:
@@ -134,7 +146,7 @@ def compute_sensitivity_tables(
             forecast, w, scenario, timing_convention=timing_convention, opening_working_capital=opening_working_capital
         )  # type: ignore
         last_fcff = fcffs[-1].fcff if fcffs and fcffs[-1].fcff else 0.0
-        last_ebitda = forecast.get_value("canonical.is.ebitda", FORECAST_PERIODS[-1], scenario) or 0.0
+        last_ebitda = forecast.get_value("canonical.is.ebitda", _last_period(forecast), scenario) or 0.0
 
         for m in mult_steps:
             tv = compute_terminal_value(

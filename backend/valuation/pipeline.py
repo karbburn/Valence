@@ -57,6 +57,23 @@ DEBT_BASIS_NOTE = (
 )
 
 
+def _forecast_date_span(forecast):
+    """The first and last dated point on a forecast, for discounting between.
+
+    The first is the balance sheet the model is struck on, so it is the date its
+    own cash and debt belong to. The last is where the final forecast year closes,
+    which is where the terminal value is struck. Both are taken from the company's
+    own periods rather than assumed, because they differ by six months between a
+    January filer and a December one.
+    """
+    dates = [
+        item.period_end_date
+        for item in (getattr(forecast, "line_items", None) or [])
+        if getattr(item, "period_end_date", None)
+    ]
+    return (min(dates), max(dates)) if dates else (None, None)
+
+
 def run_valuation(
     spec: ModelSpecification,
     current_share_price: Optional[float] = None,
@@ -276,6 +293,9 @@ def run_valuation(
             scenario,
             timing_convention="mid_year",
             opening_working_capital=opening_wc,
+            # Discounts are measured from the filed balance sheet the bridge values
+            # off, so the cash flows and the cash they are netted against share a date.
+            historicals=spec.historicals,
         )
 
         # 6. Compute Terminal Value (Gordon Growth default)
@@ -305,6 +325,11 @@ def run_valuation(
             last_ebit=last_ebit,
             terminal_tax_rate=term_tax,
             timing_convention="mid_year",
+            # Struck at the end of the company's own final forecast year, measured
+            # from the balance sheet the model is valued on — not at a fixed five
+            # years out for every company regardless of its fiscal calendar.
+            terminal_period_end=_forecast_date_span(spec.forecast)[1],
+            valuation_date=_forecast_date_span(spec.forecast)[0],
         )
 
         # 7. DCF Bridge (EV -> Equity Value -> Implied Share Price)

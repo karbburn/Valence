@@ -7,6 +7,7 @@ Calculates Free Cash Flow to Firm (FCFF), discounts to present value, computes
 dual terminal values (Gordon Growth and Exit Multiple), and completes the EV -> Equity Value -> Implied Share Price bridge.
 """
 
+from datetime import date
 from typing import List, Literal, Optional, Tuple
 
 from backend.forecast.debt import DebtSchedule
@@ -61,12 +62,37 @@ def _delta_wc_from_balance_sheet(
     return _wc_level(forecast, period, scenario) - prior
 
 
+def _valuation_date(forecast: Forecast, historicals=None):
+    """The date the model's cash and debt are struck on: its balance sheet date.
+
+    Every discount factor is measured from here rather than from an assumed
+    half-year, because the model's own cash and debt belong to this date and a cash
+    flow discounted from anywhere else is not consistent with them.
+
+    Taken from the HISTORICALS, not from the forecast. The earliest forecast line
+    is the first forecast year, and measuring from that put every first year's cash
+    flow at roughly zero years out — a discount factor of 1.0, i.e. no discounting
+    at all on the year the whole terminal argument leans on.
+    """
+    for source in (historicals, forecast):
+        items = getattr(source, "line_items", None) or []
+        dates = [
+            item.period_end_date
+            for item in items
+            if getattr(item, "period_end_date", None)
+        ]
+        if dates:
+            return max(dates)
+    return None
+
+
 def compute_fcff_periods(
     forecast: Forecast,
     wacc_pct: float,
     scenario: str = "base",
     timing_convention: Literal["mid_year", "end_year"] = "mid_year",
     opening_working_capital: Optional[float] = None,
+    historicals=None,
 ) -> List[FCFFPeriod]:
     """Compute FCFF and discounted PV for each forecast period using mid-year discounting.
 
@@ -80,8 +106,46 @@ def compute_fcff_periods(
     wacc_frac = wacc_pct / 100.0
     prior_wc = opening_working_capital
 
-    for idx, p in enumerate(FORECAST_PERIODS):
-        t = (idx + 1) - 0.5 if timing_convention == "mid_year" else (idx + 1)
+    # How long each period's cash flow is actually away, from the dates on the
+    # forecast itself rather than from its position in a list.
+    #
+    # It was `(idx + 1) - 0.5`, which places every company's first forecast year at
+    # exactly half a year out regardless of when that year closes. NVIDIA's FY2027
+    # cash flow arrives at the end of January 2027 and Microsoft theirs at the end of
+    # June 2027, and a December filer's is five and a half months away where a
+    # January filer's is not — so the same discount was applied to cash flows that
+    # are six months apart. The error is in the discounting, not in a label, so it
+    # moves every price and is invisible in any reconciliation of the model.
+    #
+    # Measured from the last reported balance sheet, which is the date the model's
+    # own cash and debt are struck on and therefore the only self-consistent
+    # starting point. A period with no date falls back to the index, which is the
+    # old behaviour rather than a worse one.
+    valuation_date = _valuation_date(forecast, historicals)
+    period_ends = {
+        item.period_label: item.period_end_date
+        for item in (getattr(forecast, "line_items", None) or [])
+    }
+
+    def _years_to(period_label: str, index: int) -> float:
+        end = period_ends.get(period_label)
+        if valuation_date is None or end is None:
+            return (index + 1) - 0.5 if timing_convention == "mid_year" else (index + 1)
+        elapsed = (end - valuation_date).days / 365.25
+        # A period ending before the balance sheet date cannot be discounted by a
+        # negative length, and mid-year still applies to it.
+        if elapsed <= 0:
+            elapsed = (index + 1) - 0.5 if timing_convention == "mid_year" else (index + 1)
+        if timing_convention == "mid_year":
+            elapsed -= 0.5
+        return max(elapsed, 0.0)
+
+    # The periods the forecast actually contains, not the platform default. They
+    # differ by company now that the horizon is derived from the last reported year.
+    forecast_periods = list(getattr(forecast, "periods", None) or []) or list(FORECAST_PERIODS)
+
+    for idx, p in enumerate(forecast_periods):
+        t = _years_to(p, idx)
         ebit = forecast.get_value("canonical.is.operating_profit", p, scenario) or 0.0
         pbt = forecast.get_value("canonical.is.pbt", p, scenario) or ebit
         tax = forecast.get_value("canonical.is.tax", p, scenario) or 0.0
@@ -157,11 +221,20 @@ def compute_terminal_value(
     last_ebit: Optional[float] = None,
     terminal_tax_rate: Optional[float] = None,
     timing_convention: Literal["mid_year", "end_year"] = "mid_year",
+    terminal_period_end: Optional[date] = None,
+    valuation_date: Optional[date] = None,
 ) -> TerminalValue:
     """Compute dual terminal value (Gordon Growth & Exit Multiple) with quality checks.
 
     Validates terminal_growth_rate < WACC.
     Computes implied terminal ROIC & reinvestment rate.
+
+    `terminal_period_end` and `valuation_date` are the dates the discounting is
+    measured between. Without them the terminal is discounted by the LENGTH of the
+    forecast rather than by how long it actually runs, which was five years for
+    every company: a January filer's five-year forecast reaches into January and a
+    December filer's into December, and both were discounted as if they ended at
+    the same moment five years out.
     """
     if terminal_growth_rate >= wacc_pct:
         raise ValueError(
@@ -171,9 +244,17 @@ def compute_terminal_value(
 
     wacc_frac = wacc_pct / 100.0
     g_frac = terminal_growth_rate / 100.0
-    # Standard Wall Street convention: terminal value is discounted from the END of the
-    # final forecast year, so the exponent equals the number of forecast periods.
-    df5 = 1.0 / ((1.0 + wacc_frac) ** len(FORECAST_PERIODS))
+    # Standard Wall Street convention: the terminal value is struck at the END of the
+    # final forecast year, so the exponent is the length of the whole forecast. From
+    # the company's own dates where they are known, and from the horizon length where
+    # they are not.
+    if terminal_period_end is not None and valuation_date is not None:
+        years = (terminal_period_end - valuation_date).days / 365.25
+        if years <= 0:
+            years = float(len(FORECAST_PERIODS))
+    else:
+        years = float(len(FORECAST_PERIODS))
+    df5 = 1.0 / ((1.0 + wacc_frac) ** years)
 
     # 1. Gordon Growth
     # Standard Valuation Practice (McKinsey / Damodaran): If final year FCFF is non-positive due to

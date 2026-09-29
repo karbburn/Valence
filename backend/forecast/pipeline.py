@@ -14,7 +14,7 @@ from backend.forecast.debt import OPENING_BALANCE_KEYS, build_debt_schedule
 from backend.forecast.engine import run_forecast
 from backend.forecast.scenarios import build_scenario_assumptions
 from backend.forecast.share_count import build_share_count
-from backend.models.spec.forecast import FORECAST_PERIODS
+from backend.models.spec.forecast import FORECAST_PERIODS, forecast_periods_after
 from backend.models.spec.metadata import ModelMetadata, get_metadata_for_company
 from backend.models.spec.model_specification import ModelSpecification
 from backend.models.spec.qa import QAResults
@@ -74,14 +74,29 @@ def run(
 
     all_assumptions = base_assumptions + bull_assumptions + bear_assumptions
 
+    # The horizon for THIS company: the five fiscal years after the last one it
+    # reported. A fixed FY27-FY31 list skipped a year for every company whose last
+    # actual was FY25, which is eight of the twenty-three served.
+    periods = forecast_periods_after(
+        historical_model.periods[-1] if historical_model.periods else "FY26"
+    )
+
     # Run forecast engine for each scenario
     base_forecast = run_forecast(base_assumptions, historical_model, "base")
     bull_forecast = run_forecast(bull_assumptions, historical_model, "bull")
     bear_forecast = run_forecast(bear_assumptions, historical_model, "bear")
 
     # Merge all forecast line items
+    #
+    # `periods` is the company's own horizon, not the platform default. It was
+    # omitted, so the merged forecast declared FY27-FY31 while carrying line items
+    # for FY23-FY27, and everything reading `forecast.periods` — the DCF's
+    # discounting loop, the sensitivity grid, the final-year EBITDA lookup — then
+    # worked from five years the model does not contain while the years it does
+    # contain went unread.
     from backend.models.spec.forecast import Forecast
     merged_forecast = Forecast(
+        periods=periods,
         line_items=base_forecast.line_items + bull_forecast.line_items + bear_forecast.line_items
     )
 
@@ -138,7 +153,7 @@ def run(
             draws_by_period={},
             scheduled_repayments_by_period={},
             optional_repayments_by_period={},
-            periods=FORECAST_PERIODS,
+            periods=periods,
             scenario=s,
         )
         for s in ["base", "bull", "bear"]
@@ -146,7 +161,7 @@ def run(
     spec.debt_schedule = debt_schedules
 
     # Build share count schedule (historical derived + forecast held flat)
-    spec.share_count = build_share_count(historical_model, FORECAST_PERIODS)
+    spec.share_count = build_share_count(historical_model, periods)
 
     print(
         f"Forecast Pipeline Complete:\n"

@@ -25,6 +25,18 @@ from backend.models.spec.valuation import (
 )
 
 
+def _last_period(forecast: Forecast) -> str:
+    """The final year this forecast actually contains.
+
+    `FORECAST_PERIODS[-1]` is a fixed label and is not necessarily in it. The
+    horizon now begins after each company's last reported year, so a company ending
+    FY30 has no FY31 and a lookup on the fixed label returned nothing — the terminal
+    multiple and the exit-multiple path were both being computed on zero.
+    """
+    periods = list(forecast.periods)
+    return periods[-1] if periods else FORECAST_PERIODS[-1]
+
+
 def compute_reverse_dcf(
     market_price: float,
     fcff_periods: List[FCFFPeriod],
@@ -92,9 +104,10 @@ def compute_reverse_dcf(
     target_pv_tv = target_ev - sum_pv_fcff
 
     wacc_frac = wacc_pct / 100.0
-    # Terminal value discounting: exponent equals the number of forecast periods
-    # (end-of-final-year convention, matching compute_terminal_value).
-    df5 = 1.0 / ((1.0 + wacc_frac) ** len(FORECAST_PERIODS))
+    # Terminal value discounting: exponent is the number of forecast periods, taken
+    # from the periods themselves rather than from the fixed horizon. It is the same
+    # end-of-final-year convention compute_terminal_value uses, so the two agree.
+    df5 = 1.0 / ((1.0 + wacc_frac) ** len(fcff_periods))
 
     # Undiscounted target TV
     target_tv_undiscounted = target_pv_tv / df5 if df5 > 0 else 0.0
@@ -201,9 +214,11 @@ def _solve_implied_revenue_cagr(
             return 0.0
 
         last_fcff = fcffs[-1].fcff or 0.0
-        last_ebitda = trial_forecast.get_value("canonical.is.ebitda", FORECAST_PERIODS[-1], scenario) or 0.0
+        last_ebitda = trial_forecast.get_value(
+            "canonical.is.ebitda", _last_period(trial_forecast), scenario
+        ) or 0.0
         trial_last_ebit = trial_forecast.get_value(
-            "canonical.is.operating_profit", FORECAST_PERIODS[-1], scenario
+            "canonical.is.operating_profit", _last_period(trial_forecast), scenario
         ) or 0.0
 
         # Compute DCF
