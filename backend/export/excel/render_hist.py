@@ -136,18 +136,23 @@ def render_historical_balance_sheet(wb: Workbook, spec: ModelSpecification) -> W
         ("canonical.bs.other_non_current_assets", "Other Non-Current Assets", False),
         ("canonical.bs.total_non_current_assets", "Total Non-Current Assets", True),
         ("canonical.bs.trade_receivables", "Trade Receivables", False),
+        # A line of its own on the filer's balance sheet, and one of its largest:
+        # Apple's is 33,180 of 147,957 in current assets. Omitted from the rendered
+        # block, the column falls a fifth of the way short of the filer's own
+        # subtotal and a reader checking it finds assets the statement never mentions.
+        ("canonical.bs.vendor_non_trade_receivables", "Vendor Non-Trade Receivables", False),
         ("canonical.bs.unbilled_revenue", "Unbilled Revenue", False),
         ("canonical.bs.inventory", "Inventory", False),
         ("canonical.bs.cash_and_bank", "Cash & Cash Equivalents", False),
         ("canonical.bs.current_investments", "Current Investments", False),
-        # Prepaid expenses and the filer's own current-asset catch-all. Both were
-        # ingested and neither was printed, so the visible current-asset block
-        # stopped short of the filer's own subtotal: Microsoft showed 159,116 of
-        # detail against a filed 207,710, and a reader checking the column would
-        # have found 48,594 of assets the statement did not mention. The block only
-        # adds up when every current-asset line the engine holds is on it.
+        # The filer's own current-asset catch-all: prepaid expenses and whatever
+        # else the statement does not itemise. It was ingested and never printed, so
+        # the visible block stopped short of the filer's own subtotal — Microsoft
+        # showed 159,116 of detail against a filed 207,710 — and a reader checking
+        # the column would have found 48,594 of assets the statement did not
+        # mention. ONE row, because the elements behind it are levels of the same
+        # money: printed as two, the smaller counts twice.
         ("canonical.bs.prepayments_other_current_assets", "Prepaid Expenses & Other Current Assets", False),
-        ("canonical.bs.other_current_assets", "Other Current Assets", False),
         ("canonical.bs.total_current_assets", "Total Current Assets", True),
         ("canonical.bs.total_assets", "TOTAL ASSETS", True),
         ("canonical.bs.equity_capital", "Equity Share Capital", False),

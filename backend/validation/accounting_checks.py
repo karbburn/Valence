@@ -8,6 +8,8 @@ Checks:
 2. cash_flow_reconciles: Cash flow ending balance ties to balance sheet cash line.
 3. debt_schedule_reconciles: Opening + draws - repayments = closing debt (wires debt module reconcile()).
 4. share_count_consistent: Share count used consistently across EPS and valuation.
+5. current_assets_reconcile: the itemised current-asset lines sum to the filer's
+   own current-asset subtotal.
 """
 
 from typing import List
@@ -25,6 +27,19 @@ BS_TOLERANCE_CR = 1.0
 # vary widely) with a small absolute floor for tiny balances.
 CF_TOLERANCE_REL = 0.01
 CF_TOLERANCE_ABS = 1.0
+
+# The current-asset lines the workbook prints above the subtotal, in the order it
+# prints them. A line added to the renderer belongs here, or this check stops
+# describing the statement a reader actually sees.
+CURRENT_ASSET_LINES: List[str] = [
+    "canonical.bs.cash_and_bank",
+    "canonical.bs.current_investments",
+    "canonical.bs.trade_receivables",
+    "canonical.bs.vendor_non_trade_receivables",
+    "canonical.bs.unbilled_revenue",
+    "canonical.bs.inventory",
+    "canonical.bs.prepayments_other_current_assets",
+]
 
 
 def check_balance_sheet_balances(spec: ModelSpecification) -> ModelCheckResult:
@@ -83,6 +98,74 @@ def check_balance_sheet_balances(spec: ModelSpecification) -> ModelCheckResult:
         implicated_canonical_keys=failing_keys,
         implicated_periods=failing_periods,
         implicated_scenarios=failing_scenarios,
+    )
+
+
+def check_current_assets_reconcile(spec: ModelSpecification) -> ModelCheckResult:
+    """The itemised current-asset lines must sum to the filer's own subtotal.
+
+    The balance sheet balances in total, which says nothing about whether the lines
+    printed above the current-asset subtotal add up to that subtotal. Two failures
+    hide there, and both are invisible to every other check in this codebase because
+    both are internally consistent:
+
+    An OVER-count, when two of the lines are the same money at two levels of the
+    taxonomy. Armstrong World Industries prints one line, "Other current assets
+    23.9", of which prepaid expenses are 22.5. Held as two separate figures, the
+    itemised block summed to 414.0 against a filed 391.5, and because the
+    investment residual was clamped at zero, the 22.5 of overlap was reported by
+    nothing at all.
+
+    An UNDER-count, when the filer holds a current asset the engine never ingested.
+    Apple's vendor non-trade receivables are the large example: nothing above the
+    subtotal accounts for them, so the column falls short by tens of billions and
+    the statement still balances.
+
+    Reported as a signed gap per period rather than a verdict, because a gap of
+    minus three is a missing line and a gap of plus three is a double count, and
+    those need opposite fixes.
+    """
+    failing_keys: List[str] = []
+    failing_periods: List[str] = []
+    errors: List[str] = []
+
+    for p in spec.historicals.periods:
+        subtotal = spec.historicals.get_value("canonical.bs.total_current_assets", p)
+        if subtotal is None:
+            continue
+        itemised = 0.0
+        seen_any = False
+        for key in CURRENT_ASSET_LINES:
+            v = spec.historicals.get_value(key, p)
+            if v is not None:
+                itemised += float(v)
+                seen_any = True
+        if not seen_any:
+            continue
+        gap = itemised - float(subtotal)
+        # Relative to the subtotal, because a rupee of gap on a company reporting in
+        # crores is nothing and a rupee on a company reporting in units is not.
+        if abs(gap) > max(float(subtotal) * 0.005, 1.0):
+            failing_periods.append(p)
+            errors.append(
+                f"{p}: itemised current assets {itemised:,.0f} against a filed "
+                f"subtotal of {subtotal:,.0f}, gap {gap:+,.0f}"
+            )
+            failing_keys = list(CURRENT_ASSET_LINES)
+
+    passed = not errors
+    return ModelCheckResult(
+        check_name="current_assets_reconcile",
+        category="accounting",
+        passed=passed,
+        detail=(
+            ""
+            if passed
+            else f"Itemised current assets do not reach the filer's subtotal in "
+            f"{len(errors)} period(s): " + "; ".join(errors[:3])
+        ),
+        implicated_canonical_keys=failing_keys,
+        implicated_periods=failing_periods,
     )
 
 
@@ -265,9 +348,10 @@ def check_share_count_consistent(spec: ModelSpecification) -> ModelCheckResult:
 
 
 def run_accounting_checks(spec: ModelSpecification) -> List[ModelCheckResult]:
-    """Run all 4 accounting checks against specification."""
+    """Run all accounting checks against specification."""
     return [
         check_balance_sheet_balances(spec),
+        check_current_assets_reconcile(spec),
         check_cash_flow_reconciles(spec),
         check_debt_schedule_reconciles(spec),
         check_share_count_consistent(spec),

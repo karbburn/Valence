@@ -26,6 +26,7 @@ from openpyxl import load_workbook
 
 from backend.export.excel.exporter import export_model_to_excel
 from backend.export.excel.links import AUTHOR_URL, VALENCE_URL
+from backend.export.excel.builder import row_of_label
 from backend.export.excel.render_val import bridge_ref
 
 # Every tab the workbook must contain, in the order it must appear.
@@ -130,9 +131,22 @@ def main() -> None:
 
     print("\n--- 3. AUDITING LIVE EXCEL FORMULAS & WORKBOOK STYLING ---")
     # Check 6: 30_WACC CAPM Live Formula
+    #
+    # Addressed by line name. The sheet gained a row when the workbook began
+    # disclosing the published beta beside the Blume-adjusted one it uses, and this
+    # read was left pointing at the old cell — which is now the equity risk premium,
+    # a literal. `"=" in str(0.045)` is False, so this assertion raised on every run
+    # and the four checks after it, which are the executive-summary formula, the
+    # cover signature and the guide styling, never executed at all. A read by
+    # position reports a verdict about whichever cell is there, and here that cell
+    # was a constant, so it reported a defect in a correct workbook.
     ws_wacc = wb["30_WACC"]
-    wacc_formula = str(ws_wacc["C9"].value)
-    _assert("=" in wacc_formula and "C6" in wacc_formula, f"30_WACC live CAPM formula verified ({wacc_formula})")
+    ke_row = row_of_label(ws_wacc, "Cost of Equity (r_e) %")
+    wacc_formula = str(ws_wacc.cell(row=ke_row, column=3).value)
+    _assert(
+        wacc_formula.startswith("=") and "C6" in wacc_formula,
+        f"30_WACC live CAPM formula verified ({wacc_formula})",
+    )
 
     # Check 7: 36_EV_Bridge Live FCFF Sum Formula
     #

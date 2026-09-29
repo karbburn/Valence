@@ -140,8 +140,19 @@ def main() -> int:
     if current:
         print("\nfailing:")
         for cid, names in sorted(current.items()):
-            marker = "REGRESSION" if cid in regressions else "known"
-            print(f"  [{marker:10s}] {cid:28s} {', '.join(names)}")
+            # Print the NEW failures and the KNOWN ones under separate headings. The
+            # line used to carry every check the company was failing under a single
+            # REGRESSION marker as soon as one of them was new, so Amazon was reported
+            # as having three regressions when it had one and two long-standing
+            # known failures. A gate that over-reports is a gate whose numbers stop
+            # being read, which is the one property it cannot afford to lose.
+            new = [n for n in names if n not in baseline.get(cid, [])]
+            known = [n for n in names if n in baseline.get(cid, [])]
+            if new:
+                print(f"  [REGRESSION] {cid:28s} {', '.join(new)}")
+            if known:
+                tag = "also failing" if new else "known"
+                print(f"  [{tag:10s}] {cid:28s} {', '.join(known)}")
 
     if args.update_baseline:
         # Every checked company is written, passing ones included, as an empty

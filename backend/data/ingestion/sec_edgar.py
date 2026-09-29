@@ -194,34 +194,56 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
     ("Current investments", [
         "MarketableSecuritiesCurrent",
         "AvailableForSaleSecuritiesCurrent",
-        # Amdocs files its securities under the debt-securities element and nothing
-        # else, so the two above resolve to nothing for it and its 168,220 of
-        # marketable securities fell through to the residual derivation.
+        "ShortTermInvestments",
+        # LAST, and deliberately. This element covers the DEBT securities slice of an
+        # available-for-sale portfolio, which is narrower than ShortTermInvestments:
+        # it excludes the equity and other holdings a filer may park in the same
+        # line. Ahead of ShortTermInvestments it made Ambarella publish 121.6 of
+        # debt securities where it had been publishing 122.0 of short-term
+        # investments, so a broader balance was silently replaced by a narrower one
+        # for no stated reason. Last, it is still reached by a filer that tags
+        # nothing else, which is the only case that needed it.
         "AvailableForSaleSecuritiesDebtSecuritiesCurrent",
-        "ShortTermInvestments"
-    ], "BALANCE SHEET"),
-    # Current assets that are not cash, securities, receivables, inventory or
-    # prepayments. A filer that prints this line publishes current assets the
-    # engine has not identified, and without a canonical home for it they were
-    # absorbed by the residual derivation and republished as investments, which
-    # the enterprise bridge then deducted as though they were marketable
-    # securities. Armstrong's balance sheet carries no securities at all: its
-    # 1,400 residual was the difference between 23,900 of other current assets and
-    # 22,500 of prepayments, presented as a security the company does not hold.
-    ("Other current assets", [
-        "OtherAssetsCurrent",
-        "OtherAssetsMiscellaneousCurrent",
     ], "BALANCE SHEET"),
     ("Inventory", [
         "InventoryNet",
         "InventoryGross",
         "InventoryFinishedGoods"
     ], "BALANCE SHEET"),
+    # Vendor non-trade receivables, a line of its own on a filer's balance sheet and
+    # one of its largest: Apple's was 33,180 against total current assets of 147,957,
+    # so a current-asset block that omitted it fell a fifth of the way short of the
+    # filer's own subtotal and nothing said so. It is not a member of the trade
+    # receivables line and not part of the other-current-assets catch-all, which is
+    # why it needs a canonical key of its own rather than a home inside either.
+    ("Vendor non-trade receivables", [
+        "NontradeReceivablesCurrent",
+    ], "BALANCE SHEET"),
     ("Trade receivables", [
         "AccountsReceivableNetCurrent", 
         "ReceivablesNetCurrent"
     ], "BALANCE SHEET"),
-    ("Prepayments and other assets", ["PrepaidExpenseAndOtherAssetsCurrent", "PrepaidExpenseCurrent"], "BALANCE SHEET"),
+    # ONE current-asset catch-all, and the filer's own caption for it.
+    #
+    # `OtherAssetsCurrent` and `OtherAssetsMiscellaneousCurrent` belong here rather
+    # than in a key of their own. In the us-gaap taxonomy they are the same money as
+    # `PrepaidExpenseCurrent` viewed from different levels: Armstrong prints one
+    # line, "Other current assets 23.9", of which prepaid expenses are 22.5. Held
+    # under two canonical keys, the smaller sits inside the larger and every sum
+    # that includes both double-counts it — Armstrong's identified current assets
+    # came to 414.0 against a filed subtotal of 391.5, and because the residual was
+    # clamped at zero, that 22.5 of overlap was reported nowhere.
+    #
+    # Ordered from the statement-level element down to the narrowest, so a filer
+    # that publishes the whole line gets the whole line and a filer that publishes
+    # only prepaid expenses still has a home.
+    ("Prepayments and other assets", [
+        "OtherAssetsCurrent",
+        "PrepaidExpenseAndOtherAssetsCurrent",
+        "OtherAssetsMiscellaneousCurrent",
+        "OtherAssetsCurrentNontrade",
+        "PrepaidExpenseCurrent",
+    ], "BALANCE SHEET"),
     ("Total current assets", ["AssetsCurrent"], "BALANCE SHEET"),
     ("Total assets", ["Assets"], "BALANCE SHEET"),
     # DEBT — three separate lines, because one line cannot carry a debt stack.

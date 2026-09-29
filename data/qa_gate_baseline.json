@@ -5,6 +5,7 @@
     "implied_price_deviation_is_explainable"
   ],
   "amzn_us": [
+    "current_assets_reconcile",
     "implied_price_deviation_is_explainable",
     "terminal_value_is_not_carrying_the_model"
   ],
@@ -19,10 +20,10 @@
     "equity_value_positive",
     "implied_price_deviation_is_explainable"
   ],
-  "infy_infy": [],
-  "infy_us": [
-    "implied_price_deviation_is_explainable"
+  "infy_infy": [
+    "current_assets_reconcile"
   ],
+  "infy_us": [],
   "lt_lt": [],
   "msft_us": [],
   "nvda_us": [],
