@@ -121,6 +121,15 @@ class PeerMultiples:
     financials_period: str
     balance_sheet_as_of: str
     price_as_of: str
+    price_source: str
+    shares_basis: str
+    # Where the revenue, operating profit and D&A behind these multiples came from.
+    # A peer measured on the filed statement is comparable with the target; one
+    # measured on a feed's own scale is not, and a reader cannot tell from the
+    # multiple alone.
+    results_basis: str = ""
+    balance_sheet_as_of: str
+    price_as_of: str
     shares_basis: str = ""
     price_source: str = ""
 
@@ -364,16 +373,56 @@ def compute_peer_multiples(
         logger.info("Peer %s: no price from any source", symbol)
         return None
 
+    # Resolved before the filed statements are read, because the net debt, the
+    # equity and the results all come from them and there is nothing to fall back
+    # to without one.
+    company_id = _company_id_for(symbol)
+
     annual = getattr(handle, "income_stmt", None)
     quarterly = getattr(handle, "quarterly_income_stmt", None)
     if annual is None or len(getattr(annual, "columns", [])) == 0:
-        logger.info("Peer %s: no income statement", symbol)
+        logger.info("Peer %s: no income statement", handle if False else symbol)
         return None
 
-    revenue = _ttl(annual, _REVENUE_ROWS, quarterly)
-    net_income = _ttl(annual, _NET_INCOME_ROWS, quarterly)
-    ebit = _ttl(annual, _EBIT_ROWS, quarterly)
-    da = _ttl(annual, _DA_ROWS, quarterly)
+    # Results come from the peer's FILED statement where one exists, for the same
+    # reason net debt does.
+    #
+    # A feed does not report a peer on one scale. Infosys comes back at 20,158,000,000
+    # and TCS at 2,670,210,000,000 — the first in crores, the second in rupees, for
+    # companies of near-identical size. Nothing in the payload says which, so revenue
+    # divided by a market capitalisation in rupees gave Infosys an EV/Revenue of 181x
+    # and got it dropped from its own peer group, leaving three peers and no
+    # benchmark for every Indian target.
+    #
+    # The filed statement removes the question rather than guessing at it, and puts
+    # the peer on the same basis as the company it is being compared against. A peer
+    # with no filed statement still falls through to the feed below, and is then
+    # measured on the feed's own scale — which is stated, not hidden.
+    filed = _filed_results(company_id)
+    if filed is not None:
+        revenue, ebit, da = filed["revenue"], filed["ebit"], filed["da"]
+        # Net income comes from the same statement for the same reason: a peer whose
+        # earnings are filed and whose revenue is filed, but whose net income is a
+        # feed figure on the feed's own scale, produces a P/E that is off by the
+        # scale ratio and nothing about the number says so. It read 1,237x against
+        # a peer set sitting at 12-19x.
+        net_income = filed["net_income"]
+        financials_period = filed["period"]
+        results_basis = f"filed {filed['period']} statement"
+    else:
+        revenue = _ttl(annual, _REVENUE_ROWS, quarterly)
+        ebit = _ttl(annual, _EBIT_ROWS, quarterly)
+        da = _ttl(annual, _DA_ROWS, quarterly)
+        net_income = _ttl(annual, _NET_INCOME_ROWS, quarterly)
+        financials_period = str(annual.columns[0])[:10] if len(getattr(annual, "columns", [])) else ""
+        results_basis = "market feed, on the feed's own reporting scale"
+        if revenue is not None and market and market.lower() == "india":
+            logger.info(
+                "Peer %s: no filed statement, so results come from the feed, whose "
+                "scale for Indian listings is not consistent between companies.",
+                symbol,
+            )
+
     # EBITDA is always DERIVED as operating profit plus depreciation and
     # amortisation. A feed's own EBITDA row is not reliable across listings:
     # it produced a 68% EBITDA margin at one large-cap and an eleventh of the
@@ -427,7 +476,6 @@ def compute_peer_multiples(
     # an absent peer.
     net_debt: Optional[float] = None
     balance_as_of = ""
-    company_id = _company_id_for(symbol)
 
     # The peer's FILED balance sheet first, on the same definition the target is
     # valued on.
@@ -574,7 +622,8 @@ def compute_peer_multiples(
         pe_ratio=round(pe, 4) if pe is not None else 0.0,
         fcf_yield_pct=round(fcf_yield, 4) if fcf_yield is not None else 0.0,
         roic_pct=round(roic, 4) if roic is not None else 0.0,
-        financials_period=str(annual.columns[0])[:10],
+        financials_period=financials_period,
+        results_basis=results_basis,
         balance_sheet_as_of=balance_as_of,
         price_as_of=price_as_of,
         price_source=price_source,
@@ -709,6 +758,120 @@ def _filed_net_debt(company_id: str) -> Optional[tuple]:
         return None
 
     return (debt + claims - liquid) * divisor, as_of
+
+
+def _latest_period_items(company_id: str):
+    """The most recent reported period's canonical line items for a company.
+
+    Read from the compiled snapshot first, because that is what a fresh deploy
+    with no database serves, and from the database second.
+    """
+    import json
+    from pathlib import Path
+
+    items: list = []
+    as_of = ""
+
+    cache_dir = Path(__file__).resolve().parents[1] / "data" / "cache"
+    snapshot_path = cache_dir / f"{company_id}.json"
+    if snapshot_path.exists():
+        try:
+            payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
+            historicals = (payload.get("model") or payload).get("historicals") or {}
+            periods = [str(p) for p in (historicals.get("periods") or [])]
+            if periods:
+                latest = max(periods, key=lambda x: (len(x), x))
+                for item in historicals.get("line_items") or []:
+                    if str(item.get("period_label")) == latest:
+                        items.append(item)
+                counts: dict = {}
+                for item in items:
+                    stamp = item.get("period_end_date")
+                    if stamp:
+                        counts[str(stamp)] = counts.get(str(stamp), 0) + 1
+                if counts:
+                    as_of = max(counts, key=counts.get)
+        except Exception as exc:
+            logger.info("Peer %s: compiled snapshot unreadable (%s)", company_id, exc)
+            items = []
+
+    if not items:
+        try:
+            from backend.api.routes import _get_hist_model
+
+            model = _get_hist_model(company_id)
+            if model is None or not model.periods:
+                return [], ""
+            latest = model.periods[-1]
+            for item in model.balance_sheet.line_items:
+                if item.values_by_period.get(latest) is not None:
+                    items.append(
+                        {
+                            "canonical_key": item.canonical_key,
+                            "value": item.values_by_period.get(latest),
+                        }
+                    )
+            for item in model.income_statement.line_items:
+                if item.values_by_period.get(latest) is not None:
+                    items.append(
+                        {
+                            "canonical_key": item.canonical_key,
+                            "value": item.values_by_period.get(latest),
+                        }
+                    )
+            as_of = str(latest)
+        except Exception as exc:
+            logger.info(
+                "Peer %s: filed statement unreadable (%s)", company_id, exc
+            )
+            return [], ""
+    return items, as_of
+
+
+def _filed_results(company_id: str) -> Optional[dict]:
+    """Revenue, operating profit and D&A from a peer's own filed statement.
+
+    Returned in the feed's absolute currency, because the market capitalisation
+    these figures are divided against is price times shares and is therefore in
+    rupees or dollars. The filed statements are held in the reporting units the
+    model uses, so they are scaled back out here — the same conversion, and the
+    same reason, as the net debt beside them.
+    """
+    from backend.data.bridge_inputs import UNIT_DIVISORS
+    from backend.models.spec.metadata import get_metadata_for_company
+
+    items, period = _latest_period_items(company_id)
+    if not items:
+        return None
+
+    balances: dict = {}
+    for item in items:
+        balances.setdefault(
+            str(item.get("canonical_key")), float(item.get("value") or 0.0)
+        )
+
+    revenue = balances.get("canonical.is.revenue")
+    ebit = balances.get("canonical.is.operating_profit")
+    da = balances.get("canonical.is.depreciation_amortization")
+    net_income = balances.get("canonical.is.net_profit")
+    if not revenue or revenue <= 0:
+        return None
+
+    try:
+        meta = get_metadata_for_company(company_id)
+        divisor = UNIT_DIVISORS.get((meta.currency, meta.units))
+    except Exception:
+        return None
+    if not divisor:
+        return None
+
+    return {
+        "revenue": revenue * divisor,
+        "ebit": (ebit * divisor) if ebit is not None else None,
+        "da": (da * divisor) if da is not None else None,
+        "net_income": (net_income * divisor) if net_income is not None else None,
+        "period": period,
+    }
 
 
 def _company_id_for(symbol: str) -> str:
