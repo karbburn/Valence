@@ -102,6 +102,47 @@ def test_a_genuine_lease_component_is_still_reported():
     assert snapshot.terms["lease_liabilities"] == pytest.approx(16_532_000_000.0)
 
 
+def test_a_zero_current_leg_beside_an_unread_combined_total_is_not_no_debt():
+    """The case that produced a company published with no debt at all.
+
+    The feed reports `Current Debt` at exactly 0.0 while the filer's non-current
+    borrowings sit unread in the combined caption this module does not use. Testing
+    for the presence of the key passes it, so the company is published with 28,654
+    of borrowings discarded and a net cash position invented, and an enterprise
+    value and an EV/EBITDA are computed from that. A feed reporting zero on a row
+    it also reports a combined total for has not established that the filer owes
+    nothing; it has established that it does not separate the two.
+    """
+    assert _snapshot({
+        "Current Debt": 0.0,
+        "Long Term Debt And Capital Lease Obligation": 28_654_000_000.0,
+        "Cash Cash Equivalents And Short Term Investments": 76_651_000_000.0,
+    }) is None
+
+
+def test_both_legs_at_zero_is_a_real_answer():
+    """A filer stating it owes nothing on either side has said so."""
+    snapshot = _snapshot({
+        "Long Term Debt": 0.0,
+        "Current Debt": 0.0,
+        "Cash Cash Equivalents And Short Term Investments": 500.0,
+    })
+
+    assert snapshot is not None
+    assert snapshot.total_debt == pytest.approx(0.0)
+
+
+def test_a_nonzero_leg_beside_an_absent_one_is_established():
+    """One leg reported and not the other is a figure, not a gap."""
+    snapshot = _snapshot({
+        "Long Term Debt": 40_294_000_000.0,
+        "Cash Cash Equivalents And Short Term Investments": 76_651_000_000.0,
+    })
+
+    assert snapshot is not None
+    assert snapshot.total_debt == pytest.approx(40_294_000_000.0)
+
+
 def test_a_component_larger_than_the_total_is_also_dropped():
     """Larger than the total is at least as impossible as equal to it."""
     values = {"lease_liabilities": 200.0}

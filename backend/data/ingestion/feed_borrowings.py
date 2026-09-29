@@ -58,16 +58,23 @@ def _number(value) -> Optional[float]:
 def resolve_borrowings(
     rows: Dict[str, object],
     cell: Callable[[object], Optional[float]],
-) -> List[Tuple[str, str, float, bool]]:
-    """Each borrowing line as (canonical label, feed row label, value, unsplit).
+) -> List[Tuple[str, str, float]]:
+    """Each established borrowing line as (canonical label, feed row, value).
 
-    `unsplit` marks a figure taken whole from a combined caption because the feed
-    did not publish the lease half to take out of it. It is reported rather than
-    hidden: the number is the conservative one, since it cannot understate the
-    obligation, but a reader comparing it with the filing needs to know the lease
-    may be inside it.
+    A combined caption with no lease half beside it is NOT returned. The lease it
+    contains cannot be identified from the feed, so the figure cannot be shown to
+    be borrowings, and the two ways of handling it are both wrong in opposite
+    directions: taking it whole charges the valuation for a lease of unknown
+    nature, and dropping it deletes a filer's whole debt line and raises the
+    implied share price. Publishing nothing is the only option that states what is
+    actually known.
+
+    The cost is that a filer reporting a single combined caption gets no debt line
+    from this feed. That is stated rather than hidden, and it is the safe direction
+    for a line the valuation deducts: the filed statement is preferred everywhere
+    in this engine and supplies the figure wherever it has one.
     """
-    out: List[Tuple[str, str, float, bool]] = []
+    out: List[Tuple[str, str, float]] = []
 
     def read(label: str) -> Optional[float]:
         idx = rows.get(label.lower())
@@ -80,21 +87,14 @@ def resolve_borrowings(
             if candidate.lower() in rows:
                 value = read(candidate)
                 if value is not None:
-                    out.append((canonical, candidate, value, False))
+                    out.append((canonical, candidate, value))
                     break
         else:
             combined = read(bundled)
-            if combined is None:
-                continue
             lease = read(lease_row)
-            if lease is None:
-                # No split available, so the figure cannot be shown to be free of
-                # leases. Taken whole: overstating the obligation is the recoverable
-                # direction, and it is flagged rather than passed off as pure
-                # borrowings.
-                out.append((canonical, bundled, max(0.0, combined), True))
-            else:
-                value = max(0.0, combined - lease)
-                if value:
-                    out.append((canonical, bundled, value, False))
+            if combined is None or lease is None:
+                continue
+            value = max(0.0, combined - lease)
+            if value:
+                out.append((canonical, bundled, value))
     return out

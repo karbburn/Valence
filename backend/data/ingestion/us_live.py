@@ -253,15 +253,9 @@ def fetch_and_parse_us_live(company_id: str) -> List[RawDatapoint]:
             if col_match is None:
                 continue
 
-            for row_idx, (metric_label, matched_row, value, unsplit) in enumerate(
+            for row_idx, (metric_label, matched_row, value) in enumerate(
                 fb_resolve_borrowings(rows, lambda idx: df.loc[idx, col_match])
             ):
-                if unsplit:
-                    logger.info(
-                        "%s for %s came from the feed's combined caption %r with no "
-                        "lease split published, so it may include a lease obligation",
-                        metric_label, period_lbl, matched_row,
-                    )
                 dp_id = _datapoint_id(
                     company_id, metric_label, period_lbl, "yfinance_live",
                     "BALANCE SHEET", row_idx + 1,
@@ -277,14 +271,7 @@ def fetch_and_parse_us_live(company_id: str) -> List[RawDatapoint]:
                         currency="USD",
                         units="millions",
                         source="yfinance_live",
-                        source_location=(
-                            f"yfinance!{matched_row}"
-                            + (
-                                "; lease half not published by the feed"
-                                if unsplit
-                                else ""
-                            )
-                        ),
+                        source_location=f"yfinance!{matched_row}",
                         status="reported",
                         update_date=now,
                     )

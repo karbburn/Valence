@@ -106,8 +106,13 @@ BRIDGE_TERMS: dict[str, tuple[str, ...]] = {
     "preferred_stock": ("Preferred Stock", "Preferred Stock Equity"),
 }
 
-# Labels whose value is already the combined figure. If a feed reports these,
-# the components must not be added on top or the same money is counted twice.
+# Labels whose value is already the combined figure, so the components must not
+# be added on top or the same money is counted twice.
+#
+# This is a warning about double counting, not a licence to use them. Neither is
+# used as the basis for anything: the combined cash row is a valid liquid figure,
+# and the combined debt row carries a lease the feed cannot identify, so it is not
+# a debt figure. See _build.
 COMBINED_LABELS = frozenset({
     "Cash Cash Equivalents And Short Term Investments",
     "Total Debt",
@@ -239,25 +244,34 @@ def _build(frame, column, source: str) -> Optional[BridgeSnapshot]:
     # part of, so a row at or above the total is dropped rather than reported as
     # something it is not. The same rule is applied to the minority-interest and
     # preferred rows.
-    debt = values.get("debt_non_current", 0.0) + values.get("debt_current", 0.0)
-
-    # No debt row resolved means no debt figure, which is not the same statement as
-    # no debt. The feed publishes a combined caption for many filers and no pure
-    # one at all, and that caption is not usable here, so the balance is unknown
-    # rather than nil. Returning a snapshot with debt of 0 would publish a company
-    # as carrying no debt: the number flows straight into an enterprise value, an
-    # EV/EBITDA, and a benchmark median, and it flatters every one of them. The
-    # caller treats a missing snapshot as an unsourceable peer and drops it, which
-    # is the outcome the existing "a peer presented as a debt-free one is worse
-    # than an absent peer" rule already requires.
-    if not any(k in values for k in ("debt_non_current", "debt_current")):
+    # No debt figure means no snapshot, and "no debt figure" has two cases.
+    #
+    # The first is a filer publishing only the combined caption, which is not a
+    # debt figure here. The second is subtler and was the original defect: a filer
+    # publishing `Current Debt` at exactly 0.0 while its non-current borrowings sit
+    # unread in the combined caption. Testing for the PRESENCE of the key passes
+    # that, and the company is published carrying no debt at all — 28,654 of
+    # borrowings discarded, a net cash position invented, and an enterprise value
+    # and an EV/EBITDA computed from it. A feed reporting zero on a row it also
+    # reports a combined total for has not established that the filer owes nothing;
+    # it has established that it does not separate the two.
+    #
+    # So a zero is only accepted when the other leg is also resolved. Both at zero
+    # is a filer stating it owes nothing on either side, and that is a real answer.
+    resolved = [
+        values[k] for k in ("debt_non_current", "debt_current") if k in values
+    ]
+    established = len(resolved) == 2 or any(v != 0.0 for v in resolved)
+    if not established:
         logger.info(
-            "No borrowings row on the feed's %s statement; it publishes only the "
-            "combined caption, which carries an unidentifiable lease. Returning no "
-            "snapshot rather than a debt figure of zero.",
+            "No borrowings figure on the feed's %s statement: it publishes either "
+            "only the combined caption, which carries an unidentifiable lease, or a "
+            "zero current leg beside an unread combined total. Returning no snapshot "
+            "rather than a debt figure of zero.",
             source,
         )
         return None
+    debt = sum(resolved)
 
     _drop_claims_at_or_above_total(values, debt)
 
