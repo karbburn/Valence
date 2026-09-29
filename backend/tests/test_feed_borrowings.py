@@ -35,7 +35,7 @@ def test_a_pure_row_is_taken_as_it_stands():
     rows = _rows("Long Term Debt", "Long Term Debt And Capital Lease Obligation")
     got = resolve_borrowings(rows, _cell({"long term debt": 83_664.0}))
 
-    assert got == [("Borrowings", "Long Term Debt", 83_664.0, False)]
+    assert got == [("Borrowings", "Long Term Debt", 83_664.0)]
 
 
 def test_a_lease_bundled_into_the_borrowings_is_subtracted():
@@ -81,29 +81,22 @@ def test_genuine_debt_survives_a_combined_caption():
     )
 
     assert got == [
-        ("Short term borrowings", "Current Debt And Capital Lease Obligation", 1_300.0, False)
+        ("Short term borrowings", "Current Debt And Capital Lease Obligation", 1_300.0)
     ]
 
 
-def test_a_combined_caption_with_no_lease_split_is_taken_whole_and_flagged():
-    """It cannot be shown to be free of leases, so it is not presented as if it were.
+def test_a_combined_caption_with_no_lease_split_is_not_a_debt_figure():
+    """It cannot be shown to be free of leases, so it is not presented as one.
 
-    Taking it whole overstates the obligation, which is the recoverable direction;
-    taking nothing understates it, which raises the implied share price.
+    Both ways of handling it are wrong in opposite directions: taking the figure
+    whole charges the valuation for a lease of unknown nature, and dropping it
+    deletes the filer's debt line and raises the implied share price. Publishing
+    nothing is the only option that states what is actually known.
     """
     rows = _rows("Long Term Debt And Capital Lease Obligation")
-    got = resolve_borrowings(
+    assert resolve_borrowings(
         rows, _cell({"long term debt and capital lease obligation": 9_000.0})
-    )
-
-    assert got == [
-        (
-            "Borrowings",
-            "Long Term Debt And Capital Lease Obligation",
-            9_000.0,
-            True,
-        )
-    ]
+    ) == []
 
 
 def test_a_pure_row_that_is_missing_falls_through_to_the_combined_caption():
@@ -150,12 +143,7 @@ def test_a_pure_row_holding_nothing_falls_through_to_the_combined_caption():
     )
 
     assert got == [
-        (
-            "Short term borrowings",
-            "Current Debt And Capital Lease Obligation",
-            3_000.0,
-            False,
-        )
+        ("Short term borrowings", "Current Debt And Capital Lease Obligation", 3_000.0)
     ]
 
 
@@ -164,7 +152,7 @@ def test_a_pure_row_holding_zero_is_taken_as_zero():
     rows = _rows("Current Debt", "Current Debt And Capital Lease Obligation")
     got = resolve_borrowings(rows, _cell({"current debt": 0.0}))
 
-    assert got == [("Short term borrowings", "Current Debt", 0.0, False)]
+    assert got == [("Short term borrowings", "Current Debt", 0.0)]
 
 
 def test_a_lease_larger_than_the_combined_figure_does_not_produce_negative_borrowings():
@@ -204,7 +192,7 @@ def test_both_lines_are_resolved_independently():
         ),
     )
 
-    by_label = {label: value for label, _row, value, _u in got}
+    by_label = {label: value for label, _row, value in got}
     assert by_label == {"Borrowings": 5_000.0, "Short term borrowings": 500.0}
 
 
