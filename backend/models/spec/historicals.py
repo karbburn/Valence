@@ -16,6 +16,29 @@ HistoricalStatus = Literal[
 REPORTED_STATUSES = frozenset({"reported", "reported_adjusted"})
 
 
+def modal_period_end(dates) -> Optional[date]:
+    """The date most of a period's reported lines agree on.
+
+    A fiscal calendar gives the month and day a filer's year closes on, not the
+    date it closed: NVIDIA's FY2026 ended 25 January 2026, the last Sunday of the
+    month, and the 31st is what the calendar produces. Taking the LATEST date is no
+    better, because the handful of lines that never carried a filed date fall back
+    to the calendar and would then win. The date the reported lines agree on is the
+    filing's.
+
+    Takes plain dates rather than line items so a caller holding only the dates —
+    reading a compiled snapshot, say — gets the same answer as one holding whole
+    statements, and cannot answer it wrongly by constructing a partial one.
+    """
+    counts: dict = {}
+    for value in dates:
+        if value:
+            counts[value] = counts.get(value, 0) + 1
+    if not counts:
+        return None
+    return max(counts, key=counts.get)
+
+
 class HistoricalLineItem(BaseModel):
     """Single canonical datapoint as it appears in the Model Specification.
 
@@ -54,20 +77,7 @@ class Historicals(BaseModel):
         return item.value if item else None
 
     def filed_period_end(self, period: str) -> Optional[date]:
-        """The day this period was filed for, from the balance of the reported lines.
-
-        A fiscal calendar gives the month and day a filer's year closes on, not
-        the date it closed: NVIDIA's FY2026 ended 25 January 2026, the last Sunday
-        of the month, and the 31st is what the calendar produces. Taking the LATEST
-        date is no better, because the handful of lines that never carried a filed
-        date fall back to the calendar and would then win. The date most of the
-        reported lines agree on is the filing's.
-        """
-        counts: dict = {}
-        for item in self.line_items:
-            if item.period_label != period or not item.period_end_date:
-                continue
-            counts[item.period_end_date] = counts.get(item.period_end_date, 0) + 1
-        if not counts:
-            return None
-        return max(counts, key=counts.get)
+        """The day this period was filed for, from the balance of the reported lines."""
+        return modal_period_end(
+            (i.period_end_date for i in self.line_items if i.period_label == period)
+        )

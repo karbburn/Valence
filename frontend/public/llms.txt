@@ -22,7 +22,7 @@ stated in the same units and can be argued with directly.
   Bear scenarios.
 - **Excel exporter:** 31-tab .xlsx workbook of live formulas, not pasted values, so a
   reader can change a driver and watch the model move.
-- **16-check audit:** 4 accounting, 3 valuation, and 9 data-quality checks run before a
+- **17-check audit:** 4 accounting, 3 valuation, and 10 data-quality checks run before a
   number is shown. A check that cannot run reports N/A and is never counted as a pass.
 
 ## Pages

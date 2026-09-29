@@ -66,7 +66,7 @@ with currency and unit localization across all statements.
 
 ### Audit engine
 The engine runs its own checks and publishes them: 4 accounting, 3 valuation, and
-9 data-quality checks in total. A check whose inputs are absent reports N/A and
+10 data-quality checks in total. A check whose inputs are absent reports N/A and
 is never counted as a pass, because a check that did not run has not cleared
 anything. The number of checks is read from the engine rather than fixed in the
 description of it, so the two cannot drift.
