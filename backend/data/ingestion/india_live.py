@@ -64,14 +64,9 @@ YF_BALANCE_MAP = [
     # debt the valuation deducts while rent is already inside the EBIT the cash
     # flows are built from. See _extract_borrowings.
     #
-    # No finance-lease line is synthesised from the feed either, for the reason
-    # given in us_live: the feed's capital lease rows cannot be told apart from its
-    # operating lease rows. The filed figure is mapped from the exchange filing.
-    ("Operating lease liabilities", [
-        "Operating Lease Liability",
-        "Leases",
-        "Capital Lease Obligations",
-    ]),
+    # No lease line is mapped from the feed, in either direction, for the reason
+    # given in us_live: the feed's capital-lease and lease rows cannot be placed
+    # against the filings. Lease balances come from the exchange filing.
     ("Other Liabilities", ["Total Non Current Liabilities Net Minority Interest", "Current Liabilities"]),
     ("Total_Liab", ["Total Liabilities Net Minority Interest", "Total Liabilities"]),
     ("Net Block", ["Net PPE", "Gross PPE", "Properties"]),

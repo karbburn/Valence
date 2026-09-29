@@ -69,19 +69,18 @@ YF_BALANCE_MAP = [
     # through this map, because the feed bundles leases into them and the lease has
     # to be taken back out. See _extract_borrowings.
     #
-    # No finance-lease line is synthesised from the feed either. The feed's capital
-    # lease rows cannot be told apart from its operating lease rows: Meta's feed
-    # carries 28,654 of "Capital Lease Obligations" against a filed 1,184 of finance
-    # leases, and Ambarella's 13,435 against a filed 13,435 of operating lease
-    # liability. Reading them as finance leases would put 27,470 of rent into the
-    # debt the valuation deducts at Meta, and inventing a finance lease at Ambarella.
-    # The filed figure is authoritative and is mapped from EDGAR; where a filer has
-    # no filed finance lease, this feed has not established one.
-    ("Operating lease liabilities", [
-        "Operating Lease Liability",
-        "Leases",
-        "Capital Lease Obligations",
-    ]),
+    # No lease line is mapped from the feed, in either direction. The feed cannot
+    # distinguish a capital lease from an operating one: Meta's feed carries 28,654
+    # of "Capital Lease Obligations" against a filed 1,184 of finance leases, and
+    # Ambarella's 13,435 against a filed 13,435 of operating lease liability, while
+    # its "Leases" row is 8,464 and 2,560 respectively and matches neither. A row
+    # that cannot be placed cannot be asserted, and asserting it either way puts an
+    # obligation the valuation deducts, or a figure the reader is invited to apply,
+    # on no evidence at all. Lease balances come from the filing.
+    #
+    # The consequence is stated rather than hidden: a filer whose lease balance is
+    # only available from this feed shows none. That is the safe direction, because
+    # the balance is a disclosure shown beside the debt and not part of it.
     ("Total current liabilities", ["Total Current Liabilities"]),
     ("Total liabilities", ["Total Liabilities Net Minority Interest", "Total Liabilities"]),
     ("Total equity", ["Stockholders Equity", "Total Equity Gross Minority Interest", "Common Stock Equity"]),

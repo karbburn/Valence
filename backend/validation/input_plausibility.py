@@ -78,18 +78,29 @@ NEGATIVE_EQUITY_REVIEW = True
 
 
 def check_bridge_inputs_plausible(spec: ModelSpecification) -> ModelCheckResult:
-    """The debt, cash and lease figures on the bridge must be able to coexist.
+    """A large net cash position next to a real business usually means no debt.
 
-    The specific contradiction this exists to catch: total debt smaller than the
-    operating lease liability, on a bridge whose own note says the reported debt
-    total already contains the lease component and so must not be added to
-    separately. Both statements cannot hold. If total debt is the smaller number,
-    it cannot contain the larger one, the note's premise is false, and net debt is
-    understated by at least the difference.
+    The bridge takes cash and debt from the filed balance sheet, so the figures
+    are as good as the filing and there is little left to second-guess here. What
+    survives as a heuristic is the case where a debt figure has gone missing
+    entirely: a company that nets out to a large cash position next to a business
+    of its own size is usually one whose debt line read as nil, and that produces
+    exactly this shape once the arithmetic has been tidied away.
 
-    Also rejects the softer version of the same error: a bridge that reports a
-    large net *cash* position, which is what a missing debt figure looks like once
-    it has been arithmetically tidied away.
+    It used to also reject total debt being smaller than the reported operating
+    lease liability, on the premise that the note said debt already contained the
+    lease and so the two statements could not both hold. The note no longer says
+    that: operating leases are excluded from debt because rent is already inside
+    the EBIT the cash flows are built from. Under that basis a company holding
+    more lease than debt is the convention working as documented, and the check
+    flagged it as a defect — which it did for two filers, one of them holding
+    11,283 of operating leases against 7,200 of debt. A check whose premise has
+    been corrected must be corrected with it, or it manufactures failures to look
+    busy.
+
+    The remaining question this used to answer — is the debt figure the filer's? —
+    is answered properly by the tie-out against the filing rather than by comparing
+    one reported number with another.
     """
     errors: List[str] = []
     failing_scenarios: List[str] = []
@@ -106,22 +117,7 @@ def check_bridge_inputs_plausible(spec: ModelSpecification) -> ModelCheckResult:
         if val.scenario != "base":
             continue
         b = val.dcf_bridge
-        debt = b.total_debt or 0.0
-        leases = b.operating_lease_liabilities or 0.0
-        cash = (b.cash_and_equivalents or 0.0) + (b.marketable_securities or 0.0)
         net = b.less_net_debt
-
-        if leases > 0 and debt < leases:
-            short = leases - debt
-            errors.append(
-                f"{val.scenario}: total debt {debt:,.0f} is smaller than the reported "
-                f"operating lease liability {leases:,.0f}, so it cannot already contain "
-                f"the lease component as the bridge note states. Net debt is understated "
-                f"by at least {short:,.0f}."
-            )
-            keys.extend(["total_debt", "operating_lease_liabilities", "less_net_debt"])
-            failing_scenarios.append(val.scenario)
-            continue
 
         # A net cash position is legitimate for a company with genuinely little
         # debt. It is only suspicious when it is large next to the business, and

@@ -65,14 +65,28 @@ BRIDGE_TERMS: dict[str, tuple[str, ...]] = {
         "Other Investments",
         "Financial Assets",
     ),
+    # The pure rows are read, and the combined ones are deliberately NOT.
+    #
+    # The combined caption carries a lease obligation inside the debt figure, and
+    # whether that obligation is finance or operating is not determinable from the
+    # feed: Meta's combined row holds 28,654 of capital leases against a filed
+    # 1,184 of finance leases, and Ambarella's 13,435 against a filed 13,435 of
+    # operating lease liability. So the row cannot be placed, and a debt figure
+    # built from it charges for an obligation whose nature the platform cannot
+    # state. This snapshot now prefers a filer with no debt figure over one whose
+    # debt figure contains an unidentifiable lease.
+    #
+    # The pure rows lose the lease, which for a filer reporting a single combined
+    # caption means its debt is not established here at all. That is stated rather
+    # than papered over: the caller publishes the basis, and the valuation bridge
+    # no longer reads this snapshot at all.
     "debt_non_current": (
-        "Long Term Debt And Capital Lease Obligation",
         "Long Term Debt",
     ),
     "debt_current": (
-        "Current Debt And Capital Lease Obligation",
         "Current Debt",
         "Short Term Debt",
+        "Other Current Borrowings",
     ),
     # Lease liabilities, reported for the reader's benefit.
     #
@@ -81,10 +95,11 @@ BRIDGE_TERMS: dict[str, tuple[str, ...]] = {
     # capitalised-lease convention can see the balance; whether it belongs in
     # net debt is a convention choice, and the basis note on the bridge states
     # which convention the platform is using.
+    #
+    # Only the feed's own operating-lease caption is read. Its capital-lease row
+    # is not, for the reason above: it cannot be told from an operating one, and
+    # the same row appearing in both lists would report one balance twice.
     "lease_liabilities": (
-        "Capital Lease Obligation",
-        "Capital Lease Obligations",
-        "Finance Lease",
         "Operating Lease Liability",
     ),
     "minority_interest": ("Minority Interest",),
@@ -178,12 +193,12 @@ def _build(frame, column, source: str) -> Optional[BridgeSnapshot]:
     if not values:
         return None
 
-    # A feed may publish the combined liquid-asset and total-debt figures
-    # directly. When it does, use them and do NOT add the components on top.
+    # The feed's published combined totals are read so the components can be
+    # reported alongside them, but neither is used as the basis: both are sums of
+    # borrowings and a lease obligation. See the debt block below.
     combined_liquid = _label_value(
         frame, ("Cash Cash Equivalents And Short Term Investments",), column
     )
-    combined_debt = _label_value(frame, ("Total Debt",), column)
 
     # BASIS, matching the convention the valuation bridge uses:
     #   net cash = (cash + short-term investments + long-term investments) - debt
@@ -203,26 +218,46 @@ def _build(frame, column, source: str) -> Optional[BridgeSnapshot]:
 
     # Total debt.
     #
-    # The feed's published "Total Debt" is used as-is. It already contains the
-    # non-current lease component: adding the separately-listed lease line on
-    # top double counts, and doing so moved eleven of twelve companies away from
-    # the market reference rather than towards it.
+    # The feed's published "Total Debt" is NOT used, and neither are the combined
+    # borrowings captions above. Every one of them is the sum of borrowings and a
+    # lease obligation, and the lease cannot be identified from the feed, so a debt
+    # figure taken from any of them is debt plus an obligation of unknown nature.
     #
-    # The lease balance is read so a reader can see it, but only where it is
-    # genuinely a COMPONENT of the debt total.
+    # It used to be used as-is, on the reasoning that it already contained the
+    # lease component and that adding the separately-listed lease line on top would
+    # double count. That reasoning was sound for a snapshot whose convention was to
+    # include leases in debt. It is not this platform's convention: rent is already
+    # inside the EBIT the cash flows are built from, so a lease inside debt charges
+    # for the same obligation twice. The figure is therefore the sum of the two
+    # pure rows, and a filer publishing only a combined caption has no debt figure
+    # established here.
     #
-    # A feed's lease row is not reliably a lease component. For one large
-    # Indian listing the row equalled the entire debt balance to the rupee, which
-    # is a restatement of total debt rather than a subset of it; published as
-    # "lease liabilities" it told a reader that all of that company's debt was
-    # leases. A component cannot equal or exceed the total it is part of, so a
-    # row at or above the total is dropped rather than reported as something it
-    # is not. The same rule is applied to the minority-interest and preferred
-    # rows.
-    if combined_debt is not None:
-        debt = combined_debt
-    else:
-        debt = values.get("debt_non_current", 0.0) + values.get("debt_current", 0.0)
+    # The lease balance is still read so a reader can see it. A feed's lease row is
+    # not reliably a lease component: for one large Indian listing the row equalled
+    # the entire debt balance to the rupee, which is a restatement of total debt
+    # rather than a subset of it. A component cannot equal or exceed the total it is
+    # part of, so a row at or above the total is dropped rather than reported as
+    # something it is not. The same rule is applied to the minority-interest and
+    # preferred rows.
+    debt = values.get("debt_non_current", 0.0) + values.get("debt_current", 0.0)
+
+    # No debt row resolved means no debt figure, which is not the same statement as
+    # no debt. The feed publishes a combined caption for many filers and no pure
+    # one at all, and that caption is not usable here, so the balance is unknown
+    # rather than nil. Returning a snapshot with debt of 0 would publish a company
+    # as carrying no debt: the number flows straight into an enterprise value, an
+    # EV/EBITDA, and a benchmark median, and it flatters every one of them. The
+    # caller treats a missing snapshot as an unsourceable peer and drops it, which
+    # is the outcome the existing "a peer presented as a debt-free one is worse
+    # than an absent peer" rule already requires.
+    if not any(k in values for k in ("debt_non_current", "debt_current")):
+        logger.info(
+            "No borrowings row on the feed's %s statement; it publishes only the "
+            "combined caption, which carries an unidentifiable lease. Returning no "
+            "snapshot rather than a debt figure of zero.",
+            source,
+        )
+        return None
 
     _drop_claims_at_or_above_total(values, debt)
 

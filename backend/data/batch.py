@@ -169,7 +169,6 @@ SUPPLEMENTABLE_METRICS = frozenset({
     "Inventory",
     "Dividend Amount",
     "Short term borrowings",
-    "Finance lease liabilities",
     "Operating lease liabilities",
     "Minority interest",
 })
