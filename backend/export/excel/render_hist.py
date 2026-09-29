@@ -140,6 +140,14 @@ def render_historical_balance_sheet(wb: Workbook, spec: ModelSpecification) -> W
         ("canonical.bs.inventory", "Inventory", False),
         ("canonical.bs.cash_and_bank", "Cash & Cash Equivalents", False),
         ("canonical.bs.current_investments", "Current Investments", False),
+        # Prepaid expenses and the filer's own current-asset catch-all. Both were
+        # ingested and neither was printed, so the visible current-asset block
+        # stopped short of the filer's own subtotal: Microsoft showed 159,116 of
+        # detail against a filed 207,710, and a reader checking the column would
+        # have found 48,594 of assets the statement did not mention. The block only
+        # adds up when every current-asset line the engine holds is on it.
+        ("canonical.bs.prepayments_other_current_assets", "Prepaid Expenses & Other Current Assets", False),
+        ("canonical.bs.other_current_assets", "Other Current Assets", False),
         ("canonical.bs.total_current_assets", "Total Current Assets", True),
         ("canonical.bs.total_assets", "TOTAL ASSETS", True),
         ("canonical.bs.equity_capital", "Equity Share Capital", False),

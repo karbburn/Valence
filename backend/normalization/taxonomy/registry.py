@@ -60,6 +60,7 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Income tax assets": ("canonical.bs.income_tax_assets", "bs"),
     "Other non-current assets": ("canonical.bs.other_non_current_assets", "bs"),
     "Total non-current assets": ("canonical.bs.total_non_current_assets", "bs"),
+    "Other current assets": ("canonical.bs.other_current_assets", "bs"),
     "Current investments": ("canonical.bs.current_investments", "bs"),
     "Investments": ("canonical.bs.current_investments", "bs"),
     "- Certificates of deposit": ("canonical.bs.current_investments", "bs"),

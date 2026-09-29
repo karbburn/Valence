@@ -176,7 +176,23 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
     ("Current investments", [
         "MarketableSecuritiesCurrent",
         "AvailableForSaleSecuritiesCurrent",
+        # Amdocs files its securities under the debt-securities element and nothing
+        # else, so the two above resolve to nothing for it and its 168,220 of
+        # marketable securities fell through to the residual derivation.
+        "AvailableForSaleSecuritiesDebtSecuritiesCurrent",
         "ShortTermInvestments"
+    ], "BALANCE SHEET"),
+    # Current assets that are not cash, securities, receivables, inventory or
+    # prepayments. A filer that prints this line publishes current assets the
+    # engine has not identified, and without a canonical home for it they were
+    # absorbed by the residual derivation and republished as investments, which
+    # the enterprise bridge then deducted as though they were marketable
+    # securities. Armstrong's balance sheet carries no securities at all: its
+    # 1,400 residual was the difference between 23,900 of other current assets and
+    # 22,500 of prepayments, presented as a security the company does not hold.
+    ("Other current assets", [
+        "OtherAssetsCurrent",
+        "OtherAssetsMiscellaneousCurrent",
     ], "BALANCE SHEET"),
     ("Inventory", [
         "InventoryNet",
