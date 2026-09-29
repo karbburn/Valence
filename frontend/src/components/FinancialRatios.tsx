@@ -62,14 +62,14 @@ export function FinancialRatios({ spec, scenario }: FinancialRatiosProps) {
         <div className="bg-[#0d1220] border border-[#1e283d] rounded-[4px] p-2.5 flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-text-dim text-[10px] uppercase">Terminal ROIC</span>
-            <ShieldCheck className="w-3.5 h-3.5 text-[#10b981]" />
+            <ShieldCheck className="w-3.5 h-3.5 text-positive" />
           </div>
           <div className="font-bold text-[15px] text-[#f8fafc] mt-1">
             {fmtPct(roic, 1)}
           </div>
           <div className="text-[10px] mt-0.5">
             {spread != null ? (
-              <span className={spread >= 0 ? 'text-[#10b981]' : 'text-[#ef4444]'}>
+              <span className={spread >= 0 ? 'text-positive' : 'text-negative'}>
                 {spread >= 0 ? '+' : ''}{spread.toFixed(1)}% vs WACC
               </span>
             ) : (
@@ -96,7 +96,7 @@ export function FinancialRatios({ spec, scenario }: FinancialRatiosProps) {
         <div className="bg-[#0d1220] border border-[#1e283d] rounded-[4px] p-2.5 flex flex-col justify-between">
           <span className="text-text-dim text-[10px] uppercase">Implied EV / EBIT</span>
           <div className="font-bold text-[15px] text-[#f8fafc] mt-1">
-            {evEbit != null ? `${fmtNum(evEbit, 1)}x` : '—'}
+            {evEbit != null ? `${fmtNum(evEbit, 1)}x` : 'n/a'}
           </div>
           <div className="text-[10px] text-text-dim mt-0.5">
             Forward Multiple
@@ -106,7 +106,7 @@ export function FinancialRatios({ spec, scenario }: FinancialRatiosProps) {
         {/* Net Debt Status */}
         <div className="bg-[#0d1220] border border-[#1e283d] rounded-[4px] p-2.5 flex flex-col justify-between">
           <span className="text-text-dim text-[10px] uppercase">Net Debt Position</span>
-          <div className={`font-bold text-[14px] mt-1 ${netDebt < 0 ? 'text-[#10b981]' : 'text-[#ef4444]'}`}>
+          <div className={`font-bold text-[14px] mt-1 ${netDebt < 0 ? 'text-positive' : 'text-negative'}`}>
             {netDebt < 0 ? `+${currencySym}${fmtNum(Math.abs(netDebt))}` : `-${currencySym}${fmtNum(netDebt)}`}
           </div>
           <div className="text-[10px] text-text-dim mt-0.5">

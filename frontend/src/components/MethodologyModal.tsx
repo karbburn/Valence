@@ -5,6 +5,7 @@ import { Modal } from './Modal'
 import { ShieldCheck, Scale } from 'lucide-react'
 import { ModelSpecification, ScenarioLabel } from '@/lib/types'
 import { fmtNum, fmtPct, getCurrencySymbol } from '@/lib/formatters'
+import { NO_VALUE } from '@/lib/noValue'
 
 export interface MethodologyModalProps {
   open: boolean
@@ -111,7 +112,7 @@ export function MethodologyModal({
               <tr className="bg-surface-3">
                 <td className="p-2.5 font-bold text-text-main">Model Valuation Output</td>
                 <td className="p-2.5 bg-accent-subtle border-l-2 border-l-accent border-r border-accent-border font-bold text-accent-hover text-[13px]">
-                  {impliedPrice != null ? `${currencySym}${fmtNum(impliedPrice, 2)}` : '—'} / share
+                  {impliedPrice != null ? `${currencySym}${fmtNum(impliedPrice, 2)}` : NO_VALUE} / share
                 </td>
                 <td className="p-2.5 text-[#cbd5e1] font-semibold">
                   Differs based on cash flow definitions

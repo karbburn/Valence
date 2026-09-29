@@ -197,7 +197,7 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
                           r.bold ? 'text-[#f8fafc]' : 'text-text-dim'
                         }`}
                       >
-                        {val != null ? `${currencySym}${fmtNum(val)}` : '—'}
+                        {val != null ? `${currencySym}${fmtNum(val)}` : 'n/a'}
                       </td>
                     )
                   })}
@@ -212,7 +212,7 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
                           idx === 0 ? 'border-l-2 border-[#374766]' : ''
                         } ${r.bold ? 'text-[#7dd3fc]' : 'text-[#94a3b8]'}`}
                       >
-                        {val != null ? `${currencySym}${fmtNum(val)}` : '—'}
+                        {val != null ? `${currencySym}${fmtNum(val)}` : 'n/a'}
                       </td>
                     )
                   })}

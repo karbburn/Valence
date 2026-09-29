@@ -63,7 +63,7 @@ export function SaveModal({
           <div
             role="alert"
             aria-live="assertive"
-            className="text-[11px] text-[#ef4444] font-semibold bg-[#ef4444]/10 border border-[#ef4444]/20 rounded-[3px] p-2"
+            className="text-[11px] text-negative font-semibold bg-negative-subtle border border-negative rounded-[3px] p-2"
           >
             {error}
           </div>

@@ -34,15 +34,15 @@ export function QAModal({ open, onClose, qa }: QAModalProps) {
             checks.length === 0
               ? 'bg-[#192030] border-[#1e283d] text-[#94a3b8]'
               : allPassed
-              ? 'bg-[#10b981]/10 border-[#10b981]/30 text-[#10b981]'
-              : 'bg-[#ef4444]/10 border-[#ef4444]/30 text-[#ef4444]'
+              ? 'bg-positive-subtle border-positive text-positive'
+              : 'bg-negative-subtle border-negative text-negative'
           }`}
         >
           <div className="flex items-center space-x-2">
             {allPassed ? (
-              <ShieldCheck className="w-5 h-5 text-[#10b981]" />
+              <ShieldCheck className="w-5 h-5 text-positive" />
             ) : failedCount > 0 ? (
-              <AlertTriangle className="w-5 h-5 text-[#ef4444]" />
+              <AlertTriangle className="w-5 h-5 text-negative" />
             ) : (
               <ShieldCheck className="w-5 h-5 text-[#94a3b8]" />
             )}
@@ -93,15 +93,15 @@ export function QAModal({ open, onClose, qa }: QAModalProps) {
                 <span
                   className={`flex items-center space-x-1 px-2 py-0.5 rounded-[3px] text-[10px] font-bold shrink-0 border ${
                     !c.passed
-                      ? 'bg-[#ef4444]/10 text-[#ef4444] border-[#ef4444]/30'
+                      ? 'bg-negative-subtle text-negative border-negative'
                       : c.detail.startsWith('SKIPPED:')
                       ? 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/30'
-                      : 'bg-[#10b981]/10 text-[#10b981] border-[#10b981]/30'
+                      : 'bg-positive-subtle text-positive border-positive'
                   }`}
                 >
                   {!c.passed ? (
                     <>
-                      <AlertTriangle className="w-3 h-3 text-[#ef4444]" />
+                      <AlertTriangle className="w-3 h-3 text-negative" />
                       <span>FAIL</span>
                     </>
                   ) : c.detail.startsWith('SKIPPED:') ? (
@@ -111,7 +111,7 @@ export function QAModal({ open, onClose, qa }: QAModalProps) {
                     </>
                   ) : (
                     <>
-                      <CheckCircle2 className="w-3 h-3 text-[#10b981]" />
+                      <CheckCircle2 className="w-3 h-3 text-positive" />
                       <span>PASS</span>
                     </>
                   )}

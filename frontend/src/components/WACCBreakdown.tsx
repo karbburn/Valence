@@ -4,6 +4,7 @@ import React from 'react'
 import { Percent } from 'lucide-react'
 import { ModelSpecification, ScenarioLabel } from '@/lib/types'
 import { fmtPct } from '@/lib/formatters'
+import { NO_VALUE } from '@/lib/noValue'
 
 export interface WACCBreakdownProps {
   spec: ModelSpecification | null
@@ -56,7 +57,7 @@ export function WACCBreakdown({ spec, scenario }: WACCBreakdownProps) {
         {/* Beta */}
         <div className="flex items-center justify-between px-[8px] py-[6px]">
           <span className="text-[#94a3b8]">Beta (β)</span>
-          <span className="font-mono text-[#f8fafc]">{beta != null ? beta.toFixed(2) : '—'}</span>
+          <span className="font-mono text-[#f8fafc]">{beta != null ? beta.toFixed(2) : NO_VALUE}</span>
         </div>
 
         {/* Equity Risk Premium */}

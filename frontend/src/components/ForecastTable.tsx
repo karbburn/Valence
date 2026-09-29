@@ -114,12 +114,12 @@ export function ForecastTable({ spec, scenario }: ForecastTableProps) {
                         }`}
                       >
                         <span className="inline-flex items-center justify-end space-x-1">
-                          <span>{val != null ? `${currencySym}${fmtNum(val)}` : '—'}</span>
+                          <span>{val != null ? `${currencySym}${fmtNum(val)}` : 'n/a'}</span>
                           {trend === 'up' && (
-                            <span className="text-[#10b981] font-bold text-[9px]">↑</span>
+                            <span className="text-positive font-bold text-[9px]">↑</span>
                           )}
                           {trend === 'down' && (
-                            <span className="text-[#ef4444] font-bold text-[9px]">↓</span>
+                            <span className="text-negative font-bold text-[9px]">↓</span>
                           )}
                         </span>
                       </td>
