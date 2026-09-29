@@ -1,13 +1,12 @@
 {
-  "aapl_us": [
-    "implied_price_deviation_is_explainable"
-  ],
+  "aapl_us": [],
   "amba_us": [
     "equity_value_positive",
     "implied_price_deviation_is_explainable"
   ],
   "amzn_us": [
-    "implied_price_deviation_is_explainable"
+    "implied_price_deviation_is_explainable",
+    "terminal_value_is_not_carrying_the_model"
   ],
   "awi_us": [],
   "bhartiartl_bhartiartl": [],
@@ -24,17 +23,13 @@
   "infy_us": [
     "implied_price_deviation_is_explainable"
   ],
-  "lt_lt": [
-    "implied_price_deviation_is_explainable"
-  ],
+  "lt_lt": [],
   "msft_us": [],
   "nvda_us": [],
   "ongc_ongc": [
     "implied_price_deviation_is_explainable"
   ],
-  "reliance_reliance": [
-    "implied_price_deviation_is_explainable"
-  ],
+  "reliance_reliance": [],
   "sunpharma_sunpharma": [
     "bridge_inputs_plausible",
     "implied_price_deviation_is_explainable"
