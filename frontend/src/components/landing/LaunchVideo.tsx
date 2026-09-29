@@ -35,10 +35,25 @@ import { Pause, Play, Volume2, VolumeX } from 'lucide-react'
  *
  * Set it to the date of the new cut, or any value that changes with it.
  */
-const MEDIA_REV = '2026-09-29a'
+const MEDIA_REV = '2026-09-29b'
 
-const VIDEO_SRC = `/media/valence-launch.mp4?v=${MEDIA_REV}`
-const POSTER_SRC = `/media/valence-launch-poster.jpg?v=${MEDIA_REV}`
+/**
+ * The three media paths, built from bare names and the cache token separately.
+ *
+ * Deriving the caption track from the video URL did not work, and failed in a way
+ * that was invisible: the derivation stripped a trailing ".mp4", but the video URL
+ * ends with its cache token, so the extension was never stripped and the track
+ * resolved to a path that names no file. The video played, the poster showed, and
+ * the caption track was simply absent, which is the one failure on this component
+ * that nothing else would have reported.
+ */
+const VIDEO_PATH = '/media/valence-launch.mp4'
+const POSTER_PATH = '/media/valence-launch-poster.jpg'
+const CAPTIONS_PATH = '/media/valence-launch.en.vtt'
+
+const VIDEO_SRC = `${VIDEO_PATH}?v=${MEDIA_REV}`
+const POSTER_SRC = `${POSTER_PATH}?v=${MEDIA_REV}`
+const CAPTIONS_SRC = `${CAPTIONS_PATH}?v=${MEDIA_REV}`
 
 /** Runtime of the cut, read from the file rather than typed in by hand. */
 const FILM_RUNTIME = '0:26'
@@ -84,7 +99,7 @@ export function LaunchVideo() {
               picture when the film is re-cut. */}
           <track
             kind="captions"
-            src={`${VIDEO_SRC.replace(/\.mp4$/, '')}.en.vtt?v=${MEDIA_REV}`}
+            src={CAPTIONS_SRC}
             srcLang="en"
             label="English"
             default
