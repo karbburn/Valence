@@ -41,9 +41,23 @@ DEFAULT_COMPANIES = [
     "msft_us",        # US large cap
 ]
 
-# Plausible share-price bands per market — a placeholder or unit error (INR vs
-# USD, Crores vs Millions) lands outside these immediately.
-BANDS = {"india": (50.0, 20000.0), "us": (5.0, 2000.0)}
+# Plausible share-price bands per market.
+#
+# The band is there to catch a gross fault — a placeholder, a garbage value, a price
+# off by orders of magnitude — and nothing finer. It is not evidence of correct
+# units: rupees and dollars are both plain numbers, so a currency mix-up passes it,
+# and so do paise and thousands. Any band tight enough to catch those would also
+# reject real quotes, which is what this one did.
+#
+# It was 50 to 20,000 for India, on the assumption that the listed universe was all
+# large caps, and it failed Vodafone Idea at 13.56. That price is correct: IDEA
+# traded between roughly 12 and 15.5 rupees through September 2026, verified against
+# the exchange record. A check that reports a correct figure as wrong is worse than
+# no check, because the reader stops believing it and then stops reading it.
+#
+# The bounds below admit every price a listed Indian or US equity has plausibly
+# traded at, from a sub-rupee penny stock to a five-figure rupee issue.
+BANDS = {"india": (0.5, 200_000.0), "us": (0.5, 500_000.0)}
 
 
 def _get_json(url: str, timeout: int = 600) -> dict:
@@ -126,7 +140,12 @@ def _audit_excel(cid: str, blob: bytes, spec: dict) -> list[str]:
     rd = val.get("reverse_dcf") or {}
     wacc = val.get("wacc") or {}
 
+    # Two views of the same file, and the distinction matters: `wb` carries the
+    # formulas a reader sees when they click a cell, and `wv` carries the values
+    # Excel computed and cached. Reading a figure out of `wb` returns the string
+    # "=C6+(C8*C9)" rather than the number, which is not a defect in the workbook.
     wb = load_workbook(io.BytesIO(blob), data_only=False)
+    wv = load_workbook(io.BytesIO(blob), data_only=True)
     print(f"    excel sheets  : {len(wb.sheetnames)}")
 
     def _close(a, b, tol_pct=0.001):
@@ -180,11 +199,32 @@ def _audit_excel(cid: str, blob: bytes, spec: dict) -> list[str]:
 
     # 4. WACC recomputed from the sheet's own literals must equal the API WACC.
     #    Catches percent/decimal unit errors that still *look* plausible.
-    w_ws = wb["30_WACC"]
-    rfr, beta, erp = w_ws["C6"].value, w_ws["C7"].value, w_ws["C8"].value
-    kd_pre, tax = w_ws["C10"].value, w_ws["C11"].value
-    we, wd = w_ws["C13"].value, w_ws["C14"].value
+    #
+    #    Rows are resolved by label, never by number. The sheet gained a row when
+    #    the workbook began disclosing the published beta alongside the Blume-
+    #    adjusted one actually used, which pushed every line below it down one, and
+    #    the hardcoded reads kept returning numbers: risk-free rate from the right
+    #    row, published beta where the adjusted one belongs, the adjusted beta where
+    #    the equity risk premium belongs, and the cost of equity's own formula where
+    #    the cost of debt belongs. Seven wrong cells, none of them obviously wrong on
+    #    the page. A check that reads by position is a check that reports a verdict
+    #    about whichever cell happens to be there.
+    w_ws = wv["30_WACC"]
+
+    def wacc_row(label: str) -> int:
+        for r in range(1, (w_ws.max_row or 0) + 1):
+            if str(w_ws.cell(row=r, column=2).value).strip() == label:
+                return r
+        raise KeyError(label)
+
     try:
+        rfr = w_ws.cell(wacc_row("Risk-Free Rate (Rf) %"), 3).value
+        beta = w_ws.cell(wacc_row("Equity Beta (β) — used in CAPM"), 3).value
+        erp = w_ws.cell(wacc_row("Equity Risk Premium (ERP) %"), 3).value
+        kd_pre = w_ws.cell(wacc_row("Pre-Tax Cost of Debt %"), 3).value
+        tax = w_ws.cell(wacc_row("Effective Tax Rate %"), 3).value
+        we = w_ws.cell(wacc_row("Equity Market Weight %"), 3).value
+        wd = w_ws.cell(wacc_row("Debt Market Weight %"), 3).value
         ke = float(rfr) + float(beta) * float(erp)
         kd = float(kd_pre) * (1 - float(tax))
         xl_wacc = (float(we) * ke + float(wd) * kd) * 100.0
@@ -193,7 +233,7 @@ def _audit_excel(cid: str, blob: bytes, spec: dict) -> list[str]:
                 f"{cid}: excel WACC recomputes to {xl_wacc:.2f}% but API says {wacc.get('wacc')}"
             )
         print(f"    excel WACC    : recomputed {xl_wacc:.2f}% vs API {_fmt(wacc.get('wacc'))}%")
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, KeyError) as exc:
         problems.append(f"{cid}: could not recompute excel WACC ({exc})")
 
     # 5. Executive summary upside formula must be a real formula, not a literal.
