@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
@@ -84,6 +85,16 @@ class BalanceSheetLineItem(BaseModel):
     currency: str = "INR"
     units: str = "crores"
     lineage_ids_by_period: Dict[str, List[str]] = Field(default_factory=dict)
+    # The period end each value was FILED for, keyed by period label.
+    #
+    # This is provenance and not decoration. A filer's fiscal year does not end on
+    # the calendar day a fiscal calendar implies: NVIDIA's FY2026 ended 25 January
+    # 2026, the last Sunday of January, not the 31st the month/day default would
+    # produce. Substituting the calendar day published a balance sheet dated six
+    # days after the quarter closed, which is the kind of discrepancy that reads as
+    # a data error to anyone holding the filing. Absent for periods where nothing
+    # was reported, in which case the caller falls back rather than inventing one.
+    period_end_dates_by_period: Dict[str, date] = Field(default_factory=dict)
 
 
 class BalanceSheet(BaseModel):
@@ -131,6 +142,7 @@ def assemble_balance_sheet(
     for c_key, label, cat in BS_LINE_ITEM_CONFIG:
         values: Dict[str, float] = {}
         lineage: Dict[str, List[str]] = {}
+        period_ends: Dict[str, date] = {}
         curr = "INR"
         un = "crores"
 
@@ -139,6 +151,7 @@ def assemble_balance_sheet(
             if dp is not None:
                 values[p] = dp.value
                 lineage[p] = dp.source_datapoint_ids
+                period_ends[p] = dp.period_end_date
                 curr = dp.currency
                 un = dp.units
 
@@ -152,6 +165,7 @@ def assemble_balance_sheet(
                     currency=curr,
                     units=un,
                     lineage_ids_by_period=lineage,
+                    period_end_dates_by_period=period_ends,
                 )
             )
 
@@ -173,6 +187,7 @@ def assemble_balance_sheet(
                 currency=template.currency,
                 units=template.units,
                 lineage_ids_by_period=dict(template.lineage_ids_by_period),
+                period_end_dates_by_period=dict(template.period_end_dates_by_period),
             )
         )
 

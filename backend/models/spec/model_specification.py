@@ -130,6 +130,11 @@ class ModelSpecification(BaseModel):
             historical_model.cash_flow_statement.line_items,
         ]:
             for li in stmt_items:
+                # The day a period was FILED for, where the statement carried it.
+                # Only the balance sheet records it today; the income and cash flow
+                # statements fall through to the fiscal calendar below, which is
+                # wrong by up to six days for a filer whose year ends on a Sunday.
+                filed_period_ends = getattr(li, "period_end_dates_by_period", None) or {}
                 for period, value in li.values_by_period.items():
                     all_periods.add(period)
                     # Infer derived status from derivation_rule availability
@@ -143,7 +148,8 @@ class ModelSpecification(BaseModel):
                         HistoricalLineItem(
                             canonical_key=li.canonical_key,
                             period_label=period,
-                            period_end_date=date(_yr(period), fy_month, fy_day),
+                            period_end_date=filed_period_ends.get(period)
+                            or date(_yr(period), fy_month, fy_day),
                             value=value,
                             currency=li.currency,
                             units=li.units,

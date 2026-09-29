@@ -63,10 +63,25 @@ YF_BALANCE_MAP = [
     ("Total assets", ["Total Assets"]),
     # Long-term borrowings only; short-term debt is mapped separately so current
     # maturities are not silently excluded from the EV -> equity bridge.
-    ("Borrowings", ["Long Term Debt", "Long Term Debt And Capital Lease Obligation"]),
-    ("Short term borrowings", ["Current Debt", "Current Debt And Capital Lease Obligation", "Other Current Borrowings"]),
+    #
+    # The two bundled "...AndCapitalLeaseObligation" labels are excluded from the
+    # borrowing rows. They cannot be split from the feed, and the part that is not
+    # debt is a lease. Meta files no current debt at all, and its feed reported
+    # 2,213 of "Current Debt And Capital Lease Obligation", which is exactly the
+    # current portion of its operating lease liability. Reading that as short-term
+    # borrowings put 2,213 of rent into the debt the valuation deducts, while rent
+    # is already inside the EBIT the cash flows are built from: the same obligation,
+    # charged twice, in the one company whose leases are large enough to notice.
+    #
+    # A capital lease obligation is not split either, and it is not counted twice:
+    # it belongs to finance leases, which are interest-bearing and are in debt, and
+    # not to operating leases, which are shown but not deducted. It used to appear
+    # in both lists, so a filer with a capital lease had that liability on the
+    # bridge twice, once inside total debt and once beside it.
+    ("Borrowings", ["Long Term Debt"]),
+    ("Short term borrowings", ["Current Debt", "Other Current Borrowings"]),
     ("Finance lease liabilities", ["Finance Lease", "Capital Lease Obligation"]),
-    ("Operating lease liabilities", ["Operating Lease Liability", "Capital Lease Obligation"]),
+    ("Operating lease liabilities", ["Operating Lease Liability"]),
     ("Total current liabilities", ["Total Current Liabilities"]),
     ("Total liabilities", ["Total Liabilities Net Minority Interest", "Total Liabilities"]),
     ("Total equity", ["Stockholders Equity", "Total Equity Gross Minority Interest", "Common Stock Equity"]),

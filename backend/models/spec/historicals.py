@@ -52,3 +52,22 @@ class Historicals(BaseModel):
     def get_value(self, canonical_key: str, period: str) -> Optional[float]:
         item = self.get(canonical_key, period)
         return item.value if item else None
+
+    def filed_period_end(self, period: str) -> Optional[date]:
+        """The day this period was filed for, from the balance of the reported lines.
+
+        A fiscal calendar gives the month and day a filer's year closes on, not
+        the date it closed: NVIDIA's FY2026 ended 25 January 2026, the last Sunday
+        of the month, and the 31st is what the calendar produces. Taking the LATEST
+        date is no better, because the handful of lines that never carried a filed
+        date fall back to the calendar and would then win. The date most of the
+        reported lines agree on is the filing's.
+        """
+        counts: dict = {}
+        for item in self.line_items:
+            if item.period_label != period or not item.period_end_date:
+                continue
+            counts[item.period_end_date] = counts.get(item.period_end_date, 0) + 1
+        if not counts:
+            return None
+        return max(counts, key=counts.get)

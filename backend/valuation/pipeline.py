@@ -8,13 +8,14 @@ across all scenarios (base, bull, bear) and populates spec.valuation.
 Market-aware and free of Infosys-specific share/cash constant fallbacks.
 """
 
-from typing import List, Optional
+from datetime import date
+from typing import Dict, List, Optional
 
 import logging
 
 from backend import constants
-from backend.data.bridge_inputs import resolve_bridge_inputs
 from backend.data.providers.market_data import get_company_market_data
+from backend.forecast.debt import OPENING_BALANCE_KEYS
 from backend.forecast.share_count import resolve_shares_outstanding
 from backend.models.spec.forecast import FORECAST_PERIODS
 from backend.models.spec.model_specification import ModelSpecification
@@ -37,14 +38,21 @@ logger = logging.getLogger(__name__)
 # against.
 DEBT_BASIS_NOTE = (
     "Net cash = (cash + short-term investments) - total interest-bearing debt, "
-    "as reported on the most recent balance sheet whose date is shown here. Debt "
-    "is the issuer's own reported total, which already contains its lease "
-    "component; lease liabilities are shown on this bridge for reference and are "
-    "NOT added on top, because doing so double counts. Non-current investments "
-    "are not netted. Note that a feed's debt total does not carry the full lease "
-    "obligation of every issuer, so a provider that capitalises all leases will "
-    "show a higher debt figure and a correspondingly lower net cash; the date "
-    "and this basis are published so the two can be reconciled."
+    "as filed for the period end shown here. Debt is the issuer's own reported "
+    "borrowings: non-current borrowings, plus current borrowings including the "
+    "current portion of long-term debt, plus finance and capital lease "
+    "liabilities. Operating lease liabilities are EXCLUDED and are displayed on "
+    "this bridge separately, so a reader who prefers the market convention of "
+    "capitalising them can see the amount and add it; the engine does not, "
+    "because rent already sits in operating expense and is therefore inside the "
+    "EBIT these cash flows are built from. This is the same definition the debt "
+    "schedule opens on, so the obligation the valuation deducts and the balance "
+    "the forecast services are one number. Non-current investments are not "
+    "netted. Every figure on this bridge is taken from the filed balance sheet "
+    "for the date shown, not from a market feed: a feed's quarterly statement "
+    "reported a synthetic period-end date rather than the day the quarter ended, "
+    "a debt total inflated by capitalising operating leases, and a short-term "
+    "investment line that matched no filed caption."
 )
 
 
@@ -94,107 +102,90 @@ def run_valuation(
     pref_stock = constants.resolve(
         spec.historicals.get_value("canonical.bs.preferred_stock", latest_hist), 0.0
     )
-    # Total interest-bearing debt.
+    # Total interest-bearing debt, on the definition the debt schedule opens on.
     #
-    # Four components, each of which a filer may report separately and each of
-    # which used to be missing from the bridge:
-    #   - non-current borrowings
-    #   - current borrowings, INCLUDING the current portion of long-term debt
-    #   - finance / capital lease liabilities, which are borrowing in substance
+    # Total interest-bearing debt, read through the same key list the debt schedule
+    # opens on, so the obligation the valuation deducts and the balance the forecast
+    # services are one number by construction rather than by agreement.
     #
-    # Operating lease liabilities are deliberately NOT deducted. Under US GAAP
-    # rent sits in operating expense, so operating leases are already reflected
-    # in the EBIT the cash flows are built from; deducting the liability as well
-    # would charge for the same obligation twice. The balance is still carried
-    # on the statement and exposed, so a reader who prefers the other
-    # convention can see the amount and apply it.
-    short_term_debt = constants.resolve(
-        spec.historicals.get_value("canonical.bs.short_term_borrowings", latest_hist), 0.0
+    # The components are non-current borrowings, current borrowings including the
+    # current portion of long-term debt, and finance and capital lease liabilities
+    # which are borrowing in substance. Operating lease liabilities are deliberately
+    # NOT deducted: rent already sits in operating expense, so operating leases are
+    # inside the EBIT the cash flows are built from and deducting the liability as
+    # well would charge for the same obligation twice. The balance is still exposed
+    # so a reader who prefers the other convention can see the amount and apply it.
+    #
+    # Unpacked positionally rather than by name, so this module never names a debt
+    # component and cannot quietly come to disagree with the list.
+    (
+        debt_non_current_annual,
+        short_term_debt,
+        finance_lease_debt,
+    ) = (
+        constants.resolve(spec.historicals.get_value(key, latest_hist), 0.0)
+        for key in OPENING_BALANCE_KEYS
     )
-    finance_lease_debt = constants.resolve(
-        spec.historicals.get_value("canonical.bs.finance_lease_liabilities", latest_hist), 0.0
-    )
+    annual_total_debt = debt_non_current_annual + short_term_debt + finance_lease_debt
     operating_lease_liability = constants.resolve(
         spec.historicals.get_value("canonical.bs.operating_lease_liabilities", latest_hist), 0.0
     )
 
-    annual_liquid_assets = cash_and_bank + current_inv
-    debt_non_current_annual = constants.resolve(
-        spec.historicals.get_value("canonical.bs.borrowings", latest_hist), 0.0
-    )
-    annual_total_debt = debt_non_current_annual + short_term_debt + finance_lease_debt
-
-    # Most recently reported balance sheet for the bridge.
+    # ONE balance sheet per model.
     #
-    # A market capitalisation is live; a net debt figure taken from the last
-    # annual balance sheet is up to a year old. Bridging the two produced an
-    # enterprise value stale by exactly that gap, and every multiple built on it
-    # with it. The bridge therefore uses the most recent reported balances, and
-    # the statement date is published with the figure so a reader can see how
-    # fresh it is.
-    snapshot, bridge_note = resolve_bridge_inputs(
-        company_id,
-        {
-            "cash_and_bank": cash_and_bank,
-            "marketable_securities": current_inv,
-            "non_current_investments": non_current_inv,
-            "debt_non_current": debt_non_current_annual,
-            "debt_current": short_term_debt,
-            "total_debt": annual_total_debt,
-            "liquid_assets": annual_liquid_assets,
-        },
+    # The bridge and the forecast used to read the balance sheet independently: the
+    # forecast from the filed annual statement, the bridge from a market feed's
+    # quarterly. They happened to agree for two companies in six and disagreed by
+    # up to 50,062 for the rest, so a model could value against one set of
+    # obligations while forecasting off another.
+    #
+    # A feed's quarterly statement was preferred because a market capitalisation is
+    # live while a net debt figure taken from the last annual is up to a year old,
+    # and bridging the two produced an enterprise value stale by exactly that gap.
+    # But the feed's statement failed every check against the filing. Its date was
+    # a synthetic calendar date rather than the day the quarter actually ended,
+    # five days late for NVIDIA and ninety-one days early for Amazon. Its total
+    # debt capitalised operating leases, so NVIDIA carried 4,985 and Microsoft
+    # 16,532 of lease liability inside a figure presented as borrowings. Its
+    # short-term investment line was a residual computed by the feed and matched
+    # no filed caption at all. Freshness bought from a source that cannot be tied
+    # to an issuer is not freshness; it is a second, less accurate balance sheet.
+    #
+    # So the bridge reads the filed statement the forecast already opens on, and
+    # publishes that statement's real period end rather than a manufactured one.
+    # Where the filed statement is older than the latest quarter, that gap is
+    # stated rather than papered over: an issuer that has not filed, or a feed that
+    # cannot be verified, is a reason to publish the date, not to substitute a
+    # number.
+    # The date the FILING was filed for, which is what the bridge publishes. The
+    # fiscal calendar gives the month and day a filer's year closes on rather than
+    # the date it closed, so a year ending on a Sunday produces a date six days
+    # late, and preferring the latest date would pick that wrong answer over the
+    # filed one on the balance of a handful of lines.
+    bridge_as_of = (
+        (spec.historicals.filed_period_end(latest_hist) or latest_hist)
+        .isoformat()
+        if isinstance(spec.historicals.filed_period_end(latest_hist), date)
+        else latest_hist
     )
-
-    if snapshot is not None:
-        # Use the snapshot's OWN aggregates. Re-deriving them from the
-        # individual terms double counts: a feed's "Total Debt" already
-        # contains its lease components, so adding the separately-mapped lease
-        # lines on top inflated one large-cap's debt by 2.5x and another's by
-        # 1.5x. The individual terms are for display, not for a second sum.
-        cash_and_bank = constants.resolve(
-            snapshot.terms.get("cash_and_bank"), cash_and_bank
-        )
-        # Whether short-term investments were MEASURED or are the leftover.
-        #
-        # The snapshot's own total is used rather than a second sum of its terms,
-        # because a feed's total already contains components the separate lines
-        # also carry. When the feed does not name a short-term investment line at
-        # all, the balance below is the difference between its liquid total and
-        # its cash — a residual, not a reported balance. It is still the right
-        # number for the bridge, since the liquid total is what the accounts
-        # support, but it must not be published as though a line had been read.
-        mkt_sec_derived = "marketable_securities" not in (snapshot.terms or {})
-        current_inv = max(0.0, snapshot.total_liquid_assets - cash_and_bank)
-        mkt_sec_derivation = (
-            f"DERIVED, not reported. The source states total liquid assets of "
-            f"{snapshot.total_liquid_assets:,.0f} and cash of "
-            f"{cash_and_bank:,.0f}, and does not break out short-term "
-            f"investments. This line is the difference: "
-            f"{snapshot.total_liquid_assets:,.0f} - {cash_and_bank:,.0f} = "
-            f"{current_inv:,.0f}. It is whatever the source folded into its "
-            f"liquid total without naming, and is not a balance a reader will "
-            f"find in the accounts."
-        ) if mkt_sec_derived else ""
-        minority_int = constants.resolve(snapshot.terms.get("minority_interest"), minority_int)
-        pref_stock = constants.resolve(snapshot.terms.get("preferred_stock"), pref_stock)
-        debt_cr = snapshot.total_debt
-        # Lease obligations are part of total debt on the market convention, and
-        # the balance is reported separately so a reader who prefers to exclude
-        # them can see the amount. The basis note on the bridge says which.
-        operating_lease_liability = constants.resolve(
-            snapshot.terms.get("lease_liabilities"), 0.0
-        )
-        bridge_as_of = snapshot.as_of
-        bridge_source = snapshot.source
-    else:
-        debt_cr = annual_total_debt
-        bridge_as_of = latest_hist
-        bridge_source = "filed_annual_balance_sheet"
-        # The filed annual statement carries investments as their own line, so
-        # the balance is reported rather than residual.
-        mkt_sec_derived = False
-        mkt_sec_derivation = ""
-    logger.info("%s bridge balance sheet: %s (%s)", company_id, bridge_as_of, bridge_note)
+    debt_cr = annual_total_debt
+    bridge_source = "filed_annual_balance_sheet"
+    # The filed statement carries short-term investments as their own line, so the
+    # balance is reported rather than a feed's residual, and there is nothing to
+    # derive and disclaim.
+    mkt_sec_derived = False
+    mkt_sec_derivation = ""
+    logger.info(
+        "%s bridge balance sheet: %s (filed statement, debt %.0f = borrowings %.0f"
+        " + short-term %.0f + finance leases %.0f; operating leases %.0f excluded)",
+        company_id,
+        bridge_as_of,
+        debt_cr,
+        debt_non_current_annual,
+        short_term_debt,
+        finance_lease_debt,
+        operating_lease_liability,
+    )
 
     # Liquid cash used in WACC weights
     cash_cr = cash_and_bank + current_inv

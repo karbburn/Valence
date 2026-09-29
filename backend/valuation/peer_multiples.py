@@ -25,6 +25,7 @@ from backend.data.providers.run_rate import (
     trailing_twelve_months,
 )
 from backend.data.providers.share_count import resolve_share_count
+from backend.forecast.debt import OPENING_BALANCE_KEYS
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
@@ -407,9 +408,8 @@ def compute_peer_multiples(
     assets = _row(balance, _ASSET_ROWS, balance.columns[0]) if balance is not None and len(balance.columns) else None
     tax = _ttl(annual, _TAX_ROWS, quarterly)
 
-    # Net debt and share count come from the same most-recent-reported
-    # machinery the valuation bridge uses, so a peer is measured on the basis
-    # the target is measured on.
+    # Net debt and share count are taken the same way the valuation bridge takes
+    # them, so a peer is measured on the basis the target is measured on.
     #
     # On the SAME basis means the whole bridge, not just its debt and cash legs.
     # This used to take debt less liquid assets and stop there, leaving out the
@@ -427,32 +427,47 @@ def compute_peer_multiples(
     # an absent peer.
     net_debt: Optional[float] = None
     balance_as_of = ""
-    try:
-        from backend.data.bridge_inputs import fetch_bridge_snapshot
+    company_id = _company_id_for(symbol)
 
-        company_id = _company_id_for(symbol)
-        if not company_id:
-            logger.info(
-                "Peer %s: listed in a market the platform does not onboard, so its "
-                "balance sheet cannot be resolved — dropped rather than published "
-                "with no debt",
-                symbol,
-            )
-            return None
+    # The peer's FILED balance sheet first, on the same definition the target is
+    # valued on.
+    #
+    # This has to lead. The valuation bridge stopped taking net debt from a market
+    # feed's quarterly statement, because that statement's period end was a
+    # synthetic calendar date rather than the day the quarter closed and its debt
+    # total capitalised every operating lease it could find. A benchmark whose
+    # median is a mix of filed and feed net debt is a median of two conventions,
+    # and it moves as peers happen to be sourced rather than as they are valued.
+    # So a peer the platform has a filed statement for is measured exactly as the
+    # target is, and only a peer with no filed statement falls back to the feed.
+    filed = _filed_net_debt(company_id) if company_id else None
+    if filed is not None:
+        net_debt, balance_as_of = filed
+    elif not company_id:
+        logger.info(
+            "Peer %s: listed in a market the platform does not onboard, so its "
+            "balance sheet cannot be resolved — dropped rather than published "
+            "with no debt",
+            symbol,
+        )
+        return None
+    else:
+        try:
+            from backend.data.bridge_inputs import fetch_bridge_snapshot
 
-        # Absolute currency, because the market capitalisation below is price
-        # times shares and is therefore in rupees or dollars. The snapshot's
-        # default crores/millions scaling is for the model, and adding it to an
-        # absolute market capitalisation understates net debt ten-millionfold.
-        snapshot = fetch_bridge_snapshot(company_id, in_model_units=False)
-        if snapshot is not None and snapshot.as_of:
-            claims = (snapshot.terms.get("minority_interest") or 0.0) + (
-                snapshot.terms.get("preferred_stock") or 0.0
-            )
-            net_debt = snapshot.total_debt + claims - snapshot.total_liquid_assets
-            balance_as_of = snapshot.as_of
-    except Exception as exc:
-        logger.info("Peer %s: balance sheet snapshot unavailable (%s)", symbol, exc)
+            # Absolute currency, because the market capitalisation below is price
+            # times shares and is therefore in rupees or dollars. The snapshot's
+            # default crores/millions scaling is for the model, and adding it to an
+            # absolute market capitalisation understates net debt ten-millionfold.
+            snapshot = fetch_bridge_snapshot(company_id, in_model_units=False)
+            if snapshot is not None and snapshot.as_of:
+                claims = (snapshot.terms.get("minority_interest") or 0.0) + (
+                    snapshot.terms.get("preferred_stock") or 0.0
+                )
+                net_debt = snapshot.total_debt + claims - snapshot.total_liquid_assets
+                balance_as_of = snapshot.as_of
+        except Exception as exc:
+            logger.info("Peer %s: balance sheet snapshot unavailable (%s)", symbol, exc)
 
     if net_debt is None:
         logger.info("Peer %s: no balance sheet, so no net debt — dropped", symbol)
@@ -565,6 +580,136 @@ def compute_peer_multiples(
         price_source=price_source,
         shares_basis=shares_basis,
     )
+
+
+def _filed_net_debt(company_id: str) -> Optional[tuple]:
+    """Net debt for a peer from its own filed balance sheet, in absolute currency.
+
+    Returns (net_debt, period_end_iso) or None when the peer has no filed
+    statement, in which case the caller falls back to the market feed.
+
+    The valuation bridge computes the target's net debt from the filed statement
+    on a stated definition: the interest-bearing components listed in
+    OPENING_BALANCE_KEYS, less cash and short-term investments, plus the minority
+    interests and preferred stock that enterprise value also carries. A peer
+    measured any other way is not comparable to it, and a median built from a mix
+    of conventions is not a peer median.
+
+    The absolute currency matters and is easy to get wrong. A market
+    capitalisation is price times shares and is therefore in rupees or dollars,
+    while the filed statements are held in the reporting units the model uses —
+    crores for an Indian filer, millions for a US one. Adding one to the other
+    without converting understates net debt ten-millionfold, which is the reason
+    the resolver below scales back out before returning.
+
+    Read from the compiled snapshot first, because that is what a fresh deploy
+    with no database serves, and from the database second.
+    """
+    import json
+    from pathlib import Path
+
+    items: list = []
+    as_of = ""
+
+    cache_dir = Path(__file__).resolve().parents[1] / "data" / "cache"
+    snapshot_path = cache_dir / f"{company_id}.json"
+    if snapshot_path.exists():
+        try:
+            payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
+            historicals = (payload.get("model") or payload).get("historicals") or {}
+            periods = [str(p) for p in (historicals.get("periods") or [])]
+            if periods:
+                latest = max(periods, key=lambda x: (len(x), x))
+                for item in historicals.get("line_items") or []:
+                    if str(item.get("period_label")) == latest:
+                        items.append(item)
+                # The date most of the reported lines agree on, not the latest one
+                # seen: the few lines that carry no filed date fall back to the
+                # fiscal calendar, and a year closing on a Sunday makes that
+                # fallback the later of the two.
+                counts: dict = {}
+                for item in items:
+                    stamp = item.get("period_end_date")
+                    if stamp:
+                        counts[str(stamp)] = counts.get(str(stamp), 0) + 1
+                if counts:
+                    as_of = max(counts, key=counts.get)
+        except Exception as exc:
+            logger.info("Peer %s: compiled snapshot unreadable (%s)", company_id, exc)
+            items = []
+
+    if not items:
+        try:
+            from backend.api.routes import _get_hist_model
+            from backend.models.spec.historicals import Historicals
+
+            model = _get_hist_model(company_id)
+            if model is None or not model.periods:
+                return None
+            latest = model.periods[-1]
+            for item in model.balance_sheet.line_items:
+                value = item.values_by_period.get(latest)
+                if value is not None:
+                    items.append(
+                        {
+                            "canonical_key": item.canonical_key,
+                            "value": value,
+                            "period_end_date": item.period_end_dates_by_period.get(latest),
+                        }
+                    )
+            filed = Historicals(
+                periods=model.periods,
+                line_items=[
+                    {
+                        "canonical_key": i["canonical_key"],
+                        "period_label": latest,
+                        "period_end_date": i["period_end_date"],
+                    }
+                    for i in items
+                ],
+            ).filed_period_end(latest)
+            if filed:
+                as_of = filed.isoformat()
+        except Exception:
+            return None
+
+    if not items:
+        return None
+
+    balances: dict = {}
+    for item in items:
+        balances.setdefault(
+            str(item.get("canonical_key")), float(item.get("value") or 0.0)
+        )
+
+    debt = sum(balances.get(key, 0.0) for key in OPENING_BALANCE_KEYS)
+    # Every asset the target's bridge nets, and no more. Leaving non-current
+    # investments out netted 22,251 of NVIDIA's away from a peer figure it applies
+    # in full to the target, which is the same inconsistency in the other
+    # direction: a benchmark that flatters one side of the comparison.
+    liquid = (
+        balances.get("canonical.bs.cash_and_bank", 0.0)
+        + balances.get("canonical.bs.current_investments", 0.0)
+        + balances.get("canonical.bs.non_current_investments", 0.0)
+    )
+    claims = (
+        balances.get("canonical.bs.minority_interest", 0.0)
+        + balances.get("canonical.bs.preferred_stock", 0.0)
+    )
+    if not debt and not liquid:
+        return None
+    from backend.data.bridge_inputs import UNIT_DIVISORS
+    from backend.models.spec.metadata import get_metadata_for_company
+
+    try:
+        meta = get_metadata_for_company(company_id)
+        divisor = UNIT_DIVISORS.get((meta.currency, meta.units))
+    except Exception:
+        return None
+    if not divisor:
+        return None
+
+    return (debt + claims - liquid) * divisor, as_of
 
 
 def _company_id_for(symbol: str) -> str:

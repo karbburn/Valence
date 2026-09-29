@@ -10,7 +10,7 @@ from pathlib import Path
 from backend import constants
 from backend.constants import MAX_CARRYING_RATE, MIN_CARRYING_RATE  # noqa: F401
 from backend.forecast.assumptions import suggest_base_assumptions
-from backend.forecast.debt import build_debt_schedule
+from backend.forecast.debt import OPENING_BALANCE_KEYS, build_debt_schedule
 from backend.forecast.engine import run_forecast
 from backend.forecast.scenarios import build_scenario_assumptions
 from backend.forecast.share_count import build_share_count
@@ -93,19 +93,11 @@ def run(
     spec.valuation = valuation_scaffolds
     spec.qa = QAResults.empty()
 
-    # Determine opening debt balance from the last historical balance sheet.
-    # Must match the definition the valuation bridge deducts, or the schedule's
-    # interest and the bridge's obligation are two different numbers for the
-    # same debt: non-current borrowings + current borrowings (including the
-    # current portion of long-term debt) + finance lease liabilities.
+    # Opening debt balance from the last historical balance sheet, on the shared
+    # definition the enterprise-value bridge deducts. See OPENING_BALANCE_KEYS.
     last_period = historical_model.periods[-1] if historical_model.periods else "FY26"
-    debt_keys = (
-        "canonical.bs.borrowings",
-        "canonical.bs.short_term_borrowings",
-        "canonical.bs.finance_lease_liabilities",
-    )
     opening_debt = 0.0
-    for key in debt_keys:
+    for key in OPENING_BALANCE_KEYS:
         item = next(
             (i for i in historical_model.balance_sheet.line_items if i.canonical_key == key),
             None,
