@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import Link from 'next/link'
-import { Pause, Play } from 'lucide-react'
+import { Pause, Play, Volume2, VolumeX } from 'lucide-react'
 
 /**
  * Hero video slot.
@@ -14,6 +14,14 @@ import { Pause, Play } from 'lucide-react'
  * The frame is 16:9 set in CSS rather than read from the file, so dropping in
  * the next cut at the same dimensions changes nothing about the layout. The box
  * is reserved before the file loads, which keeps the shift on load at zero.
+ *
+ * The film carries a voiceover and a sound bed, and the captions are burnt into
+ * the picture rather than carried as a track. It therefore plays correctly with
+ * the sound off, which is how it starts: a visitor who clicked play on a page
+ * they opened to read something did not ask for a soundtrack, and a film that
+ * can be understood silently should not insist otherwise. The voiceover is one
+ * control away rather than unreachable, which is what the caption row's sound
+ * control is for.
  */
 
 /**
@@ -27,14 +35,18 @@ import { Pause, Play } from 'lucide-react'
  *
  * Set it to the date of the new cut, or any value that changes with it.
  */
-const MEDIA_REV = '2026-09-28a'
+const MEDIA_REV = '2026-09-29a'
 
 const VIDEO_SRC = `/media/valence-launch.mp4?v=${MEDIA_REV}`
 const POSTER_SRC = `/media/valence-launch-poster.jpg?v=${MEDIA_REV}`
 
+/** Runtime of the cut, read from the file rather than typed in by hand. */
+const FILM_RUNTIME = '0:26'
+
 export function LaunchVideo() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [started, setStarted] = useState(false)
+  const [sound, setSound] = useState(false)
 
   return (
     <div className="relative">
@@ -49,13 +61,34 @@ export function LaunchVideo() {
           className="absolute inset-0 w-full h-full object-cover object-top"
           poster={POSTER_SRC}
           preload="none"
-          muted
+          muted={!sound}
           playsInline
           controls
           onPlay={() => setStarted(true)}
           onPause={() => setStarted(false)}
         >
           <source src={VIDEO_SRC} type="video/mp4" />
+          {/* A caption track, default, so the browser offers captions without
+              a visitor going looking for them.
+
+              The captions are already burned into the picture, so this is not
+              what a sighted viewer reads and it is not a substitute for them. It
+              is for the two cases pixels cannot serve: a screen reader has no
+              frame to read, and a viewer who turns the sound on has no reason to
+              keep looking at the screen. Without it, turning the sound on put
+              spoken audio on with no text anywhere for anyone who needs it,
+              which is why the sound control and this track landed together.
+
+              The timings are generated from the film's own composition rather
+              than typed, so the track cannot drift away from the captions in the
+              picture when the film is re-cut. */}
+          <track
+            kind="captions"
+            src={`${VIDEO_SRC.replace(/\.mp4$/, '')}.en.vtt?v=${MEDIA_REV}`}
+            srcLang="en"
+            label="English"
+            default
+          />
           Your browser cannot play embedded video.{' '}
           <a href={VIDEO_SRC} className="text-accent underline">
             Download the clip
@@ -99,12 +132,22 @@ export function LaunchVideo() {
         )}
       </div>
 
-      {/* Caption row. Carries the visible play control, the accessibility
-          statement, and the way to the assumptions. Not "recorded from the live
-          workbench": the poster is a composed card, and a caption that
-          misdescribes the thing above it is the same class of error as a
-          caption that misdescribes a number. This one also survives a re-cut,
-          because it points at the assumptions rather than the production. */}
+      {/* Caption row. Carries the visible play control, the runtime, the sound
+          control, and the way to the assumptions.
+
+          The sound control is a control rather than a label because the film has
+          a voiceover and this row previously said "Silent" in words while the
+          video element was muted, so the statement described the element's state
+          and nothing else. It read as a fact about the film, and the fact was
+          wrong: the cut carries a five-line voiceover over a sound bed. A label
+          that asserts something cannot be acted on, and this one had to be acted
+          on, because the audio was otherwise unreachable.
+
+          It starts off. Someone who pressed play on a page they opened in order
+          to read something did not ask for a soundtrack, and the captions are
+          burnt into the picture, so the film is complete either way. Turning it
+          on is one press away, which is the difference between a film that has a
+          voiceover and one that has had it taken away. */}
       <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <button
           type="button"
@@ -128,7 +171,24 @@ export function LaunchVideo() {
         <span className="text-[11px] text-text-faint font-mono" aria-hidden>
           /
         </span>
-        <span className="text-[11px] text-text-dim font-mono">Silent</span>
+        <span className="text-[11px] text-text-dim font-mono">{FILM_RUNTIME}</span>
+        <span className="text-[11px] text-text-faint font-mono" aria-hidden>
+          /
+        </span>
+        <button
+          type="button"
+          onClick={() => setSound((on) => !on)}
+          className="inline-flex items-center gap-1.5 text-[11px] font-mono text-text-muted
+                     hover:text-text-main transition-colors"
+          aria-pressed={sound}
+        >
+          {sound ? (
+            <Volume2 className="w-3 h-3 text-accent" aria-hidden />
+          ) : (
+            <VolumeX className="w-3 h-3" aria-hidden />
+          )}
+          {sound ? 'Sound on' : 'Sound off'}
+        </button>
         <span className="text-[11px] text-text-faint font-mono" aria-hidden>
           /
         </span>
