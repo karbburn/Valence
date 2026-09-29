@@ -17,7 +17,7 @@ from backend.data.providers.run_rate import (
     run_rate_is_comparable,
 )
 from backend.models.spec.assumptions import AssumptionObject
-from backend.models.spec.forecast import FORECAST_PERIODS
+from backend.models.spec.forecast import FORECAST_PERIODS, forecast_periods_after
 from backend.models.spec.metadata import resolve_market
 from backend.models.statements.historical_model import HistoricalModel
 from backend.models.statements.ratios import HistoricalRatios
@@ -228,7 +228,12 @@ def suggest_base_assumptions(
                 f"{rev_end:,.0f} reported in {last_p} has fallen behind"
             )
 
-    for idx, p in enumerate(FORECAST_PERIODS):
+    # The horizon belongs to the company: the five fiscal years after the last one
+    # it reported. The fixed FY27-FY31 list meant a company whose last actual was
+    # FY25 was given drivers for years it never modelled and none for FY26.
+    forecast_periods = forecast_periods_after(last_p)
+
+    for idx, p in enumerate(forecast_periods):
         # The whole path decays from the YEAR-ONE rate, not from the historical
         # one. Using the measured rate again from year two produced a cliff the
         # moment the floor bound: a company measured at 4.2% whose run rate
@@ -263,7 +268,7 @@ def suggest_base_assumptions(
         if ebitda_measured is not None
         else f"No reported EBITDA margin; platform default {constants.DEFAULT_EBITDA_MARGIN}%"
     )
-    for p in FORECAST_PERIODS:
+    for p in forecast_periods:
         result.append(_make("ebitda_margin", ebitda_margin, p, "base", source_ebitda))
 
     # ------------------------------------------------------------------ #
@@ -277,7 +282,7 @@ def suggest_base_assumptions(
         if ebit_measured is not None
         else f"No reported operating margin; platform default {constants.DEFAULT_EBIT_MARGIN}%"
     )
-    for p in FORECAST_PERIODS:
+    for p in forecast_periods:
         result.append(_make("ebit_margin", ebit_margin, p, "base", source_ebit))
 
     # ------------------------------------------------------------------ #
@@ -291,7 +296,7 @@ def suggest_base_assumptions(
         if da_measured is not None
         else f"No reported D&A; platform default {constants.DEFAULT_DA_PCT_REVENUE}%"
     )
-    for p in FORECAST_PERIODS:
+    for p in forecast_periods:
         result.append(_make("da_pct_revenue", da_pct, p, "base", source_da))
 
     # ------------------------------------------------------------------ #
@@ -305,7 +310,7 @@ def suggest_base_assumptions(
 
     # Fade towards statutory rate in Years 3-5 (reflecting global minimum tax / credit phase-outs)
     tax_fade_weights = [0.0, 0.0, 0.25, 0.50, 0.75]  # weight on statutory rate
-    for idx, p in enumerate(FORECAST_PERIODS):
+    for idx, p in enumerate(forecast_periods):
         w_stat = tax_fade_weights[idx] if idx < len(tax_fade_weights) else 1.0
         p_tax = round((1.0 - w_stat) * hist_tax_rate + w_stat * default_tax, 2)
         source_tax = (
@@ -337,7 +342,7 @@ def suggest_base_assumptions(
     else:
         source_dso = f"most recent period DSO ({last_p})"
 
-    for p in FORECAST_PERIODS:
+    for p in forecast_periods:
         result.append(_make("dso_days", dso, p, "base", source_dso))
 
     # ------------------------------------------------------------------ #
@@ -361,7 +366,7 @@ def suggest_base_assumptions(
     else:
         source_dpo = f"most recent period DPO ({last_p})"
 
-    for p in FORECAST_PERIODS:
+    for p in forecast_periods:
         result.append(_make("dpo_days", dpo, p, "base", source_dpo))
 
     # ------------------------------------------------------------------ #
@@ -387,7 +392,7 @@ def suggest_base_assumptions(
                 "inventory held at zero rather than assumed"
             )
 
-    for p in FORECAST_PERIODS:
+    for p in forecast_periods:
         result.append(_make("dio_days", dio, p, "base", source_dio))
 
     # ------------------------------------------------------------------ #
@@ -441,7 +446,7 @@ def suggest_base_assumptions(
     is_expansion_cycle = hist_capex_pct > (da_pct * 1.35) and hist_capex_pct > 6.0
     capex_fade_weights = [0.0, 0.20, 0.45, 0.65, 0.85] if is_expansion_cycle else [0.0, 0.0, 0.0, 0.0, 0.0]
 
-    for idx, p in enumerate(FORECAST_PERIODS):
+    for idx, p in enumerate(forecast_periods):
         w_fade = capex_fade_weights[idx] if idx < len(capex_fade_weights) else 0.0
         p_capex = round((1.0 - w_fade) * hist_capex_pct + w_fade * steady_state_capex, 4)
         if p_capex > constants.MAX_CAPEX_PCT_REVENUE:
@@ -456,7 +461,7 @@ def suggest_base_assumptions(
     # 9. Debt Repayment — zero (borrowings carried flat across forecast)
     # ------------------------------------------------------------------ #
     source_debt = "zero — opening debt carried flat, no draws or repayments"
-    for p in FORECAST_PERIODS:
+    for p in forecast_periods:
         result.append(_make("debt_repayment", 0.0, p, "base", source_debt))
 
     # ------------------------------------------------------------------ #

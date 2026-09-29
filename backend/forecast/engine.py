@@ -31,7 +31,12 @@ from backend.forecast.debt import OPENING_BALANCE_KEYS
 
 logger = logging.getLogger(__name__)
 from backend.models.spec.assumptions import AssumptionObject
-from backend.models.spec.forecast import FORECAST_PERIODS, Forecast, ForecastLineItem
+from backend.models.spec.forecast import (
+    FORECAST_PERIODS,
+    Forecast,
+    ForecastLineItem,
+    forecast_periods_after,
+)
 from backend.models.spec.metadata import ModelMetadata, parse_fiscal_year_end
 
 
@@ -93,6 +98,26 @@ def _period_end(year: int, month: int, day: int) -> date:
     return date(year, month, min(day, last_day))
 
 
+def _weekday_aligned_day(year: int, month: int, weekday: int, anchor_day: int) -> int:
+    """The day in this month falling on the filer's usual weekday.
+
+    A company's fiscal year does not end on a fixed date. NVIDIA's ends on the last
+    Sunday in January, so the 26th in 2025, the 25th in 2026 and the 24th in 2027 —
+    the same Sunday, a different date each year. A registry default of 31 January
+    is the right answer on average and the wrong answer every time, and since the
+    discounting is now measured in days between these dates, that difference is
+    compounded into every price.
+
+    Returns the filer's anchor day when the month cannot hold a matching weekday,
+    rather than a date the company has never used.
+    """
+    last = calendar.monthrange(year, month)[1]
+    for day in range(last, anchor_day - 1, -1):
+        if date(year, month, day).weekday() == weekday:
+            return day
+    return min(anchor_day, last)
+
+
 def _item(
     canonical_key: str,
     period: str,
@@ -123,6 +148,35 @@ def run_forecast(
 
     # Seed prior-period values from last available historical period
     last_p = historical_model.periods[-1] if (historical_model.periods and len(historical_model.periods) > 0) else "FY26"
+
+    # The fiscal calendar to stamp FORECAST periods with: the company's own, taken
+    # from the day it last actually reported rather than from the registry default.
+    #
+    # The registry says NVIDIA's year ends 31 January and Microsoft its 30 June. The
+    # filings say NVIDIA's FY2026 ended 25 January, the last Sunday, and Apple's
+    # FY2025 ended 27 September. Stamping the forecast from the registry put
+    # NVIDIA's FY2027 a week after a date its own filing never used, and those
+    # dates are what the discounting is now measured in — so a six-day calendar
+    # guess was becoming a six-day error in the discount factor.
+    _stamped = [
+        stamped
+        for item in (
+            list(historical_model.balance_sheet.line_items)
+            + list(historical_model.income_statement.line_items)
+        )
+        for stamped in [
+            (getattr(item, "period_end_dates_by_period", None) or {}).get(last_p)
+        ]
+        if stamped
+    ]
+    # The date most of the reported lines agree on, not the latest one seen. A
+    # handful of lines carry no filed date and fall back to the registry's calendar
+    # day, and for a January filer that fallback is six days LATER than the real
+    # one — so taking the maximum preferred the guess over the filing on the
+    # strength of two rows, and the forecast was then stamped with the guess.
+    _last_filed_end = (
+        max(set(_stamped), key=_stamped.count) if _stamped else None
+    )
     hist_is = historical_model.income_statement
     hist_bs = historical_model.balance_sheet
     hist_cf = historical_model.cash_flow_statement
@@ -242,7 +296,23 @@ def run_forecast(
     except ValueError:
         fiscal_end_month, fiscal_end_day = (12, 31) if market == "us" else (3, 31)
 
-    for period in FORECAST_PERIODS:
+    # Where the company actually closed its last reported year wins over the
+    # registry default, and the filer's own weekday carries forward year to year.
+    #
+    # A filer's year ends on the same weekday it always has — NVIDIA's on the last
+    # Sunday in January, which is the 24th in 2027 and the 25th in 2026 and the 26th
+    # in 2025. A fixed month and day cannot follow that, so each forecast year is
+    # the same weekday in its own year rather than the registry's day.
+    if _last_filed_end is not None:
+        fiscal_end_month = _last_filed_end.month
+        fiscal_end_day = _weekday_aligned_day(_last_filed_end.year, fiscal_end_month, _last_filed_end.weekday(), _last_filed_end.day)
+
+    # The horizon belongs to the company: the five fiscal years following the last
+    # one it actually reported. It was a fixed FY27-FY31 list, so a company whose
+    # last actual was FY25 jumped straight to FY27 and never modelled FY26.
+    periods = forecast_periods_after(last_p)
+
+    for period in periods:
         # --- Driver lookups ---
         # `constants.resolve`, never `or`: a driver whose real value is 0.0 (no
         # inventory, no payables, a nil tax rate) must not be replaced by the

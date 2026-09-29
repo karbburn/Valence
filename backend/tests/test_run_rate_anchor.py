@@ -41,14 +41,27 @@ def _run_rate(value, basis="trailing twelve months to 2026-06-30"):
 
 
 def _fy27(revenues: list[float], run_rate=None, basis="trailing twelve months to 2026-06-30"):
-    """FY27 published growth, with the run rate pinned (or suppressed)."""
+    """The FIRST forecast year's published growth, run rate pinned or suppressed.
+
+    Named for the year one rather than for a label: the horizon follows the
+    company's last reported year, and these fixtures end FY22, so year one is not
+    FY27. Reading a named year here returned the third forecast year's rate and
+    every assertion about year one was really about year three.
+    """
     with _run_rate(run_rate, basis):
         model = _model(revenues)
         assumptions = suggest_base_assumptions(model.ratios, model)
+    years = sorted(
+        a.period
+        for a in assumptions
+        if a.driver_key == "revenue_growth" and a.scenario == "base"
+    )
     return next(
         a.value
         for a in assumptions
-        if a.driver_key == "revenue_growth" and a.period == "FY27" and a.scenario == "base"
+        if a.driver_key == "revenue_growth"
+        and a.period == years[0]
+        and a.scenario == "base"
     )
 
 
@@ -56,10 +69,17 @@ def _source(revenues: list[float], run_rate=None, basis="trailing twelve months 
     with _run_rate(run_rate, basis):
         model = _model(revenues)
         assumptions = suggest_base_assumptions(model.ratios, model)
+    years = sorted(
+        a.period
+        for a in assumptions
+        if a.driver_key == "revenue_growth" and a.scenario == "base"
+    )
     return next(
         a.source
         for a in assumptions
-        if a.driver_key == "revenue_growth" and a.period == "FY27" and a.scenario == "base"
+        if a.driver_key == "revenue_growth"
+        and a.period == years[0]
+        and a.scenario == "base"
     )
 
 

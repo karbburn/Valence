@@ -88,13 +88,21 @@ def _no_run_rate():
 def _growths_live(revenues: list[float]) -> list[float]:
     model = _model(revenues)
     assumptions = suggest_base_assumptions(model.ratios, model)
+    # The horizon follows the company's last reported year, so it is read from the
+    # engine rather than from the platform default. These fixtures end FY24, which
+    # means the engine publishes FY25 onward.
+    periods = sorted(
+        a.period
+        for a in assumptions
+        if a.driver_key == "revenue_growth" and a.scenario == "base"
+    )
     return [
         next(
             a.value
             for a in assumptions
             if a.driver_key == "revenue_growth" and a.period == period and a.scenario == "base"
         )
-        for period in FORECAST_PERIODS
+        for period in periods
     ]
 
 
@@ -183,34 +191,42 @@ def test_fade_reaches_a_mature_rate_over_the_forecast():
     assert growths[-1] > 0.0, "growth faded through zero into decline"
 
 
-def test_growth_source_states_the_rule():
-    """The published source string must describe the rule that produced it."""
-    model = _model([1000.0, 1880.0, 3534.4])
-    assumptions = suggest_base_assumptions(model.ratios, model)
+def _year_one_source(revenues: list[float]) -> str:
+    """The published source string for this company's FIRST forecast year.
 
-    source = next(
+    Read from the engine rather than named, because the horizon follows the last
+    reported year: these fixtures end FY24, so year one is FY25.
+    """
+    model = _model(revenues)
+    assumptions = suggest_base_assumptions(model.ratios, model)
+    years = sorted(
+        a.period
+        for a in assumptions
+        if a.driver_key == "revenue_growth" and a.scenario == "base"
+    )
+    return next(
         a.source
         for a in assumptions
-        if a.driver_key == "revenue_growth" and a.period == "FY27" and a.scenario == "base"
+        if a.driver_key == "revenue_growth"
+        and a.period == years[0]
+        and a.scenario == "base"
     )
 
+
+def test_growth_source_states_the_rule():
+    """The published source string must describe the rule that produced it."""
+    source = _year_one_source([1000.0, 1880.0, 3534.4])
+
     assert "year one carries it in" in source, (
-        "the FY27 growth source does not say that year one is the measured "
+        f"the year-one growth source does not say that year one is the measured "
         f"rate: {source!r}"
     )
-    assert "decays" in source, f"the FY27 growth source does not state the fade: {source!r}"
+    assert "decays" in source, f"the year-one growth source does not state the fade: {source!r}"
 
 
 def test_flat_growth_source_says_it_is_held_flat():
     """A held-flat rate is a different claim from a faded one, and says so."""
-    model = _model([1000.0, 1040.0, 1081.6])
-    assumptions = suggest_base_assumptions(model.ratios, model)
-
-    source = next(
-        a.source
-        for a in assumptions
-        if a.driver_key == "revenue_growth" and a.period == "FY27" and a.scenario == "base"
-    )
+    source = _year_one_source([1000.0, 1040.0, 1081.6])
 
     assert "held flat" in source, (
         f"a company whose growth is held flat does not say so: {source!r}"
@@ -229,16 +245,25 @@ def test_forecast_revenue_matches_the_published_growth_rate():
     last_actual = forecast_spec.historicals.get_value(
         "canonical.is.revenue", forecast_spec.historicals.periods[-1]
     )
-    fy27 = forecast_spec.forecast.get_value("canonical.is.revenue", "FY27", "base")
-    implied = (fy27 / last_actual - 1) * 100
+    # The FIRST forecast year, not a named one. The horizon follows the company's
+    # last reported year, and this check is about the gap between the revenue line
+    # and the rate published beside it in year one — a later year's revenue has
+    # compounded through three rates and is not what the year-one driver claims.
+    year_one = forecast_spec.forecast.periods[0]
+    year_one_revenue = forecast_spec.forecast.get_value(
+        "canonical.is.revenue", year_one, "base"
+    )
+    implied = (year_one_revenue / last_actual - 1) * 100
 
     published = next(
         a.value
         for a in forecast_spec.assumptions
-        if a.driver_key == "revenue_growth" and a.period == "FY27" and a.scenario == "base"
+        if a.driver_key == "revenue_growth"
+        and a.period == year_one
+        and a.scenario == "base"
     )
 
     assert implied == pytest.approx(published, abs=0.1), (
-        f"FY27 revenue of {fy27} on {last_actual} implies {implied:.2f}% growth, "
-        f"but the sheet publishes {published}%"
+        f"{year_one} revenue of {year_one_revenue} on {last_actual} implies "
+        f"{implied:.2f}% growth, but the sheet publishes {published}%"
     )
