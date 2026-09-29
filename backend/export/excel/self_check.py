@@ -81,9 +81,13 @@ def main() -> None:
     # value bridge moving to 36_EV_Bridge is exactly that change.
     missing = [tab for tab in EXPECTED_SHEETS if tab not in sheet_names]
     extra = [tab for tab in sheet_names if tab not in EXPECTED_SHEETS]
+    # The element is `want`, not a name that is not bound: a comprehension only
+    # evaluates its result expression for the items it keeps, so a wrong name here
+    # raised NameError on precisely the run where the sheets were out of order.
+    # The check that exists to report a broken workbook was the thing that broke.
     out_of_order = [
-        tab
-        for (want, got) in zip(EXPECTED_SHEETS, sheet_names)
+        f"position {i + 1}: expected {want!r}, found {got!r}"
+        for i, (want, got) in enumerate(zip(EXPECTED_SHEETS, sheet_names))
         if want != got
     ]
     _assert(
