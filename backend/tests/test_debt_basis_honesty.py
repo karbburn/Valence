@@ -79,7 +79,7 @@ def test_a_lease_row_equal_to_total_debt_is_not_published_as_a_component():
     lease obligations, which is not a capital structure any company has.
     """
     snapshot = _snapshot({
-        "Total Debt": 112_830_000_000.0,
+        "Long Term Debt": 112_830_000_000.0,
         "Cash Cash Equivalents And Short Term Investments": 413_730_000_000.0,
         "Capital Lease Obligation": 112_830_000_000.0,
     })
@@ -94,9 +94,9 @@ def test_a_lease_row_equal_to_total_debt_is_not_published_as_a_component():
 def test_a_genuine_lease_component_is_still_reported():
     """Dropping the unreliable case must not drop the reliable one."""
     snapshot = _snapshot({
-        "Total Debt": 56_826_000_000.0,
+        "Long Term Debt": 40_294_000_000.0,
         "Cash Cash Equivalents And Short Term Investments": 76_651_000_000.0,
-        "Capital Lease Obligation": 16_532_000_000.0,
+        "Operating Lease Liability": 16_532_000_000.0,
     })
 
     assert snapshot.terms["lease_liabilities"] == pytest.approx(16_532_000_000.0)
@@ -112,7 +112,7 @@ def test_a_component_larger_than_the_total_is_also_dropped():
 def test_minority_interest_at_or_above_total_debt_is_dropped():
     """Same reasoning: a claim on the company cannot exceed the company's debt."""
     snapshot = _snapshot({
-        "Total Debt": 1_000.0,
+        "Long Term Debt": 1_000.0,
         "Cash Cash Equivalents And Short Term Investments": 500.0,
         "Minority Interest": 1_000.0,
     })
@@ -120,10 +120,39 @@ def test_minority_interest_at_or_above_total_debt_is_dropped():
     assert "minority_interest" not in snapshot.terms
 
 
+def test_a_filer_publishing_only_the_combined_debt_caption_is_dropped():
+    """No debt row means no debt figure, which is not the same as no debt.
+
+    The combined caption carries a lease the feed cannot identify, so it cannot be
+    used. Publishing a balance of zero instead would state that the company carries
+    no debt, and that figure flows into an enterprise value, an EV/EBITDA and a
+    benchmark median, flattering every one of them.
+    """
+    assert _snapshot({
+        "Total Debt": 56_826_000_000.0,
+        "Long Term Debt And Capital Lease Obligation": 56_826_000_000.0,
+        "Cash Cash Equivalents And Short Term Investments": 76_651_000_000.0,
+    }) is None
+
+
+def test_the_combined_debt_caption_is_never_read_as_borrowings():
+    """The sum it publishes is borrowings plus a lease of unidentifiable nature."""
+    snapshot = _snapshot({
+        "Long Term Debt And Capital Lease Obligation": 40_294_000_000.0,
+        "Long Term Capital Lease Obligation": 16_532_000_000.0,
+        "Cash Cash Equivalents And Short Term Investments": 76_651_000_000.0,
+    })
+
+    assert snapshot is None, (
+        "a combined caption with no pure row beside it must not become a debt "
+        "figure, because the lease inside it cannot be removed"
+    )
+
+
 def test_a_small_minority_interest_is_kept():
     """Ordinary claims are untouched."""
     snapshot = _snapshot({
-        "Total Debt": 1_000.0,
+        "Long Term Debt": 1_000.0,
         "Cash Cash Equivalents And Short Term Investments": 500.0,
         "Minority Interest": 120.0,
     })
