@@ -23,6 +23,10 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from backend.api import throttle as ingest_throttle
+from backend.data.providers.market_data import (
+    REGISTRY_FALLBACKS,
+    last_completed_session,
+)
 from backend.export.excel.exporter import export_model_to_excel
 from backend.forecast.engine import run_forecast
 from backend.forecast.pipeline import run as run_forecast_pipeline
@@ -324,9 +328,59 @@ class _StaleCache(Exception):
     """Raised when a cached snapshot predates the current database state."""
 
 
+def _cached_spec_session(spec: ModelSpecification) -> Optional[str]:
+    """The market session a cached spec was valued against, if it records one."""
+    for output in getattr(spec, "valuation", None) or []:
+        reverse = getattr(output, "reverse_dcf", None)
+        if reverse is not None and reverse.market_price_date:
+            return reverse.market_price_date
+    return None
+
+
+def _spec_is_current_for_session(
+    spec: ModelSpecification, market: str, now: Optional[datetime] = None
+) -> bool:
+    """Whether a cached spec was valued against the session that has since closed.
+
+    The in-memory model cache has no time-based expiry. It evicts by capacity, and
+    the capacity is larger than the number of onboarded companies, so nothing is
+    ever evicted. A spec therefore lived for the life of the process with the
+    price frozen at the moment it was first requested, and the daily refresh that
+    recomputes valuation against live quotes only ever ran on the one request
+    that missed the cache. Every company the process had ever served kept
+    yesterday's close indefinitely, and nothing in the served output said so: the
+    price carried a real session date and a real source, just not the current one.
+
+    A model is invalidated when a newer session has closed since it was valued.
+    That is the same question the quote cache asks, asked with the same calendar,
+    so the two cannot disagree about which close is the current one.
+
+    The comparison is for equality, and both directions matter. A spec priced
+    against an earlier session is stale, and a spec dated against a session that
+    has not happened cannot be a settled close at all, so neither is current.
+    """
+    session = _cached_spec_session(spec)
+    if session is None:
+        # Nothing to compare against, so the spec cannot be shown to be current.
+        return False
+    return session == last_completed_session(market, now).isoformat()
+
+
 def _get_or_build_spec(company_id: str = "infy_infy") -> ModelSpecification:
     if company_id in _MODEL_CACHE:
-        return _lru_get(_MODEL_CACHE, company_id)
+        cached_spec = _lru_get(_MODEL_CACHE, company_id)
+        reg = REGISTRY_FALLBACKS.get(company_id, {})
+        market = reg.get("market") or ("us" if company_id.endswith("_us") else "india")
+        if _spec_is_current_for_session(cached_spec, market):
+            return cached_spec
+        # A newer session has closed. Drop it and revalue, rather than serve a
+        # model priced against a close the market has already moved past.
+        del _MODEL_CACHE[company_id]
+        logger.info(
+            "Cached model for %s predates the current %s session; revaluing.",
+            company_id,
+            market,
+        )
 
     cache_path = PROJECT_ROOT / "backend" / "data" / "cache" / f"{company_id}.json"
     has_snapshot = cache_path.exists()
