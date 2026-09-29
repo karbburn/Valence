@@ -20,6 +20,7 @@ from datetime import date
 
 import pytest
 
+from backend.forecast import engine as forecast_engine
 from backend.forecast import pipeline as forecast_pipeline
 from backend.forecast.debt import OPENING_BALANCE_KEYS
 from backend.valuation import pipeline as valuation_pipeline
@@ -60,16 +61,19 @@ def _historical_model(company_id: str):
 
 
 def test_both_sides_read_the_one_debt_definition():
-    """Neither module may name the components itself.
+    """No module may name the debt components itself.
 
-    The failure this replaces was two literal tuples with a comment asserting they
-    must match. A comment cannot hold two lists together; a shared constant can.
+    The failure this replaces was three hand-written tuples with a comment in each
+    asserting they must match. A comment cannot hold three lists together; a
+    shared constant can. All three call sites are checked because two agreeing
+    while the third drifts is still a model with two debts in it.
     """
-    for module in (forecast_pipeline, valuation_pipeline):
+    for module in (forecast_pipeline, forecast_engine, valuation_pipeline):
         source = inspect.getsource(module)
         assert "canonical.bs.short_term_borrowings" not in source, (
             f"{module.__name__} names a debt component itself instead of reading "
-            f"OPENING_BALANCE_KEYS, so the two sides can drift apart again"
+            f"OPENING_BALANCE_KEYS, so it can drift from the debt schedule and the "
+            f"valuation bridge"
         )
 
 
