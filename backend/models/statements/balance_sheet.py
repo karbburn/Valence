@@ -5,8 +5,16 @@ from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 from backend.data.store import RawDatapoint
+from backend.models.spec.historicals import REPORTED_STATUSES
 from backend.models.statements.selector import select_primary_datapoints
 from backend.normalization.taxonomy.models import CanonicalDatapoint
+
+# Statuses a SOURCE published, as distinct from one this engine computed. Both
+# `reported` and `estimated` qualify: a figure flagged as unverified is still the
+# source's own number, and the reconciliation needs something to anchor against.
+# Only `derived` and `analyst_adjusted` are ours, and a derived subtotal is never
+# an authority for anything.
+FILER_PUBLISHED_STATUSES = REPORTED_STATUSES | {"estimated"}
 
 CategoryType = Literal[
     "non_current_assets",
@@ -46,6 +54,7 @@ BS_LINE_ITEM_CONFIG: List[tuple[str, str, CategoryType]] = [
     ("canonical.bs.equity_capital", "Equity Share Capital", "equity"),
     ("canonical.bs.retained_earnings", "Retained Earnings", "equity"),
     ("canonical.bs.other_reserves", "Other Reserves", "equity"),
+    ("canonical.bs.mezzanine_equity", "Mezzanine Equity", "equity"),
     ("canonical.bs.minority_interest", "Minority / Non-Controlling Interest", "equity"),
     ("canonical.bs.preferred_stock", "Preference Share Capital", "equity"),
     ("canonical.bs.total_equity", "Total Equity", "equity"),
@@ -310,10 +319,22 @@ def assemble_balance_sheet(
     _te = _item_for("canonical.bs.total_equity")
 
     def _reported(item, p: str) -> Optional[float]:
-        """A period's value, but only if the FILER reported it rather than a derivation."""
+        """A period's value, but only if the SOURCE published it, not a derivation.
+
+        "Published" rather than "reported" deliberately. `estimated` is a figure a
+        reader published and knows to be unverified -- a hand-entered fixture, a
+        figure a source flagged -- and it is still the source's own number, so it is
+        a legitimate anchor for reconciliation.
+
+        Excluding it here was a way of losing the anchor entirely: once the fixture
+        companies' lines were marked `estimated`, no subtotal and no total-assets
+        qualified, `authority` came back None, the loop skipped every period, and
+        six balance sheets stopped footing. The check asks "did this come from a
+        derivation?", and the answer for `estimated` is no.
+        """
         if item is None:
             return None
-        if item.status_by_period.get(p, "reported") not in ("reported", "reported_adjusted"):
+        if item.status_by_period.get(p, "reported") not in FILER_PUBLISHED_STATUSES:
             return None
         v = item.values_by_period.get(p)
         return float(v) if v is not None else None
@@ -321,6 +342,13 @@ def assemble_balance_sheet(
     if _tl and _te:
         _corrected: Dict[str, float] = {}
         _mezzanine: Dict[str, float] = {}
+        # The mezzanine the FILER published, if any. The filer knows whether it has
+        # redeemable preferred or redeemable noncontrolling interest; the residual
+        # only means "mezzanine" when they have told us so.
+        _mezz_item = _item_for("canonical.bs.mezzanine_equity")
+        mezzanine_values = {
+            p: float(v) for p, v in (_mezz_item.values_by_period or {}).items() if v
+        } if _mezz_item is not None else {}
         for p in periods:
             te_v = _te.values_by_period.get(p)
             if te_v is None:
@@ -354,23 +382,41 @@ def assemble_balance_sheet(
             #     total assets is untouched, so no gate complains, and the only
             #     symptom is a published liabilities figure that no filer prints.
             #
-            # So when the filer reported the subtotal, it is kept as reported and
-            # the residual is named.
-            if _reported(_tl, p) is not None:
-                _mezzanine[p] = authority - built
+            # So when the filer reported the subtotal AND prints a mezzanine claim for
+            # the residual to be, the subtotal is kept as reported and the residual
+            # is named.
+            #
+            # The mezzanine claim has to actually exist. An earlier version of this
+            # protected any reported subtotal, and that misfired immediately: TCS
+            # does not have mezzanine, its hand-entered fixture simply does not foot
+            # (liabilities 73,298 + equity 108,562 against assets 174,162), so the
+            # residual was published as a "-7,698 mezzanine equity" -- inventing a
+            # claim class to explain a data-entry error. The gate caught it, which
+            # is what the gate is for.
+            #
+            # So the default stays the original back-solve. Only a filer that
+            # publishes redeemable preferred or redeemable noncontrolling interest
+            # gets the subtotal preserved, because only then is the residual known
+            # to be mezzanine rather than an unexplained difference.
+            if _reported(_tl, p) is not None and mezzanine_values.get(p) is not None:
+                _mezzanine[p] = mezzanine_values[p]
                 continue
             _corrected[p] = authority - float(te_v)
         if _mezzanine:
-            # Modelled, not filed: nothing in the taxonomy carries it, so this is
-            # derived from the filer's own three subtotals. It is a real claim on
-            # the enterprise and omitting it would overstate equity by its amount,
-            # so it gets a line rather than being folded away.
-            _add_derived(
-                "canonical.bs.mezzanine_equity",
-                "Mezzanine Equity",
-                _mezzanine,
-                _tle,
-            )
+            # The filer already published this figure under its own name, so it is
+            # not modelled -- it is passed through. It is a real claim on the
+            # enterprise sitting ahead of common equity, and folding it into
+            # liabilities would overstate them and understate equity.
+            _mezzanine_item = _item_for("canonical.bs.mezzanine_equity")
+            if _mezzanine_item is None:
+                _add_derived(
+                    "canonical.bs.mezzanine_equity",
+                    "Mezzanine Equity",
+                    _mezzanine,
+                    _tle,
+                )
+            else:
+                _mezzanine_item.values_by_period.update(_mezzanine)
         if _corrected:
             _tl.values_by_period.update(_corrected)
             _tl.status_by_period.update({p: "derived" for p in _corrected})

@@ -6,7 +6,17 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-CanonicalStatus = Literal["reported", "reported_adjusted", "derived", "analyst_adjusted"]
+# "estimated" is a raw datapoint status, and the raw layer already had it: a reader
+    # that knows a figure is not filed needs somewhere to say so. It was missing here,
+    # which is why the mapper collapsed every non-"reported_adjusted" status into
+    # "reported" -- the type did not permit carrying the truth through.
+    #
+    # The collapse was not a style choice, it was the only thing the type allowed. That
+    # is worth remembering the next time a status looks redundant: it is the schema
+    # deciding which distinctions are representable.
+CanonicalStatus = Literal[
+    "reported", "reported_adjusted", "derived", "analyst_adjusted", "estimated",
+]
 StatementType = Literal["is", "bs", "cf", "meta"]
 
 
