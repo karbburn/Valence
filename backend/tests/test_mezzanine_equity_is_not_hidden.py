@@ -1,0 +1,140 @@
+"""A filer's reported total liabilities must not be overwritten by a back-solve.
+
+The balance sheet reconciles its subtotals: when total liabilities plus total
+equity does not equal the filer's own total-liabilities-and-equity, one side is
+adjusted. For most filers the reason is that the assembled liability components
+fell short, and back-solving the subtotal is the correct response.
+
+For a filer that prints MEZZANINE EQUITY -- redeemable preferred, redeemable
+noncontrolling interest -- the reason is different: there is a third claim class
+between liabilities and equity that the model had no line for. Uxin filed
+liabilities 330,838, mezzanine 48,056, and a shareholders' deficit of -33,017.
+The back-solve produced total_liabilities of 378,894: a 14.5% overstatement of a
+figure the filer had reported exactly, with the mezzanine silently inside it.
+
+The failure is close to invisible. The balance sheet still foots, total assets is
+untouched, no QA check fires, and the only symptom is a published liabilities
+number that appears in no filing. A sampling tie-out over 45 filers found total
+assets exact in every case and flagged this line as the only systematic
+disagreement -- which is the argument for running the harness at all.
+
+So a reported subtotal is kept as reported, and the residual is named.
+"""
+
+from __future__ import annotations
+
+from datetime import date
+
+import pytest
+
+from backend.models.statements.balance_sheet import assemble_balance_sheet
+from backend.normalization.taxonomy.models import CanonicalDatapoint
+
+COMPANY = "mezzco_us"
+
+
+def _dp(key: str, value: float, status: str = "reported") -> CanonicalDatapoint:
+    return CanonicalDatapoint(
+        id=f"{COMPANY}-{key}-FY25",
+        company_id=COMPANY,
+        canonical_key=key,
+        metric_raw=key.rsplit(".", 1)[-1],
+        period_label="FY25",
+        period_end_date=date(2025, 12, 31),
+        value=value,
+        currency="USD",
+        units="millions",
+        status=status,
+        source_datapoint_ids=[f"{COMPANY}-fixture"],
+    )
+
+
+def _build(dps):
+    result = assemble_balance_sheet(dps, target_periods=["FY25"])
+    items = result.line_items if hasattr(result, "line_items") else result
+    return {i.canonical_key: i for i in items}
+
+
+# Uxin's filed FY25 balance sheet, in millions: liabilities 330.838, mezzanine
+# equity 48.056, shareholders' deficit -33.017, total 345.877.
+MEZZANINE_ROWS = [
+    ("canonical.bs.total_assets", 345.877),
+    ("canonical.bs.total_liabilities", 330.838),
+    ("canonical.bs.total_equity", -33.017),
+    ("canonical.bs.total_liabilities_and_equity", 345.877),
+]
+
+
+class TestReportedSubtotalSurvives:
+    def test_reported_total_liabilities_is_kept_as_reported(self) -> None:
+        by_key = _build([_dp(k, v) for k, v in MEZZANINE_ROWS])
+        tl = by_key["canonical.bs.total_liabilities"]
+        assert tl.values_by_period["FY25"] == pytest.approx(330.838), (
+            "the filer's reported total liabilities was overwritten by a back-solve; "
+            f"published {tl.values_by_period['FY25']} against a filed 330.838"
+        )
+        assert tl.status_by_period.get("FY25") == "reported", (
+            "a figure the filer reported must not be re-statused as derived"
+        )
+
+    def test_the_residual_is_named_rather_than_dropped(self) -> None:
+        by_key = _build([_dp(k, v) for k, v in MEZZANINE_ROWS])
+        mezz = by_key.get("canonical.bs.mezzanine_equity")
+        assert mezz is not None, (
+            "the 48.056 residual was dropped instead of named; the balance sheet "
+            "would then be missing a real claim sitting ahead of common equity"
+        )
+        assert mezz.values_by_period["FY25"] == pytest.approx(48.056, abs=0.01)
+
+    def test_the_balance_sheet_still_foots(self) -> None:
+        by_key = _build([_dp(k, v) for k, v in MEZZANINE_ROWS])
+        built = (
+            by_key["canonical.bs.total_liabilities"].values_by_period["FY25"]
+            + by_key["canonical.bs.mezzanine_equity"].values_by_period["FY25"]
+            + by_key["canonical.bs.total_equity"].values_by_period["FY25"]
+        )
+        assert built == pytest.approx(345.877, abs=0.01), (
+            "naming the residual must not stop the balance sheet footing"
+        )
+
+
+class TestTheBackSolveStillWorksWhereItBelongs:
+    def test_a_derived_subtotal_is_still_back_solved(self) -> None:
+        """The original correction must survive.
+
+        A filer whose assembled liability components fall short of its own subtotal
+        is the case the back-solve was written for, and it is still right there.
+        Only a REPORTED subtotal is protected. If this fails, the mezzanine fix has
+        swallowed the correction it was meant to sit beside.
+
+        The subtotal is supplied as `derived`, which is how an assembled-components
+        total reaches this code: `_reported` returns None for it, so the correction
+        engages.
+        """
+        by_key = _build([
+            _dp("canonical.bs.total_assets", 400.0),
+            _dp("canonical.bs.total_liabilities", 250.0, status="derived"),
+            _dp("canonical.bs.total_equity", 100.0),
+            _dp("canonical.bs.total_liabilities_and_equity", 400.0),
+        ])
+        tl = by_key["canonical.bs.total_liabilities"]
+        assert tl.values_by_period["FY25"] == pytest.approx(300.0, abs=0.01), (
+            "a DERIVED subtotal must still be back-solved from the filer's own "
+            "balance-sheet subtotal less its equity; got "
+            f"{tl.values_by_period['FY25']}"
+        )
+        assert "canonical.bs.mezzanine_equity" not in by_key, (
+            "no residual exists when the correction applies; nothing should be named"
+        )
+
+    def test_subtotals_that_foot_produce_no_residual_line(self) -> None:
+        by_key = _build([
+            _dp("canonical.bs.total_assets", 400.0),
+            _dp("canonical.bs.total_liabilities", 300.0),
+            _dp("canonical.bs.total_equity", 100.0),
+            _dp("canonical.bs.total_liabilities_and_equity", 400.0),
+        ])
+        assert "canonical.bs.mezzanine_equity" not in by_key, (
+            "a mezzanine line appeared for a filer whose subtotals already foot; "
+            "that would invent a claim class that does not exist"
+        )
