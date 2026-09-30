@@ -4,6 +4,13 @@ import React, { useSyncExternalStore } from 'react'
 import { ModelSpecification, ScenarioLabel } from '@/lib/types'
 import { fmtMoney, fmtPct, fmtPrice } from '@/lib/formatters'
 import { NO_VALUE } from '@/lib/noValue'
+import {
+  baseQuoteSource,
+  classifyQuote,
+  quoteCaption,
+  quoteIsFlagged,
+  quoteTitle,
+} from '@/lib/quoteLabel'
 
 export interface KPIBarProps {
   spec: ModelSpecification | null
@@ -132,44 +139,15 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
   const terminalGrowthVal = tvObj?.terminal_growth_rate ?? null
 
   const priceSource = reverseDcf?.market_price_source ?? null
-  // Successor ticker: the quote belongs to a different listed entity than the
-  // model's historical financials (demerger/restructuring). The price is real
-  // but the vs-market % is not meaningful, so say so instead of printing it.
-  const isSuccessorQuote = !!priceSource && priceSource.endsWith(':successor_ticker')
-  const baseSource = isSuccessorQuote ? priceSource.slice(0, -':successor_ticker'.length) : priceSource
-  const isLiveQuote =
-    baseSource === 'yfinance' ||
-    baseSource === 'yfinance_history' ||
-    baseSource === 'yahoo_chart' ||
-    baseSource === 'twelvedata'
-  const isStaleQuote = !!baseSource && baseSource.startsWith('stale_cache')
-  const isFallbackQuote =
-    !!baseSource &&
-    (baseSource === 'registry' ||
-      baseSource === 'market_default' ||
-      baseSource.startsWith('market_default'))
-  const priceSublabel = isSuccessorQuote
-    ? `As of ${reverseDcf?.market_price_date} · Successor ticker`
-    : !reverseDcf?.market_price_date
-      ? 'Live / Benchmark'
-      : isLiveQuote
-        ? `As of ${reverseDcf.market_price_date} · Live`
-        : isStaleQuote
-          ? `As of ${reverseDcf.market_price_date} · Stale`
-          : isFallbackQuote
-            ? `As of ${reverseDcf.market_price_date} · Benchmark`
-            : `As of ${reverseDcf.market_price_date}`
-  const priceSublabelClass =
-    isStaleQuote || isFallbackQuote || isSuccessorQuote ? 'text-[#f59e0b]' : 'text-text-dim'
-  const priceTitle = isSuccessorQuote
-    ? 'The listed ticker was retired by a corporate action and this quote is the successor entity. It is not comparable with this model\'s historical financials, so the vs-market % is suppressed.'
-    : isLiveQuote
-      ? `Live quote from ${baseSource} on ${reverseDcf?.market_price_date}`
-      : isStaleQuote
-        ? 'Live quote failed: showing last cached close. Check connection, then reload.'
-        : isFallbackQuote
-          ? 'Live quote unavailable: showing benchmark fallback. Treat vs-mkt % with caution.'
-          : undefined
+  // One definition of what the quote is, in lib/quoteLabel, because this logic
+  // was duplicated here and in QuickDCFView and had drifted. A daily close is a
+  // dated figure, not a live print, and the two sources that can only return a
+  // close were being captioned "Live".
+  const quoteKind = classifyQuote(priceSource, reverseDcf?.market_price_date)
+  const isSuccessorQuote = quoteKind === 'successor'
+  const priceSublabel = quoteCaption(quoteKind, reverseDcf?.market_price_date)
+  const priceSublabelClass = quoteIsFlagged(quoteKind) ? 'text-[#f59e0b]' : 'text-text-dim'
+  const priceTitle = quoteTitle(quoteKind, reverseDcf?.market_price_date, baseQuoteSource(priceSource))
 
   const statementsStale =
     statementAge != null && statementAge > STATEMENTS_STALE_DAYS
