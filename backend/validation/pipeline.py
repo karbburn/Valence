@@ -25,6 +25,7 @@ from backend.validation.data_quality import (
     check_historicals_are_reported,
     check_fixture_sourced_years_are_reported,
 )
+from backend.validation.valuation_meaningful import check_valuation_is_meaningful
 from backend.validation.debt_sourcing import check_debt_is_actually_sourced
 from backend.validation.input_plausibility import (
     check_bridge_inputs_plausible,
@@ -75,6 +76,9 @@ CHECK_SUITE: List[Tuple[str, Callable[[ModelSpecification], ModelCheckResult]]] 
     ("data_quality", check_bridge_inputs_plausible),
     # Zero debt with no debt input is not a plausible bridge, it is an absent one.
     ("data_quality", check_debt_is_actually_sourced),
+    # A valuation outside the range of possible answers is not a view. This is an
+    # input defect for publication purposes, not merely a flagged observation.
+    ("data_quality", check_valuation_is_meaningful),
     ("data_quality", check_equity_value_positive),
     ("data_quality", check_implied_price_deviation_is_explainable),
     ("data_quality", check_year_one_growth_is_plausible),

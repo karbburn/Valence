@@ -554,6 +554,12 @@ _INPUT_DEFECT_CHECKS = frozenset(
         "terminal_value_is_not_carrying_the_model",
         "equity_value_positive",
         "cost_of_capital_is_live",
+        # A negative enterprise value, equity value or share price is arithmetic
+        # that cannot happen, not a valuation that disagrees with the market. Three
+        # companies shipped one. Presenting it as "opinion_only" would still put a
+        # negative share price on the page.
+        "valuation_is_meaningful",
+        "debt_is_actually_sourced",
     }
 )
 
