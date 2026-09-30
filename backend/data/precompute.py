@@ -11,6 +11,7 @@ saving it to a static JSON cache file.
 import json
 from pathlib import Path
 
+from backend.data.snapshot_io import write_model_snapshot
 from backend.forecast.pipeline import run as run_forecast_pipeline
 from backend.models.statements.pipeline import run as run_historical
 from backend.validation.pipeline import run_qa
@@ -50,10 +51,14 @@ def run_precompute(company_id: str | None = None) -> Path:
         raise
 
     # 5. Serialize and write to cache file
+    #
+    # Written via a temp file and renamed, so a reader never sees a truncated
+    # snapshot. A plain open(..., "w") truncates first and writes second, and the
+    # QA gate, the sitemap and the test suite all read these files out of the same
+    # working tree that a rebuild is writing to.
     cache_file = CACHE_DIR / f"{target_id}.json"
     try:
-        with open(cache_file, "w", encoding="utf-8") as f:
-            f.write(final_spec.serialize())
+        write_model_snapshot(cache_file, final_spec.serialize())
     except Exception as e:
         print(f"Error: Failed to write cache file to {cache_file}: {e}")
         raise
