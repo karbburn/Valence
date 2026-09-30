@@ -88,9 +88,24 @@ def _period_label(d: date) -> str:
 # US GAAP XBRL Concept Tag Mappings to Raw Metric Labels
 US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
     # (Raw Metric Label, [XBRL Tags in priority order], Section)
+    # Revenue tags, in priority order. Each entry here is a filer that exists and
+    # publishes perfectly good statements and was silently absent from the model
+    # because its tag was missing from this list -- no error, no warning, just a
+    # company that never appears. A uniform probe of the US index
+    # (assets/gsd/coverage_probe.py) is what found the gap.
+    #
+    # `IncludingAssessedTax` is the one that was missing, and it is not rare:
+    # filers tag it instead of `ExcludingAssessedTax` for a perfectly defensible
+    # reason, and a tag list that assumes one choice silently loses the filer.
+    # Liberty Latin America, Annaly, Northwest Bancshares and AEGON were among
+    # those it lost. Expect any new tag here to be a bug surface rather than a
+    # nicety, and verify it with the probe before believing it.
     ("Revenues", [
         "Revenues", 
         "RevenueFromContractWithCustomerExcludingAssessedTax", 
+        # Includes sales taxes collected on the issuer's behalf. Materially the
+        # same revenue figure, and the filers using it are not doing anything odd.
+        "RevenueFromContractWithCustomerIncludingAssessedTax",
         "SalesRevenueNet", 
         "OperatingRevenue", 
         "TotalRevenueNet", 
