@@ -198,6 +198,18 @@ export interface QAResults {
   checks: ModelCheckResult[]
 }
 
+/**
+ * A model payload together with the server's publication verdict.
+ *
+ * The verdict is part of every `/api/model` response and is what decides whether
+ * the implied price may be shown at all. Keeping it on the type is what stops a
+ * call site from silently discarding it and falling back to recomputing the
+ * decision locally.
+ */
+export interface ModelSpecWithVerdict extends ModelSpecification {
+  publication?: PublicationVerdict
+}
+
 export interface ModelSpecification {
   metadata: ModelMetadata
   historicals: Historicals

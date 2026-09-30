@@ -220,6 +220,10 @@ def assemble_balance_sheet(
                 units=template.units,
                 lineage_ids_by_period=dict(template.lineage_ids_by_period),
                 period_end_dates_by_period=dict(template.period_end_dates_by_period),
+                  # Recorded rather than left unset. Left unset, the reconciliation
+                  # treated a subtotal this engine computed as one a filer
+                  # published, which is the distinction the step turns on.
+                  status_by_period={p: "derived" for p in values},
             )
         )
 

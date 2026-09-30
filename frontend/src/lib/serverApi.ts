@@ -1,4 +1,4 @@
-import type { ModelSpecification } from './types'
+import type { ModelSpecWithVerdict, ModelSpecification } from './types'
 import type { ResolvedSlug } from './tickers'
 import { REVALIDATE_SECONDS } from './site'
 
@@ -58,11 +58,19 @@ const serverFetchInit = {
  */
 export async function getModelSpecServer(
   companyId: string
-): Promise<ModelSpecification | null> {
+): Promise<ModelSpecWithVerdict | null> {
   try {
     const res = await fetch(endpoint(`/api/model/${encodeURIComponent(companyId)}`), serverFetchInit)
     if (!res.ok) return null
-    return (await res.json()) as ModelSpecification
+    // The payload carries the server's `publication` verdict alongside the spec, and
+    // it is kept here rather than cast away.
+    //
+    // The client once recomputed the same decision from its own list of defect-check
+    // names: five, where the server had eight. That divergence put headline prices
+    // on the page for models the API was refusing to serve, and the code that
+    // replaced it claimed to read the verdict while still recomputing it from a
+    // single check name. One answer, from the one place that decides it.
+    return (await res.json()) as ModelSpecWithVerdict
   } catch {
     return null
   }

@@ -55,18 +55,56 @@ test('a disagreeing valuation is still published', () => {
   // The check that must NOT suppress: disagreement with the market is a view, and
   // publishing one is the product working. Conflating "disagrees" with "cannot be
   // true" would suppress every interesting result the site has.
-  const spec = specWith({
-    check_name: 'implied_price_deviation_is_explainable',
-    passed: false,
-    detail: 'base: implied 147.37 against a market price of 329.40 is -55.3%',
-  })
-  assert.equal(mayPublishPrice(spec), true)
+  //
+  // Note this now passes a verdict. Before the verdict was actually read, this
+  // decision was made locally from a five-name list against the server's eight, and
+  // that divergence put prices on the page for models the API was refusing.
+  const spec = {
+    publication: {
+      status: 'publishable',
+      publishable: true,
+      input_defect_checks_failed: [],
+      other_checks_failed: ['implied_price_deviation_is_explainable'],
+      reasons: [],
+      summary: '',
+    },
+    qa: {
+      checks: [
+        {
+          check_name: 'implied_price_deviation_is_explainable',
+          passed: false,
+          detail: 'base: implied 147.37 against a market price of 329.40 is -55.3%',
+        },
+      ],
+    },
+  }
+  assert.equal(mayPublishPrice(spec as never), true)
 })
 
 test('no checks and no verdict is not publishable', () => {
   // Absence of evidence is not evidence of a number.
   assert.equal(mayPublishPrice(specWith()), false)
   assert.equal(mayPublishPrice(null), false)
+})
+
+test('the verdict is read off the spec, so no call site can forget to pass it', () => {
+  // The reason the fallback had to become conservative: components are typed
+  // against ModelSpecification, so the verdict arrived at runtime but nothing
+  // obliged them to look at it. Reading it here means threading a prop is optional
+  // and forgetting it is impossible.
+  const spec = {
+    publication: {
+      status: 'opinion_only',
+      publishable: false,
+      input_defect_checks_failed: ['bridge_inputs_plausible'],
+      other_checks_failed: [],
+      reasons: ['bridge_inputs_plausible: cost of revenue exceeds revenue'],
+      summary: '',
+    },
+    qa: { checks: [{ check_name: 'bridge_inputs_plausible', passed: false, detail: 'x' }] },
+  }
+  assert.equal(mayPublishPrice(spec as never), false)
+  assert.equal(withheldReason(spec as never), 'bridge_inputs_plausible: cost of revenue exceeds revenue')
 })
 
 test('the withheld reason quotes what actually failed', () => {
@@ -78,10 +116,17 @@ test('the withheld reason quotes what actually failed', () => {
 })
 
 test('a publishable model has no withheld reason', () => {
-  // A spec with a passing meaningfulness check, not an empty one. An empty spec is
-  // withheld by design -- absence of evidence is not evidence of a number -- so
-  // asserting undefined against one would have been asserting the opposite rule.
-  const spec = specWith({ check_name: 'valuation_is_meaningful', passed: true })
-  assert.equal(mayPublishPrice(spec), true)
-  assert.equal(withheldReason(spec), undefined)
+  const spec = {
+    publication: {
+      status: 'publishable',
+      publishable: true,
+      input_defect_checks_failed: [],
+      other_checks_failed: [],
+      reasons: [],
+      summary: '',
+    },
+    qa: { checks: [{ check_name: 'valuation_is_meaningful', passed: true, detail: '' }] },
+  }
+  assert.equal(mayPublishPrice(spec as never), true)
+  assert.equal(withheldReason(spec as never), undefined)
 })

@@ -18,7 +18,12 @@
  * place and the page follows.
  */
 
-import type { ModelCheckResult, ModelSpecification, PublicationVerdict } from './types'
+import type {
+  ModelCheckResult,
+  ModelSpecWithVerdict,
+  ModelSpecification,
+  PublicationVerdict,
+} from './types'
 
 /**
  * The server's verdict, when the payload carries one.
@@ -44,13 +49,24 @@ export function mayPublishPrice(
   spec: ModelSpecification | null | undefined,
   verdict?: PublicationVerdict,
 ): boolean {
-  if (verdict) return verdict.publishable
-  const checks: ModelCheckResult[] = spec?.qa?.checks ?? []
-  if (!checks.length) return false
-  // With no verdict to read, the conservative answer is not to publish. A
-  // headline that shows a number is a claim; the absence of evidence is not
-  // evidence of a number.
-  return !checks.some((c) => c.check_name === 'valuation_is_meaningful' && !c.passed)
+  // Read it off the spec when the caller did not pass it. `ModelSpecWithVerdict`
+  // extends `ModelSpecification`, so a component typed against the base still
+  // receives the field at runtime -- which means no call site has to thread a prop
+  // to get the server's answer, and no call site can forget.
+  const serverVerdict = verdict ?? (spec as ModelSpecWithVerdict | null)?.publication
+  if (serverVerdict) return serverVerdict.publishable
+
+  // No verdict to read. This is the path a client fetch takes when the payload was
+  // cast to a bare spec, and it is the path the divergence lived on: the previous
+  // fallback listed five defect-check names, the server had eight, and any model
+  // failing only a newer check had its price published while the API returned
+  // opinion_only.
+  //
+  // So the fallback refuses rather than guessing from a subset. A headline is a
+  // claim about a figure, and a partial list of reasons is not evidence for it.
+  // The cost is that a caller who drops the verdict shows n/a on a perfectly good
+  // model, which is a visible, fixable mistake rather than a wrong number.
+  return false
 }
 
 /**
@@ -64,6 +80,11 @@ export function withheldReason(
   verdict?: PublicationVerdict,
 ): string | undefined {
   if (mayPublishPrice(spec, verdict)) return undefined
+  const serverVerdict = verdict ?? (spec as ModelSpecWithVerdict | null)?.publication
+  if (serverVerdict?.reasons?.length) return serverVerdict.reasons.join('\n\n')
+  if (serverVerdict?.input_defect_checks_failed?.length) {
+    return `The engine could not verify: ${serverVerdict.input_defect_checks_failed.join(', ')}.`
+  }
   const failed = (spec?.qa?.checks ?? []).filter((c) => !c.passed)
   return (
     failed.map((c) => `${c.check_name}: ${c.detail}`).join('\n\n') ||

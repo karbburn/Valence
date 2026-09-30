@@ -171,3 +171,55 @@ class TestTheBackSolveStillWorksWhereItBelongs:
             "a mezzanine line appeared for a filer whose subtotals already foot; "
             "that would invent a claim class that does not exist"
         )
+
+
+class TestAFilersMezzanineMustEqualTheResidual:
+    """The mezzanine branch used to fire on the mere EXISTENCE of a mezzanine line.
+
+    A filer reporting 1.0 of mezzanine against a residual of 48.056 would have had
+    its 1.0 published while the sheet stayed 47.056 out, and
+    `balance_sheet_balances` would still have reported balanced: it overwrites the
+    total from assets and then compares it to itself, which is `x == x`.
+
+    The two numbers agreeing is the only evidence that the residual IS mezzanine.
+    Where they disagree, the residual is some other difference and the subtotal is
+    reconciled the ordinary way.
+    """
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "OPEN DEFECT, recorded rather than hidden. The mezzanine branch fires on "
+            "the mere EXISTENCE of a filer's mezzanine line instead of requiring the "
+            "filed figure to equal the residual, so a filer reporting 1.0 against an "
+            "implied 48.056 has its 1.0 published while the sheet stays 47.056 out. "
+            "Found by review in REVIEW3.md (CR-02). The fix must also zero the "
+            "mezzanine line for that period, because the back-solve already absorbs "
+            "it, or the amount is counted twice. When fixed, strict xfail turns this "
+            "into XPASS and the mark must be removed."
+        ),
+    )
+    def test_a_filers_mezzanine_that_is_not_the_residual_is_not_published_as_it(self) -> None:
+        by_key = _build([
+            _dp("canonical.bs.total_assets", 345.877),
+            _dp("canonical.bs.total_liabilities", 330.838),
+            # The filer says 1.0. The three subtotals imply 48.056.
+            _dp("canonical.bs.mezzanine_equity", 1.0),
+            _dp("canonical.bs.total_equity", -33.017),
+            _dp("canonical.bs.total_liabilities_and_equity", 345.877),
+        ])
+        tl = by_key["canonical.bs.total_liabilities"]
+        mezz = by_key.get("canonical.bs.mezzanine_equity")
+
+        # The subtotal is back-solved instead of being preserved on the strength of
+        # a mezzanine line that does not account for the gap.
+        assert tl.values_by_period["FY25"] == pytest.approx(378.894, abs=0.01), (
+            "with the filer's mezzanine inconsistent with the residual, the "
+            f"subtotal must be reconciled the ordinary way; got "
+            f"{tl.values_by_period['FY25']}"
+        )
+        if mezz is not None:
+            assert mezz.values_by_period["FY25"] != pytest.approx(1.0, abs=0.01), (
+                "published the filer's 1.0 of mezzanine as the reconciling figure "
+                "while the sheet is 47.056 out of balance"
+            )
