@@ -77,7 +77,23 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Cash & Bank": ("canonical.bs.cash_and_bank", "bs"),
     "Cash and cash equivalents": ("canonical.bs.cash_and_bank", "bs"),
     "Prepayments and other assets": ("canonical.bs.prepayments_other_current_assets", "bs"),
-    "Other Assets": ("canonical.bs.prepayments_other_current_assets", "bs"),
+    # NOT "Other Assets". Screener.in's Data Sheet groups the balance sheet by
+    # analysis rather than by caption, and its "Other Assets" row is a broad
+    # aggregate: for Infosys at 2026-03-31 it reads 98,112 while the lines beneath
+    # it on the same sheet are cash 22,201, investments 21,880 and receivables
+    # 35,234, so it already contains them. Mapped to the narrow current-asset
+    # catch-all it made the itemised block sum to 192,910 against a filed
+    # current-asset subtotal of 103,489, and the engine published a balance sheet
+    # that nearly doubled the filer's own total.
+    #
+    # The honest position is that the engine does not know what that money is. An
+    # under-count is visible and checkable; an over-count dressed as a named line is
+    # neither, and `current_assets_reconcile` now reports the shortfall rather than
+    # leaving it to be found by a reader.
+    #
+    # A filer whose own balance sheet prints a line captioned "Other Assets" is a
+    # different thing, and reaches the same key through that filer's own caption
+    # list rather than through this aggregator.
     "Total current assets": ("canonical.bs.total_current_assets", "bs"),
     "Total assets": ("canonical.bs.total_assets", "bs"),
     "Total Assets": ("canonical.bs.total_assets", "bs"),
