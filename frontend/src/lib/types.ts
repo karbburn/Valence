@@ -239,6 +239,12 @@ export interface CompanySummary {
    */
   has_model?: boolean
   /**
+   * Banks and insurers. Deliberately out of scope for an FCFF DCF: a financial does
+   * not generate unlevered operating cash flow to discount, so the engine has no
+   * correct answer and no page exists for them.
+   */
+  is_financial?: boolean
+  /**
    * Public URL segment. Present on every search result so selecting a company
    * can rewrite the address bar to a link that resolves. Optional because
    * locally-saved and legacy payloads may predate it.
