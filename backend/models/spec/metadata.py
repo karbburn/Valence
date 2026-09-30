@@ -9,6 +9,17 @@ MarketType = Literal["india", "us"]
 
 MODEL_SPEC_VERSION = "1.0.0"
 
+# Ingestion sources that carry a filer's own accounts rather than someone's
+# aggregation of them. A model is filing-derived when these are the large majority
+# of its rows.
+#
+# `screener` is deliberately NOT here, and that is the substantive judgement rather
+# than a formality: Screener.in is a third-party aggregator whose own documentation
+# says its figures may differ from the filings, and the codebase already ranked it
+# as a secondary source for exactly that reason. A number from it is a real number
+# about a real company, but it is not the number the filer published.
+FILING_SOURCES = frozenset({"sec_edgar", "nse_filing", "bse_filing"})
+
 _MONTH_STARTERS = {
     "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
     "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
@@ -40,6 +51,23 @@ class ModelMetadata(BaseModel):
     fiscal_year_end: str                     # e.g. "March 31" — human-readable
     shares_outstanding: Optional[float] = None # in Crores
     sector: Optional[str] = None             # Industry sector, e.g. "Technology", "Automotive"
+    # Where this model's numbers came from, counted by ingestion source.
+    #
+    # The product claims that every published figure matches an official filing.
+    # That claim is true for nine of the twenty-three shipped companies and false
+    # for thirteen, and until now nothing in the product said so: a page built from
+    # a market feed was indistinguishable from one built from EDGAR, and the only
+    # way to tell was to know which sources a given company's ingestion happened to
+    # use. A reader cannot audit a claim the site does not let them see the terms of.
+    #
+    # The distinction is not cosmetic. The tie-out has now measured two of the
+    # market-sourced companies against their own 20-F filings and found them
+    # disagreeing — the Infosys ADR publishes 1,043 of current investments where the
+    # filing says 1,365, and no non-current investments where the filing says 942 —
+    # which is the cost of reading a feed instead of an account, stated exactly.
+    data_sources: Optional[dict] = None      # {source: row_count}
+    filing_derived: Optional[bool] = None    # True when filing rows are the large majority
+    filing_source: Optional[str] = None      # the filing source that dominates, if any
     model_version: str = MODEL_SPEC_VERSION  # schema version, semver — NOT data refresh
     generation_date: datetime = Field(default_factory=datetime.now)
 
@@ -216,6 +244,53 @@ def resolve_market(company_id: str) -> str:
     return "us" if company_id.endswith("_us") else "india"
 
 
+def _read_provenance(company_id: str) -> tuple[dict[str, int], bool | None, str | None]:
+    """What the ingestion used, counted by source, from the datapoints themselves."""
+    import sqlite3
+
+    from backend.data.universe.store import DB_PATH
+
+    conn = sqlite3.connect(str(DB_PATH))
+    try:
+        rows = conn.execute(
+            "SELECT source, COUNT(*) FROM raw_datapoints WHERE company_id = ? GROUP BY source",
+            (company_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    sources = {str(s): int(n) for s, n in rows if s}
+    total = sum(sources.values())
+    if not total:
+        return sources, None, None
+    filing = {k: v for k, v in sources.items() if k in FILING_SOURCES}
+    # A majority, not an absolute: a filer whose PDF parse contributes a few rows
+    # alongside a feed is not a filing-derived model, and calling it one would be the
+    # same overclaim in the other direction.
+    derived = sum(filing.values()) / total > 0.9
+    dominant = max(filing, key=lambda k: filing[k]) if filing else None
+    return sources, derived, dominant
+
+
+def _with_provenance(meta: ModelMetadata, company_id: str) -> ModelMetadata:
+    """Return a copy of `meta` carrying the provenance read from the datapoints."""
+    if meta.data_sources is not None:
+        return meta
+    try:
+        sources, derived, dominant = _read_provenance(company_id)
+    except Exception:
+        return meta
+    if not sources:
+        return meta
+    return meta.model_copy(
+        update={
+            "data_sources": sources,
+            "filing_derived": derived,
+            "filing_source": dominant,
+        }
+    )
+
+
 def get_metadata_for_company(company_id: str) -> ModelMetadata:
     """Return ModelMetadata for company_id.
 
@@ -223,7 +298,18 @@ def get_metadata_for_company(company_id: str) -> ModelMetadata:
     are derived from the company_id slug and the company universe database.
     """
     if company_id in COMPANY_METADATA_REGISTRY:
-        return COMPANY_METADATA_REGISTRY[company_id]
+        registered = COMPANY_METADATA_REGISTRY[company_id]
+        # Enriched rather than returned. The registry is an IDENTITY record — who the
+        # company is, its fiscal year end, its share count — and it short-circuits
+        # everything below, so a registered company reported no provenance at all:
+        # nine of the twenty-three shipped companies would have had no statement of
+        # where their numbers came from, which is the one thing a reader needs in
+        # order to weigh them.
+        #
+        # Provenance is a property of the DATA, so it is read from the data even when
+        # the identity is cached. This is the same lesson as the CIK registry, which
+        # short-circuited a check and published Netflix's accounts as Infosys'.
+        return _with_provenance(registered, company_id)
 
     # Check universe database
     name = None
@@ -240,6 +326,13 @@ def get_metadata_for_company(company_id: str) -> ModelMetadata:
     except Exception:
         pass
 
+    # What the ingestion actually used, read from the datapoints rather than
+    # remembered, so it cannot drift from the data.
+    try:
+        data_sources, filing_derived, filing_source = _read_provenance(company_id)
+    except Exception:
+        data_sources, filing_derived, filing_source = {}, None, None
+
     if market == "us":
         return ModelMetadata(
             company_id=company_id,
@@ -250,6 +343,9 @@ def get_metadata_for_company(company_id: str) -> ModelMetadata:
             units="millions",
             fiscal_year_end="December 31",
             shares_outstanding=_resolve_shares(company_id, market),
+            data_sources=data_sources or None,
+            filing_derived=filing_derived,
+            filing_source=filing_source,
         )
     return ModelMetadata(
         company_id=company_id,
@@ -260,6 +356,9 @@ def get_metadata_for_company(company_id: str) -> ModelMetadata:
         units="crores",
         fiscal_year_end="March 31",
         shares_outstanding=_resolve_shares(company_id, market),
+        data_sources=data_sources or None,
+        filing_derived=filing_derived,
+        filing_source=filing_source,
     )
 
 

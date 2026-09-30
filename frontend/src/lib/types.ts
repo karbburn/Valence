@@ -17,6 +17,18 @@ export interface ModelMetadata {
   shares_outstanding: number | null
   model_version: string
   generation_date: string
+  /**
+   * Where this model's numbers came from, counted by ingestion source.
+   *
+   * The product claims every published figure matches an official filing. That is
+   * true for nine of the twenty-three shipped companies and false for thirteen, and
+   * a reader cannot weigh a claim they are not shown the terms of. This is those
+   * terms: `filing_derived` says whether the filer's own accounts are the source,
+   * and `data_sources` is the evidence rather than the assertion.
+   */
+  data_sources?: Record<string, number> | null
+  filing_derived?: boolean | null
+  filing_source?: string | null
 }
 
 export interface HistoricalLineItem {
