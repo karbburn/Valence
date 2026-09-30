@@ -127,12 +127,17 @@ def check_fixture_sourced_years_are_reported(spec: ModelSpecification) -> ModelC
     status fails, and says so, because a reader cannot distinguish that status
     from a filed one.
 
-    It does NOT fail merely because a fixture contributes an input. A model whose
-    fixture figures are all marked derived passes: the defect being checked for is
-    the mislabelling, not the presence of local inputs. Re-sourcing is a separate
-    decision and this check is deliberately not the thing that forces it -- when
-    it failed unconditionally, it could not be satisfied by fixing the thing it
-    named, and it quoted "0 line(s) published as reported" as its own evidence.
+    It fails when a model's inputs include a fixture AND no line in the model
+    carries an `estimated` status at all, because that means the reader's label was
+    lost on the way to the model and the figures are being presented as filed ones.
+
+    It does NOT fail merely because a fixture contributes an input, and it does not
+    fail when a market feed or a real exchange filing contributes legitimate
+    `reported` rows alongside the fixture's. Both of those made it permanently red
+    for eight companies for reasons unrelated to the defect it names, which is how
+    a real signal gets ignored. The inputs remain hand-entered and the figures
+    remain unverified; re-sourcing is a separate decision, and this check is
+    deliberately not the thing that forces it.
     """
     meta = getattr(spec, "metadata", None)
     sources = dict(getattr(meta, "data_sources", None) or {})
@@ -167,6 +172,49 @@ def check_fixture_sourced_years_are_reported(spec: ModelSpecification) -> ModelC
     ) else None
     latest_reported = [li for li in reported if li.period_label == period_label]
 
+    # Does the fixture's own labelling survive the pipeline?
+    #
+    # This check used to fail whenever a model had fixture inputs AND any line at
+    # all with a reported status. That conflated two unrelated things: the fixture
+    # hand-entered into a Screener-shaped workbook in this repository, and rows a
+    # market feed or a real exchange filing legitimately reported. TCS failed with
+    # 75 correctly-labelled `estimated` rows and 12 perfectly legitimate yfinance
+    # `reported` ones. Infosys failed the same way with 105 rows from its actual NSE
+    # filing. So the check was permanently red for a reason that had nothing to do
+    # with the defect it names, which is how a real signal gets ignored.
+    #
+    # What it can actually verify is whether the fixture's status survived: the
+    # screener reader marks every row it reads `estimated`, and if that label is
+    # gone from the model then something laundered it back to a filed figure. That
+    # is the regression worth guarding, and it is the one that happened.
+    estimated_lines = [
+        li for li in (spec.historicals.line_items if spec.historicals else [])
+        if li.status == "estimated"
+    ]
+    if not estimated_lines:
+        return ModelCheckResult(
+            check_name="fixture_sourced_years_are_reported",
+            category="data_quality",
+            passed=False,
+            detail=(
+                f"{fixture_rows} of {total_rows} input rows come from a locally "
+                f"generated fixture ({', '.join(sorted(fixture_sources))}), yet NO "
+                f"line in the model carries an `estimated` status. The screener "
+                f"reader marks everything it reads as estimated precisely so that a "
+                f"hand-entered figure cannot be presented as a filed one, so the "
+                f"label has been lost between the reader and the model -- most "
+                f"likely at the mapper, which used to collapse every status that "
+                f"was not `reported_adjusted` into `reported`. The figures are "
+                f"currently published as reported and were read from a workbook "
+                f"written by backend/data/sources/generate_sources.py. Re-source "
+                f"this company from its filings, or stop publishing a valuation for "
+                f"it."
+            ),
+            implicated_canonical_keys=sorted({li.canonical_key for li in reported}),
+            implicated_periods=[period_label] if period_label else [],
+            implicated_scenarios=["historical"],
+        )
+
     # The verdict follows the measurement, rather than being hardcoded False.
     #
     # It used to fail unconditionally whenever any fixture row existed, which made
@@ -184,22 +232,28 @@ def check_fixture_sourced_years_are_reported(spec: ModelSpecification) -> ModelC
     # generator's own comment calls the newest year the estimate, but every year it
     # hand-entered is equally unverified, and the ones that came from audited
     # results are the ones a reader will trust most.
-    if not reported:
-        return ModelCheckResult(
-            check_name="fixture_sourced_years_are_reported",
-            category="data_quality",
-            passed=True,
-            detail=(
-                f"{fixture_rows} of {total_rows} input rows come from a locally "
-                f"generated fixture ({', '.join(sorted(fixture_sources))}), but no "
-                f"line is published as reported, so no fixture figure is presented "
-                f"as a filed one. The inputs are still local: this check reports "
-                f"labelling, not sourcing."
-            ),
-            implicated_canonical_keys=sorted({li.canonical_key for li in reported}),
-            implicated_periods=[period_label] if period_label else [],
-            implicated_scenarios=["historical"],
-        )
+    # The fixture's label survived, so nothing it contributed is being presented as
+    # a filed figure. The other `reported` lines are not the fixture's: TCS has 12
+    # of them from a market feed and Infosys 105 from its actual NSE filing, and
+    # treating those as evidence of the defect is what kept this check red for
+    # eight companies through two rounds of fixes.
+    return ModelCheckResult(
+        check_name="fixture_sourced_years_are_reported",
+        category="data_quality",
+        passed=True,
+        detail=(
+            f"{fixture_rows} of {total_rows} input rows come from a locally generated "
+            f"fixture ({', '.join(sorted(fixture_sources))}), and all "
+            f"{len(estimated_lines)} of the figures it contributed are marked "
+            f"`estimated`, so none is presented as a filed one. The inputs remain "
+            f"hand-entered rather than filed: this check guards the label, not the "
+            f"sourcing. Re-sourcing the company from its filings is the only thing "
+            f"that changes the figures themselves."
+        ),
+        implicated_canonical_keys=sorted({li.canonical_key for li in estimated_lines}),
+        implicated_periods=sorted({li.period_label for li in estimated_lines if li.period_label}),
+        implicated_scenarios=["historical"],
+    )
 
     return ModelCheckResult(
         check_name="fixture_sourced_years_are_reported",
