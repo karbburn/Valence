@@ -4,6 +4,7 @@ import React, { useSyncExternalStore } from 'react'
 import { ModelSpecification, ScenarioLabel } from '@/lib/types'
 import { fmtMoney, fmtPct, fmtPrice } from '@/lib/formatters'
 import { NO_VALUE } from '@/lib/noValue'
+import { mayPublishPrice, withheldReason } from '@/lib/publication'
 import {
   baseQuoteSource,
   classifyQuote,
@@ -94,24 +95,14 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
 
   const impliedPrice = bridge?.implied_share_price ?? null
 
-  // The same rule the API applies in its publication verdict, derived from the
-  // checks this component is already given. Kept in step deliberately: the
-  // server decides what may be called a valuation, and the client is only
-  // choosing not to put a number in a headline.
-  const INPUT_DEFECT_CHECKS = [
-    'bridge_inputs_plausible',
-    'income_statement_is_coherent',
-    'year_one_growth_is_plausible',
-    'terminal_value_is_not_carrying_the_model',
-    'equity_value_positive',
-  ]
-  const publishable = !(spec.qa?.checks ?? []).some(
-    (c) => INPUT_DEFECT_CHECKS.includes(c.check_name) && !c.passed,
-  )
-  const publicationTitle = (spec.qa?.checks ?? [])
-    .filter((c) => INPUT_DEFECT_CHECKS.includes(c.check_name) && !c.passed)
-    .map((c) => `${c.check_name}: ${c.detail}`)
-    .join('\n\n') || 'The engine could not verify the inputs to this model.'
+  // The server decides what may be called a valuation and returns that verdict.
+  // This used to keep its own list of the defect-check names, five of them, and
+  // had already fallen behind the server's eight, so a model failing only a newer
+  // check would have shown its price in a headline while the API called it
+  // opinion_only. One list, on the server.
+  const publishable = mayPublishPrice(spec)
+  const publicationTitle =
+    withheldReason(spec) || 'The engine could not verify the inputs to this model.'
 
   // A valuation this far from the traded price is still an opinion and is still
   // shown, because disagreeing with the market is what the product is for. What
