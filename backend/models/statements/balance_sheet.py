@@ -320,6 +320,7 @@ def assemble_balance_sheet(
 
     if _tl and _te:
         _corrected: Dict[str, float] = {}
+        _mezzanine: Dict[str, float] = {}
         for p in periods:
             te_v = _te.values_by_period.get(p)
             if te_v is None:
@@ -331,8 +332,45 @@ def assemble_balance_sheet(
                 continue
             built = float(_tl.values_by_period.get(p, 0.0)) + float(te_v)
             gap = built - authority
-            if abs(gap) > max(abs(authority) * 0.001, 1.0):
-                _corrected[p] = authority - float(te_v)
+            if abs(gap) <= max(abs(authority) * 0.001, 1.0):
+                continue
+
+            # Two different things produce a subtotal that does not foot, and
+            # they must not get the same response.
+            #
+            # (a) The assembled liability components did not reach the filer's own
+            #     total. Back-solving the subtotal is the right correction, and was
+            #     the only response before this.
+            #
+            # (b) The filer prints a THIRD claim class between liabilities and
+            #     equity -- mezzanine equity: redeemable preferred, redeemable
+            #     noncontrolling interest. Uxin filed liabilities 330,838, mezzanine
+            #     48,056 and a shareholders' deficit of -33,017. Back-solving
+            #     produced total_liabilities of 378,894, a 14.5% overstatement of
+            #     a figure the filer had reported exactly, with the mezzanine
+            #     silently inside it and no line anywhere showing it went there.
+            #
+            #     That is worse than the gap: the balance sheet still foots and
+            #     total assets is untouched, so no gate complains, and the only
+            #     symptom is a published liabilities figure that no filer prints.
+            #
+            # So when the filer reported the subtotal, it is kept as reported and
+            # the residual is named.
+            if _reported(_tl, p) is not None:
+                _mezzanine[p] = authority - built
+                continue
+            _corrected[p] = authority - float(te_v)
+        if _mezzanine:
+            # Modelled, not filed: nothing in the taxonomy carries it, so this is
+            # derived from the filer's own three subtotals. It is a real claim on
+            # the enterprise and omitting it would overstate equity by its amount,
+            # so it gets a line rather than being folded away.
+            _add_derived(
+                "canonical.bs.mezzanine_equity",
+                "Mezzanine Equity",
+                _mezzanine,
+                _tle,
+            )
         if _corrected:
             _tl.values_by_period.update(_corrected)
             _tl.status_by_period.update({p: "derived" for p in _corrected})
