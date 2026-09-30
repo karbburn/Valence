@@ -67,6 +67,10 @@ import sys
 from pathlib import Path
 from typing import Dict, List
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from backend.data.snapshot_io import read_model_snapshot  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -118,7 +122,7 @@ def collect_failures_snapshot(company_ids: List[str]) -> Dict[str, List[str]]:
             continue
         try:
             spec = ModelSpecification.model_validate(
-                json.loads(path.read_text(encoding="utf-8"))["model"]
+                json.loads(read_model_snapshot(path))["model"]
             )
             run_qa(spec)
         except Exception as exc:  # noqa: BLE001

@@ -16,6 +16,8 @@ import threading
 from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
+
+from backend.data.snapshot_io import read_model_snapshot, write_model_snapshot
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -412,8 +414,7 @@ def _build_spec_locked(
     """Compile or refresh the spec for one company. Caller holds single-flight."""
     if has_snapshot:
         try:
-            with open(cache_path, "r", encoding="utf-8") as f:
-                spec = ModelSpecification.deserialize(f.read())
+            spec = ModelSpecification.deserialize(read_model_snapshot(cache_path))
             logger.info("Loaded %s ModelSpecification from precomputed cache.", company_id)
             # The cache holds a build-time SNAPSHOT of market data (price, shares,
             # beta, risk-free rate, ERP). Re-run valuation against live providers so
@@ -435,9 +436,7 @@ def _build_spec_locked(
                 hist_m = _get_hist_model(company_id)
                 spec = run_qa(run_valuation(run_forecast_pipeline(hist_m)))
                 try:
-                    cache_path.parent.mkdir(parents=True, exist_ok=True)
-                    with open(cache_path, "w", encoding="utf-8") as f:
-                        f.write(spec.serialize())
+                    write_model_snapshot(cache_path, spec.serialize())
                     logger.info("Wrote refreshed cache for %s.", company_id)
                 except Exception as e:
                     logger.warning("Warning: could not write cache for %s: %s", company_id, e)
@@ -482,9 +481,7 @@ def _build_spec_locked(
     _lru_put(_MODEL_CACHE, company_id, q_spec)
 
     try:
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(cache_path, "w", encoding="utf-8") as f:
-            f.write(q_spec.serialize())
+        write_model_snapshot(cache_path, q_spec.serialize())
         logger.info("Wrote compiled cache for %s.", company_id)
     except Exception as e:
         logger.warning("Warning: could not write cache for %s: %s", company_id, e)
