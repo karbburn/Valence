@@ -73,7 +73,26 @@ def parse_screener_export(path: str | Path, company_id: str = "infy_infy") -> li
                     if val is None:
                         continue
                     source: Source = "screener"
-                    status: Status = "reported"
+                    # Every row this reader produces is marked ESTIMATED, not
+                    # reported, and that is the honest label rather than a
+                    # conservative one.
+                    #
+                    # The files read here are not Screener.in exports. They are
+                    # written by backend/data/sources/generate_sources.py, which
+                    # is tracked in this repository and hand-enters the figures.
+                    # Some of what it wrote was transcribed from audited results and
+                    # some was estimated by the author -- the generator says so in
+                    # its own comment, "FY26 values are estimates (unverified at
+                    # fixture date)" -- but nothing in the workbook records WHICH
+                    # is which, so this reader cannot tell a transcribed filing
+                    # figure from a typed-in guess and must not claim to.
+                    #
+                    # Marking the newest year alone would be the more flattering
+                    # choice and would still be a false claim about the earlier
+                    # ones. The reader is also why `reported` was defensible for the
+                    # genuine Screener.in exports it was written for, and why it is
+                    # not here: it was reused for a file of a different kind.
+                    status: Status = "estimated"
                     offset = k + 2  # column B (index 1) is first period
                     col = openpyxl.utils.get_column_letter(offset + 1)
                     datapoints.append(

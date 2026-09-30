@@ -55,7 +55,19 @@ def map_raw_datapoints(
         canonical_key, statement = mapping
 
         # Build Canonical Datapoint
-        status = "reported_adjusted" if d.status == "reported_adjusted" else "reported"
+        #
+        # The raw datapoint's status is carried through unchanged. It used to be
+        # collapsed to a binary here -- anything that was not "reported_adjusted"
+        # became "reported" -- so a raw row an ingestion reader had deliberately
+        # marked `estimated` arrived at the canonical layer claiming to have been
+        # read from a filing. That is how eight companies' hand-entered fixture
+        # figures reached the workbook labelled `reported`: the screener reader knew
+        # what they were, and this line threw that away on the way through.
+        #
+        # Every consumer that wants to know whether a figure is filed must now read
+        # the status rather than assume it, because this was the one place that
+        # guaranteed the assumption held.
+        status = d.status
         c_dp = CanonicalDatapoint(
             company_id=d.company_id,
             canonical_key=canonical_key,

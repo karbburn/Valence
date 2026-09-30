@@ -386,6 +386,22 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
     ], "BALANCE SHEET"),
     ("Total current liabilities", ["LiabilitiesCurrent"], "BALANCE SHEET"),
     ("Total liabilities", ["Liabilities"], "BALANCE SHEET"),
+    # Mezzanine equity: redeemable preferred, redeemable noncontrolling interest.
+    #
+    # A filer that prints this presents it BETWEEN liabilities and equity, and its
+    # "Total liabilities" excludes it. Without ingesting the line the engine cannot
+    # tell that filer apart from one whose liability components merely fall short,
+    # so reconciling the subtotal back-solves and folds the mezzanine into
+    # liabilities -- Uxin publishing 378,894 against a filed 330,838.
+    #
+    # `MezzanineEquity` is the element Uxin files; the redeemable variants are what
+    # filers use when they break the line out.
+    ("Mezzanine equity", [
+        "MezzanineEquity",
+        "TemporaryEquityCarryingAmountAttributableToParent",
+        "RedeemableNoncontrollingInterestEquityCarryingAmount",
+        "RedeemablePreferredStockCarryingAmount",
+    ], "BALANCE SHEET"),
     ("Total equity", ["StockholdersEquity", "CommonStockValue"], "BALANCE SHEET"),
     ("Cash from Operating Activity", [
         "NetCashProvidedByUsedInOperatingActivities",

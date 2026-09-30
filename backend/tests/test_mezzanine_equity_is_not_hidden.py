@@ -57,12 +57,45 @@ def _build(dps):
 
 # Uxin's filed FY25 balance sheet, in millions: liabilities 330.838, mezzanine
 # equity 48.056, shareholders' deficit -33.017, total 345.877.
+#
+# The mezzanine line is present because the filer published it. That is the
+# discriminator: an earlier version of the fix preserved ANY reported subtotal that
+# did not foot, which published TCS's -7,698 fixture imbalance as "mezzanine
+# equity" -- inventing a claim class to explain a data-entry error. Only a filer
+# that says it has redeemable preferred or redeemable noncontrolling interest gets
+# its subtotal preserved.
 MEZZANINE_ROWS = [
     ("canonical.bs.total_assets", 345.877),
     ("canonical.bs.total_liabilities", 330.838),
+    ("canonical.bs.mezzanine_equity", 48.056),
     ("canonical.bs.total_equity", -33.017),
     ("canonical.bs.total_liabilities_and_equity", 345.877),
 ]
+
+
+class TestAnUnexplainedResidualIsNotCalledMezzanine:
+    def test_a_reported_subtotal_that_does_not_foot_still_gets_back_solved(self) -> None:
+        """TCS's case: no mezzanine, the numbers simply do not foot.
+
+        Preserving the reported subtotal here would publish a "-7,698 mezzanine
+        equity" that the filer never reported, for a hand-entered fixture whose
+        liability components fall short. The back-solve is the right answer when
+        there is no known claim class to point at.
+        """
+        by_key = _build([
+            _dp("canonical.bs.total_assets", 174.162),
+            _dp("canonical.bs.total_liabilities", 73.298),
+            _dp("canonical.bs.total_equity", 108.562),
+            _dp("canonical.bs.total_liabilities_and_equity", 174.162),
+        ])
+        tl = by_key["canonical.bs.total_liabilities"]
+        assert tl.values_by_period["FY25"] == pytest.approx(65.600, abs=0.01), (
+            "without a published mezzanine line the subtotal must still be "
+            f"back-solved; got {tl.values_by_period['FY25']}"
+        )
+        assert "canonical.bs.mezzanine_equity" not in by_key, (
+            "a mezzanine line was invented for a filer that published none"
+        )
 
 
 class TestReportedSubtotalSurvives:
