@@ -22,20 +22,20 @@ from __future__ import annotations
 import gzip
 import json
 import urllib.request
-from typing import List, Tuple
+from typing import List
 
 import pytest
 
-from backend.data.ingestion.sec_edgar import US_GAAP_TAG_MAP
+from backend.data.ingestion.sec_edgar import _revenue_tags as engine_revenue_tags
 
 UA = {"User-Agent": "Valence valuation research team@valence.com", "Accept-Encoding": "gzip"}
 
 
+# Read the engine's own accessor rather than re-walking US_GAAP_TAG_MAP here.
+# This helper was the last surviving copy of the tag list, and a copy in a test is
+# how a fix lands in the engine and not in the assertion that claims to cover it.
 def _revenue_tags() -> List[str]:
-    for label, tags, _section in US_GAAP_TAG_MAP:
-        if label == "Revenues":
-            return list(tags)
-    raise AssertionError("US_GAAP_TAG_MAP has no 'Revenues' entry")
+    return list(engine_revenue_tags())
 
 
 class TestRevenueTagCoverage:

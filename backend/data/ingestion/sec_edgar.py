@@ -437,9 +437,28 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
 # adding a tag in one place cannot leave the other list behind -- which is exactly
 # how the IncludingAssessedTax fix landed in US_GAAP_TAG_MAP while the period probe
 # one function below kept the old list.
-REVENUE_TAG_GROUP: Tuple[str, ...] = next(
-    tags for label, tags, _section in US_GAAP_TAG_MAP if label == "Revenues"
-)
+def _revenue_tags() -> Tuple[str, ...]:
+    """The revenue tag group, read from US_GAAP_TAG_MAP.
+
+    A function rather than a module constant so the lookup happens at call time.
+    Assigning it at import time with a bare `next()` would raise StopIteration at
+    import -- with no message -- if the "Revenues" label were ever renamed, taking
+    down every entry point that imports this module. Raising here says which entry
+    went missing instead.
+
+    Anything that needs the revenue tags should call this rather than keeping its
+    own copy: `_discover_annual_period_ends` had a second, separately maintained
+    list which silently fell behind US_GAAP_TAG_MAP, so a filer tagging revenue
+    only as IncludingAssessedTax was invisible to period discovery even after the
+    ingestion fix that made it visible to everything else.
+    """
+    for label, tags, _section in US_GAAP_TAG_MAP:
+        if label == "Revenues":
+            return tuple(tags)
+    raise RuntimeError(
+        "US_GAAP_TAG_MAP has no 'Revenues' entry, so the revenue tag group cannot be "
+        "resolved. Every consumer of revenue tags depends on it."
+    )
 
 # Tags that report borrowings as ONE combined long-term-and-short-term figure
 # rather than splitting the current slice out. A filer using one of these files no
@@ -677,16 +696,11 @@ def _discover_annual_period_ends(us_gaap: dict) -> List[date]:
     comparative shares the fiscal-year field but ends EARLIER, so the latest end
     per fiscal year is the year that filing actually reports.
     """
-    # Read the revenue tags from US_GAAP_TAG_MAP rather than restating them.
-    #
-    # This was a second hand-kept copy of the same list, one function over, and it
-    # was missed when the IncludingAssessedTax tag was added to the map: a filer
-    # tagging revenue only that way had its fiscal-year ends discovered by accident
-    # via NetIncomeLoss, or not at all if income were also filed under a
-    # non-standard member. Two copies of one list is how a fix lands in one place
-    # and not the other, which is the same defect this repository has now found
-    # three times. `test_probe_tags_cover_the_revenue_tags` fails if they diverge.
-    probe_tags = tuple(REVENUE_TAG_GROUP) + (
+    # Read the revenue tags from the map rather than restating them, so the probe
+    # cannot fall behind US_GAAP_TAG_MAP. See `_revenue_tags` for why this list used
+    # to be a problem. Divergence is impossible by construction here, which is why
+    # there is no test asserting the two agree.
+    probe_tags = _revenue_tags() + (
         "NetIncomeLoss",
         "OperatingIncomeLoss",
         "ProfitLoss",
