@@ -9,6 +9,7 @@ import { fmtPrice } from '@/lib/formatters'
 
 /** Slugs are matched case-insensitively, so lowercase and uppercase must both build. */
 export const dynamicParams = true
+export const dynamic = 'force-dynamic'
 
 /**
  * Rebuild at most this often. Market prices refresh daily, so an hourly window
