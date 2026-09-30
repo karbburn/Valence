@@ -11,6 +11,7 @@ import {
   quoteIsFlagged,
   quoteTitle,
 } from '@/lib/quoteLabel'
+import { provenanceLabel, provenanceTitleText, provenanceTone } from '@/lib/provenance'
 
 export interface KPIBarProps {
   spec: ModelSpecification | null
@@ -161,6 +162,30 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
             ? ' The next annual report should have landed by now, so this snapshot is behind and wants a rebuild.'
             : ' The model reads annual filings only, so this is the most recent one on record and the age is expected.'))
 
+  // Where the numbers came from, and whether that is the filer's own accounts.
+  //
+  // The product's claim is that every published figure matches an official filing.
+  // That is true for nine of the twenty-three shipped companies and false for
+  // thirteen, and a reader cannot weigh a claim they are not shown the terms of. The
+  // tie-out has measured the cost of the other thirteen: the Infosys ADR publishes
+  // 1,043 of current investments where its own 20-F says 1,365, and no non-current
+  // investments where the filing says 942.
+  //
+  // So the source is stated, and it is stated from the ingestion's own record rather
+  // than asserted. A company built from a market feed says so, because that is the
+  // difference between "read out of the accounts" and "reported by a provider", and
+  // only the reader can decide which one they need.
+  const meta = spec?.metadata
+  const provenance = provenanceLabel(meta?.filing_derived, meta?.filing_source, meta?.data_sources)
+  const provenanceTitle = provenanceTitleText(meta)
+  // Amber, not the muted default. A reader scanning the bar should notice that this
+  // page's figures came from a provider rather than the accounts, without opening
+  // anything.
+  const provenanceClass =
+    provenanceTone(meta?.filing_derived, meta?.filing_source) === 'filing'
+      ? 'text-text-dim'
+      : 'text-[#f59e0b]'
+
   return (
     <div className="w-full bg-[#111622]/40 border-b border-[#1e283d] px-[14px] py-[8px]">
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2.5">
@@ -199,6 +224,13 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
             ) : (
               <span className="text-text-dim">Intrinsic Value</span>
             )}
+            {/* The source of the figures, always shown. The headline claim is that
+                every number here matches an official filing, and for a company
+                built from a market feed that is not true, so it says so rather than
+                letting the claim stand unqualified. */}
+            <div className={`text-[10px] mt-0.5 ${provenanceClass} whitespace-nowrap`} title={provenanceTitle}>
+              {provenance}
+            </div>
           </div>
         </div>
 

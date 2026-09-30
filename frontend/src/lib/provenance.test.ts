@@ -1,0 +1,105 @@
+/**
+ * A model that is not read from the accounts must say so.
+ *
+ * The product claims every published figure matches an official filing. That is true
+ * for nine of the twenty-three shipped companies and false for the other fourteen,
+ * because a Screener.in export or a market feed is a real number about a real
+ * company but not the number the filer published.
+ *
+ * The tie-out has measured what the difference costs, which is what makes this a
+ * correctness matter rather than a disclosure nicety: the Infosys ADR publishes
+ * 1,043 of current investments where its own 20-F says 1,365, and no non-current
+ * investments where the filing says 942. A reader shown only the valuation has no
+ * way to know which kind of number they are looking at, and the two support
+ * different amounts of confidence.
+ */
+
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { provenanceLabel, provenanceTitleText, provenanceTone } from './provenance.ts'
+
+test('a filing-derived model says it came from the filer', () => {
+  const tone = provenanceTone(true, 'sec_edgar')
+  assert.equal(tone, 'filing')
+  const label = provenanceLabel(true, 'sec_edgar', { sec_edgar: 127, yfinance_live: 6 })
+  assert.equal(label, 'From SEC EDGAR')
+})
+
+test('a market-fed model says it did not come from the accounts', () => {
+  assert.equal(provenanceTone(false, null), 'market')
+  const label = provenanceLabel(false, null, { yfinance_live: 81 })
+  assert.ok(label.includes('not the accounts'), label)
+  assert.ok(label.includes('market feed'), label)
+})
+
+test('a screener-fed model names the aggregator rather than the accounts', () => {
+  // The substantive judgement, stated: screener is not a filing source. It is a
+  // third-party aggregator whose own documentation says its figures may differ from
+  // the filings, and the ingestion already ranked it as secondary for that reason.
+  const label = provenanceLabel(false, null, { screener: 75, yfinance_live: 15 })
+  assert.ok(label.includes('Screener.in'), label)
+  assert.ok(!/SEC|EDGAR|filing/i.test(label), `screener was presented as a filing: ${label}`)
+})
+
+test('a mixed model is neither claimed nor denied', () => {
+  assert.equal(provenanceTone(false, 'nse_filing'), 'mixed')
+  const label = provenanceLabel(false, 'nse_filing', { nse_filing: 260, screener: 305 })
+  assert.ok(/Mostly/i.test(label), label)
+  assert.ok(label.includes('NSE filing'), label)
+})
+
+test('a flag alone cannot talk the page into the filing claim', () => {
+  // Defence in depth against the backend's own flag being wrong or repurposed: the
+  // page only says "from the accounts" when a real filing source is behind it.
+  assert.notEqual(provenanceTone(true, 'screener'), 'filing')
+  assert.notEqual(provenanceTone(true, 'yfinance_live'), 'filing')
+  assert.notEqual(provenanceTone(true, null), 'filing')
+  assert.equal(provenanceTone(true, 'screener'), 'market')
+  assert.ok(
+    !/SEC|EDGAR/i.test(provenanceLabel(true, 'screener', { screener: 75 })),
+    'a screener flag must not produce a filing claim',
+  )
+})
+
+test('the hover text justifies the claim in both directions', () => {
+  const filing = provenanceTitleText({
+    filing_derived: true,
+    filing_source: 'sec_edgar',
+    data_sources: { sec_edgar: 127, yfinance_live: 6 },
+  })
+  assert.ok(/tied to a filing/i.test(filing), filing)
+
+  const feed = provenanceTitleText({
+    filing_derived: false,
+    filing_source: null,
+    data_sources: { yfinance_live: 81 },
+  })
+  assert.ok(/NOT read from the filer/i.test(feed), feed)
+  assert.ok(/differing/i.test(feed), 'the measured disagreement belongs in the explanation')
+})
+
+test('an unrecorded source says so rather than implying one', () => {
+  const title = provenanceTitleText({ filing_derived: null, data_sources: null })
+  assert.ok(/does not record/i.test(title), title)
+  assert.equal(
+    provenanceLabel(false, null, null),
+    'Source not recorded',
+  )
+})
+
+test('no model is ever described as filing-derived without a filing source', () => {
+  // The claim is the whole point, so it is guarded: nothing may say "from the
+  // accounts" unless an actual filing source is behind it.
+  for (const [derived, source, sources] of [
+    [false, null, { yfinance_live: 81 }],
+    [false, null, { screener: 75 }],
+    [null, null, {}],
+  ] as const) {
+    const title = provenanceTitleText({
+      filing_derived: derived,
+      filing_source: source,
+      data_sources: sources,
+    })
+    assert.ok(!/can be tied to a filing/i.test(title), title)
+  }
+})
