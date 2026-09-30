@@ -21,7 +21,18 @@ const SOURCE_NAMES: Record<string, string> = {
   sec_edgar: 'SEC EDGAR',
   nse_filing: 'NSE filing',
   bse_filing: 'BSE filing',
-  screener: 'Screener.in',
+  // NOT "Screener.in". The files parsed by the screener reader are not exports
+  // from Screener.in: they are produced by `backend/data/sources/generate_sources.py`
+  // and `generate_us_sources.py`, which are tracked in this repository and write
+  // hand-entered numbers into a Screener-shaped workbook. The generator's own
+  // comment on the most recent year reads "FY26 values are estimates (unverified
+  // at fixture date)", and the engine was publishing that year as `reported`
+  // because the file it read said so.
+  //
+  // So naming a third-party aggregator here would be a worse error than the one it
+  // replaced: it would attribute hand-entered figures to a named data provider, and
+  // a reader checking that provider would find nothing.
+  screener: 'a local fixture file',
   yfinance_live: 'market feed',
   yfinance: 'market feed',
   yahoo_chart: 'market feed',
