@@ -25,10 +25,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "backend/validation/**"
-      - "backend/models/spec/**"
-      - "backend/valuation/**"
-      - "backend/data/**"
+      - "backend/**"
       - "scripts/qa_gate.py"
       - "data/qa_gate_baseline.json"
       - ".github/workflows/qa-gate.yml"
@@ -42,6 +39,11 @@ on:
         description: "Accept the current failures as the new baseline"
         type: boolean
         default: false
+      mode:
+        description: "snapshot gates the push; live rebuilds from the network and only reports"
+        type: choice
+        options: [snapshot, live]
+        default: snapshot
 
 permissions:
   contents: write
@@ -54,8 +56,18 @@ concurrency:
 
 jobs:
   gate:
+    # The shipped artifact, re-checked offline. This is the gate.
+    #
+    # It runs in snapshot mode because the previous version rebuilt every company
+    # from SEC, the exchanges and a market feed, and that made the verdict depend
+    # on whether those answered rather than on the commit. The run that exposed
+    # this reported `wipro_wipro bridge_inputs_plausible` failing on a cold runner
+    # and passing on a warm one, while Yahoo 404'd for TATAMOTORS.NS, and it blocked
+    # four consecutive pushes. A local run and this job were not the same
+    # measurement either, because a local run reads `valence.db` and that file is
+    # gitignored and exists on one machine only.
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -71,20 +83,15 @@ jobs:
           pip install -e .
           pip install openpyxl pdfplumber yfinance requests
 
-      # The build path reaches out to SEC EDGAR and to the NSE, and a cold CI
-      # runner has no model cache, so this run rebuilds every company from
-      # filings. That is the point: the gate must exercise the same cold path a
-      # first-time visitor does, not a warm cache that hides an ingestion break.
-      #
       # tee rather than a bare run: the pipeline is the only thing that makes the
       # step fail, and the step summary is the only place a human reads why.
-      - name: Run the plausibility gate
+      - name: Run the plausibility gate over the shipped snapshots
         run: |
           set -o pipefail
           if [ "${{ inputs.update_baseline }}" = "true" ]; then
-            python scripts/qa_gate.py --update-baseline 2>&1 | tee gate_output.txt
+            python scripts/qa_gate.py --mode snapshot --update-baseline 2>&1 | tee gate_output.txt
           else
-            python scripts/qa_gate.py 2>&1 | tee gate_output.txt
+            python scripts/qa_gate.py --mode snapshot 2>&1 | tee gate_output.txt
           fi
 
       - name: Summarise
@@ -129,3 +136,59 @@ jobs:
 
             Review whether each fix is a real input correction and not a
             threshold that was loosened to make a failure disappear.
+
+  cold-rebuild:
+    # The ingestion path, from a cold runner with no database and no cache.
+    #
+    # This is worth knowing about and deliberately not allowed to block: it reaches
+    # SEC, the NSE and a market feed, so whether a company passes depends on whether
+    # those answered during the run. A filer whose exchange ticker has changed, or a
+    # rate limit, or a filing that has not been indexed yet, all show up here as a
+    # failure that no commit caused. Weekly triage, uploaded as an artifact, never a
+    # gate.
+    #
+    # It is also the only job that would notice an ingestion break at all, because
+    # snapshot mode reads compiled models and cannot tell a stale model from a
+    # correct one.
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'live')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    continue-on-error: true
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install openpyxl pdfplumber yfinance requests
+
+      - name: Rebuild every model from filings and the market feed
+        run: |
+          set -o pipefail
+          python scripts/qa_gate.py --mode live 2>&1 | tee cold_output.txt
+
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo "## Cold rebuild (reported, not gating)"
+            echo
+            echo '```'
+            grep -E 'mode|checked|failing|regressions|REGRESSION|BUILD_FAILED|503' cold_output.txt || echo "(no summary line)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the cold-run output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cold-rebuild-output
+          path: cold_output.txt
+          retention-days: 30
