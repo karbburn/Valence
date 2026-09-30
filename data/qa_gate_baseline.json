@@ -28,7 +28,9 @@
     "fixture_sourced_years_are_reported",
     "historicals_are_reported"
   ],
-  "infy_us": [],
+  "infy_us": [
+    "debt_is_actually_sourced"
+  ],
   "lt_lt": [
     "fixture_sourced_years_are_reported",
     "historicals_are_reported"

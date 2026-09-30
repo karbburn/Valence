@@ -18,6 +18,7 @@ from backend.data.providers.market_data import get_company_market_data
 from backend.forecast.debt import OPENING_BALANCE_KEYS
 from backend.forecast.share_count import resolve_shares_outstanding
 from backend.models.spec.forecast import FORECAST_PERIODS
+from backend.models.spec.metadata import FILING_SOURCES
 from backend.models.spec.model_specification import ModelSpecification
 from backend.models.spec.valuation import ValuationOutput
 from backend.valuation.dcf import (
@@ -187,7 +188,32 @@ def run_valuation(
         else latest_hist
     )
     debt_cr = annual_total_debt
-    bridge_source = "filed_annual_balance_sheet"
+    # Whether the bridge really is reading a filed balance sheet, decided from the
+    # sources that actually fed the model rather than asserted.
+    #
+    # It used to be set to "filed_annual_balance_sheet" unconditionally, with a
+    # twenty-line comment above it explaining in detail why the filed statement is
+    # the right authority. Infosys' ADR published exactly that string while its
+    # only input was a market feed, and carried no debt lines at all, so total_debt
+    # read 0 against roughly $962m of filed lease obligations. A reader who saw
+    # "filed_annual_balance_sheet" in the workbook had no way to check.
+    #
+    # The claim is the product's central one, so it is earned from the same set the
+    # page-level provenance uses rather than assumed from the fact that a
+    # balance sheet exists.
+    _bridge_sources = set((spec.metadata.data_sources or {}).keys())
+    bridge_source = (
+        "filed_annual_balance_sheet"
+        if _bridge_sources & FILING_SOURCES
+        else "market_feed_statement"
+    )
+    if not (_bridge_sources & FILING_SOURCES):
+        logger.warning(
+            "%s: no filing source contributes to this model (sources: %s). The bridge "
+            "is reading a market feed, not a filed balance sheet, and it is labelled "
+            "as such.",
+            company_id, sorted(_bridge_sources) or ["none"],
+        )
     # The filed statement carries short-term investments as their own line, so the
     # balance is reported rather than a feed's residual, and there is nothing to
     # derive and disclaim.
