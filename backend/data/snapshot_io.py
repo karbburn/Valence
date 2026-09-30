@@ -65,18 +65,25 @@ def _replace_with_retry(tmp: Path, dest: Path) -> None:
 def read_model_snapshot(cache_path: Path) -> str:
     """Read a model snapshot, tolerating a concurrent rename.
 
-    This is the other half of the same platform constraint. On Windows a rename
-    landing on a file this process is opening produces a sharing violation, so a
-    reader that does not retry can fail at the exact moment a rebuild completes.
+    On Windows it is the WRITER that hits the sharing violation, not the reader:
+    with a handle open, ``os.replace`` raises PermissionError (winerror 5), so the
+    rename does not land and the reader simply reads the intact previous file. That
+    is why ``_replace_with_retry`` exists and why it is the load-bearing one.
 
-    The contract this keeps is deliberately narrow: a reader gets the whole
-    snapshot or a retry, and never a document cut off mid-object. Retrying is
-    cheap because the window is a single rename wide; giving up after it would
-    surface a transient condition as a missing company.
+    This retry exists anyway, and the reason is narrower than symmetry suggests.
+    On POSIX a reader is never interrupted at all, and on Windows the observed
+    behaviour is that it does not need to be. It is insurance against a platform
+    or a filesystem where a reader does lose the race -- which was not observed and
+    so is not claimed. Kept because the cost is a few milliseconds on a cache read,
+    and removed because it is the kind of dead branch that misleads the next person
+    into deciding whether reader-side retrying is load-bearing when it is not.
 
-    The filesystem is only sampled here, so a snapshot that is absent or
-    truncated is returned to the caller to decide on rather than swallowed -- a
-    caller asking about a company that has no model needs to be able to say so.
+    The contract this actually keeps: a reader gets the whole snapshot or a
+    retry, and never a document cut off mid-object.
+
+    The filesystem is only sampled here, so a snapshot that is absent or truncated
+    is returned to the caller to decide on rather than swallowed -- a caller asking
+    about a company that has no model needs to be able to say so.
     """
     cache_path = Path(cache_path)
     deadline = time.monotonic() + _RENAME_RETRY_SECONDS

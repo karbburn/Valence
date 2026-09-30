@@ -8,6 +8,7 @@ Verifies that historical datapoints carry valid status and provenance metadata.
 
 from typing import List
 
+from backend.models.statements.selector import LOCAL_FIXTURE_SOURCES
 from backend.models.spec.model_specification import ModelSpecification
 from backend.models.spec.qa import ModelCheckResult
 
@@ -127,7 +128,19 @@ def check_fixture_sourced_years_are_reported(spec: ModelSpecification) -> ModelC
     """
     meta = getattr(spec, "metadata", None)
     sources = dict(getattr(meta, "data_sources", None) or {})
-    fixture_rows = int(sources.get("screener", 0))
+    # Tested against the set of locally generated sources, NOT the single literal
+    # "screener". The check's own docstring cites generate_us_sources.py by name,
+    # and that generator is the same class of hand-entered fixture: it writes
+    # aapl_us.xlsx, msft_us.xlsx and infy_us.xlsx, and sec_edgar.py tags those rows
+    # `source="local_export"` / `status="estimated"` rather than "screener".
+    #
+    # Keying on one string therefore reported a company fed entirely by
+    # generate_us_sources.py as having no local fixture at all, while naming that
+    # same generator as part of the problem. `local_export` is already recognised as
+    # non-filing at models/statements/selector.py:LOCAL_EXPORT_SOURCES; this is that
+    # constant not being reused where it was needed.
+    fixture_sources = {k: int(v) for k, v in sources.items() if k in LOCAL_FIXTURE_SOURCES}
+    fixture_rows = sum(fixture_sources.values())
     total_rows = sum(int(v) for v in sources.values()) if sources else 0
     if not fixture_rows or not total_rows:
         return ModelCheckResult(
@@ -146,20 +159,51 @@ def check_fixture_sourced_years_are_reported(spec: ModelSpecification) -> ModelC
     ) else None
     latest_reported = [li for li in reported if li.period_label == period_label]
 
+    # The verdict follows the measurement, rather than being hardcoded False.
+    #
+    # It used to fail unconditionally whenever any fixture row existed, which made
+    # it a permanent blocker rather than a signal: marking every line `derived` so
+    # nothing was published as a filed figure still failed, reporting "0 line(s)
+    # ... are published as reported" as the evidence. A failure that quotes the
+    # absence of the defect it describes is self-refuting, and a check that cannot
+    # be satisfied by fixing what it names is not measuring that thing.
+    #
+    # So it fails when a fixture-fed year is published as reported, which is what
+    # its name says. A model carrying fixture inputs with nothing published as
+    # reported still passes -- and the detail below says so, so the reader knows
+    # the inputs are local even though nothing mislabelled is on the page.
+    if not latest_reported:
+        return ModelCheckResult(
+            check_name="fixture_sourced_years_are_reported",
+            category="data_quality",
+            passed=True,
+            detail=(
+                f"{fixture_rows} of {total_rows} input rows come from a locally "
+                f"generated fixture ({', '.join(sorted(fixture_sources))}), but no "
+                f"line in {period_label} is published as reported, so no fixture "
+                f"figure is presented as a filed one. The inputs are still local: "
+                f"this check reports labelling, not sourcing."
+            ),
+            implicated_canonical_keys=sorted({li.canonical_key for li in reported}),
+            implicated_periods=[period_label] if period_label else [],
+            implicated_scenarios=["historical"],
+        )
+
     return ModelCheckResult(
         check_name="fixture_sourced_years_are_reported",
         category="data_quality",
         passed=False,
         detail=(
             f"{fixture_rows} of {total_rows} input rows come from a locally generated "
-            f"fixture file, not from an export: backend/data/sources/generate_sources.py "
-            f"and generate_us_sources.py are tracked in this repository and hand-enter "
-            f"the figures. {len(latest_reported)} line(s) in {period_label} are "
-            f"published as reported, and the generator's own comment calls that year "
-            f"'estimates (unverified at fixture date)'. The forecast's growth anchor "
-            f"is computed from this year, so an estimate made when the fixture was "
-            f"written is currently the model's starting point. Either re-source this "
-            f"company from its filings, or stop publishing a valuation for it."
+            f"fixture file ({', '.join(sorted(fixture_sources))}), not from an export: "
+            f"backend/data/sources/generate_sources.py and generate_us_sources.py are "
+            f"tracked in this repository and hand-enter the figures. {len(latest_reported)} "
+            f"line(s) in {period_label} are published as reported, and the generator's "
+            f"own comment calls that year 'estimates (unverified at fixture date)'. "
+            f"The forecast's growth anchor is computed from this year, so an estimate "
+            f"made when the fixture was written is currently the model's starting point. "
+            f"Either re-source this company from its filings, or stop publishing a "
+            f"valuation for it."
         ),
         implicated_canonical_keys=sorted({li.canonical_key for li in latest_reported}),
         implicated_periods=[period_label] if period_label else [],

@@ -4,6 +4,22 @@ from typing import Dict, List, Tuple
 from backend.data.store import RawDatapoint, query_datapoints
 from backend.normalization.taxonomy.models import CanonicalDatapoint
 
+# Every source whose numbers were written by hand into a workbook in this
+# repository rather than retrieved from a filer or a provider. Both members are
+# produced by tracked generators under backend/data/sources/ -- generate_sources.py
+# (read as `screener`) and generate_us_sources.py (read as `local_export`) -- so
+# neither is usable as evidence for a published figure.
+#
+# Module level, and shared, because two consumers needed this list. The validation
+# check keyed on the single literal "screener", so it named generate_us_sources.py
+# in its failure text while being structurally blind to the `local_export` rows that
+# generator produces -- a company fed entirely by it was reported as having no local
+# fixture at all. A second, separately maintained copy of one list is the defect
+# this repository has now found three times over.
+SECONDARY_SOURCES = {"screener"}
+LOCAL_EXPORT_SOURCES = {"local_export"}
+LOCAL_FIXTURE_SOURCES = SECONDARY_SOURCES | LOCAL_EXPORT_SOURCES
+
 
 def select_primary_datapoints(
     canonical_datapoints: list[CanonicalDatapoint],
@@ -23,11 +39,10 @@ def select_primary_datapoints(
     # an NSE/SEC/BSE filing disagrees with a screener or yfinance row, the
     # regulatory source wins.
     AUTHORITATIVE_SOURCES = {"nse_filing", "sec_edgar", "bse_filing"}
-    SECONDARY_SOURCES = {"screener"}
     MARKET_FEED_SOURCES = {"yfinance_live", "twelvedata"}
     # A hand-maintained repository spreadsheet ranks below every retrieved
-    # source. It is a last resort, not an imitation filing.
-    LOCAL_EXPORT_SOURCES = {"local_export"}
+    # source. It is a last resort, not an imitation filing. SECONDARY_SOURCES and
+    # LOCAL_EXPORT_SOURCES are module level so the validation check can share them.
 
     def _score(dp: CanonicalDatapoint) -> int:
         score = 0
