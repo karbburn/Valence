@@ -202,6 +202,64 @@ input[type='range'].driver-range:focus-visible::-moz-range-thumb {
 }
 
 /* ------------------------------------------------------------------ */
+/* Skeleton placeholders, for a page whose content is still arriving   */
+/*                                                                     */
+/* Used by app/stock/[ticker]/loading.tsx. A ticker outside the       */
+/* prebuilt set blocks on a full ingestion, roughly seven seconds      */
+/* cold, and the alternative to a recognisable frame is a blank        */
+/* response that reads as a broken link.                               */
+/*                                                                     */
+/* The shimmer is a background-position sweep rather than an opacity   */
+/* pulse: it travels across each bar, so a reader can see which        */
+/* regions are still pending instead of the whole frame breathing      */
+/* together. Confined to background-image and background-position, so  */
+/* it composites without layout. Gated on no-preference, so reduced    */
+/* motion gets static bars, which is still a usable loading state.     */
+/* ------------------------------------------------------------------ */
+@keyframes valence-skeleton-sweep {
+  from {
+    background-position: -160% 0;
+  }
+  to {
+    background-position: 260% 0;
+  }
+}
+
+@keyframes valence-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.skeleton-bar {
+  background-image: linear-gradient(
+    90deg,
+    var(--c-surface-2) 0%,
+    var(--c-border) 42%,
+    var(--c-surface-2) 84%
+  );
+  background-size: 200% 100%;
+}
+
+.skeleton-pulse {
+  position: relative;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton-bar {
+    animation: valence-skeleton-sweep 1.6s ease-in-out infinite;
+  }
+
+  .skeleton-pulse {
+    animation: valence-skeleton-pulse 1.6s ease-in-out infinite;
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* Reduced motion — respect the OS setting                             */
 /* ------------------------------------------------------------------ */
 @media (prefers-reduced-motion: reduce) {
