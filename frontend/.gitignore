@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...except the example, which is the only documentation a fresh clone has for
+# where a build reads its data from. With it ignored, that fact lived in an
+# untracked file on one machine and nowhere else.
+!.env.example
 
 # vercel
 .vercel

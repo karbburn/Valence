@@ -21,7 +21,17 @@ import pytest
 
 from backend.data.providers import market_data as md
 
-LIVE_SOURCES = {"yfinance", "yfinance_history", "yahoo_chart", "twelvedata"}
+# Sources that can return a traded price, and the fallback placeholders that are
+# not a traded price at all.
+#
+# This used to be one set called LIVE_SOURCES holding all four real sources, which
+# is the same conflation the frontend was making: `yfinance_history` and
+# `yahoo_chart` are documented in this module as returning a daily close, so
+# calling them live was wrong in the test exactly as it was on the page. Split
+# because the split is the thing the frontend has to get right.
+TRADED_SOURCES = {"yfinance", "yfinance_history", "yahoo_chart", "twelvedata"}
+CURRENT_PRICE_SOURCES = {"yfinance", "twelvedata"}
+CLOSE_ONLY_SOURCES = {"yfinance_history", "yahoo_chart"}
 FALLBACK_SOURCES = {"registry", "market_default"}
 
 
@@ -188,7 +198,7 @@ def test_live_source_wins_over_cache(monkeypatch, isolated_cache):
     )
     cmd = md.get_company_market_data("nvda_us", force_refresh=True)
     assert cmd.price.value == pytest.approx(225.07)
-    assert cmd.price.source in LIVE_SOURCES
+    assert cmd.price.source in TRADED_SOURCES
 
 
 def test_outage_serves_stale_cache_with_original_date(isolated_cache):
@@ -220,17 +230,73 @@ def test_source_provenance_survives_into_valuation_output():
     assert rd.model_dump()["market_price_source"] == "stale_cache:yfinance"
 
 
-def test_live_source_names_are_shared_with_frontend():
-    """Keep backend/frontend source vocabularies in sync (see KPIBar/QuickDCFView)."""
-    for frontend in (
-        "frontend/src/components/KPIBar.tsx",
-        "frontend/src/components/QuickDCFView.tsx",
-    ):
-        text = (md.Path(__file__).resolve().parents[2] / frontend).read_text(encoding="utf-8")
-        for source in LIVE_SOURCES:
-            assert f"'{source}'" in text, f"{frontend} does not recognise live source '{source}'"
-        assert "'stale_cache'" in text, f"{frontend} does not recognise stale quotes"
-        assert "successor_ticker" in text, f"{frontend} does not recognise successor-ticker quotes"
-    for source in FALLBACK_SOURCES:
-        assert f"'{source}'" in (md.Path(__file__).resolve().parents[2]
-                                 / "frontend/src/components/KPIBar.tsx").read_text(encoding="utf-8")
+def test_frontend_quote_vocabulary_matches_the_backend():
+    """The frontend's notion of a quote must follow the backend's fetches.
+
+    This used to assert that two component files each mentioned the four live
+    source names, which kept the vocabularies in step but said nothing about what
+    the sources MEAN. Both components had drifted from each other on the fallback
+    prefixes at the same time, and nothing noticed, because the assertion was about
+    presence rather than about meaning.
+
+    It now checks one file, `lib/quoteLabel`, which is the single definition the
+    components both use, and checks the part that actually matters: the sources the
+    backend documents as returning a daily close must be classified as closes, and
+    the ones that can carry a current price must be classified as live. Getting
+    this backwards is what captioned a 2026-09-28 exchange close "Live" on
+    Larsen & Toubro's page.
+    """
+    root = md.Path(__file__).resolve().parents[2]
+    label = (root / "frontend/src/lib/quoteLabel.ts").read_text(encoding="utf-8")
+
+    for source in TRADED_SOURCES | FALLBACK_SOURCES:
+        assert f"'{source}'" in label or f'"{source}"' in label, (
+            f"the frontend does not recognise quote source '{source}'"
+        )
+    assert "'stale_cache'" in label, "the frontend does not recognise stale quotes"
+    assert "successor_ticker" in label, (
+        "the frontend does not recognise successor-ticker quotes"
+    )
+
+    # The split, checked against what the fetchers do rather than a hand-copied
+    # list. `_fetch_yfinance_history` and `_fetch_yahoo_chart` are documented in
+    # this module as returning an exchange close; `_fetch_yfinance` reads
+    # currentPrice out of `.info` and can carry a live figure.
+    def _frontend_set(name: str) -> set[str]:
+        assert name in label, f"the frontend no longer defines {name}"
+        body = label.split(name, 1)[1].split("]", 1)[0]
+        return {s.strip().strip("'\"") for s in body.split("new Set([")[1].split(")")[0].split(",")}
+
+    frontend_close = _frontend_set("CLOSE_SOURCES")
+    frontend_live = _frontend_set("LIVE_SOURCES")
+    assert CLOSE_ONLY_SOURCES <= frontend_close, (
+        f"the backend returns a daily close from {sorted(CLOSE_ONLY_SOURCES)} but the "
+        f"frontend classifies only {sorted(frontend_close)} as a close, so a close "
+        f"would be captioned Live"
+    )
+    assert CURRENT_PRICE_SOURCES <= frontend_live, (
+        f"the backend can return a current price from {sorted(CURRENT_PRICE_SOURCES)} "
+        f"but the frontend classifies only {sorted(frontend_live)} as live"
+    )
+    # No source may be in both: that is the whole bug, stated as an invariant.
+    assert not (frontend_close & frontend_live), (
+        f"{sorted(frontend_close & frontend_live)} is classified as both a close and a "
+        f"live quote, so its caption depends on which branch is evaluated first"
+    )
+
+
+def test_both_components_use_the_shared_quote_classification():
+    """Neither component may re-derive what a quote is.
+
+    The duplication is what let the two captions disagree about the same price.
+    """
+    root = md.Path(__file__).resolve().parents[2]
+    for component in ("KPIBar.tsx", "QuickDCFView.tsx"):
+        text = (root / f"frontend/src/components/{component}").read_text(encoding="utf-8")
+        assert "classifyQuote" in text, f"{component} does not use the shared classification"
+        assert "from '@/lib/quoteLabel'" in text, f"{component} does not import the shared module"
+        for source in TRADED_SOURCES:
+            assert f"'{source}'" not in text, (
+                f"{component} still names quote sources directly; the vocabulary "
+                f"belongs in lib/quoteLabel so the two screens cannot diverge"
+            )
