@@ -5,6 +5,7 @@ import { TableProperties, Info } from 'lucide-react'
 import { ModelSpecification, ScenarioLabel } from '@/lib/types'
 import { fmtNum, fmtMoney, fmtPct, getCurrencySymbol } from '@/lib/formatters'
 import { NO_VALUE } from '@/lib/noValue'
+import { mayPublishPrice } from '@/lib/publication'
 
 export interface DCFScheduleProps {
   spec: ModelSpecification | null
@@ -90,6 +91,9 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
   ]
 
   const netDebt = bridge.less_net_debt || 0
+  // The headline and this panel must agree. See the note at the price.
+  const priceWithheld = !mayPublishPrice(spec)
+
   const isNetCash = netDebt < 0
 
   return (
@@ -146,9 +150,25 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
             )}
           </div>
           <span className="text-[#374766]">|</span>
-          <div>
+          <div
+            title={
+              priceWithheld
+                ? 'This model failed a check that decides whether its output may be presented as a valuation. The implied price is withheld here for the same reason it is withheld in the headline above.'
+                : undefined
+            }
+          >
             <span className="text-text-dim">Price: </span>
-            <span className="text-[#7dd3fc] font-bold">{currencySym}{fmtNum(bridge.implied_share_price, 2)}</span>
+            {/*
+              Same rule as the headline, and it has to be. The KPI bar reads "n/a"
+              for a model the engine will not certify, and this panel printed
+              "Price: $-62.40" underneath it -- two answers to one question on the
+              same screen, one of which was the number the headline had just
+              refused. Derived from the same helper rather than a second copy of
+              the check names, which is the pattern that produced the divergence.
+            */}
+            <span className={priceWithheld ? 'text-[#f59e0b]' : 'text-[#7dd3fc] font-bold'}>
+              {priceWithheld ? 'not verified' : `${currencySym}${fmtNum(bridge.implied_share_price, 2)}`}
+            </span>
           </div>
         </div>
       </div>
