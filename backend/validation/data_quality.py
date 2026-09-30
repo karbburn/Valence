@@ -8,6 +8,7 @@ Verifies that historical datapoints carry valid status and provenance metadata.
 
 from typing import List
 
+from backend.models.spec.historicals import REPORTED_STATUSES
 from backend.models.statements.selector import LOCAL_FIXTURE_SOURCES
 from backend.models.spec.model_specification import ModelSpecification
 from backend.models.spec.qa import ModelCheckResult
@@ -122,9 +123,16 @@ def check_fixture_sourced_years_are_reported(spec: ModelSpecification) -> ModelC
     model's starting point.
 
     This check does not decide what the right number is. It refuses to let the
-    question pass unasked: a model whose inputs come from a locally generated file
-    fails, and says so, rather than carrying a `reported` status that a reader
-    cannot distinguish from a filed one.
+    question pass unasked: a model carrying a fixture figure with a `reported`
+    status fails, and says so, because a reader cannot distinguish that status
+    from a filed one.
+
+    It does NOT fail merely because a fixture contributes an input. A model whose
+    fixture figures are all marked derived passes: the defect being checked for is
+    the mislabelling, not the presence of local inputs. Re-sourcing is a separate
+    decision and this check is deliberately not the thing that forces it -- when
+    it failed unconditionally, it could not be satisfied by fixing the thing it
+    named, and it quoted "0 line(s) published as reported" as its own evidence.
     """
     meta = getattr(spec, "metadata", None)
     sources = dict(getattr(meta, "data_sources", None) or {})
@@ -152,7 +160,7 @@ def check_fixture_sourced_years_are_reported(spec: ModelSpecification) -> ModelC
 
     reported = [
         li for li in (spec.historicals.line_items if spec.historicals else [])
-        if li.status in ("reported", "reported_adjusted")
+        if li.status in REPORTED_STATUSES
     ]
     period_label = spec.historicals.periods[-1] if (
         spec.historicals and spec.historicals.periods
@@ -168,11 +176,15 @@ def check_fixture_sourced_years_are_reported(spec: ModelSpecification) -> ModelC
     # absence of the defect it describes is self-refuting, and a check that cannot
     # be satisfied by fixing what it names is not measuring that thing.
     #
-    # So it fails when a fixture-fed year is published as reported, which is what
-    # its name says. A model carrying fixture inputs with nothing published as
-    # reported still passes -- and the detail below says so, so the reader knows
-    # the inputs are local even though nothing mislabelled is on the page.
-    if not latest_reported:
+    # So it fails when a fixture-fed figure is published as reported, which is what
+    # its name says. The test is on ALL reported lines, not just the final period:
+    # scoping it to periods[-1] let a model pass while FY23 and FY24 fixture figures
+    # sat in the workbook labelled reported, and then had the detail text assert "so
+    # no fixture figure is presented as a filed one", which did not follow. The
+    # generator's own comment calls the newest year the estimate, but every year it
+    # hand-entered is equally unverified, and the ones that came from audited
+    # results are the ones a reader will trust most.
+    if not reported:
         return ModelCheckResult(
             check_name="fixture_sourced_years_are_reported",
             category="data_quality",
@@ -180,9 +192,9 @@ def check_fixture_sourced_years_are_reported(spec: ModelSpecification) -> ModelC
             detail=(
                 f"{fixture_rows} of {total_rows} input rows come from a locally "
                 f"generated fixture ({', '.join(sorted(fixture_sources))}), but no "
-                f"line in {period_label} is published as reported, so no fixture "
-                f"figure is presented as a filed one. The inputs are still local: "
-                f"this check reports labelling, not sourcing."
+                f"line is published as reported, so no fixture figure is presented "
+                f"as a filed one. The inputs are still local: this check reports "
+                f"labelling, not sourcing."
             ),
             implicated_canonical_keys=sorted({li.canonical_key for li in reported}),
             implicated_periods=[period_label] if period_label else [],

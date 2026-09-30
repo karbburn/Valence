@@ -73,17 +73,20 @@ def read_model_snapshot(cache_path: Path) -> str:
     This retry exists anyway, and the reason is narrower than symmetry suggests.
     On POSIX a reader is never interrupted at all, and on Windows the observed
     behaviour is that it does not need to be. It is insurance against a platform
-    or a filesystem where a reader does lose the race -- which was not observed and
-    so is not claimed. Kept because the cost is a few milliseconds on a cache read,
-    and removed because it is the kind of dead branch that misleads the next person
-    into deciding whether reader-side retrying is load-bearing when it is not.
+    or a filesystem where a reader does lose the race -- which was not observed
+    and so is not claimed. Kept because the cost is a few milliseconds on a cache
+    read, and because `_replace_with_retry` above is the retry that actually
+    matters; if you are deciding whether reader-side retrying is load-bearing, it
+    is not.
 
-    The contract this actually keeps: a reader gets the whole snapshot or a
-    retry, and never a document cut off mid-object.
+    The contract this keeps: a reader gets the whole snapshot or a retry, and
+    never a document cut off mid-object.
 
-    The filesystem is only sampled here, so a snapshot that is absent or truncated
-    is returned to the caller to decide on rather than swallowed -- a caller asking
-    about a company that has no model needs to be able to say so.
+    Only PermissionError is retried, so anything else -- including a snapshot that
+    is absent, or one left truncated by a crash before this module existed -- is
+    returned to the caller verbatim to decide on. A truncated snapshot is NOT
+    detected here; it arrives intact as the wrong bytes, and the caller turns the
+    resulting JSONDecodeError into whatever it does about a bad cache.
     """
     cache_path = Path(cache_path)
     deadline = time.monotonic() + _RENAME_RETRY_SECONDS
