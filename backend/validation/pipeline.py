@@ -25,6 +25,7 @@ from backend.validation.data_quality import (
     check_historicals_are_reported,
     check_fixture_sourced_years_are_reported,
 )
+from backend.validation.debt_sourcing import check_debt_is_actually_sourced
 from backend.validation.input_plausibility import (
     check_bridge_inputs_plausible,
     check_equity_value_positive,
@@ -72,6 +73,8 @@ CHECK_SUITE: List[Tuple[str, Callable[[ModelSpecification], ModelCheckResult]]] 
     # 10 of 10 checks passed and an implied price 66% below the market, carrying
     # total debt of 14,900 beside a reported lease liability of 30,594.
     ("data_quality", check_bridge_inputs_plausible),
+    # Zero debt with no debt input is not a plausible bridge, it is an absent one.
+    ("data_quality", check_debt_is_actually_sourced),
     ("data_quality", check_equity_value_positive),
     ("data_quality", check_implied_price_deviation_is_explainable),
     ("data_quality", check_year_one_growth_is_plausible),
