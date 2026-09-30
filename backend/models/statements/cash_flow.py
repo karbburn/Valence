@@ -38,6 +38,13 @@ class CashFlowLineItem(BaseModel):
     # The day each period was FILED for, so the forecast that grows out of these
     # periods inherits the filer's own calendar rather than a constructed one.
     period_end_dates_by_period: Dict[str, date] = Field(default_factory=dict)
+    # Whether each period's value was READ from a filing or COMPUTED, with the
+    # formula when it was computed. 8.7% of canonical datapoints are derived and
+    # all of them used to reach the specification, the snapshot, the workbook and
+    # the site labelled `reported`, because the spec builder hardcoded that status
+    # for every line except EBITDA. See BalanceSheetLineItem for the full account.
+    status_by_period: Dict[str, str] = Field(default_factory=dict)
+    derivation_rule_by_period: Dict[str, str] = Field(default_factory=dict)
 
 
 class CashFlowStatement(BaseModel):
@@ -85,6 +92,8 @@ def assemble_cash_flow(
     for c_key, label, cat in CF_LINE_ITEM_CONFIG:
         values: Dict[str, float] = {}
         lineage: Dict[str, List[str]] = {}
+        status: Dict[str, str] = {}
+        rules: Dict[str, str] = {}
         curr = "INR"
         un = "crores"
         period_ends: Dict[str, date] = {}
@@ -95,6 +104,10 @@ def assemble_cash_flow(
                 values[p] = dp.value
                 lineage[p] = dp.source_datapoint_ids
                 period_ends[p] = dp.period_end_date
+            status[p] = getattr(dp, "status", "reported") or "reported"
+            _rule = getattr(dp, "derivation_rule", None)
+            if _rule:
+                rules[p] = _rule
                 curr = dp.currency
                 un = dp.units
 
@@ -109,6 +122,8 @@ def assemble_cash_flow(
                     units=un,
                     lineage_ids_by_period=lineage,
                     period_end_dates_by_period=period_ends,
+                    status_by_period=status,
+                    derivation_rule_by_period=rules,
                 )
             )
 

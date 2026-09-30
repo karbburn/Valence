@@ -470,10 +470,27 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
                     lookup[sa_key] = sa_dp
 
             # 9. Total Equity Derivation
+            #
+            # Preference order, and it matters: the two routes that reconcile with
+            # the filer's own balance sheet come first, and summing components comes
+            # last because it is the only route that can silently disagree with them.
+            #
+            # A filer's screener export often carries no total-liabilities line, so
+            # this fell straight through to the component sum. For Tata Consultancy
+            # that published equity of 108,562 from share capital 362 plus reserves
+            # 108,200, while the filer's own total assets were 174,162: derived
+            # liabilities of 73,298 then came to 181,860 against those same assets, a
+            # 7,698 hole. Nothing caught it, because `balance_sheet_balances` compares
+            # total assets to the filer's REPORTED total-liabilities-and-equity, and
+            # that pair ties. The components were never cross-checked against
+            # anything.
             te_key = (company_id, period, "canonical.bs.total_equity")
             if te_key not in lookup:
                 ta_dp = lookup.get(ta_key)
                 tl_dp = lookup.get((company_id, period, "canonical.bs.total_liabilities"))
+                tle_dp = lookup.get(
+                    (company_id, period, "canonical.bs.total_liabilities_and_equity")
+                )
                 # Equity components use the canonical keys produced by the taxonomy
                 # registry: share capital plus reserves and/or retained earnings.
                 component_dps = [
@@ -486,35 +503,64 @@ def derive_canonical_metrics(datapoints: list[CanonicalDatapoint]) -> list[Canon
                 ]
                 present = [dp for dp in component_dps if dp is not None]
 
+                te_dp = None
                 if ta_dp is not None and tl_dp is not None:
-                    derived_te_val = ta_dp.value - tl_dp.value
                     te_dp = _build_derived(
                         company_id=company_id,
                         canonical_key="canonical.bs.total_equity",
                         period=period,
                         metric_raw="Total Equity (Derived)",
-                        value=derived_te_val,
+                        value=ta_dp.value - tl_dp.value,
                         anchor=ta_dp,
                         source_ids=ta_dp.source_datapoint_ids + tl_dp.source_datapoint_ids,
                         formula="total_equity = total_assets - total_liabilities",
                     )
-                    new_derived.append(te_dp)
-                    lookup[te_key] = te_dp
-                elif len(present) >= 2:
-                    derived_te_val = sum(dp.value for dp in present)
-                    source_ids: list[str] = []
-                    for dp in present:
-                        source_ids += dp.source_datapoint_ids
+                elif tle_dp is not None and tl_dp is not None:
+                    # The filer prints the whole right-hand side of the balance sheet
+                    # but not its liabilities line, so equity is the difference.
+                    # Reconciles with the filer's own subtotal by construction, which
+                    # the component sum does not.
                     te_dp = _build_derived(
                         company_id=company_id,
                         canonical_key="canonical.bs.total_equity",
                         period=period,
                         metric_raw="Total Equity (Derived)",
-                        value=derived_te_val,
+                        value=tle_dp.value - tl_dp.value,
+                        anchor=tle_dp,
+                        source_ids=tle_dp.source_datapoint_ids + tl_dp.source_datapoint_ids,
+                        formula="total_equity = total_liabilities_and_equity - total_liabilities",
+                    )
+                elif len(present) >= 2:
+                    total_from_parts = sum(dp.value for dp in present)
+                    # Say so when the parts do not agree with the filer's own subtotal.
+                    # The sum is still published, because it is the only equity figure
+                    # available, but a reader is entitled to know it is not the
+                    # filer's arithmetic.
+                    if tle_dp is not None:
+                        gap = total_from_parts - (tle_dp.value - (tl_dp.value if tl_dp else 0.0))
+                        if abs(gap) > max(abs(tle_dp.value) * 0.005, 1.0):
+                            logger.warning(
+                                "%s %s: equity components sum to %.1f, which is %.1f "
+                                "away from the filer's own total-liabilities-and-equity "
+                                "less liabilities. The components are not the filer's "
+                                "equity arithmetic; published as the only figure "
+                                "available, and flagged.",
+                                company_id, period, total_from_parts, gap,
+                            )
+                    source_ids: list[str] = []
+                    for dp in present:
+                        source_ids += list(dp.source_datapoint_ids)
+                    te_dp = _build_derived(
+                        company_id=company_id,
+                        canonical_key="canonical.bs.total_equity",
+                        period=period,
+                        metric_raw="Total Equity (Derived)",
+                        value=total_from_parts,
                         anchor=present[0],
                         source_ids=source_ids,
                         formula="total_equity = equity_capital + retained_earnings + other_reserves (reported components)",
                     )
+                if te_dp is not None:
                     new_derived.append(te_dp)
                     lookup[te_key] = te_dp
 
