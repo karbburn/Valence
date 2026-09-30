@@ -2,7 +2,8 @@
   "aapl_us": [],
   "amba_us": [
     "equity_value_positive",
-    "implied_price_deviation_is_explainable"
+    "implied_price_deviation_is_explainable",
+    "valuation_is_meaningful"
   ],
   "amzn_us": [
     "current_assets_reconcile",
@@ -21,7 +22,8 @@
   ],
   "idea_idea": [
     "equity_value_positive",
-    "implied_price_deviation_is_explainable"
+    "implied_price_deviation_is_explainable",
+    "valuation_is_meaningful"
   ],
   "infy_infy": [
     "current_assets_reconcile",
@@ -57,7 +59,8 @@
     "equity_value_positive",
     "fixture_sourced_years_are_reported",
     "historicals_are_reported",
-    "implied_price_deviation_is_explainable"
+    "implied_price_deviation_is_explainable",
+    "valuation_is_meaningful"
   ],
   "tcs_tcs": [
     "fixture_sourced_years_are_reported",
