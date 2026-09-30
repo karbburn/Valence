@@ -15,7 +15,9 @@
   "googl_us": [
     "implied_price_deviation_is_explainable"
   ],
-  "hcltech_hcltech": [],
+  "hcltech_hcltech": [
+    "historicals_are_reported"
+  ],
   "idea_idea": [
     "equity_value_positive",
     "implied_price_deviation_is_explainable"
@@ -24,7 +26,9 @@
     "current_assets_reconcile"
   ],
   "infy_us": [],
-  "lt_lt": [],
+  "lt_lt": [
+    "historicals_are_reported"
+  ],
   "meta_us": [],
   "msft_us": [],
   "nvda_us": [],
@@ -34,16 +38,23 @@
   "reliance_reliance": [],
   "sunpharma_sunpharma": [
     "bridge_inputs_plausible",
+    "historicals_are_reported",
     "implied_price_deviation_is_explainable"
   ],
   "tatamotors_tatamotors": [
+    "historicals_are_reported",
     "implied_price_deviation_is_explainable"
   ],
   "tatasteel_tatasteel": [
     "equity_value_positive",
+    "historicals_are_reported",
     "implied_price_deviation_is_explainable"
   ],
-  "tcs_tcs": [],
+  "tcs_tcs": [
+    "historicals_are_reported"
+  ],
   "tsm_us": [],
-  "wipro_wipro": []
+  "wipro_wipro": [
+    "historicals_are_reported"
+  ]
 }

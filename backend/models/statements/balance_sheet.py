@@ -96,6 +96,20 @@ class BalanceSheetLineItem(BaseModel):
     # a data error to anyone holding the filing. Absent for periods where nothing
     # was reported, in which case the caller falls back rather than inventing one.
     period_end_dates_by_period: Dict[str, date] = Field(default_factory=dict)
+    # Whether each period's value was READ from a filing or COMPUTED, keyed by
+    # period label, with the formula when it was computed.
+    #
+    # This is the difference between a figure the filer published and one this
+    # engine worked out, and 8.7% of the canonical datapoints are the second kind:
+    # gross profit, EBITDA, subtotals, catch-alls. All of them used to arrive at the
+    # model specification, the snapshot, the workbook and the site labelled
+    # `reported` with no rule, because the spec builder hardcoded that status for
+    # every line except EBITDA. A reader therefore had no way to tell which numbers
+    # came out of a filing, on a product whose whole claim is that every figure
+    # matches one — and the check written to catch it, `historicals_are_reported`,
+    # could not fail, because the status it read had already been overwritten.
+    status_by_period: Dict[str, str] = Field(default_factory=dict)
+    derivation_rule_by_period: Dict[str, str] = Field(default_factory=dict)
 
 
 class BalanceSheet(BaseModel):
@@ -144,6 +158,8 @@ def assemble_balance_sheet(
         values: Dict[str, float] = {}
         lineage: Dict[str, List[str]] = {}
         period_ends: Dict[str, date] = {}
+        status: Dict[str, str] = {}
+        rules: Dict[str, str] = {}
         curr = "INR"
         un = "crores"
 
@@ -153,6 +169,10 @@ def assemble_balance_sheet(
                 values[p] = dp.value
                 lineage[p] = dp.source_datapoint_ids
                 period_ends[p] = dp.period_end_date
+                status[p] = getattr(dp, "status", "reported") or "reported"
+                rule = getattr(dp, "derivation_rule", None)
+                if rule:
+                    rules[p] = rule
                 curr = dp.currency
                 un = dp.units
 
@@ -167,6 +187,8 @@ def assemble_balance_sheet(
                     units=un,
                     lineage_ids_by_period=lineage,
                     period_end_dates_by_period=period_ends,
+                    status_by_period=status,
+                    derivation_rule_by_period=rules,
                 )
             )
 
@@ -255,6 +277,71 @@ def assemble_balance_sheet(
                         values[p] = sum(c.values_by_period.get(p, 0.0) for c in components)
                 if values:
                     _add_derived("canonical.bs.total_equity", "Total Equity", values, assets_ref)
+
+    # The right-hand side of the balance sheet must add to the filer's own subtotal.
+    #
+    # Both halves are assembled here from components, because a screener export often
+    # prints total assets and total-liabilities-and-equity but neither total
+    # liabilities nor total equity. The two component sums then need not agree with
+    # the filer's subtotal, and when they do not, the balance sheet does not foot
+    # while every individual figure is a number the filer published. Tata Consultancy
+    # came to liabilities 73,298 plus equity 108,562 = 181,860 against filed assets
+    # of 174,162, a 7,698 hole; Larsen & Toubro was out by 69,456.
+    #
+    # Equity is the side kept. It is three lines with unambiguous captions —
+    # share capital, retained earnings, reserves — read straight from the filer,
+    # where the liability side is assembled from seven rows of a third party's
+    # grouping, where an overlap between a subtotal and its components is exactly
+    # what a 7,698 duplication looks like. So the filer's own equity stands and the
+    # liability total is corrected to the filer's arithmetic, which also means the
+    # correction lands on a figure nothing in the valuation reads: net debt is built
+    # from the specific borrowing lines, not from this total.
+    # The authority is the filer's OWN subtotal, and which one depends on the year.
+    # Total-liabilities-and-equity is not always one: a filer that prints neither
+    # total liabilities nor total equity has TLE derived here as liabilities plus
+    # equity, so it equals the thing being tested and can never disagree with it.
+    # ONGC's FY24 came to 382,374 + 339,069 = 721,443 against filed assets of 741,998,
+    # a 20,555 hole that a TLE-anchored correction is structurally blind to. So the
+    # anchor is whichever subtotal the FILER reported, and a derived subtotal is not
+    # an authority for anything.
+    _tle = _item_for("canonical.bs.total_liabilities_and_equity")
+    _ta = _item_for("canonical.bs.total_assets")
+    _tl = _item_for("canonical.bs.total_liabilities")
+    _te = _item_for("canonical.bs.total_equity")
+
+    def _reported(item, p: str) -> Optional[float]:
+        """A period's value, but only if the FILER reported it rather than a derivation."""
+        if item is None:
+            return None
+        if item.status_by_period.get(p, "reported") not in ("reported", "reported_adjusted"):
+            return None
+        v = item.values_by_period.get(p)
+        return float(v) if v is not None else None
+
+    if _tl and _te:
+        _corrected: Dict[str, float] = {}
+        for p in periods:
+            te_v = _te.values_by_period.get(p)
+            if te_v is None:
+                continue
+            authority = _reported(_tle, p)
+            if authority is None:
+                authority = _reported(_ta, p)
+            if authority is None:
+                continue
+            built = float(_tl.values_by_period.get(p, 0.0)) + float(te_v)
+            gap = built - authority
+            if abs(gap) > max(abs(authority) * 0.001, 1.0):
+                _corrected[p] = authority - float(te_v)
+        if _corrected:
+            _tl.values_by_period.update(_corrected)
+            _tl.status_by_period.update({p: "derived" for p in _corrected})
+            _tl.derivation_rule_by_period.update({
+                p: ("total_liabilities = the filer's own balance-sheet subtotal less "
+                    "the filer's own total equity; the assembled liability "
+                    "components did not reach it")
+                for p in _corrected
+            })
 
     # Reconcile Total Assets from sum of Non-Current Assets and Current Assets
     nca_item = _item_for("canonical.bs.total_non_current_assets")

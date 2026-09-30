@@ -137,12 +137,32 @@ class ModelSpecification(BaseModel):
                 filed_period_ends = getattr(li, "period_end_dates_by_period", None) or {}
                 for period, value in li.values_by_period.items():
                     all_periods.add(period)
-                    # Infer derived status from derivation_rule availability
+                    # The status the ingestion recorded, not one invented here.
+                    #
+                    # This was hardcoded to "reported" for every line except EBITDA,
+                    # and the rule was dropped on the way out. 8.7% of the canonical
+                    # datapoints are derived — gross profit, EBITDA, subtotals, the
+                    # filer catch-alls — and every one of them reached the snapshot,
+                    # the workbook and the site wearing a filed figure's label. The
+                    # product's claim is that every published number matches a
+                    # filing, so a reader being unable to tell which numbers are
+                    # computed is a defect in the claim, not a cosmetic one.
+                    #
+                    # EBITDA keeps its explicit rule because the derivation that
+                    # produces it is not always the canonical one: a filer that
+                    # reports EBITDA itself is not having it computed.
                     status: str = "reported"
                     deriv_rule: Optional[str] = None
-                    if li.canonical_key == "canonical.is.ebitda":
-                        status = "derived"
-                        deriv_rule = "ebitda = canonical.is.operating_profit + canonical.is.depreciation_amortization"
+                    recorded = getattr(li, "status_by_period", None) or {}
+                    if recorded.get(period):
+                        status = recorded[period]
+                    recorded_rules = getattr(li, "derivation_rule_by_period", None) or {}
+                    deriv_rule = recorded_rules.get(period)
+                    if li.canonical_key == "canonical.is.ebitda" and status == "derived":
+                        deriv_rule = deriv_rule or (
+                            "ebitda = canonical.is.operating_profit "
+                            "+ canonical.is.depreciation_amortization"
+                        )
 
                     h_items.append(
                         HistoricalLineItem(

@@ -66,6 +66,31 @@ def check_balance_sheet_balances(spec: ModelSpecification) -> ModelCheckResult:
                 failing_scenarios.append("historical")
                 errors.append(f"Historical {p}: assets={assets} vs liab+eq={liab_eq}")
 
+        # The components, not just the two subtotals the filer prints.
+        #
+        # Comparing total assets to the filer's REPORTED total-liabilities-and-equity
+        # is necessary and nowhere near sufficient. A filer can print both of those
+        # and still have an engine that assembles the right-hand side out of
+        # components that do not add to them: Tata Consultancy reported assets of
+        # 174,162 and a total-liabilities-and-equity of 174,162, which ties, while
+        # the engine's derived liabilities of 73,298 and derived equity of 108,562
+        # came to 181,860 — a 7,698 hole that this comparison could not see, because
+        # the two figures it looks at are both the filer's own and both correct.
+        # Nothing else compared the parts, so the parts were free to be wrong.
+        liabilities = spec.historicals.get_value("canonical.bs.total_liabilities", p)
+        equity = spec.historicals.get_value("canonical.bs.total_equity", p)
+        if assets is not None and liabilities is not None and equity is not None:
+            built = float(liabilities) + float(equity)
+            gap = built - float(assets)
+            if abs(gap) > max(abs(float(assets)) * 0.001, BS_TOLERANCE_CR):
+                failing_periods.append(p)
+                failing_scenarios.append("historical")
+                errors.append(
+                    f"Historical {p}: liabilities {liabilities:,.0f} + equity "
+                    f"{equity:,.0f} = {built:,.0f}, against total assets "
+                    f"{assets:,.0f}, a gap of {gap:+,.0f}"
+                )
+
     # Forecast periods check
     if spec.forecast:
         for scenario in spec.forecast.scenarios:

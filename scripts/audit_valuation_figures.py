@@ -2,18 +2,34 @@
 
 Checks, per company:
   1. Market price provenance  — value, source, and the QUOTE date (must not be
-     stamped with a request date newer than the last trading session).
+     stamped with a request date newer than the last trading session), and the
+     source must not be a placeholder.
   2. Internal arithmetic       — implied_share_price == equity_value / shares,
      equity_value == EV - less_net_debt, and the upside % shown in the UI.
-  3. Units sanity             — share price in the right magnitude for the
-     market/currency (a $100 or Rs.1000 placeholder shows up instantly).
-  4. Excel export parity       — the same figures in the generated workbook.
-  5. Cross-source parity       — served price vs. a fresh independent fetch.
+  3. Price plausibility       — a share price inside a range that admits every
+     price a listed equity has plausibly traded at. This catches a gross fault and
+     nothing finer: it is NOT a units check. Rupees and dollars are both plain
+     numbers, and so are paise and thousands, so no band that admits real quotes
+     can catch a units error. The band once ran 50-20,000 for India on the
+     assumption that the universe was all large caps, and it failed Vodafone Idea at
+     13.56 — a correct price, verified against the exchange record. See BANDS.
+  4. Excel export parity       — the same figures in the generated workbook, and the
+     workbook's own arithmetic: its WACC recomputed from the sheet's literals must
+     equal the API's, which is read by label so a renamed or inserted row cannot
+     make the check read the wrong cell. An analyst-set cost of equity is read as
+     an override rather than recomputed, so a deliberate override is not reported
+     as a mismatch.
+  5. Workbook integrity       — the executive-summary upside is a real formula
+     rather than a literal, and the quote's date and source appear in the export.
+
+There is deliberately no cross-source parity check: a "fresh independent fetch" of
+a price is the same provider the model already used, so it would confirm the
+provider rather than the figure.
 
 Usage:
     python scripts/audit_valuation_figures.py
     python scripts/audit_valuation_figures.py --companies infy_infy,nvda_us,aapl_us
-    python scripts/audit_valuation_figures.py --base http://127.0.0.1:8010
+    python scripts/audit_valuation_figures.py --base http://127.0.0.1:8111
 """
 from __future__ import annotations
 
