@@ -863,6 +863,18 @@ def _manifest_record(c) -> Dict[str, Any]:
         "sector": c.sector,
         "cik": c.cik,
         "has_model": _has_compiled_model(c.company_id),
+        # Whether this company is in scope for the model engine at all.
+        #
+        # A bank or an insurer is deliberately excluded: an unlevered FCFF DCF
+        # needs operating cash flow to discount, and a financial does not generate
+        # one, so the engine has no correct answer to give. Those companies carry no
+        # slug and /stock/<ticker> 404s them by design.
+        #
+        # The search dropdown was still offering them as clickable rows labelled
+        # "Builds on open", which is a promise the resolver cannot keep. HDFC Bank
+        # and JPMorgan appeared in results and 404'd on click. The exclusion is
+        # right; advertising it as buildable was not.
+        "is_financial": bool(getattr(c, "is_financial", False)),
         # The date the compiled model was written, for the sitemap's lastmod.
         # A date and not a timestamp: the sitemap is revalidated far more often
         # than any model changes, and a value that moves on every revalidation
@@ -1023,6 +1035,20 @@ def search_companies(
             # Carried so selecting a result can rewrite the address bar to a
             # canonical link rather than leaving the URL on the previous ticker.
             "slug": c.slug,
+            # Out of scope for the model engine. Banks and insurers are held back
+            # deliberately: an unlevered FCFF DCF discounts operating cash flow and
+            # a financial does not generate one, so there is no correct answer to
+            # give them and no page exists. Advertising them as "Builds on open"
+            # was a promise the resolver cannot keep -- HDFC Bank and JPMorgan were
+            # offered as clickable rows and 404'd on click.
+            #
+            # This is a hand-built payload rather than the shared _manifest_record,
+            # which is the seventh time in this project a record shape has been
+            # duplicated and drifted: the same defect as the client's copy of the
+            # publication check names, and as the test script's list of files. A
+            # second place to keep in step, with nothing to notice when it falls
+            # behind.
+            "is_financial": bool(getattr(c, "is_financial", False)),
         })
 
     if len(payload) < limit and q.strip():

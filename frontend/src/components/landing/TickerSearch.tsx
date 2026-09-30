@@ -337,15 +337,23 @@ export function TickerSearch() {
                     anyone who needs it, since a 10px badge is not where a
                     sentence belongs. */}
                 <span
-                  className="font-mono text-[10px] text-text-faint shrink-0"
+                  className={`font-mono text-[10px] shrink-0 ${
+                    c.is_financial ? 'text-text-dim' : 'text-text-faint'
+                  }`}
                   title={
-                    c.has_model
-                      ? 'A compiled model exists, so the page opens with figures in place.'
-                      : 'No compiled model yet. The engine reads this company’s filings and builds one when you open it.'
+                    c.is_financial
+                      ? 'Banks and insurers are out of scope for this model. An unlevered FCFF DCF discounts operating cash flow, and a financial does not generate one, so there is no valuation to build and no page to open.'
+                      : c.has_model
+                        ? 'A compiled model exists, so the page opens with figures in place.'
+                        : 'No compiled model yet. The engine reads this company\'s filings and builds one when you open it.'
                   }
                 >
-                  {c.has_model ? 'Ready' : 'Builds on open'}
-                </span>
+                  {c.is_financial
+                    ? 'Not valued'
+                    : c.has_model
+                      ? 'Ready'
+                      : 'Builds on open'}
+                  </span>
               </li>
             )
           })}
