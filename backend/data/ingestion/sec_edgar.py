@@ -431,6 +431,16 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
     ], "PROFIT & LOSS"),
 ]
 
+# The revenue tag group, lifted out of the table above so anything needing the same
+# list reads it rather than restating it. `_discover_annual_period_ends` uses this to
+# work out which fiscal years a filer has reported. Derived once, from the table, so
+# adding a tag in one place cannot leave the other list behind -- which is exactly
+# how the IncludingAssessedTax fix landed in US_GAAP_TAG_MAP while the period probe
+# one function below kept the old list.
+REVENUE_TAG_GROUP: Tuple[str, ...] = next(
+    tags for label, tags, _section in US_GAAP_TAG_MAP if label == "Revenues"
+)
+
 # Tags that report borrowings as ONE combined long-term-and-short-term figure
 # rather than splitting the current slice out. A filer using one of these files no
 # non-current borrowings tag at all, so the "Borrowings" line above resolves to
@@ -667,10 +677,16 @@ def _discover_annual_period_ends(us_gaap: dict) -> List[date]:
     comparative shares the fiscal-year field but ends EARLIER, so the latest end
     per fiscal year is the year that filing actually reports.
     """
-    probe_tags = (
-        "Revenues",
-        "RevenueFromContractWithCustomerExcludingAssessedTax",
-        "SalesRevenueNet",
+    # Read the revenue tags from US_GAAP_TAG_MAP rather than restating them.
+    #
+    # This was a second hand-kept copy of the same list, one function over, and it
+    # was missed when the IncludingAssessedTax tag was added to the map: a filer
+    # tagging revenue only that way had its fiscal-year ends discovered by accident
+    # via NetIncomeLoss, or not at all if income were also filed under a
+    # non-standard member. Two copies of one list is how a fix lands in one place
+    # and not the other, which is the same defect this repository has now found
+    # three times. `test_probe_tags_cover_the_revenue_tags` fails if they diverge.
+    probe_tags = tuple(REVENUE_TAG_GROUP) + (
         "NetIncomeLoss",
         "OperatingIncomeLoss",
         "ProfitLoss",

@@ -106,3 +106,41 @@ test('no model is ever described as filing-derived without a filing source', () 
     assert.ok(!/can be tied to a filing/i.test(title), title)
   }
 })
+
+test('a filing_derived flag cannot carry the filing claim by itself', () => {
+  // The regression this guards: the flag said filing-derived, the source named a
+  // local fixture, and the hover text read "These figures are read from the
+  // filer's own accounts: a local fixture file. Every published number on this
+  // page can be tied to a filing." The label beside it said "not the accounts".
+  //
+  // The original test only ever passed derived=false or null, so the one case
+  // that matters -- the flag asserting exactly what the source contradicts -- was
+  // never exercised. A guard tested only in its passing state is not a guard.
+  for (const source of ['screener', 'local_export', 'yfinance_live', 'twelvedata']) {
+    const title = provenanceTitleText({
+      filing_derived: true,
+      filing_source: source,
+      data_sources: { [source]: 75 },
+    })
+    assert.ok(
+      !/can be tied to a filing/i.test(title),
+      `a ${source}-sourced model was described as tied to a filing: ${title}`,
+    )
+    assert.ok(
+      !/read from the filer.s own accounts/i.test(title),
+      `a ${source}-sourced model was described as read from the accounts: ${title}`,
+    )
+  }
+})
+
+test('a filing_derived flag with no source is called a disagreement', () => {
+  // One of the two is wrong. A reader told which can act; a reader handed a
+  // confident answer cannot.
+  const title = provenanceTitleText({
+    filing_derived: true,
+    filing_source: null,
+    data_sources: { sec_edgar: 105 },
+  })
+  assert.ok(!/can be tied to a filing/i.test(title), title)
+  assert.ok(/disagree|not established/i.test(title), title)
+})

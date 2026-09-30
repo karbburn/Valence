@@ -102,10 +102,27 @@ export function provenanceTitleText(meta: {
     .map(([k, n]) => `${SOURCE_NAMES[k] ?? k}: ${n} figure${n === 1 ? '' : 's'}`)
     .join(', ')
 
-  if (meta.filing_derived) {
+  // The same FILING_SOURCES guard the label and tone apply, for the same reason.
+  // This function used to test `filing_derived` alone, so a model flagged
+  // filing_derived while naming a non-filing source produced a title reading
+  // "These figures are read from the filer's own accounts: a local fixture file.
+  // Every published number on this page can be tied to a filing." -- the exact
+  // overclaim the module exists to prevent, in the element a reader hovers over
+  // the label that correctly says the opposite.
+  const hasFilingSource = !!meta.filing_source && FILING_SOURCES.has(meta.filing_source)
+  if (meta.filing_derived && hasFilingSource) {
     return (
       'These figures are read from the filer\'s own accounts: ' +
       `${breakdown}. Every published number on this page can be tied to a filing.`
+    )
+  }
+  if (meta.filing_derived && !hasFilingSource) {
+    // The flag and the source disagree. Say so rather than picking a side: one of
+    // them is wrong, and a reader told which is which can act on it.
+    return (
+      'This page is flagged as filing-derived but does not name a filing source: ' +
+      `${breakdown}. Those two disagree, so the filing claim is not established ` +
+      'here. Treat the figures as unverified until the source is resolved.'
     )
   }
   return (

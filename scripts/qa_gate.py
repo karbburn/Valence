@@ -67,13 +67,11 @@ import sys
 from pathlib import Path
 from typing import Dict, List
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from backend.data.snapshot_io import read_model_snapshot  # noqa: E402
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+from backend.data.snapshot_io import read_model_snapshot  # noqa: E402
 
 BASELINE_PATH = Path("data/qa_gate_baseline.json")
 CACHE_DIR = REPO_ROOT / "backend" / "data" / "cache"
