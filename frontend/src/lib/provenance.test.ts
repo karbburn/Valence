@@ -32,13 +32,16 @@ test('a market-fed model says it did not come from the accounts', () => {
   assert.ok(label.includes('market feed'), label)
 })
 
-test('a screener-fed model names the aggregator rather than the accounts', () => {
-  // The substantive judgement, stated: screener is not a filing source. It is a
-  // third-party aggregator whose own documentation says its figures may differ from
-  // the filings, and the ingestion already ranked it as secondary for that reason.
+test('a fixture-fed model does not blame a third-party aggregator', () => {
+  // The files the screener reader parses are not Screener.in exports. They are
+  // written by `generate_sources.py` in this repository, which hand-enters the
+  // numbers and whose own comment calls the most recent year an estimate. Naming
+  // Screener.in would attribute hand-entered figures to a named data provider, and
+  // a reader checking that provider would find nothing.
   const label = provenanceLabel(false, null, { screener: 75, yfinance_live: 15 })
-  assert.ok(label.includes('Screener.in'), label)
-  assert.ok(!/SEC|EDGAR|filing/i.test(label), `screener was presented as a filing: ${label}`)
+  assert.ok(!/Screener/i.test(label), `a fixture was attributed to Screener.in: ${label}`)
+  assert.ok(/fixture/i.test(label), label)
+  assert.ok(!/SEC|EDGAR|filing/i.test(label), `a fixture was presented as a filing: ${label}`)
 })
 
 test('a mixed model is neither claimed nor denied', () => {

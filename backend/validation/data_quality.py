@@ -103,6 +103,70 @@ def check_data_provenance_quality(spec: ModelSpecification) -> ModelCheckResult:
     )
 
 
+def check_fixture_sourced_years_are_reported(spec: ModelSpecification) -> ModelCheckResult:
+    """A hand-entered fixture year must not be published as a filed one.
+
+    The files the screener reader parses are not exports from Screener.in. They are
+    written by `backend/data/sources/generate_sources.py` and
+    `generate_us_sources.py`, which are tracked in this repository and hand-enter
+    the numbers into a Screener-shaped workbook so the ingestion has something to
+    read. The generator's own comment on the most recent year reads:
+
+        # FY26 values are estimates (unverified at fixture date).
+
+    The engine was publishing that year as `status: "reported"`, across twenty-odd
+    lines for each affected company, because the file it read said so and the
+    parser had no way to know the file was authored here. The forecast then anchors
+    its growth on it, so an estimate made when the fixture was written became the
+    model's starting point.
+
+    This check does not decide what the right number is. It refuses to let the
+    question pass unasked: a model whose inputs come from a locally generated file
+    fails, and says so, rather than carrying a `reported` status that a reader
+    cannot distinguish from a filed one.
+    """
+    meta = getattr(spec, "metadata", None)
+    sources = dict(getattr(meta, "data_sources", None) or {})
+    fixture_rows = int(sources.get("screener", 0))
+    total_rows = sum(int(v) for v in sources.values()) if sources else 0
+    if not fixture_rows or not total_rows:
+        return ModelCheckResult(
+            check_name="fixture_sourced_years_are_reported",
+            category="data_quality",
+            passed=True,
+            detail="No locally generated fixture contributes to this model's inputs.",
+        )
+
+    reported = [
+        li for li in (spec.historicals.line_items if spec.historicals else [])
+        if li.status in ("reported", "reported_adjusted")
+    ]
+    period_label = spec.historicals.periods[-1] if (
+        spec.historicals and spec.historicals.periods
+    ) else None
+    latest_reported = [li for li in reported if li.period_label == period_label]
+
+    return ModelCheckResult(
+        check_name="fixture_sourced_years_are_reported",
+        category="data_quality",
+        passed=False,
+        detail=(
+            f"{fixture_rows} of {total_rows} input rows come from a locally generated "
+            f"fixture file, not from an export: backend/data/sources/generate_sources.py "
+            f"and generate_us_sources.py are tracked in this repository and hand-enter "
+            f"the figures. {len(latest_reported)} line(s) in {period_label} are "
+            f"published as reported, and the generator's own comment calls that year "
+            f"'estimates (unverified at fixture date)'. The forecast's growth anchor "
+            f"is computed from this year, so an estimate made when the fixture was "
+            f"written is currently the model's starting point. Either re-source this "
+            f"company from its filings, or stop publishing a valuation for it."
+        ),
+        implicated_canonical_keys=sorted({li.canonical_key for li in latest_reported}),
+        implicated_periods=[period_label] if period_label else [],
+        implicated_scenarios=["historical"],
+    )
+
+
 def check_historicals_are_reported(spec: ModelSpecification) -> ModelCheckResult:
     """Say which published figures were computed, and fail on the ones that matter.
 

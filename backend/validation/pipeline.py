@@ -23,6 +23,7 @@ from backend.validation.data_quality import (
     check_data_provenance_quality,
     check_cost_of_capital_is_live,
     check_historicals_are_reported,
+    check_fixture_sourced_years_are_reported,
 )
 from backend.validation.input_plausibility import (
     check_bridge_inputs_plausible,
@@ -60,6 +61,11 @@ CHECK_SUITE: List[Tuple[str, Callable[[ModelSpecification], ModelCheckResult]]] 
     ("data_quality", check_no_missing_critical_inputs),
     ("data_quality", check_data_provenance_quality),
     ("data_quality", check_historicals_are_reported),
+    # Whether the inputs came from a filer's accounts or from a hand-entered
+    # fixture in this repository. It is a separate question from whether a
+    # historical line was reported or computed, and it is the one that matters for
+    # whether a published figure means anything.
+    ("data_quality", check_fixture_sourced_years_are_reported),
     # Plausibility of the inputs themselves. Every check above asks whether the
     # arithmetic ties or whether a field is populated. None of them ask whether
     # the number that was read is believable, which is how Oracle came out with
