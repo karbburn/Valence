@@ -27,6 +27,7 @@ from backend.validation.data_quality import (
 )
 from backend.validation.valuation_meaningful import check_valuation_is_meaningful
 from backend.validation.debt_sourcing import check_debt_is_actually_sourced
+from backend.validation.provenance import check_inputs_trace_to_a_filing
 from backend.validation.input_plausibility import (
     check_bridge_inputs_plausible,
     check_equity_value_positive,
@@ -79,6 +80,9 @@ CHECK_SUITE: List[Tuple[str, Callable[[ModelSpecification], ModelCheckResult]]] 
     # A valuation outside the range of possible answers is not a view. This is an
     # input defect for publication purposes, not merely a flagged observation.
     ("data_quality", check_valuation_is_meaningful),
+    # The launch bar. A valuation whose historicals no filing contributed to is not
+    # published as a valuation, however plausible the numbers are.
+    ("data_quality", check_inputs_trace_to_a_filing),
     ("data_quality", check_equity_value_positive),
     ("data_quality", check_implied_price_deviation_is_explainable),
     ("data_quality", check_year_one_growth_is_plausible),
