@@ -512,7 +512,7 @@ EV_BRIDGE_ROWS: dict[str, int] = {
     "marketable_securities": EV_BRIDGE_ROW_OFFSET + 4,
     "non_current_investments": EV_BRIDGE_ROW_OFFSET + 5,
     "total_debt": EV_BRIDGE_ROW_OFFSET + 6,
-    "minority_interest_and_preferred": EV_BRIDGE_ROW_OFFSET + 7,
+    "minority_interest_and_preferred": EV_BRIDGE_ROW_OFFSET + 7,  # incl. mezzanine
     "net_non_operating_debt": EV_BRIDGE_ROW_OFFSET + 8,
     "equity_value": EV_BRIDGE_ROW_OFFSET + 9,
     "diluted_shares": EV_BRIDGE_ROW_OFFSET + 10,
@@ -563,9 +563,16 @@ def render_ev_bridge_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     mkt_sec_val = _num(b_obj.marketable_securities if b_obj else None)
     non_curr_inv_val = _num(b_obj.non_current_investments if b_obj else None)
     tot_debt_val = _num(b_obj.total_debt if b_obj else None)
+    # Mezzanine equity belongs on this row. It is redeemable preferred or
+    # redeemable noncontrolling interest -- a claim ranking ahead of common
+    # equity, exactly like minority interest and preferred stock -- so the row it
+    # belongs on is this one, and the export must show it for a reader to be able
+    # to reconcile the bridge by hand. Without it the workbook deducted less than
+    # the model did, and nothing on the page said so.
     min_int_val = (
         _num(b_obj.minority_interest if b_obj else None)
         + _num(b_obj.preferred_stock if b_obj else None)
+        + _num(b_obj.mezzanine_equity if b_obj else None)
     ) if b_obj else 0.0
     net_debt = _num(b_obj.less_net_debt if b_obj else None)
 
@@ -636,9 +643,9 @@ def render_ev_bridge_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
          else "not reported by the source"),
         ("total_debt", "Less: Total Debt", tot_debt_val, tot_debt_val, FMT_CURRENCY_INT,
          f"{bs_note}; {basis}"),
-        ("minority_interest_and_preferred", "Less: Minority Interest & Preferred", min_int_val,
+        ("minority_interest_and_preferred", "Less: Minority Interest, Preferred & Mezzanine", min_int_val,
          min_int_val, FMT_CURRENCY_INT,
-         f"{bs_note}; no minority interest or preferred reported"
+         f"{bs_note}; no minority interest, preferred or mezzanine reported"
          if min_int_val else
          ("neither reported by the source" if b_obj is None else
           f"{bs_note}; reported as nil")),

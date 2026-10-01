@@ -169,7 +169,10 @@ def main() -> None:
     _assert(ev_diff < 0.1, f"EV Tie-out: EV ({bridge.enterprise_value:,.1f}) == Sum(PV FCFF) + PV(TV) ({expected_ev:,.1f}) [diff={ev_diff:.4f}]")
 
     # Check 3: Net Debt Tie-out
-    expected_net_debt = (bridge.total_debt + (bridge.minority_interest or 0) + (bridge.preferred_stock or 0)) - (
+    # Mezzanine equity is included: it is deducted in the bridge and has to be
+    # here too, or this check would disagree with the model it is verifying.
+    expected_net_debt = (bridge.total_debt + (bridge.minority_interest or 0)
+                          + (bridge.preferred_stock or 0) + (bridge.mezzanine_equity or 0)) - (
         bridge.cash_and_equivalents + bridge.marketable_securities + bridge.non_current_investments
     )
     net_debt_diff = abs(bridge.less_net_debt - expected_net_debt)

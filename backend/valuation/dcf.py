@@ -333,6 +333,7 @@ def compute_dcf_bridge(
     non_current_investments_cr: float = 0.0,
     minority_interest_cr: float = 0.0,
     preferred_stock_cr: float = 0.0,
+    mezzanine_equity_cr: float = 0.0,
     operating_lease_liabilities_cr: float = 0.0,
 ) -> Tuple[DCFBridge, TerminalValue]:
     """Compute EV -> Equity Value -> Implied Share Price bridge with full non-operating breakdown.
@@ -355,7 +356,15 @@ def compute_dcf_bridge(
     # Comprehensive Non-Operating Assets & Liabilities Bridge:
     # Net Debt = (Borrowings + Minority Interest + Preferred Stock) - (Cash + Marketable Sec + Non-Current Inv)
     total_liquid_and_investments = cash_cr + marketable_securities_cr + non_current_investments_cr
-    total_obligations = debt_cr + minority_interest_cr + preferred_stock_cr
+    # Mezzanine equity belongs here for the same reason minority interest and
+    # preferred stock do: it is a claim on the enterprise that ranks AHEAD of
+    # common equity, so value attributable to common shareholders is what is
+    # left after it. Uxin filed 48,056 of it and the bridge was overstating
+    # equity value by that amount, because the balance sheet had started
+    # carrying the line and the bridge had not started deducting it.
+    total_obligations = (
+        debt_cr + minority_interest_cr + preferred_stock_cr + mezzanine_equity_cr
+    )
     net_debt = total_obligations - total_liquid_and_investments
 
     equity_value = ev - net_debt
@@ -377,6 +386,7 @@ def compute_dcf_bridge(
         operating_lease_liabilities=round(operating_lease_liabilities_cr, 2),
         minority_interest=round(minority_interest_cr, 2),
         preferred_stock=round(preferred_stock_cr, 2),
+        mezzanine_equity=round(mezzanine_equity_cr, 2),
         less_net_debt=round(net_debt, 2),
         equity_value=round(equity_value, 2),
         shares_outstanding=round(shares_cr, 4),

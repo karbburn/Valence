@@ -121,6 +121,14 @@ def run_valuation(
     pref_stock = constants.resolve(
         spec.historicals.get_value("canonical.bs.preferred_stock", latest_hist), 0.0
     )
+    # Mezzanine equity: redeemable preferred and redeemable noncontrolling
+    # interest. It ranks ahead of common equity in exactly the way preferred
+    # stock and minority interest do, so it is deducted before the implied
+    # share price. The balance sheet began carrying this line before the bridge
+    # began deducting it, overstating equity value by the full amount.
+    mezzanine_equity = constants.resolve(
+        spec.historicals.get_value("canonical.bs.mezzanine_equity", latest_hist), 0.0
+    )
     # Total interest-bearing debt, on the definition the debt schedule opens on.
     #
     # Total interest-bearing debt, read through the same key list the debt schedule
@@ -367,6 +375,7 @@ def run_valuation(
             non_current_investments_cr=non_current_inv,
             debt_cr=debt_cr,
             minority_interest_cr=minority_int,
+        mezzanine_equity_cr=mezzanine_equity,
             preferred_stock_cr=pref_stock,
             operating_lease_liabilities_cr=operating_lease_liability,
             shares_cr=shares_cr,

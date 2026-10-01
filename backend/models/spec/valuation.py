@@ -108,6 +108,10 @@ class DCFBridge(BaseModel):
     operating_lease_liabilities: Optional[float] = None  # shown, not deducted (see note)
     minority_interest: Optional[float] = None       # non-controlling interests
     preferred_stock: Optional[float] = None         # preferred equity
+    # Redeemable preferred and redeemable noncontrolling interest: a claim
+    # ranking ahead of common equity, so it is deducted before the implied share
+    # price is computed.
+    mezzanine_equity: Optional[float] = None
     less_net_debt: Optional[float] = None           # (Debt + NCI + Pref) - (Cash + MktSec + NonCurrInv)
     equity_value: Optional[float] = None            # EV - less_net_debt
     shares_outstanding: Optional[float] = None      # diluted, in units

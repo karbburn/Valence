@@ -79,14 +79,25 @@ def check_balance_sheet_balances(spec: ModelSpecification) -> ModelCheckResult:
         # Nothing else compared the parts, so the parts were free to be wrong.
         liabilities = spec.historicals.get_value("canonical.bs.total_liabilities", p)
         equity = spec.historicals.get_value("canonical.bs.total_equity", p)
+        # Mezzanine equity sits BETWEEN liabilities and equity in a filer's own
+        # presentation: redeemable preferred, redeemable noncontrolling interest. It
+        # is neither, and it is a real claim on the enterprise, so it belongs on the
+        # right-hand side of the identity.
+        #
+        # Omitting it made every genuine mezzanine filer fail this check by exactly
+        # the mezzanine amount, on a balance sheet that is correct. Uxin is 48,056.
+        mezzanine = spec.historicals.get_value("canonical.bs.mezzanine_equity", p) or 0.0
         if assets is not None and liabilities is not None and equity is not None:
-            built = float(liabilities) + float(equity)
+            built = float(liabilities) + float(mezzanine) + float(equity)
             gap = built - float(assets)
             if abs(gap) > max(abs(float(assets)) * 0.001, BS_TOLERANCE_CR):
                 failing_periods.append(p)
                 failing_scenarios.append("historical")
+                mezz_txt = (
+                    f" + mezzanine {mezzanine:,.0f}" if mezzanine else ""
+                )
                 errors.append(
-                    f"Historical {p}: liabilities {liabilities:,.0f} + equity "
+                    f"Historical {p}: liabilities {liabilities:,.0f}{mezz_txt} + equity "
                     f"{equity:,.0f} = {built:,.0f}, against total assets "
                     f"{assets:,.0f}, a gap of {gap:+,.0f}"
                 )
