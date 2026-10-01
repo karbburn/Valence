@@ -32,10 +32,7 @@
     "historicals_are_reported",
     "inputs_trace_to_a_filing"
   ],
-  "infy_us": [
-    "debt_is_actually_sourced",
-    "inputs_trace_to_a_filing"
-  ],
+  "infy_us": [],
   "lt_lt": [
     "historicals_are_reported",
     "inputs_trace_to_a_filing"
@@ -72,6 +69,7 @@
     "inputs_trace_to_a_filing"
   ],
   "tsm_us": [
+    "implied_price_deviation_is_explainable",
     "inputs_trace_to_a_filing"
   ],
   "wipro_wipro": [

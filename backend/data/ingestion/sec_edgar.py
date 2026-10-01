@@ -29,6 +29,7 @@ import requests
 
 from backend.data.errors import NoFinancialsAvailable
 from backend.data.store import RawDatapoint, Source, Status
+from backend.data.ingestion import ifrs_tags
 
 logger = logging.getLogger(__name__)
 
@@ -818,11 +819,47 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
         raise RuntimeError(f"SEC EDGAR API HTTP {resp.status_code} for CIK {cik} ({company_id})")
 
     facts_data = resp.json()
-    us_gaap = facts_data.get("facts", {}).get("us-gaap", {})
-    if not us_gaap:
+    all_facts = facts_data.get("facts", {})
+
+    # A foreign private issuer filing a 20-F reports under IFRS, and its facts arrive
+    # under `ifrs-full`. Only looking at `us-gaap` meant every one of them raised
+    # `NoFinancialsAvailable` and fell through to a market feed:
+    #
+    #     TSMC      334 ifrs-full tags, 0 us-gaap
+    #     Infosys   300 ifrs-full tags, 0 us-gaap
+    #
+    # So the marquee non-US names the index carries were reading a vendor feed for the
+    # want of a taxonomy check. us-gaap is still preferred where a filer reports both,
+    # because that is the taxonomy the rest of the tag map is written against.
+    us_gaap = all_facts.get("us-gaap", {})
+    ifrs_facts = all_facts.get("ifrs-full", {})
+    if us_gaap:
+        tag_map = US_GAAP_TAG_MAP
+        tag_namespace_used = "us-gaap"
+        capex_is_negative = False
+    elif ifrs_facts:
+        us_gaap = ifrs_facts  # the loop below only needs a tag->facts mapping
+        # Same metric labels, different element names. Walking the us-gaap map and
+        # substituting keeps ONE vocabulary, so a label cannot exist here without
+        # existing in the taxonomy registry. The previous version declared its own
+        # labels and two of them ("CapEx", "EPS") joined to nothing, so a filer
+        # arrived with no capex line and every per-share figure rounded to zero --
+        # while the ingestion reported success.
+        tag_map = ifrs_tags.build_ifrs_map(US_GAAP_TAG_MAP)
+        tag_namespace_used = ifrs_tags.IFRS_NAMESPACE
+        # IFRS reports capex as a negative number, a cash OUTFLOW. The us-gaap
+        # figures this engine already handles are positive magnitudes. Without the
+        # flip a filer's capital expenditure arrives as a capital release and every
+        # cash flow in the model inverts.
+        capex_is_negative = True
+        logger.info(
+            "%s (%s) reports under IFRS; reading %d ifrs-full tags.",
+            company_id, cik, len(ifrs_facts),
+        )
+    else:
         raise NoFinancialsAvailable(
-          f"No us-gaap facts found in SEC EDGAR response for CIK {cik}"
-      )
+            f"No us-gaap or ifrs-full facts found in SEC EDGAR response for CIK {cik}"
+        )
 
     # ------------------------------------------------------------------ #
     # Period discovery
@@ -870,7 +907,7 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
             {target_labels.get(e, e.isoformat()): f"{v:,.0f}" for e, v in sorted(derived_borrowings.items())},
         )
 
-    for metric_label, tag_list, section in US_GAAP_TAG_MAP:
+    for metric_label, tag_list, section in tag_map:
         selected_tag = None
         tag_data = None
         for tag in tag_list:
@@ -974,6 +1011,15 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
             # per share.
             val = raw_val if metric_label in _PER_SHARE_LABELS else raw_val / 1e6
 
+            # IFRS states capex as a negative outflow; this engine stores a positive
+            # magnitude for every other filer, so the sign is normalised here rather
+            # than in every consumer that reads the line. Without it an IFRS filer's
+            # capital expenditure arrives as a capital RELEASE, free cash flow is
+            # overstated by twice the capex, and every valuation built on it is wrong
+            # in the flattering direction.
+            if capex_is_negative and metric_label == ifrs_tags.CAPEX_LABEL and val < 0:
+                val = -val
+
             end_d = period_end
             fy = period_end.year
 
@@ -990,7 +1036,7 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
                     units="millions",
                     source="sec_edgar",
                     source_location=(
-                        f"SEC_EDGAR_CompanyFacts!us-gaap:"
+                        f"SEC_EDGAR_CompanyFacts!{tag_namespace_used}:"
                         f"{tag_of_period.get(period_end) or selected_tag or 'derived'}"
                         f"[period_end={end_d.isoformat()};form={item.get('form')}"
                         f";filed={item.get('filed')}]"
