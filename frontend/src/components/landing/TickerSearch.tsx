@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Search, Loader2 } from 'lucide-react'
 import type { CompanySummary } from '@/lib/types'
 import { stockPath } from '@/lib/tickers'
+import { usePendingNavigation } from '@/lib/usePendingNavigation'
 import { getCurrencySymbol } from '@/lib/formatters'
 
 /**
@@ -29,6 +30,7 @@ export function TickerSearch() {
   const errorId = `ticker-error-${uid}`
 
   const router = useRouter()
+  const { navigate, pendingTo } = usePendingNavigation()
   const searchParams = useSearchParams()
   const prefill = searchParams.get('q') ?? ''
 
@@ -168,7 +170,7 @@ export function TickerSearch() {
   const choose = async (c: CompanySummary) => {
     setOpen(false)
     if (c.slug) {
-      router.push(stockPath(c.slug))
+      navigate(stockPath(c.slug), c.company_id)
       return
     }
     // A company found in the exchange index has no page yet, so there is no slug
@@ -198,7 +200,7 @@ export function TickerSearch() {
       }
       const record = (await res.json()) as { slug?: string | null }
       if (record.slug) {
-        router.push(stockPath(record.slug))
+        navigate(stockPath(record.slug), c.company_id)
       } else {
         setResolveError(`${c.ticker} resolved without a page. Try searching for it again.`)
       }
@@ -307,8 +309,11 @@ export function TickerSearch() {
                 aria-selected={i === highlight}
                 onMouseEnter={() => setHighlight(i)}
                 onClick={() => void choose(c)}
+                aria-busy={pendingTo === c.company_id}
                 className={`px-3.5 py-2.5 cursor-pointer flex items-center justify-between gap-3 transition-colors ${
                   i === highlight ? 'bg-surface-2' : ''
+                } ${pendingTo === c.company_id ? 'opacity-60' : ''} ${
+                  pendingTo && pendingTo !== c.company_id ? 'pointer-events-none' : ''
                 }`}
               >
                 <span className="flex items-center gap-2.5 min-w-0">

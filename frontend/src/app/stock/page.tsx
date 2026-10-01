@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getManifestServer } from '@/lib/serverApi'
-import { stockPath } from '@/lib/tickers'
+import CompanyCard from '@/components/CompanyCard'
 import { SITE_URL, SITE_NAME, OG_IMAGE, CONTACT_EMAIL } from '@/lib/site'
 import type { ResolvedSlug } from '@/lib/tickers'
 import { TickerSearch } from '@/components/landing/TickerSearch'
@@ -148,43 +148,15 @@ function TickerGrid({
     <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
       {companies.map((c) => (
         <li key={c.company_id}>
-          <Link
-            href={stockPath(c.slug)}
-            className="group flex items-center gap-3 bg-surface border border-border rounded-sm px-3 py-2.5 hover:border-accent-border hover:bg-surface-2 transition-colors"
-          >
-            <span className="font-mono text-[11px] font-bold text-accent-hover bg-accent-subtle border border-accent-border rounded-sm px-1.5 py-0.5 shrink-0">
-              {c.ticker}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[13px] font-medium text-text-main truncate">
-                {c.name}
-              </span>
-              <span className="block font-mono text-[10px] text-text-dim truncate">
-                {c.exchange} · {c.slug}
-              </span>
-            </span>
-            {/* Only shown when it distinguishes something. When every covered
-                company is already modelled, a column of identical green Ready
-                chips carries no information and reads as a status light on a
-                list where status is not the variable.
-
-                "Builds on open" rather than "On demand", matching the search
-                dropdown. Nothing is on demand: the engine reads the filings when
-                the page is opened. A page that says "on demand" in one place and
-                "builds on open" in another has made the reader reconcile two
-                words for one state. */}
-            {!allModelled && (
-              <span
-                className={`shrink-0 font-mono text-[10px] px-1.5 py-0.5 rounded-sm border ${
-                  c.has_model
-                    ? 'bg-positive-subtle text-positive border-positive/30'
-                    : 'bg-surface-2 text-text-dim border-border'
-                }`}
-              >
-                {c.has_model ? 'Ready' : 'Builds on open'}
-              </span>
-            )}
-          </Link>
+          <CompanyCard
+            companyId={c.company_id}
+            slug={c.slug}
+            ticker={c.ticker}
+            name={c.name}
+            exchange={c.exchange}
+            hasModel={c.has_model}
+            showStatusChip={!allModelled}
+          />
         </li>
       ))}
     </ul>

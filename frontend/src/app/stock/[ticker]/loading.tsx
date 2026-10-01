@@ -73,9 +73,14 @@ export default function Loading() {
           aria-live="polite"
           className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-[var(--c-accent-border)] bg-[var(--c-accent-subtle)] px-4 py-3"
         >
-          <span className="flex h-2 w-2 shrink-0">
-            <span className="skeleton-pulse absolute inline-flex h-2 w-2 rounded-full bg-[var(--c-accent)]" />
-          </span>
+          {/* No status dot here.
+           *
+           * It pulsed, so it read as a live indicator, which means it was claiming to
+           * report something. It was not: it pulsed on a timer whether the build was
+           * progressing or wedged. And it was redundant, because the skeleton grid
+           * directly below it is the real progress signal, laid out where the figures
+           * will land. One honest indicator, not a decorative one standing in front of
+           * a real one. */}
           <span className="text-sm font-medium text-[var(--c-text)]">
             Building the model
           </span>
