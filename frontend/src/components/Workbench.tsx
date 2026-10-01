@@ -69,7 +69,7 @@ export default function Workbench({ companyId, initialSpec, syncUrl = true }: Wo
   // difference between waiting and leaving.
   const [loadingTitle, setLoadingTitle] = useState('Compiling Valuation Model')
   const [loadingSubtitle, setLoadingSubtitle] = useState(
-    'Reading this company\u2019s filings and building the model. First visit to a ticker takes a minute or two, and later visits are immediate.'
+    'Reading this company\u2019s filings and building the model. A first visit takes a few seconds, and a ticker you have already opened loads immediately.'
   )
 
   const [exporting, setExporting] = useState(false)
@@ -126,11 +126,11 @@ export default function Workbench({ companyId, initialSpec, syncUrl = true }: Wo
     if (isLive) {
       setLoadingTitle(`Compiling ${company.ticker}`)
       setLoadingSubtitle(
-        `Reading its filings and building the model from scratch. This takes a minute or two the first time and is immediate after that.`
+        `Reading its filings and building the model from scratch. Usually a few seconds.`
       )
     } else {
       setLoadingTitle(`Loading ${company.ticker} Model`)
-      setLoadingSubtitle(`Loading precomputed valuation model from local registry...`)
+      setLoadingSubtitle(`Loading its compiled valuation.`)
     }
 
     // Only rewrite the URL for a company that has a real slug. A search result

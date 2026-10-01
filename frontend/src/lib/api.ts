@@ -38,22 +38,40 @@ function writeSavedModels(entries: SavedModelEntry[]): void {
 /**
  * Why a ticker has no model, in the visitor's terms.
  *
- * 503 is the one failure here that is not a fault. It means the filings behind
- * this company are not retrievable: a foreign ordinary with no filing in reach, a
- * recent listing with no annual report, a delisted symbol still in the index.
- * Roughly one in seven tickers drawn at random lands here, so it is a normal
- * outcome and the person reading it is most likely to have followed a link rather
- * than to have mistyped anything.
+ * 503 means the engine could not compile this company right now. It is NOT a verdict
+ * on the company. The two causes are "the filings do not exist" and "we could not
+ * reach the filings", and from the outside they look identical, which is exactly why
+ * the copy must not pick one.
  *
- * The API's own wording was written for the API. Shown to a visitor it reads as
- * a malfunction, and "retry shortly" is the wrong advice when the filings are not
- * going to appear, so it names the situation and gives somewhere to go instead.
+ * The previous wording picked one, and picked the wrong one. It said "no annual
+ * filings could be reached for it, so there is nothing to model" -- a factual claim
+ * about a company we know nothing about. Adani Green files annually with its
+ * exchange, and the page failed because a fetch did not come back. The sentence told
+ * a reader the company has no financials when the truth was that we had not asked
+ * successfully. A number platform whose error state overstates its own knowledge is
+ * the one place a reader is most entitled to be misled, because that is the state
+ * they read in order to decide whether to trust anything else on the page.
+ *
+ * It also printed the internal storage key, uppercased: ADANIGREEN_ADANIGREEN. That
+ * is plumbing, not a name, and putting it in front of a visitor tells them the
+ * system is showing them its internals. The ticker is what a person recognises.
+ *
+ * So: name what happened, name the company the way the exchange does, say plainly
+ * that the filings most likely exist, and hand over the one action that can still
+ * change the outcome.
  */
-function unavailableMessage(companyId: string, detail: string): string {
+function unavailableMessage(ticker: string, detail: string): string {
+  const label = ticker.trim().toUpperCase()
+  // The API leads with "No financial statements could be sourced for this ticker
+  // yet", which only repeats what follows. Dropped so one sentence carries it all.
+  const tail = detail.replace(
+    /^\s*No financial statements could be sourced[^.]*\.\s*/i,
+    ''
+  )
   return (
-    `${detail} ${companyId.toUpperCase()} is listed, but no annual filings could be reached ` +
-    'for it, so there is nothing to model. Try another ticker, or ask for this one and ' +
-    'it will be looked at.'
+    `${label}: ${tail || 'the filings behind this company could not be reached'}. ` +
+    'The company does file, so this is most likely a temporary failure to reach ' +
+    'them rather than a gap in its reporting. Try again in a few minutes.'
   )
 }
 
@@ -62,7 +80,9 @@ export async function fetchModelSpec(companyId: string): Promise<ModelSpecificat
   if (!res.ok) {
     const detail = await res.json().catch(() => ({ detail: res.status }))
     const message = String(detail.detail || `Failed to load ${companyId}`)
-    if (res.status === 503) throw new Error(unavailableMessage(companyId, message))
+    if (res.status === 503) {
+      throw new Error(unavailableMessage(companyId.split('_')[0], message))
+    }
     throw new Error(message)
   }
   return res.json()

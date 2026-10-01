@@ -435,6 +435,29 @@ kbd {
   height: 2px;
   background: var(--c-surface-2);
 }
+/* The build indicator.
+ *
+ * One indeterminate bar, replacing a spinner plus an activity bar. Two elements
+ * animating at different rhythms on a five-second build reads as two things going
+ * wrong rather than one thing going slowly, and neither was reporting progress.
+ *
+ * The travel is 100% of the track rather than the 400% the old slide used, because
+ * a bar that overshoots its own container reads as a rendering fault at the moment
+ * it is fastest and most attention-grabbing.
+ *
+ * Gated on prefers-reduced-motion like every other animation here. */
+@keyframes valence-load {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+.loading-bar {
+  animation: valence-load 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
 .activity-bar::after {
   content: '';
   position: absolute;
