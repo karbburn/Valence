@@ -58,7 +58,9 @@ FALLBACK_COST_OF_EQUITY = 13.0
 # A capex ratio above this multiple of D&A is not a steady state; used to clamp
 # a distorted starting ratio (e.g. a year that nets M&A into investing CF).
 MAX_STEADY_STATE_CAPEX_PCT = 4.0
-# Hard ceiling on a capex-to-revenue ratio, well above any real operating
+
+
+    # Hard ceiling on a capex-to-revenue ratio, well above any real operating
 # business, so a bad proxy cannot produce permanently negative FCFF.
 MAX_CAPEX_PCT_REVENUE = 30.0
 
