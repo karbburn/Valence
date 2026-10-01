@@ -392,9 +392,27 @@ def suggest_base_assumptions(
         hist_tax_rate = default_tax
 
     # Fade towards statutory rate in Years 3-5 (reflecting global minimum tax / credit phase-outs)
-    tax_fade_weights = [0.0, 0.0, 0.25, 0.50, 0.75]  # weight on statutory rate
+    # The tax fade has to REACH the statutory rate in the terminal year.
+    #
+    # It used to be five literals ending at 0.75, so the final explicit year carried
+    # an effective rate a quarter of the way from the historical rate to statutory --
+    # and the Gordon terminal value capitalises that year. A perpetuity taxed below
+    # its own statutory rate is not a perpetuity. The error runs conservative, which
+    # is the only reason it survived: it understates the terminal value rather than
+    # inflating it, so it never produced an alarming number.
+    #
+    # The same defect the capex fade had, three lines away in the same function, in
+    # the same file, in the same commit that fixed the other one.
+    #
+    # Linear rather than the capex fade's front-loaded curve, and deliberately so: a
+    # tax rate converges as credits and holidays run off, which is a steady drift
+    # rather than a cycle that unwinds early. Front-loading a tax normalisation
+    # assumes the one-off benefits disappear faster than they do.
+    tax_fade_weights = [round(i / (len(forecast_periods) - 1), 4)
+                        if len(forecast_periods) > 1 else 1.0
+                        for i in range(len(forecast_periods))]
     for idx, p in enumerate(forecast_periods):
-        w_stat = tax_fade_weights[idx] if idx < len(tax_fade_weights) else 1.0
+        w_stat = tax_fade_weights[idx]
         p_tax = round((1.0 - w_stat) * hist_tax_rate + w_stat * default_tax, 2)
         source_tax = (
             f"Effective tax rate ({hist_tax_rate:.1f}%) fading to statutory ({default_tax:.1f}%)"
