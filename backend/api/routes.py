@@ -560,6 +560,11 @@ _INPUT_DEFECT_CHECKS = frozenset(
         # negative share price on the page.
         "valuation_is_meaningful",
         "debt_is_actually_sourced",
+            # The launch bar itself. Thirteen of twenty-three shipped companies
+            # had no filing behind their historicals, and nine of them were
+            # publishing a full valuation anyway, off a market feed nobody had
+            # verified against a filing.
+            "inputs_trace_to_a_filing",
     }
 )
 
