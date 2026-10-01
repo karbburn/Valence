@@ -23,6 +23,7 @@ from backend.models.spec.valuation import (
     TerminalValue,
     WACCBreakdown,
 )
+from backend.valuation import claims
 
 
 def _last_period(forecast: Forecast) -> str:
@@ -48,6 +49,7 @@ def compute_reverse_dcf(
     non_current_investments_cr: float = 0.0,
     minority_interest_cr: float = 0.0,
     preferred_stock_cr: float = 0.0,
+    mezzanine_equity_cr: float = 0.0,
     forecast: Optional[Forecast] = None,
     assumptions: Optional[List[AssumptionObject]] = None,
     historical_model=None,
@@ -95,7 +97,23 @@ def compute_reverse_dcf(
     # 1. Target Equity Value and EV
     target_equity_val = market_price * shares_cr
     total_liquid_and_investments = cash_cr + marketable_securities_cr + non_current_investments_cr
-    total_obligations = debt_cr + minority_interest_cr + preferred_stock_cr
+    # Walked from the shared declaration, like the forward bridge.
+    #
+    # This was a FOURTH copy of the same enumeration and it still omitted mezzanine
+    # after the commit that introduced claims.py specifically to end that. Both
+    # occurrences missed it, consistently, so the reverse DCF returned a plausible
+    # wrong number rather than an obviously broken one: a filer with mezzanine was
+    # solved for a growth rate that implies a higher equity value than actually
+    # exists, which is the worst direction for an implied-rate output.
+    claims_amount = sum(
+        {
+            "minority_interest": minority_interest_cr,
+            "preferred_stock": preferred_stock_cr,
+            "mezzanine_equity": mezzanine_equity_cr,
+        }.get(c.bridge_field, 0.0)
+        for c in claims.CLAIMS_AHEAD_OF_COMMON_EQUITY
+    )
+    total_obligations = debt_cr + claims_amount
     net_debt = total_obligations - total_liquid_and_investments
     target_ev = target_equity_val + net_debt
 
@@ -136,6 +154,7 @@ def compute_reverse_dcf(
             non_current_investments_cr=non_current_investments_cr,
             minority_interest_cr=minority_interest_cr,
             preferred_stock_cr=preferred_stock_cr,
+        mezzanine_equity_cr=mezzanine_equity_cr,
             terminal_growth_rate=terminal_growth_rate,
             exit_multiple=exit_multiple,
             timing_convention=timing_convention,

@@ -43,6 +43,7 @@ def compute_sensitivity_tables(
     non_current_investments_cr: float = 0.0,
     minority_interest_cr: float = 0.0,
     preferred_stock_cr: float = 0.0,
+    mezzanine_equity_cr: float = 0.0,
     scenario: str = "base",
     base_g: float = 4.0,
     base_exit_mult: float = 20.0,
@@ -118,6 +119,7 @@ def compute_sensitivity_tables(
                     non_current_investments_cr=non_current_investments_cr,
                     minority_interest_cr=minority_interest_cr,
                     preferred_stock_cr=preferred_stock_cr,
+        mezzanine_equity_cr=mezzanine_equity_cr,
                 )
                 row.append(bridge.implied_share_price)
         grid1.append(row)
@@ -170,6 +172,7 @@ def compute_sensitivity_tables(
                 non_current_investments_cr=non_current_investments_cr,
                 minority_interest_cr=minority_interest_cr,
                 preferred_stock_cr=preferred_stock_cr,
+        mezzanine_equity_cr=mezzanine_equity_cr,
             )
             row.append(bridge.implied_share_price)
         grid2.append(row)

@@ -35,28 +35,73 @@ def _steady_state_block() -> str:
 
 
 class TestSteadyStateCapexIsARealSteadyState:
-    def test_the_steady_state_is_exactly_depreciation_grown_at_the_terminal_rate(self):
-        """capex / D&A converges on 1 + g, and to nothing else.
+    def test_the_steady_state_overstates_reinvestment_rather_than_understating_it(self):
+        """The premium must sit ABOVE the true economic ratio, not below it.
 
-        There used to be a ceiling constant on the premium. A mutation run proved it
-        inert -- the rule was min(cap, 1 + g), g is 2.25% or 4%, so the growth term
-        always bound and raising the cap from 1.15 to 1.25 turned no test red. It is
-        gone. What remains is the rule that is defensible on its own terms.
+        This is the assertion that should have existed before the mistake was made.
+        A review found the rule had been changed from 1.25 to `1 + g`, i.e. 1.022 --
+        which is only correct for a one-year asset life. The correct form is
+        `1 + g/delta` with delta the depreciation rate, which is 1.135-1.180 at US
+        growth for a 6-8 year asset base.
+
+        The error direction is the whole point. Understating steady-state capex
+        raises free cash flow, raises the terminal value, and inflates the headline in
+        exactly the direction nobody wants a credibility problem to move. So the test
+        asserts the premium sits at or above the top of the economic range: overstating
+        reinvestment understates value, and that is the cheap way to be wrong.
         """
-        assert not hasattr(constants, "STEADY_STATE_CAPEX_PREMIUM_CAP"), (
-            "a premium ceiling above 1 + g cannot bind at any plausible growth rate, "
-            "so it is not a guard -- reinstate it only alongside a case where it binds"
+        premium = constants.STEADY_STATE_CAPEX_PREMIUM
+        assert premium > 1.0, (
+            "a steady state at or below depreciation funds no growth at all"
         )
-        for growth in (constants.US_TERMINAL_GROWTH, constants.INDIA_TERMINAL_GROWTH):
-            premium = 1.0 + growth / 100.0
-            assert premium > 1.0, (
-                f"a steady state at or below depreciation funds no growth at {growth}%"
+        # US only, and deliberately so. Every flagship filer in the shipped set is a
+        # US filer and 1.25 clears their whole range (1.135-1.180 at a 6-8 year asset
+        # life).
+        #
+        # It does NOT clear India's: at 4% growth and a 10 year asset life the
+        # economic ratio is 1.40. So for a long-lived Indian asset base this constant
+        # UNDERSTATES steady-state capex, which overstates the terminal value, and
+        # that is stated here rather than tested away. One global constant cannot be
+        # right in both markets, which is precisely why measuring delta is the open
+        # item rather than something a test can settle.
+        for life in (6, 8):
+            true_ratio = 1.0 + (constants.US_TERMINAL_GROWTH / 100.0) * life
+            assert premium >= true_ratio, (
+                f"at US growth and a {life}-year asset life the economic steady state "
+                f"is capex/D&A = {true_ratio:.3f}, but the model uses {premium:.3f}. "
+                f"Understating it inflates free cash flow and the terminal value."
             )
-            assert premium < 1.15, (
-                f"{growth}% growth implies capex at {premium:.3f}x depreciation; a "
-                f"reinvestment rate that far above the growth it funds means the "
-                f"terminal value is an assumption rather than a business"
-            )
+        # Known, accepted limitation, recorded rather than tested away.
+        #
+        # 1.25 does not clear India's range: at 4% growth and an 8-10 year asset life
+        # the economic ratio is 1.32-1.40, so for a long-lived Indian asset base this
+        # constant UNDERSTATES steady-state capex and therefore overstates the
+        # terminal value.
+        #
+        # One global constant cannot be right in both markets, and pretending
+        # otherwise with a looser assertion would hide it. It happens to be harmless
+        # today because every publishable company in the shipped set is a US filer;
+        # it stops being harmless the moment an Indian filer with a long-lived asset
+        # base is published. That is the concrete form of "measuring delta is the open
+        # item".
+
+
+    def test_growth_alone_is_not_the_rule(self):
+        """`1 + g` must never come back.
+
+        It reads as the obviously-correct answer -- reinvest to fund depreciation plus
+        the growth -- and it is the wrong one, because the growth capital is `g x
+        invested capital` while D&A is `delta x invested capital`. The ratio is
+        `1 + g/delta`, and the two differ by a factor of 1/delta.
+        """
+        import re
+
+        block = _steady_state_block()
+        offenders = re.findall(r"premium\s*=\s*1\.0\s*\+\s*term_growth", block)
+        assert not offenders, (
+            "premium = 1 + g ignores the depreciation rate; use "
+            "constants.STEADY_STATE_CAPEX_PREMIUM, which is anchored to 1 + g/delta"
+        )
 
     def test_a_filer_already_inside_the_steady_state_is_not_faded(self):
         """Fading a business that is not in a cycle would invent a decline."""
@@ -92,7 +137,7 @@ class TestSteadyStateCapexIsARealSteadyState:
     @pytest.mark.parametrize("growth", [0.0, 2.25, 4.0])
     def test_a_five_year_fade_reaches_the_steady_state(self, growth):
         """The weights must actually land on the target, not stop short of it."""
-        premium = 1.0 + growth / 100.0
+        premium = constants.STEADY_STATE_CAPEX_PREMIUM
         hist, da = 13.5, 8.6
         target = min(max(da * (1 + growth / 100.0),
                          min(hist, constants.MAX_STEADY_STATE_CAPEX_PCT)),
@@ -241,12 +286,12 @@ class TestTheFadeActuallyReachesTheSteadyState:
             "a filer in a capex cycle must see its ratio fade, or the terminal value "
             "is struck on the peak"
         )
-        # D&A averaged ~9.2% of revenue here; US terminal growth is 2.25%, so the
-        # steady state funds about 1.0225x depreciation.
+        # D&A averaged ~8.6% of revenue here. The steady state funds
+        # STEADY_STATE_CAPEX_PREMIUM times depreciation.
         da_pct = (
             48_663 / 574_785 + 52_795 / 637_959 + 65_756 / 716_924
         ) / 3 * 100
-        allowed = da_pct * (1 + constants.US_TERMINAL_GROWTH / 100.0)
+        allowed = da_pct * constants.STEADY_STATE_CAPEX_PREMIUM
         # The published ratio is rounded to four decimals by the assumption
         # builder, so the tolerance is a rounding step and not a judgement call.
         assert ratios[-1] <= allowed + 1e-3, (
@@ -259,7 +304,7 @@ class TestTheFadeActuallyReachesTheSteadyState:
     def test_a_cyclic_filer_reaches_it_exactly_in_the_last_year(self):
         ratios = self._published_capex_ratios()
         da_pct = (48_663 / 574_785 + 52_795 / 637_959 + 65_756 / 716_924) / 3 * 100
-        target = da_pct * (1 + constants.US_TERMINAL_GROWTH / 100.0)
+        target = da_pct * constants.STEADY_STATE_CAPEX_PREMIUM
         assert ratios[-1] == pytest.approx(target, abs=0.05), (
             "the fade must land on the steady state, not merely close to it"
         )

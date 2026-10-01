@@ -59,6 +59,22 @@ FALLBACK_COST_OF_EQUITY = 13.0
 # a distorted starting ratio (e.g. a year that nets M&A into investing CF).
 MAX_STEADY_STATE_CAPEX_PCT = 4.0
 
+# Steady-state capex as a multiple of depreciation.
+#
+# The economics: at a steady state capex = D&A + g x invested capital, and with
+# D&A = delta x IC that is capex/D&A = 1 + g/delta -- the DEPRECIATION RATE in the
+# denominator. g alone is wrong; it assumes a one-year asset life.
+#
+# At g = 2.25% (US) and a 6-8 year blended asset life the true ratio is 1.135-1.180.
+# 1.25 sits above that, overstating steady-state reinvestment and so understating the
+# terminal value. That is the safe direction: when the terminal value is the thing
+# under scrutiny, erring low costs an honest understatement rather than an inflated
+# headline.
+#
+# Measured delta is the open item. Depreciation runs on a gross asset base and the
+# statements carry a net one, so a derived figure would look precise and be wrong.
+STEADY_STATE_CAPEX_PREMIUM = 1.25
+
 
     # Hard ceiling on a capex-to-revenue ratio, well above any real operating
 # business, so a bad proxy cannot produce permanently negative FCFF.

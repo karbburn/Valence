@@ -509,17 +509,33 @@ def suggest_base_assumptions(
     term_growth, _growth_basis = constants.terminal_growth_for(
         resolve_market(historical_model.company_id)
     )
-    # Purely growth-derived, with no tunable premium above it.
+    # What the fade is fading towards, economically.
     #
-    # There was a ceiling constant here (1.15) and it was inert: the rule was
-    # min(cap, 1 + g), and g is 2.25% or 4%, so the growth term always bound and the
-    # cap never did. A knob that cannot move is not a guard, it is a comment that
-    # reads like one -- and a mutation run proved it, because raising it to 1.25
-    # turned no test red.
+    # At a steady state capex = D&A + g x invested capital, and with D&A = delta x IC
+    # that is capex/D&A = 1 + g/delta: the DEPRECIATION RATE in the denominator, not
+    # the growth rate. At g = 2.25% and a 6 to 8 year blended asset life the true
+    # ratio is 1.135 to 1.180.
     #
-    # So the rule is now just the one that is actually defensible: in a perpetuity
-    # growing at g, reinvestment funds depreciation plus the capital for the growth.
-    premium = 1.0 + term_growth / 100.0
+    # This was a flat 1.25, a crude approximation that happened to sit inside that
+    # range. It was then "fixed" to 1 + g, which is 1.022 -- wrong by a factor that
+    # scales with asset life, because 1 + g is only correct at delta = 1, a one-year
+    # asset life. Assuming a company reinvests only 2.25% above depreciation implies
+    # it stops investing well below maintenance, which raises free cash flow and so
+    # raises the terminal value: the change inflated value in exactly the direction
+    # nobody wants a credibility problem to go.
+    #
+    # delta is not cleanly measurable from what the statements carry -- depreciation
+    # runs on a gross asset base and the statements give a net one -- so this uses a
+    # documented default rather than a derived figure that would look precise and be
+    # wrong. Measuring it properly is the open item, recorded in the handoff rather
+    # than guessed at here.
+    #
+    # The direction of the error is deliberate: 1.25 sits above the 1.135-1.180 range
+    # for a typical asset life, so it overstates steady-state reinvestment and
+    # understates the terminal value. When the terminal value is already the thing
+    # under scrutiny, erring low is the right way to be wrong.
+    premium = constants.STEADY_STATE_CAPEX_PREMIUM
+    _unused_term_growth = term_growth
     if hist_capex_pct <= da_pct * premium:
         # Already inside the steady state. There is no cycle to fade, and fading
         # would invent a decline the filings do not show.

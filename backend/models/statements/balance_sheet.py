@@ -440,6 +440,21 @@ def assemble_balance_sheet(
                     company_id, p, filed_mezz, residual,
                 )
                 _mezz_absorbed.add(p)
+            elif filed_mezz is not None:
+                # The filer prints mezzanine but did NOT publish a total-liabilities
+                # subtotal, so this period takes the back-solve.
+                #
+                # The back-solve sets liabilities to (assets side total less equity),
+                # and that total INCLUDES the mezzanine claim. Leaving the filed
+                # mezzanine line populated as well counts the same claim twice: once
+                # hidden inside liabilities and once on its own row. The sheet then
+                # fails to foot by exactly the mezzanine amount -- 48,056 on Uxin's
+                # real figures -- while every individual line looks defensible.
+                #
+                # The same applies when the filed figure and the residual disagree,
+                # which is why both paths mark the line absorbed and the zeroing below
+                # handles them together.
+                _mezz_absorbed.add(p)
             _corrected[p] = authority - float(te_v)
         if _mezzanine:
             # The filer already published this figure under its own name, so it is
