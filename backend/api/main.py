@@ -74,6 +74,29 @@ async def add_iframe_headers(request: Request, call_next):  # type: ignore[no-un
 
 
 # Include API Router
+@app.middleware("http")
+async def _flag_explicit_rebuild(request, call_next):
+    """Let an operator rebuild retry what a crawler must not.
+
+    The ingestion throttle negatively caches a ticker whose statements could not be
+    sourced, so a public slug is not hammered. `assets/gsd/rebuild.py` deletes the
+    snapshot and the database rows and asks for the model back, which is an explicit
+    operator action: its first attempt can fail for reasons that have nothing to do
+    with the company, and the resulting negative entry then refused every later
+    attempt in the same run without trying. A shipped company became unrebuildable
+    until this header existed.
+    """
+    from backend.api.routes import set_force_rebuild
+
+    set_force_rebuild(
+        request.headers.get("x-valence-force-rebuild", "").lower() in ("1", "true", "yes")
+    )
+    try:
+        return await call_next(request)
+    finally:
+        set_force_rebuild(False)
+
+
 app.include_router(api_router, prefix="/api")
 
 # Mount Static UI Dashboard

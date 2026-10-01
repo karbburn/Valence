@@ -32,6 +32,15 @@ CategoryType = Literal[
 BS_LINE_ITEM_CONFIG: List[tuple[str, str, CategoryType]] = [
     # Non-Current Assets
     ("canonical.bs.ppe", "Property, Plant & Equipment (Net Block)", "non_current_assets"),
+    # Gross asset base and accumulated depreciation.
+    #
+    # Not part of the balance-sheet identity: gross PP&E plus accumulated
+    # depreciation is the net block again, so adding them to `built` would double
+    # count the whole asset base. They are carried because the steady-state capex
+    # target needs the DEPRECIATION RATE, which is D&A over a GROSS asset base, and
+    # net PP&E cannot produce it.
+    ("canonical.bs.ppe_gross", "Property, Plant & Equipment (Gross)", "non_current_assets"),
+    ("canonical.bs.accumulated_depreciation", "Accumulated Depreciation", "non_current_assets"),
     ("canonical.bs.cwip", "Capital Work-in-Progress", "non_current_assets"),
     ("canonical.bs.goodwill", "Goodwill", "non_current_assets"),
     ("canonical.bs.intangible_assets", "Intangible Assets", "non_current_assets"),

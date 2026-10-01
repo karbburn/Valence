@@ -22,6 +22,14 @@ from backend.models.spec.metadata import resolve_market
 from backend.models.statements.historical_model import HistoricalModel
 from backend.models.statements.ratios import HistoricalRatios
 
+# Plausibility band for a MEASURED depreciation rate, as a fraction of gross PP&E.
+#
+# Outside this range the denominator is not a property, plant and equipment base.
+# See the use in suggest_base_assumptions, where Ambarella measured at 58.65%.
+MIN_PLAUSIBLE_DEPRECIATION_RATE = 0.03
+MAX_PLAUSIBLE_DEPRECIATION_RATE = 0.30
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -124,6 +132,34 @@ def _fade_weights(n_periods: int) -> List[float]:
         round(1.0 - (1.0 - i / (n_periods - 1)) ** 2, 4)
         for i in range(n_periods)
     ]
+
+
+def _latest_positive(statement, canonical_key: str) -> Optional[float]:
+    """The most recent positive value for a key on a statement, or None.
+
+    "Most recent" rather than "last" because a statement's period list and its line
+    items do not always agree, and a filer that omits a line leaves no value at all
+    rather than a zero. Walking backwards and taking the first real positive is the
+    only way to be sure the figure belongs to the period being forecast.
+
+    Positive because these are asset and revenue balances. A negative PP&E is not a
+    thing, so a negative reading means the figure was mis-mapped, and using it to
+    derive a depreciation rate would produce a rate with no meaning.
+    """
+    if statement is None:
+        return None
+    try:
+        periods = list(getattr(statement, "periods", []) or [])
+    except Exception:
+        return None
+    for period in reversed(periods):
+        try:
+            v = statement.get_value(canonical_key, period)
+        except Exception:
+            continue
+        if v is not None and float(v) > 0:
+            return float(v)
+    return None
 
 
 def _default_cost_of_equity(historical_model: HistoricalModel) -> tuple[float, str]:
@@ -534,7 +570,102 @@ def suggest_base_assumptions(
     # for a typical asset life, so it overstates steady-state reinvestment and
     # understates the terminal value. When the terminal value is already the thing
     # under scrutiny, erring low is the right way to be wrong.
-    premium = constants.STEADY_STATE_CAPEX_PREMIUM
+    # The depreciation rate, measured rather than assumed where the filer allows it.
+    #
+    # delta = D&A / gross asset base. Gross is net PP&E plus accumulated
+    # depreciation, both now ingested, because depreciation is charged on the gross
+    # base: dividing by net understates delta, which overstates the growth the
+    # terminal value can fund, which inflates the terminal value. That is the whole
+    # reason this is measured.
+    #
+    # Falls back to the documented constant only when the filer reports no gross base
+    # at all -- which is common, since many filers print a single net caption and
+    # carry the gross and accumulated figures only as parentheticals.
+    gross_ppe = _latest_positive(
+        historical_model.balance_sheet, "canonical.bs.ppe_gross"
+    )
+    accum_dep = _latest_positive(
+        historical_model.balance_sheet, "canonical.bs.accumulated_depreciation"
+    )
+    delta_measured: Optional[float] = None
+    if gross_ppe and da_pct > 0:
+        # da_pct is a percent of revenue; convert to a percent of gross PP&E.
+        revenue = _latest_positive(
+            historical_model.income_statement, "canonical.is.revenue"
+        )
+        if revenue:
+            da_abs = da_pct / 100.0 * revenue
+            delta_measured = da_abs / gross_ppe
+    elif accum_dep and _latest_positive(
+        historical_model.balance_sheet, "canonical.bs.ppe"
+    ):
+        net_ppe = _latest_positive(
+            historical_model.balance_sheet, "canonical.bs.ppe"
+        )
+        if net_ppe:
+            gross_derived = net_ppe + accum_dep
+            revenue = _latest_positive(
+                historical_model.income_statement, "canonical.is.revenue"
+            )
+            if revenue and da_pct > 0:
+                delta_measured = (da_pct / 100.0 * revenue) / gross_derived
+
+    # Plausibility band on the measured rate.
+    #
+    # Measuring per filer immediately produced a value that proves the measurement
+    # can be wrong: Ambarella reported gross PP&E of 44 against D&A of 26, a rate of
+    # 58.65%, implying an asset life of 1.7 years. Nothing depreciates that fast.
+    # Its depreciation is mostly on acquired intangibles and a fabless business
+    # carries almost no plant, so PP&E is the wrong denominator entirely and the
+    # ratio is measuring two unrelated things.
+    #
+    # A depreciation rate outside roughly 3% to 30% means the denominator is not a
+    # property, plant and equipment base -- it is intangibles, or a tag that picked
+    # up something else. Rather than publish a steady state derived from it, fall
+    # back and say so. A wrong number that is precisely wrong is worse than an
+    # approximation that is honestly labelled.
+    delta_plausible = (
+        delta_measured is not None
+        and MIN_PLAUSIBLE_DEPRECIATION_RATE
+        <= delta_measured
+        <= MAX_PLAUSIBLE_DEPRECIATION_RATE
+    )
+    if delta_plausible:
+        premium = 1.0 + (term_growth / 100.0) / delta_measured
+        # `gross_ppe` is None when the rate came from the accumulated-depreciation
+        # fallback rather than a reported gross figure. Formatting it regardless
+        # raised a TypeError that took out every build for such a filer -- the
+        # optional input was read as though it were required.
+        base_desc = (
+            f"a reported gross asset base of {gross_ppe:,.0f}"
+            if gross_ppe
+            else (
+                f"net PP&E plus reported accumulated depreciation of {accum_dep:,.0f}"
+                if accum_dep
+                else "the filer's asset base"
+            )
+        )
+        steady_state_basis = (
+            f"steady-state capex {premium:.3f}x D&A from the measured depreciation "
+            f"rate {delta_measured:.1%} (D&A over {base_desc}) at "
+            f"{term_growth:.2f}% terminal growth"
+        )
+    else:
+        premium = constants.STEADY_STATE_CAPEX_PREMIUM
+        if delta_measured is None:
+            why = "no gross asset base was reported"
+        else:
+            why = (
+                f"the measured depreciation rate of {delta_measured:.1%} implies an "
+                f"asset life under "
+                f"{1 / MAX_PLAUSIBLE_DEPRECIATION_RATE:.1f} years, so PP&E is not "
+                f"the base its depreciation runs on -- most of it is intangibles or "
+                f"a mis-mapped tag"
+            )
+        steady_state_basis = (
+            f"steady-state capex {premium:.3f}x D&A, the platform default, because "
+            f"{why}"
+        )
     _unused_term_growth = term_growth
     if hist_capex_pct <= da_pct * premium:
         # Already inside the steady state. There is no cycle to fade, and fading
@@ -581,7 +712,10 @@ def suggest_base_assumptions(
             source_capex = f"Peak cycle CapEx ({hist_capex_pct:.1f}%) fading to steady-state maintenance ({steady_state_capex:.1f}%)"
         else:
             source_capex = source_capex_base
-        result.append(_make("capex_pct_revenue", p_capex, p, "base", source_capex))
+        result.append(_make(
+            "capex_pct_revenue", p_capex, p, "base",
+            f"{source_capex}; {steady_state_basis}",
+        ))
 
     # ------------------------------------------------------------------ #
     # 9. Debt Repayment — zero (borrowings carried flat across forecast)

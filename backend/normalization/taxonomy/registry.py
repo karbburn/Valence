@@ -52,6 +52,11 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
 
     # --- Balance Sheet (Assets) ---
     "Net Block": ("canonical.bs.ppe", "bs"),
+    # Gross asset base and accumulated depreciation. Both are needed to measure the
+    # depreciation rate the steady-state capex target is built on; see
+    # backend/forecast/assumptions.py.
+    "Gross Block": ("canonical.bs.ppe_gross", "bs"),
+    "Accumulated Depreciation": ("canonical.bs.accumulated_depreciation", "bs"),
     "Capital Work in Progress": ("canonical.bs.cwip", "bs"),
     "Goodwill": ("canonical.bs.goodwill", "bs"),
     "Intangible assets": ("canonical.bs.intangible_assets", "bs"),

@@ -201,6 +201,24 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
         "PropertyPlantAndEquipmentNet",
         "PropertyPlantAndEquipmentAndFinanceLeaseRightOfUseAssetAfterAccumulatedDepreciationAndAmortization",
     ], "BALANCE SHEET"),
+    # Gross asset base and accumulated depreciation, kept as separate lines.
+    #
+    # These exist for one reason: the steady-state capex target. Depreciation runs
+    # on a GROSS asset base, so the depreciation rate delta = D&A / gross PP&E is
+    # what a terminal value has to be built on, and net PP&E alone cannot give it --
+    # net divided by gross understates delta and therefore overstates the growth the
+    # business can fund, which inflates the terminal value.
+    #
+    # Both are standard us-gaap tags and most filers report them, often only as
+    # parenthetical components of a single net caption rather than as their own line.
+    ("Gross Block", [
+        "PropertyPlantAndEquipmentGross",
+    ], "BALANCE SHEET"),
+    ("Accumulated Depreciation", [
+        "AccumulatedDepreciationDepletionAndAmortization",
+        "AccumulatedDepreciationDepletionAndAmortizationPropertyPlantAndEquipment",
+        "AccumulatedDepreciation",
+    ], "BALANCE SHEET"),
     ("Cash & Bank", [
         "CashAndCashEquivalentsAtCarryingValue", 
         "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",

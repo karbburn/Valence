@@ -368,12 +368,35 @@ def _spec_is_current_for_session(
     return session == last_completed_session(market, now).isoformat()
 
 
-def _get_or_build_spec(company_id: str = "infy_infy") -> ModelSpecification:
+def _get_or_build_spec(
+    company_id: str = "infy_infy", force_retry: Optional[bool] = None
+) -> ModelSpecification:
+    cache_path = PROJECT_ROOT / "backend" / "data" / "cache" / f"{company_id}.json"
     if company_id in _MODEL_CACHE:
         cached_spec = _lru_get(_MODEL_CACHE, company_id)
         reg = REGISTRY_FALLBACKS.get(company_id, {})
         market = reg.get("market") or ("us" if company_id.endswith("_us") else "india")
         if _spec_is_current_for_session(cached_spec, market):
+            # Self-heal a snapshot that has gone missing underneath us.
+            #
+            # `assets/gsd/rebuild.py` deletes the snapshot AND the database rows, then
+            # asks the API to rebuild. If this process still holds the model in memory
+            # the request is served from the LRU, returns 200, and nothing is written
+            # -- so the rebuild reports that the company did not come back, for a
+            # model that was sitting right there. One company failed this way
+            # repeatedly until the negative cache turned every later attempt into a
+            # 503, which is how a recoverable problem presented as unsourceable data.
+            #
+            # A shipped company whose artifact has vanished should have the artifact
+            # restored, not a 200 that pretends it is still there.
+            if company_id in _SHIPPED_AT_STARTUP and not cache_path.exists():
+                try:
+                    write_model_snapshot(cache_path, cached_spec.serialize())
+                    logger.info("Restored missing snapshot for %s from memory.",
+                                company_id)
+                except Exception as e:
+                    logger.warning("Could not restore missing snapshot for %s: %s",
+                                   company_id, e)
             return cached_spec
         # A newer session has closed. Drop it and revalue, rather than serve a
         # model priced against a close the market has already moved past.
@@ -384,7 +407,6 @@ def _get_or_build_spec(company_id: str = "infy_infy") -> ModelSpecification:
             market,
         )
 
-    cache_path = PROJECT_ROOT / "backend" / "data" / "cache" / f"{company_id}.json"
     # Whether this company is part of the curated shipped set, as read at import.
     #
     # `data/cache/` is the launch surface: what is in it is what the site serves and
@@ -403,6 +425,25 @@ def _get_or_build_spec(company_id: str = "infy_infy") -> ModelSpecification:
     # request. Once /stock/<ticker> is public an unresolvable slug is something a
     # crawler will find, and retrying spends the upstream providers' budget on a
     # request that cannot succeed.
+    # An explicit operator request must be allowed to retry, whatever the negative
+    # cache says.
+    #
+    # `assets/gsd/rebuild.py` deletes the snapshot and the database rows and then
+    # asks the API to rebuild. The first attempt can fail for reasons that have
+    # nothing to do with the company being unsourceable -- a network blip, an upstream
+    # 429, a process restart mid-build. That marks the company negative, and because
+    # the cache lives in the process, every subsequent attempt in the same batch is
+    # refused instantly without trying. One company in the shipped set could not be
+    # rebuilt at all until this was found.
+    #
+    # The negative cache is right for a crawler hitting a public slug and wrong for a
+    # person re-running the build, so the distinction is made explicit rather than
+    # left to timing.
+    if force_retry is None:
+        force_retry = _FORCE_REBUILD
+    if force_retry:
+        ingest_throttle.clear_failure(company_id)
+
     if not has_snapshot and ingest_throttle.is_negative(company_id):
         raise HTTPException(
             status_code=503,
@@ -551,6 +592,8 @@ def get_model_spec(company_id: str = "infy_infy") -> Dict[str, Any]:
     """
     _require_valid_company_id(company_id)
     try:
+        # An operator rebuild must be allowed to retry; a crawler must not. See
+        # `_get_or_build_spec` for why the distinction is explicit rather than timed.
         spec = _get_or_build_spec(company_id)
     except HTTPException:
         raise
@@ -847,6 +890,34 @@ def _export_excel_locked(company_id: str) -> Response:
 # COMPANY_ID_PATTERN: a URL segment is untrusted input arriving from the internet,
 # so it is bounded tightly before it is used in a query or a file path.
 SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.\-]{0,31}$")
+
+# Whether the request currently in flight is an explicit operator rebuild.
+#
+# Read from a header by middleware rather than by threading a `Request` through four
+# route handlers into a plain helper that has no business knowing about HTTP. The
+# distinction is worth this little piece of machinery: the negative cache stops a
+# crawler retrying an unsourceable ticker, and without a way to override it, a
+# rebuild that failed once for an unrelated reason -- a network blip, an upstream
+# 429 -- left a shipped company permanently unrebuildable for the life of the process.
+_FORCE_REBUILD = False
+
+
+def set_force_rebuild(value: bool) -> None:
+    """Mark the request in flight as an explicit operator rebuild.
+
+    Read from a header by the middleware registered in `main.py`, rather than by
+    threading a `Request` through four route handlers into a plain helper that has
+    no business knowing about HTTP.
+
+    The distinction is worth this little piece of machinery. The negative ingestion
+    cache stops a crawler retrying an unsourceable ticker, which is correct; but
+    without a way to override it, a rebuild that failed once for an unrelated reason
+    -- a network blip, an upstream 429, a process restart mid-build -- left a shipped
+    company permanently unrebuildable for the life of that process. One did.
+    """
+    global _FORCE_REBUILD
+    _FORCE_REBUILD = bool(value)
+
 
 MODEL_CACHE_DIR = PROJECT_ROOT / "backend" / "data" / "cache"
 
