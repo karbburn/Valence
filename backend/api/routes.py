@@ -385,6 +385,18 @@ def _get_or_build_spec(company_id: str = "infy_infy") -> ModelSpecification:
         )
 
     cache_path = PROJECT_ROOT / "backend" / "data" / "cache" / f"{company_id}.json"
+    # Whether this company is part of the curated shipped set, as read at import.
+    #
+    # `data/cache/` is the launch surface: what is in it is what the site serves and
+    # what `scripts/check_shipped_set.py` holds us to. Writing to it from the read
+    # path meant the surface moved by traffic rather than by intention -- a visitor
+    # browsing companies grew the shipped set from 23 to 162 once, and every one of
+    # those models then reported as an unreviewed regression.
+    #
+    # So an on-demand build for a company that is not already shipped stays in the
+    # in-memory LRU and is not written. Refreshing a snapshot that already exists is
+    # still written, because that keeps a shipped member current rather than adding
+    # one. Adding a company to the shipped set becomes a deliberate act.
     has_snapshot = cache_path.exists()
 
     # A company already known to be unsourceable must not be retried on every
@@ -412,6 +424,11 @@ def _build_spec_locked(
     company_id: str, cache_path: Path, has_snapshot: bool
 ) -> ModelSpecification:
     """Compile or refresh the spec for one company. Caller holds single-flight."""
+    # Read from the release-time set, not from the filesystem. `has_snapshot`
+    # describes the request -- a rebuild deletes the file before asking for it
+    # back -- while shipped-ness is a property of the release and survives the
+    # file being absent.
+    is_shipped = company_id in _SHIPPED_AT_STARTUP
     if has_snapshot:
         try:
             spec = ModelSpecification.deserialize(read_model_snapshot(cache_path))
@@ -480,11 +497,20 @@ def _build_spec_locked(
 
     _lru_put(_MODEL_CACHE, company_id, q_spec)
 
-    try:
-        write_model_snapshot(cache_path, q_spec.serialize())
-        logger.info("Wrote compiled cache for %s.", company_id)
-    except Exception as e:
-        logger.warning("Warning: could not write cache for %s: %s", company_id, e)
+    if is_shipped:
+        try:
+            write_model_snapshot(cache_path, q_spec.serialize())
+            logger.info("Wrote compiled cache for %s.", company_id)
+        except Exception as e:
+            logger.warning("Warning: could not write cache for %s: %s", company_id, e)
+    else:
+        # Deliberately not written. This model exists in the LRU for this process
+        # and nowhere else, so the shipped set does not move because someone browsed.
+        logger.info(
+            "Compiled %s on demand; held in memory only. Adding it to the shipped "
+            "set is a separate, deliberate act.",
+            company_id,
+        )
 
     try:
         update_onboarding_status(company_id, "onboarded", notes="On-demand live ingestion")
@@ -823,6 +849,22 @@ def _export_excel_locked(company_id: str) -> Response:
 SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.\-]{0,31}$")
 
 MODEL_CACHE_DIR = PROJECT_ROOT / "backend" / "data" / "cache"
+
+# The shipped set, read ONCE at import, before anything can create or remove a file.
+#
+# Reading membership per-request was wrong, and wrong in a way the rebuild tooling
+# found immediately: `assets/gsd/rebuild.py` deletes a snapshot and then asks the API
+# to rebuild it, so a per-request existence test saw the company as unshipped and
+# declined to write it. All 23 rebuilds failed. The same test would also have
+# mis-classified a shipped model whose snapshot was corrupt and being repaired.
+#
+# Membership is a property of the release, not of the filesystem's current state. A
+# shipped company stays shipped while its file happens to be absent, because the
+# file being absent is a fact about the request, not about the product.
+_SHIPPED_AT_STARTUP: frozenset[str] = frozenset(
+    f.stem for f in MODEL_CACHE_DIR.glob("*.json") if f.stem != "market_data_cache"
+)
+logger.info("Shipped set at startup: %d companies", len(_SHIPPED_AT_STARTUP))
 
 
 def _has_compiled_model(company_id: str) -> bool:
