@@ -49,6 +49,7 @@ from backend.export.excel.styles import (
 from backend.models.spec.forecast import FORECAST_PERIODS
 from backend.models.spec.model_specification import ModelSpecification
 from backend.export.excel.render_fcst import WACC_ROW_OFFSET, WACC_ROWS, op_row, wacc_ref
+from backend.valuation import claims
 
 # Named fallbacks
 FALLBACK_WACC = 12.0
@@ -569,11 +570,11 @@ def render_ev_bridge_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
     # belongs on is this one, and the export must show it for a reader to be able
     # to reconcile the bridge by hand. Without it the workbook deducted less than
     # the model did, and nothing on the page said so.
-    min_int_val = (
-        _num(b_obj.minority_interest if b_obj else None)
-        + _num(b_obj.preferred_stock if b_obj else None)
-        + _num(b_obj.mezzanine_equity if b_obj else None)
-    ) if b_obj else 0.0
+    # One call, no list kept here. This file previously enumerated the claims itself
+    # and missed mezzanine while the balance sheet carried it, so the workbook
+    # deducted less than the model did and a reader reconciling the bridge by hand
+    # found a gap with nothing on the page to explain it.
+    min_int_val = claims.claims_total(b_obj) if b_obj else 0.0
     net_debt = _num(b_obj.less_net_debt if b_obj else None)
 
     r_sum = EV_BRIDGE_ROWS["sum_pv_fcff"]
@@ -643,7 +644,7 @@ def render_ev_bridge_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet:
          else "not reported by the source"),
         ("total_debt", "Less: Total Debt", tot_debt_val, tot_debt_val, FMT_CURRENCY_INT,
          f"{bs_note}; {basis}"),
-        ("minority_interest_and_preferred", "Less: Minority Interest, Preferred & Mezzanine", min_int_val,
+        ("minority_interest_and_preferred", claims.claims_label(), min_int_val,
          min_int_val, FMT_CURRENCY_INT,
          f"{bs_note}; no minority interest, preferred or mezzanine reported"
          if min_int_val else

@@ -47,6 +47,7 @@ EXPECTED_SHEETS = (
 from backend.forecast.pipeline import run as run_forecast_pipeline
 from backend.validation.pipeline import run_qa
 from backend.valuation.pipeline import run_valuation
+from backend.valuation import claims
 
 
 def _assert(cond: bool, msg: str) -> None:
@@ -171,8 +172,12 @@ def main() -> None:
     # Check 3: Net Debt Tie-out
     # Mezzanine equity is included: it is deducted in the bridge and has to be
     # here too, or this check would disagree with the model it is verifying.
-    expected_net_debt = (bridge.total_debt + (bridge.minority_interest or 0)
-                          + (bridge.preferred_stock or 0) + (bridge.mezzanine_equity or 0)) - (
+    # Re-derived through the same one function the workbook renders from. This check
+    # exists to catch a bridge that does not reconcile, so keeping its own copy of
+    # the claim list made it a check that agrees with a wrong answer -- and it did,
+    # for every filer with mezzanine, because the omission was in both places.
+    claims_amount = claims.claims_total(bridge)
+    expected_net_debt = (bridge.total_debt + claims_amount) - (
         bridge.cash_and_equivalents + bridge.marketable_securities + bridge.non_current_investments
     )
     net_debt_diff = abs(bridge.less_net_debt - expected_net_debt)

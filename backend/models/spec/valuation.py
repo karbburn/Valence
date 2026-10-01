@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 ScenarioLabel = Literal["base", "bull", "bear", "custom"]
 TerminalValueMethod = Literal["gordon_growth", "exit_multiple"]
@@ -112,6 +112,14 @@ class DCFBridge(BaseModel):
     # ranking ahead of common equity, so it is deducted before the implied share
     # price is computed.
     mezzanine_equity: Optional[float] = None
+
+    # Any further claim class declared in `backend.valuation.claims` that has no
+    # field of its own here. Without this, a claim added to the declaration would be
+    # deducted from enterprise value and then vanish: the workbook, the frontend and
+    # the export self-check all read named fields, so they would each show zero for a
+    # charge the bridge had genuinely applied. The regression test found exactly
+    # that, which is why this exists rather than another explicit field.
+    other_claims: Dict[str, float] = Field(default_factory=dict)
     less_net_debt: Optional[float] = None           # (Debt + NCI + Pref) - (Cash + MktSec + NonCurrInv)
     equity_value: Optional[float] = None            # EV - less_net_debt
     shares_outstanding: Optional[float] = None      # diluted, in units

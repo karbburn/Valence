@@ -8,7 +8,9 @@ dual terminal values (Gordon Growth and Exit Multiple), and completes the EV -> 
 """
 
 from datetime import date
-from typing import List, Literal, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple
+
+from backend.valuation import claims
 
 from backend.forecast.debt import DebtSchedule
 from backend.forecast.share_count import ShareCountSchedule
@@ -335,6 +337,7 @@ def compute_dcf_bridge(
     preferred_stock_cr: float = 0.0,
     mezzanine_equity_cr: float = 0.0,
     operating_lease_liabilities_cr: float = 0.0,
+    **other_claims_cr: float,
 ) -> Tuple[DCFBridge, TerminalValue]:
     """Compute EV -> Equity Value -> Implied Share Price bridge with full non-operating breakdown.
 
@@ -362,9 +365,55 @@ def compute_dcf_bridge(
     # left after it. Uxin filed 48,056 of it and the bridge was overstating
     # equity value by that amount, because the balance sheet had started
     # carrying the line and the bridge had not started deducting it.
-    total_obligations = (
-        debt_cr + minority_interest_cr + preferred_stock_cr + mezzanine_equity_cr
-    )
+    # Walked from the shared declaration, so a claim class is added in one place.
+    #
+    # This list was restated here, in the workbook's bridge row, and in the workbook
+    # self-check's independent re-derivation of net debt. Mezzanine equity was
+    # missing from all three, so Uxin's equity value was overstated by its filed
+    # 48,056 and the self-check -- whose entire job is catching a bridge that does
+    # not reconcile -- agreed with the wrong answer, because the omission sat in
+    # both places at once.
+    _known_params = {
+        c.bridge_field + "_cr" for c in claims.CLAIMS_AHEAD_OF_COMMON_EQUITY
+    }
+    # Diagnosed before the loop below, so a mistyped claim name names itself instead
+    # of being reported as a claim that "has no amount".
+    _unknown = sorted(set(other_claims_cr) - _known_params)
+    if _unknown:
+        raise ValueError(
+            f"the bridge was given amounts that match no declared claim: "
+            f"{', '.join(_unknown)}. Add the claim to "
+            f"backend.valuation.claims.CLAIMS_AHEAD_OF_COMMON_EQUITY, or correct the "
+            f"name. Deducting nothing while appearing to have charged is the failure "
+            f"mode this refuses."
+        )
+
+    _locals = locals()
+    claims_amount = 0.0
+    _unnamed: Dict[str, float] = {}
+    for _c in claims.CLAIMS_AHEAD_OF_COMMON_EQUITY:
+        _param = _c.bridge_field + "_cr"
+        _v = _locals.get(_param)
+        if _v is None:
+            _v = other_claims_cr.get(_param)
+        if _v is None:
+            # Declared but not supplied. Defaulting to zero here would reproduce the
+            # mezzanine defect exactly: the claim exists, the arithmetic runs, and
+            # the reader is simply never charged. Refusing is the point.
+            raise ValueError(
+                f"claim '{_c.bridge_field}' is declared in backend.valuation.claims "
+                f"but no amount reached the bridge. Pass {_param}=, or remove it "
+                f"from the declaration."
+            )
+        claims_amount += _v
+        if _c.bridge_field not in DCFBridge.model_fields:
+            # A claim with no field of its own must still be PUBLISHED, or the
+            # workbook and the frontend -- which read named fields -- would each
+            # show a reader that nothing stands ahead of them, while the arithmetic
+            # had charged it.
+            _unnamed[_c.bridge_field] = _v
+
+    total_obligations = debt_cr + claims_amount
     net_debt = total_obligations - total_liquid_and_investments
 
     equity_value = ev - net_debt
@@ -387,6 +436,7 @@ def compute_dcf_bridge(
         minority_interest=round(minority_interest_cr, 2),
         preferred_stock=round(preferred_stock_cr, 2),
         mezzanine_equity=round(mezzanine_equity_cr, 2),
+        other_claims={k: round(v, 2) for k, v in _unnamed.items()},
         less_net_debt=round(net_debt, 2),
         equity_value=round(equity_value, 2),
         shares_outstanding=round(shares_cr, 4),
