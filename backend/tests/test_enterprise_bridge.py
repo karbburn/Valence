@@ -181,3 +181,41 @@ def test_working_capital_derivation_matches_the_explicit_line():
         previous = level
         prior_level = level
     assert prior_level == pytest.approx(150.0 + 80.0 - 40.0, abs=0.01)
+
+
+def test_mezzanine_equity_is_deducted_before_the_common_shareholder_is_told():
+    """Mezzanine ranks ahead of common equity, so it leaves the bridge.
+
+    It is redeemable preferred or redeemable noncontrolling interest: a real claim
+    on the enterprise that common shareholders rank behind. The balance sheet
+    started carrying the line and the bridge did not start deducting it, so Uxin's
+    equity value was overstated by its filed 48,056.
+
+    Minority interest and preferred stock were already deducted here. Mezzanine is
+    the same claim class under a third name, and it was missed for the same reason
+    the others were once: a list of obligations nobody re-read when the taxonomy
+    gained a line.
+    """
+    per = FCFFPeriod(period="FY30", ebit=0.0, tax_rate=0.0, nopat=0.0, da=0.0,
+                     capex=0.0, delta_working_capital=0.0, fcff=0.0,
+                     discount_factor=1.0, pv_fcff=0.0)
+    tv = TerminalValue(method="gordon_growth", terminal_growth_rate=0.0,
+                       final_year_fcff=0.0, terminal_value_undiscounted=0.0,
+                       final_year_ebitda=0.0, terminal_value_pv=0.0)
+    base = dict(fcff_periods=[per], terminal_value=tv, cash_cr=0.0, debt_cr=0.0,
+                shares_cr=100.0, marketable_securities_cr=0.0,
+                non_current_investments_cr=0.0, minority_interest_cr=0.0,
+                preferred_stock_cr=0.0)
+
+    without = compute_dcf_bridge(**base)[0]
+    with_mezz = compute_dcf_bridge(**base, mezzanine_equity_cr=48_056.0)[0]
+
+    assert without.equity_value == pytest.approx(with_mezz.equity_value + 48_056.0), (
+        "mezzanine equity was not deducted from equity value"
+    )
+    assert with_mezz.implied_share_price == pytest.approx(
+        without.implied_share_price - 480.56, abs=0.01
+    )
+    assert with_mezz.mezzanine_equity == pytest.approx(48_056.0)
+    # And it must not also land in debt, which would charge it twice.
+    assert with_mezz.total_debt == without.total_debt
