@@ -105,6 +105,27 @@ def capm_default_for(company_id: str, market: Optional[str] = None) -> tuple[flo
         return constants.FALLBACK_COST_OF_EQUITY, "fallback default — market data unavailable"
 
 
+def _fade_weights(n_periods: int) -> List[float]:
+    """Weights running 0 -> 1 across the forecast, reaching 1.0 in the final year.
+
+    Front-loaded rather than linear, because a capex cycle that unwinds evenly would
+    hold the business at a mid-cycle investment rate for years after the pressure to
+    invest has passed. Linear would be defensible; it just understates the early
+    normalisation, which is where the cash flow actually recovers.
+
+    The endpoint matters more than the path: 1.0 in the final explicit year, so the
+    terminal value is struck on a steady state. A fade that stops short does not
+    mean "conservative" -- it means the perpetuity is priced off a year the company
+    would not still be living in.
+    """
+    if n_periods <= 1:
+        return [1.0] * max(n_periods, 0)
+    return [
+        round(1.0 - (1.0 - i / (n_periods - 1)) ** 2, 4)
+        for i in range(n_periods)
+    ]
+
+
 def _default_cost_of_equity(historical_model: HistoricalModel) -> tuple[float, str]:
     """Per-company CAPM default (wrapper using the historical model id).
 
@@ -466,11 +487,74 @@ def suggest_base_assumptions(
     else:
         source_capex_base = f"Multi-year average GAAP capex % revenue ({first_p}-{last_p})"
 
-    steady_state_capex = max(
-        da_pct * 1.25, min(hist_capex_pct, constants.MAX_STEADY_STATE_CAPEX_PCT)
+    # What the fade is fading TOWARDS.
+    #
+    # The target used to be a flat 1.25x depreciation. That is not a steady state:
+    # in a Gordon perpetuity growing at g, reinvestment funds depreciation plus the
+    # capital for that growth, so capex converges on D&A x (1 + g). Sitting
+    # permanently 25% above depreciation says the business reinvests for ever at a
+    # rate its growth does not fund, and the terminal value becomes a function of
+    # that assumption rather than of the business.
+    #
+    # Concretely: it is why the largest company in the shipped set failed
+    # terminal_value_is_not_carrying_the_model. Capex ran at about 1.3x D&A in the
+    # final explicit year, free cash flow stayed near zero, and the terminal value
+    # carried the entire enterprise. Nothing in that filer's filings was wrong -- the
+    # fade had a target that was never a steady state, so it faded toward a number
+    # that suppressed cash flow for ever.
+    #
+    # The premium is bounded by the growth the terminal value itself assumes, because
+    # that is the growth the reinvestment has to fund. A filer is never handed a
+    # terminal value paying for capex its own growth rate cannot support.
+    term_growth, _growth_basis = constants.terminal_growth_for(
+        resolve_market(historical_model.company_id)
     )
+    # Purely growth-derived, with no tunable premium above it.
+    #
+    # There was a ceiling constant here (1.15) and it was inert: the rule was
+    # min(cap, 1 + g), and g is 2.25% or 4%, so the growth term always bound and the
+    # cap never did. A knob that cannot move is not a guard, it is a comment that
+    # reads like one -- and a mutation run proved it, because raising it to 1.25
+    # turned no test red.
+    #
+    # So the rule is now just the one that is actually defensible: in a perpetuity
+    # growing at g, reinvestment funds depreciation plus the capital for the growth.
+    premium = 1.0 + term_growth / 100.0
+    if hist_capex_pct <= da_pct * premium:
+        # Already inside the steady state. There is no cycle to fade, and fading
+        # would invent a decline the filings do not show.
+        steady_state_capex = hist_capex_pct
+    else:
+        # Above it, the fade targets the steady state exactly.
+        #
+        # This was written as
+        #     min(max(da*(1+g), min(hist, CAP)), da*premium)
+        # which collapses to da*(1+g), because the max() is always at least da*(1+g)
+        # and premium IS 1+g. The outer clamp could therefore never bind -- a
+        # mutation setting premium to 1.15 passed the suite, because the redundant
+        # term absorbed it.
+        #
+        # Stated plainly it is also checkable, which the compound form was not.
+        steady_state_capex = da_pct * premium
     is_expansion_cycle = hist_capex_pct > (da_pct * 1.35) and hist_capex_pct > 6.0
-    capex_fade_weights = [0.0, 0.20, 0.45, 0.65, 0.85] if is_expansion_cycle else [0.0, 0.0, 0.0, 0.0, 0.0]
+    # The fade COMPLETES in the final explicit year, and that is a requirement
+    # rather than a preference. The Gordon terminal value capitalises the final
+    # year, so if that year is not the steady state then the perpetuity is being
+    # valued off a peak-investment year and the terminal value becomes a function of
+    # the fade schedule rather than of the business.
+    #
+    # This used to stop at 0.85, leaving 15% of the peak capex ratio in the terminal
+    # year -- at Amazon's ratio that left capex near 1.10x depreciation against a
+    # growth rate funding 1.02x, and terminal_value_is_not_carrying_the_model caught
+    # it.
+    #
+    # Derived from len(forecast_periods) rather than written as five literals, so
+    # adding or removing a forecast year cannot silently leave the fade short.
+    capex_fade_weights = (
+        _fade_weights(len(forecast_periods))
+        if is_expansion_cycle
+        else [0.0] * len(forecast_periods)
+    )
 
     for idx, p in enumerate(forecast_periods):
         w_fade = capex_fade_weights[idx] if idx < len(capex_fade_weights) else 0.0
