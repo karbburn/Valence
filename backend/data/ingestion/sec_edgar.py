@@ -816,7 +816,29 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
 
     resp = requests.get(url, headers=SEC_HEADERS, timeout=15)
     if resp.status_code != 200:
-        raise RuntimeError(f"SEC EDGAR API HTTP {resp.status_code} for CIK {cik} ({company_id})")
+        # A non-200 here means SEC has nothing for this CIK, or could not be reached.
+        # Both are "this provider cannot supply this company", which is what
+        # NoFinancialsAvailable MEANS, and the provider chain is written to continue
+        # past it.
+        #
+        # This raised RuntimeError instead, and RuntimeError is not what the chain
+        # catches. So a CIK with no company facts -- an ordinary outcome, and one of
+        # roughly one in seven tickers -- skipped every other provider and reached the
+        # visitor as a raw HTTP 500. A 500 says the service is broken; the truth is that
+        # one ticker has no filing at this provider and there are others to try.
+        #
+        # The distinction that matters is preserved: a 404 names a real answer (no
+        # facts for that CIK) and is logged at info, while a 5xx or a timeout is an
+        # outage and is logged as one, so an SEC brownout is still visible in the logs
+        # rather than looking like a ticker with no filings.
+        if resp.status_code == 404:
+            raise NoFinancialsAvailable(
+                f"SEC EDGAR has no company facts for CIK {cik} ({company_id}); "
+                f"the CIK exists but carries no XBRL financials"
+            )
+        raise NoFinancialsAvailable(
+            f"SEC EDGAR API HTTP {resp.status_code} for CIK {cik} ({company_id})"
+        )
 
     facts_data = resp.json()
     all_facts = facts_data.get("facts", {})
