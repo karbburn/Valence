@@ -29,6 +29,7 @@ from backend.valuation.dcf import (
 from backend.valuation.reverse_dcf import compute_reverse_dcf
 from backend.valuation.sensitivity import compute_sensitivity_tables
 from backend.valuation.wacc import compute_wacc
+from backend.valuation import claims
 
 logger = logging.getLogger(__name__)
 
@@ -115,20 +116,22 @@ def run_valuation(
     # incomplete and the gap was invisible. Now the key is mapped by the
     # ingestion layer, and a genuinely absent balance is recorded as a
     # coverage note rather than hidden.
-    minority_int = constants.resolve(
-        spec.historicals.get_value("canonical.bs.minority_interest", latest_hist), 0.0
-    )
-    pref_stock = constants.resolve(
-        spec.historicals.get_value("canonical.bs.preferred_stock", latest_hist), 0.0
-    )
-    # Mezzanine equity: redeemable preferred and redeemable noncontrolling
-    # interest. It ranks ahead of common equity in exactly the way preferred
-    # stock and minority interest do, so it is deducted before the implied
-    # share price. The balance sheet began carrying this line before the bridge
-    # began deducting it, overstating equity value by the full amount.
-    mezzanine_equity = constants.resolve(
-        spec.historicals.get_value("canonical.bs.mezzanine_equity", latest_hist), 0.0
-    )
+    # Claims ranking ahead of common equity, read by walking the shared declaration
+    # rather than by naming each one. These were three separate literal reads that
+    # each had to be extended when the taxonomy gained a class: minority interest,
+    # then preferred stock, then mezzanine equity, which was missed by all three and
+    # so overstated Uxin's equity value by its filed 48,056.
+    #
+    # Walked, not restated: a fourth claim class is now a line in `claims.py`.
+    _claims = {
+        c.bridge_field: constants.resolve(
+            spec.historicals.get_value(c.canonical_key, latest_hist), 0.0
+        )
+        for c in claims.CLAIMS_AHEAD_OF_COMMON_EQUITY
+    }
+    minority_int = _claims["minority_interest"]
+    pref_stock = _claims["preferred_stock"]
+    mezzanine_equity = _claims["mezzanine_equity"]
     # Total interest-bearing debt, on the definition the debt schedule opens on.
     #
     # Total interest-bearing debt, read through the same key list the debt schedule

@@ -219,3 +219,207 @@ def test_mezzanine_equity_is_deducted_before_the_common_shareholder_is_told():
     assert with_mezz.mezzanine_equity == pytest.approx(48_056.0)
     # And it must not also land in debt, which would charge it twice.
     assert with_mezz.total_debt == without.total_debt
+
+
+def test_one_declaration_of_what_ranks_ahead_of_common_equity():
+    """The claim list is stated once, and every consumer reads that one copy.
+
+    Minority interest, preferred stock and mezzanine equity each had to be added to
+    three separate places -- the bridge's arithmetic, the workbook's bridge row, and
+    the workbook self-check's independent re-derivation of net debt. Mezzanine was
+    missed by all three, and missed by the accounting check as well, so Uxin's equity
+    value was overstated by its filed 48,056 and nothing went red.
+
+    The self-check is the one that matters for this test. It exists to catch a
+    bridge that does not reconcile, so re-deriving its input from a separately
+    maintained list made it a check that agrees with a wrong answer -- and did,
+    because the omission was present in both places at once.
+
+    So this asserts the property rather than any one company's number: a claim
+    added to the declaration is picked up everywhere, with no second edit.
+    """
+    from backend.valuation.claims import CLAIMS_AHEAD_OF_COMMON_EQUITY, claims_label
+
+    fields = {c.bridge_field for c in CLAIMS_AHEAD_OF_COMMON_EQUITY}
+    keys = {c.canonical_key for c in CLAIMS_AHEAD_OF_COMMON_EQUITY}
+
+    # The three that were each missed at least once. Mezzanine is the one that cost
+    # a real filer 48,056.
+    assert {"minority_interest", "preferred_stock", "mezzanine_equity"} <= fields
+    assert {"canonical.bs.minority_interest",
+            "canonical.bs.preferred_stock",
+            "canonical.bs.mezzanine_equity"} <= keys
+
+    # No duplicates in either space, which would silently double-charge a claim.
+    assert len(fields) == len(CLAIMS_AHEAD_OF_COMMON_EQUITY)
+    assert len(keys) == len(CLAIMS_AHEAD_OF_COMMON_EQUITY)
+
+    # Every declared bridge field is an actual field on DCFBridge. Without this, a
+    # renamed field would be read as absent and silently contribute zero.
+    assert all(c.bridge_field in DCFBridge.model_fields for c in CLAIMS_AHEAD_OF_COMMON_EQUITY)
+
+    assert "Mezzanine" in claims_label()
+
+
+def test_a_claim_added_to_the_declaration_is_picked_up_with_no_second_edit(monkeypatch):
+    """Adding a claim class must require exactly one edit: the declaration.
+
+    This is the property the previous shape did not have. Mezzanine equity was
+    missing from the bridge, the workbook row and the workbook self-check, so Uxin's
+    equity value was overstated by its filed 48,056 and the self-check -- whose whole
+    job is catching a bridge that does not reconcile -- agreed with the wrong answer,
+    because the omission sat in both places at once.
+
+    A shape assertion cannot catch that: the list would still contain mezzanine and
+    still look right. So this adds a claim nobody has written code for and asserts
+    it changes the bridge's arithmetic on its own. If a consumer ever hardcodes a
+    field again, this turns red.
+    """
+    from backend.valuation import claims
+
+    per = FCFFPeriod(period="FY30", ebit=0.0, tax_rate=0.0, nopat=0.0, da=0.0,
+                     capex=0.0, delta_working_capital=0.0, fcff=0.0,
+                     discount_factor=1.0, pv_fcff=0.0)
+    tv = TerminalValue(method="gordon_growth", terminal_growth_rate=0.0,
+                       final_year_fcff=0.0, terminal_value_undiscounted=0.0,
+                       final_year_ebitda=0.0, terminal_value_pv=0.0)
+
+    def bridge_with(**kw):
+        return compute_dcf_bridge(
+            fcff_periods=[per], terminal_value=tv, cash_cr=0.0, debt_cr=0.0,
+            shares_cr=100.0, marketable_securities_cr=0.0,
+            non_current_investments_cr=0.0, minority_interest_cr=0.0,
+            preferred_stock_cr=0.0, **kw,
+        )[0]
+
+    before = bridge_with()
+    baseline = before.equity_value
+
+    # A fourth claim class, carrying an amount the bridge was never told about. The
+    # point is that nobody wrote `claims_warranty_cr` anywhere; the declaration is
+    # the only thing that changed.
+    warrant = claims.ClaimAheadOfCommonEquity(
+        "canonical.bs.warrant_liability", "warrant_liability", "Warrant Liability"
+    )
+    monkeypatch.setattr(
+        claims, "CLAIMS_AHEAD_OF_COMMON_EQUITY",
+        claims.CLAIMS_AHEAD_OF_COMMON_EQUITY + (warrant,),
+    )
+
+    after = bridge_with(warrant_liability_cr=7_500.0)
+    assert after.equity_value == pytest.approx(baseline - 7_500.0), (
+        "a claim class added to the declaration did not reach the bridge, so a "
+        "reader told there is a claim ranking ahead of them would not be charged "
+        "for it"
+    )
+
+    # And the charge must be PUBLISHED, not merely applied. This is the half that was
+    # actually broken: `warrant_liability` has no named field on DCFBridge, and every
+    # reader -- the workbook's bridge row, the export self-check that exists to catch
+    # a bridge that does not reconcile -- read named fields only. So the arithmetic
+    # would have been right and every published figure would have said zero.
+    assert after.other_claims == pytest.approx({"warrant_liability": 7_500.0}), (
+        "the bridge charged a claim it did not publish"
+    )
+
+    # Every consumer resolves through the one helper, so none of them can read zero
+    # for a charge the bridge genuinely applied.
+    assert claims.claims_total(after) == pytest.approx(7_500.0)
+    assert claims.resolve_claim(after, warrant) == pytest.approx(7_500.0)
+
+    # ...and a named claim still resolves from its own field, not the channel, so it
+    # is not counted twice. Built with the declaration restored, because the bridge
+    # now refuses to run at all when a declared claim arrives with no amount -- which
+    # is the other half of the fix and is asserted separately below.
+    monkeypatch.undo()
+    named = claims.ClaimAheadOfCommonEquity(
+        "canonical.bs.mezzanine_equity", "mezzanine_equity", "Mezzanine Equity"
+    )
+    me = bridge_with(mezzanine_equity_cr=100.0)
+    assert claims.resolve_claim(me, named) == pytest.approx(100.0)
+    assert "mezzanine_equity" not in (me.other_claims or {}), (
+        "a claim with a named field must not also sit in the open channel, or every "
+        "consumer that sums the two would charge for it twice"
+    )
+
+
+def test_a_declared_claim_with_no_amount_is_refused_rather_than_deducted_at_zero(monkeypatch):
+    """Silence is the failure mode here, not a wrong number.
+
+    When mezzanine was missing from the bridge, nothing raised and nothing looked
+    wrong: the claim existed in the taxonomy, the arithmetic ran, and the reader was
+    simply never charged. A default of zero reproduces that exactly, one refactor
+    away. So a declared claim that arrives with no amount stops the build.
+
+    This also means the pipeline must supply every claim the declaration lists. That
+    is the intended pressure -- adding a claim class now fails loudly on the first
+    company that does not carry it, instead of quietly understating every one.
+    """
+    from backend.valuation import claims
+
+    per = FCFFPeriod(period="FY30", ebit=0.0, tax_rate=0.0, nopat=0.0, da=0.0,
+                     capex=0.0, delta_working_capital=0.0, fcff=0.0,
+                     discount_factor=1.0, pv_fcff=0.0)
+    tv = TerminalValue(method="gordon_growth", terminal_growth_rate=0.0,
+                       final_year_fcff=0.0, terminal_value_undiscounted=0.0,
+                       final_year_ebitda=0.0, terminal_value_pv=0.0)
+
+    extra = claims.ClaimAheadOfCommonEquity(
+        "canonical.bs.warrant_liability", "warrant_liability", "Warrant Liability"
+    )
+    monkeypatch.setattr(
+        claims, "CLAIMS_AHEAD_OF_COMMON_EQUITY",
+        claims.CLAIMS_AHEAD_OF_COMMON_EQUITY + (extra,),
+    )
+
+    common = dict(fcff_periods=[per], terminal_value=tv, cash_cr=0.0, debt_cr=0.0,
+                  shares_cr=100.0, marketable_securities_cr=0.0,
+                  non_current_investments_cr=0.0, minority_interest_cr=0.0,
+                  preferred_stock_cr=0.0)
+
+    with pytest.raises(ValueError, match="warrant_liability"):
+        compute_dcf_bridge(**common)
+
+    # And an amount matching no declared claim is refused too, so a typo cannot
+    # deduct nothing while appearing to have been charged.
+    with pytest.raises(ValueError, match="no declared claim"):
+        compute_dcf_bridge(**common, mezzanine_equity_cr=0.0,
+                           warrant_liabilty_cr=5_000.0)
+
+
+def test_no_consumer_keeps_its_own_enumeration_of_claims():
+    """The workbook and its self-check must not name a claim class at all.
+
+    This asserts on source text, which is normally the wrong thing to do. Here it is
+    the property itself: these two files must contain no enumeration of what ranks
+    ahead of common equity, so there is nothing for them to fall behind on.
+
+    The mutation run is why. Restoring a hardcoded list inside the export self-check
+    -- the one whose entire job is catching a bridge that does not reconcile -- left
+    the whole suite green, because both of my new tests were on the bridge and
+    neither could see it. That is precisely the failure mode the module docstring
+    describes: a check that agrees with a wrong answer.
+
+    So this refuses the shape rather than asserting a number. If a claim class ever
+    needs naming here, the failure says why instead of passing quietly.
+    """
+    import re
+    from pathlib import Path
+
+    from backend.valuation.claims import CLAIMS_AHEAD_OF_COMMON_EQUITY
+
+    root = Path(__file__).resolve().parents[2]
+    fields = [c.bridge_field for c in CLAIMS_AHEAD_OF_COMMON_EQUITY]
+
+    for rel in ("backend/export/excel/render_val.py",
+                "backend/export/excel/self_check.py"):
+        # Comments may name a claim to explain it; code may not.
+        code = re.sub(r"#.*", "", (root / rel).read_text(encoding="utf-8"))
+        for f in fields:
+            offenders = [ln.strip() for ln in code.splitlines()
+                         if re.search(r"\b" + re.escape(f) + r"\b", ln)]
+            assert not offenders, (
+                f"{rel} names the claim '{f}' in code again:\n  "
+                + "\n  ".join(offenders)
+                + "\nCall backend.valuation.claims.claims_total() instead."
+            )
