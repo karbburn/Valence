@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from datetime import date
 from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
@@ -15,6 +17,8 @@ from backend.normalization.taxonomy.models import CanonicalDatapoint
 # Only `derived` and `analyst_adjusted` are ours, and a derived subtotal is never
 # an authority for anything.
 FILER_PUBLISHED_STATUSES = REPORTED_STATUSES | {"estimated"}
+
+logger = logging.getLogger(__name__)
 
 CategoryType = Literal[
     "non_current_assets",
@@ -338,7 +342,15 @@ def assemble_balance_sheet(
         """
         if item is None:
             return None
-        if item.status_by_period.get(p, "reported") not in FILER_PUBLISHED_STATUSES:
+        # No default. This used to default to "reported", so a line whose status
+        # was never recorded counted as filer-published. `_add_derived` did not
+        # write `status_by_period`, so every subtotal this engine derived was
+        # promoted to a filed figure at the moment it was tested -- and the
+        # mezzanine guard reads this same predicate.
+        #
+        # Absence of a recorded status is absence of evidence that a source
+        # published the figure. It does not default to yes.
+        if item.status_by_period.get(p) not in FILER_PUBLISHED_STATUSES:
             return None
         v = item.values_by_period.get(p)
         return float(v) if v is not None else None
@@ -346,6 +358,9 @@ def assemble_balance_sheet(
     if _tl and _te:
         _corrected: Dict[str, float] = {}
         _mezzanine: Dict[str, float] = {}
+        # Periods whose filed mezzanine the back-solve has already absorbed. The
+        # line is zeroed for those periods, or the amount is counted twice.
+        _mezz_absorbed: set = set()
         # The mezzanine the FILER published, if any. The filer knows whether it has
         # redeemable preferred or redeemable noncontrolling interest; the residual
         # only means "mezzanine" when they have told us so.
@@ -402,9 +417,29 @@ def assemble_balance_sheet(
             # publishes redeemable preferred or redeemable noncontrolling interest
             # gets the subtotal preserved, because only then is the residual known
             # to be mezzanine rather than an unexplained difference.
-            if _reported(_tl, p) is not None and mezzanine_values.get(p) is not None:
-                _mezzanine[p] = mezzanine_values[p]
-                continue
+            filed_mezz = mezzanine_values.get(p)
+            if _reported(_tl, p) is not None and filed_mezz is not None:
+                # Only when the filer's own figure IS the residual.
+                #
+                # Requiring agreement is the whole point. The branch used to fire on
+                # the mere EXISTENCE of a mezzanine line, so a filer reporting 1.0
+                # against an implied 48.056 had its 1.0 published while the sheet
+                # stayed 47.056 out -- and balance_sheet_balances still reported
+                # balanced, because it overwrites the total from assets and then
+                # compares it to itself.
+                residual = authority - built
+                if abs(filed_mezz - residual) <= max(abs(residual) * 0.001, 1.0):
+                    _mezzanine[p] = residual
+                    continue
+                logger.warning(
+                    "%s %s: filer reports %.1f of mezzanine equity but the "
+                    "balance-sheet subtotals imply %.1f. The difference is not "
+                    "assumed to be mezzanine; the subtotal is reconciled as for any "
+                    "other unexplained gap and the mezzanine line is zeroed for this "
+                    "period, because the back-solve already absorbs it.",
+                    company_id, p, filed_mezz, residual,
+                )
+                _mezz_absorbed.add(p)
             _corrected[p] = authority - float(te_v)
         if _mezzanine:
             # The filer already published this figure under its own name, so it is
@@ -421,6 +456,15 @@ def assemble_balance_sheet(
                 )
             else:
                 _mezzanine_item.values_by_period.update(_mezzanine)
+        # Applied here, not inside the branch above: when the filer's mezzanine
+        # disagrees with the residual we fall back to the back-solve and
+        # _mezzanine is empty, so a block nested in that branch would never run.
+        _mezz_item_now = _item_for("canonical.bs.mezzanine_equity")
+        if _mezz_absorbed and _mezz_item_now is not None:
+            _mezz_item_now.values_by_period.update({p: 0.0 for p in _mezz_absorbed})
+            _mezz_item_now.status_by_period.update(
+                {p: "derived" for p in _mezz_absorbed}
+            )
         if _corrected:
             _tl.values_by_period.update(_corrected)
             _tl.status_by_period.update({p: "derived" for p in _corrected})

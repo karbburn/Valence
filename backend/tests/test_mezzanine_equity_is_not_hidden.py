@@ -186,19 +186,6 @@ class TestAFilersMezzanineMustEqualTheResidual:
     reconciled the ordinary way.
     """
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "OPEN DEFECT, recorded rather than hidden. The mezzanine branch fires on "
-            "the mere EXISTENCE of a filer's mezzanine line instead of requiring the "
-            "filed figure to equal the residual, so a filer reporting 1.0 against an "
-            "implied 48.056 has its 1.0 published while the sheet stays 47.056 out. "
-            "Found by review in REVIEW3.md (CR-02). The fix must also zero the "
-            "mezzanine line for that period, because the back-solve already absorbs "
-            "it, or the amount is counted twice. When fixed, strict xfail turns this "
-            "into XPASS and the mark must be removed."
-        ),
-    )
     def test_a_filers_mezzanine_that_is_not_the_residual_is_not_published_as_it(self) -> None:
         by_key = _build([
             _dp("canonical.bs.total_assets", 345.877),
