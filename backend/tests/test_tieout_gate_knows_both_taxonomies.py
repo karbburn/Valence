@@ -153,14 +153,40 @@ class TestNoSecondCopyOfTheElementNames:
         ]
         assert not offenders, f"still names elements inline: {offenders}"
 
-    def test_the_untouched_fields_are_named_as_such(self):
-        """`non_current_investments` still restsates its elements.
+    def test_non_current_investments_resolves_instead_of_being_restated(self):
+        """The last field to restate us-gaap names inline, and it cost a real signal.
 
-        Recorded so this file does not imply the whole table was converted. It was
-        not, and a test claiming otherwise would be a check that examines nothing.
+        This test previously asserted the field was NOT converted, as a record that the
+        work had not been done. Converting it then left the test asserting something
+        false, so it is replaced rather than loosened: a test should describe the
+        state of the code, not tolerate whichever state it happens to find.
         """
         entry = _entry("non_current_investments")
-        assert "MarketableSecuritiesNoncurrent" in entry, (
-            "if this field has been converted, update this test rather than letting "
-            "it pass for a reason that is no longer true"
-        )
+        assert "_US_GAAP_ELEMENTS" in entry and "_IFRS_ELEMENTS" in entry
+
+        # `OtherLongTermInvestments` and `LongTermInvestments` have no IFRS
+        # counterpart and no shipped filer reports them, so they stay inline. Assert
+        # that they were kept deliberately, so a future edit cannot drop them
+        # silently and quietly narrow the gate.
+        for name in ("OtherLongTermInvestments", "LongTermInvestments"):
+            assert name in entry, f"{name} was dropped from the non-current entry"
+
+    def test_every_field_the_gate_checks_resolves_through_both_taxonomies(self):
+        """No field may be left reading one vocabulary.
+
+        Every one of these was a real untied figure at some point today, and in each
+        case the figure was right and the gate could not see the filing that reported
+        it. This is the property that prevents the sixth repetition.
+        """
+        import re as _re
+
+        i = TIEOUT.index("FIELDS = [")
+        table = _code_only(TIEOUT[i:TIEOUT.index("\n]\n", i)])
+        labels = _re.findall(r'\("([a-z_]+)",', table)
+        assert labels, "the FIELDS table could not be read; this test would pass vacuously"
+        for label in labels:
+            entry = _entry(label)
+            assert "_US_GAAP_ELEMENTS" in entry, (
+                f"{label} does not resolve through the us-gaap resolver"
+            )
+
