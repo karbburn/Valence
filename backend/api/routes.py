@@ -599,7 +599,23 @@ def get_model_spec(company_id: str = "infy_infy") -> Dict[str, Any]:
         raise
     except Exception as e:
         logger.exception("Failed to build valuation model for '%s'", company_id)
-        status_code = 422 if "No canonical" in str(e) or "unmapped" in str(e) else 500
+        # Classify by the TYPE of failure, never by searching the message for words.
+        #
+        # This was `422 if "No canonical" in str(e) or "unmeasured" in str(e) else
+        # 500`, and any error whose text did not contain those two phrases became a
+        # 500 "Failed to build model. See server logs for details." One did: an
+        # unlisted ticker raised ValueError from resolve_cik, whose message contains
+        # neither, so CWDV answered 500 while four other unsourceable tickers in the
+        # same 50-company sweep answered 503 for the identical condition.
+        #
+        # A substring test cannot be right here. It classifies by vocabulary, so
+        # rewording an error reclassifies it, and every future "not available" error
+        # whose wording differs becomes a fabricated fault. `NoFinancialsAvailable`
+        # is the type for "no filing in reach" and it is converted to 503 above and
+        # in `_get_hist_model`; a value the filer published nothing for, or a
+        # statement shape the parser does not recognise, is 422 -- a request this
+        # build cannot answer, not a service that is broken.
+        status_code = 422 if isinstance(e, ValueError) else 500
         raise HTTPException(
             status_code=status_code,
             detail="Failed to build model. See server logs for details.",
