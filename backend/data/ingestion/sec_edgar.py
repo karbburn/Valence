@@ -254,16 +254,38 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
         "NontradeReceivablesCurrent",
     ], "BALANCE SHEET"),
 ("Unbilled revenue", [
-        # ASC 606 states unbilled revenue as a contract asset.
+        # Deliberately no us-gaap element, and the reason is a specific filer's own
+        # balance sheet rather than a general doubt.
         #
-        # The canonical key `canonical.bs.unbilled_revenue` has been wired through the
-        # renderer, the forecast working-capital driver and the DSO ratio since it was
-        # introduced, and the current-investments derivation subtracts it -- but no
-        # element was ever named for it, so it could never be populated. A subtraction
-        # with no producer is a subtraction that always subtracts zero, and whatever it
-        # failed to remove ended up inside the investments residual.
-        "ContractWithCustomerAsset",
-        "UnbilledReceivablesCurrent",
+        # `ContractWithCustomerAsset` and `UnbilledReceivablesCurrent` were named here
+        # in e6d95d6, to give `canonical.bs.unbilled_revenue` a producer: the key is
+        # wired through the renderer, the working-capital driver and the DSO ratio, and
+        # a subtraction with no producer always subtracts zero. An element existing in
+        # the taxonomy is not a filer printing it on the face of the statement, though,
+        # and AMDOCS' 20-F for FYE 2025-09-31 draws the line differently:
+        #
+        #     Cash and cash equivalents                  324,999    346,085
+        #     Short-term interest-bearing investments          0    168,242
+        #     Accounts receivable, net                   935,751  1,028,357
+        #     Prepaid expenses and other current assets  331,387    228,498
+        #     Total current assets                    1,592,137  1,771,182
+        #
+        # Five captions, both columns summing exactly, and no contract-asset line
+        # among them. AMDOCS discloses the element in a note, where it sits inside the
+        # caption already mapped above, so mapping it as its own line counted the same
+        # money twice -- by exactly the line: +157.166, +211.498, +362.617 against a
+        # filed subtotal of 2,003 / 1,912 / 1,771.
+        #
+        # The label is kept because the IFRS map keys on us-gaap labels and asserts they
+        # exist, and Infosys' `CurrentAccruedIncomeIncludingCurrentContractAssets` IS a
+        # face caption -- 1,503 at 2025-03-31, read off the 20-F and matching to the
+        # rupee. The vocabularies disagree here, so the mapping is asymmetric on
+        # purpose rather than by omission.
+        #
+        # A us-gaap filer that does break contract assets out on the face of its
+        # balance sheet will need this back, and the reconciliation gate is what will
+        # say so: the line is added, the subtotal stops matching, and the caption is
+        # read off that filer's own statement before the element is trusted.
 ], "BALANCE SHEET"),
         ("Trade receivables", [
         "AccountsReceivableNetCurrent", 
