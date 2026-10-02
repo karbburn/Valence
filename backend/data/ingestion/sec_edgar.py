@@ -22,7 +22,7 @@ import logging
 import time
 from datetime import date, datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import openpyxl
 import requests
@@ -581,7 +581,32 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
     ("Dividend Amount", [
         "PaymentsOfDividends",
         "PaymentsOfDividendsCommonStock",
-    ], "CASH FLOW:"),
+    ], "CASH FLOW:",
+     # Sign: a cash-flow OUTFLOW is negative in this model.
+     #
+     # XBRL stores `PaymentsOfDividends` as a positive magnitude -- the sign is implied
+     # by the element's meaning -- while a printed statement shows the movement in
+     # parentheses. Reading the element verbatim published NVIDIA's dividends as
+     #
+     #     FY24  395   FY25  834   FY26  974
+     #
+     # where the market feed had supplied -395 / -834 / -974: right magnitude, inverted
+     # outflow, and a forecast line that would ADD a dividend to cash.
+     #
+     # The convention is the engine's, not a preference. `forecast/engine.py` emits
+     # `_item("canonical.cf.dividends_paid", period, -dividends_est, ...)` -- an outflow
+     # is negative -- and reads history with `abs(hist_div / hist_np)`, which is
+     # sign-agnostic. So the historical line must be negative to match what the forecast
+     # writes beside it.
+     #
+     # NOTED, NOT FIXED HERE: capex breaks this convention. `canonical.cf.capex` is
+     # stored POSITIVE from both the feed and the filing (NVIDIA 1,069 / 3,236 /
+     # 6,042), while dividends are stored negative. One statement, two sign
+     # conventions. Reconciling that means deciding which way capex should go and
+     # re-deriving anything that consumes it, which is a separate change with its own
+     # verification -- recorded in assets/gsd/OPEN_DEFECTS.md rather than slipped in
+     # beside an unrelated fix.
+     ),
     ("Basic (in shares)", [
         "CommonStockSharesOutstanding",
         "EntityCommonStockSharesOutstanding",
@@ -664,6 +689,89 @@ _CURRENT_DEBT_TAGS = (
     "OtherShortTermBorrowings",
     "ShortTermBankLoansAndNotesPayable",
 )
+
+
+# The us-gaap elements whose value is an OUTFLOW MAGNITUDE, so the sign is carried by
+# the element's meaning rather than by its number.
+#
+# Matched on the whole element name, NOT on a `PaymentsOf...` prefix. That prefix was
+# the first attempt and it is wrong in a way the tests caught immediately: capital
+# expenditure is `PaymentsToAcquirePropertyPlantAndEquipment`, which does not begin
+# "PaymentsOf" -- so capex was left alone by luck rather than by decision, and the
+# prefix read as though it were naming the class of outflows when it names only a few
+# of them.
+#
+# Membership is explicit rather than pattern-derived because each name added is a
+# decision about a specific element, and a prefix rule would sweep in elements whose
+# sign convention nobody has checked.
+#
+# ONLY elements the reader actually reads from are listed. A test asserts this: an
+# element named here but present in no `US_GAAP_TAG_MAP` entry is a rule that can never
+# fire, and it reads as coverage. `PaymentsForRepurchaseOfCommonStock` was in the first
+# version of this set for that reason -- nothing in the map reads it, so a buyback is
+# not currently sourced from the filing at all, and listing its element implied a
+# financing-section sign convention the model does not yet exercise.
+#
+# Adding buybacks means adding the line to the map FIRST, then the element here.
+_OUTFLOW_ELEMENTS = frozenset({
+    "PaymentsOfDividends",
+    "PaymentsOfDividendsCommonStock",
+})
+
+
+def _is_outflow_element(metric_label: str, tags: Sequence[str] | None = None) -> bool:
+    """True when this line's us-gaap element stores an OUTFLOW MAGNITUDE.
+
+    Takes the element names, not the raw label, because the raw label is the reader's
+    own vocabulary and says nothing about which element produced the number: "Dividend
+    Amount" is the label, and the elements behind it are `PaymentsOfDividends` and
+    `PaymentsOfDividendsCommonStock`. Matching the label instead -- which the first two
+    attempts did -- returned False for every line and silently disabled the rule, which
+    is the most expensive way to be wrong: the code reads as correct and publishes an
+    inflow.
+
+    `tags` is the candidate list from `US_GAAP_TAG_MAP`. A line is an outflow when any
+    element it can be read from is one, so a filer that switches between
+    `PaymentsOfDividends` and the CommonStock spelling is covered by either.
+    """
+    if tags:
+        return any(t in _OUTFLOW_ELEMENTS for t in tags)
+    return metric_label in _OUTFLOW_ELEMENTS
+
+
+def _as_stored_outflow(
+    val: float, metric_label: str, tags: Sequence[str] | None = None
+) -> float:
+    """A cash OUTFLOW is stored negative; XBRL reports outflow magnitudes as positive.
+
+    The sign of `PaymentsOfDividends` is carried by the element's MEANING, not by its
+    value, so reading it verbatim published NVIDIA's dividends as
+
+        FY24  395    FY25  834    FY26  974
+
+    where the market feed had supplied -395 / -834 / -974: the right magnitude as a
+    capital INFLOW. The forecast engine writes `-dividends_est` for this line, so
+    history and forecast then disagreed about which direction the money moved, and
+    nothing in the model flagged it.
+
+    Named rather than inlined because the rule is a POLICY, and an inlined policy in the
+    middle of a 300-line fetch loop can only be tested by reading the source: five
+    attempts to match it with a regex all reported `None` against code that plainly
+    contained it. A function can be called.
+
+    Narrow deliberately. It matches elements named `PaymentsOf...`, which are outflows by
+    construction, rather than outflows generally -- because capex is NOT covered:
+
+        canonical.cf.capex        POSITIVE  (NVIDIA 1,069 / 3,236 / 6,042)
+        canonical.cf.dividends_paid  NEGATIVE
+
+    One cash-flow statement, two conventions. Reconciling that means choosing which way
+    capex goes and re-deriving everything that reads it, which is a separate change with
+    its own verification. Recorded in assets/gsd/OPEN_DEFECTS.md.
+    """
+    if _is_outflow_element(metric_label, tags) and val > 0:
+        return -val
+    return val
 
 
 def _derive_noncurrent_borrowings(
@@ -1215,6 +1323,32 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
             # in the flattering direction.
             if capex_is_negative and metric_label == ifrs_tags.CAPEX_LABEL and val < 0:
                 val = -val
+
+            # A cash OUTFLOW is stored negative, and XBRL stores outflow magnitudes as
+            # positive numbers -- the sign is carried by the element's meaning, not by
+            # its value. `PaymentsOfDividends` is one such element, and reading it
+            # verbatim published NVIDIA's dividends as +395 / +834 / +974 where the
+            # market feed had -395 / -834 / -974: the right magnitude as a capital
+            # INFLOW.
+            #
+            # The convention is the engine's, not a preference. `forecast/engine.py`
+            # emits `_item("canonical.cf.dividends_paid", period, -dividends_est, ...)`
+            # -- negative for an outflow -- and reads history through
+            # `abs(hist_div / hist_np)`, so history must be negative to sit beside what
+            # the forecast writes.
+            #
+            # Applied to the whole family rather than to the one label, because every
+            # element whose name begins "PaymentsOf" is an outflow by construction and
+            # adding them one at a time leaves the next one publishing an inflow.
+            #
+            # NOTED, NOT FIXED HERE: capex does not follow this convention. It is stored
+            # POSITIVE for both us-gaap and IFRS filers (the flip above makes IFRS agree
+            # with us-gaap), so one cash-flow statement carries capex as a magnitude and
+            # dividends as a movement. Reconciling that means choosing which way capex
+            # goes and re-deriving everything that reads it -- a separate change with its
+            # own verification. Recorded in assets/gsd/OPEN_DEFECTS.md rather than
+            # slipped in beside an unrelated fix.
+            val = _as_stored_outflow(val, metric_label, tag_list)
 
             end_d = period_end
             fy = period_end.year
