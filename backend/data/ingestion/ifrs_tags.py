@@ -95,6 +95,29 @@ IFRS_ALTERNATIVES: dict[str, tuple[str, ...]] = {
         "CashAndCashEquivalents",
         "CashAndCashEquivalentsAtCarryingValue",
     ),
+    # Verified against Infosys' own 20-F (CIK 1067491), not from memory. That filer
+    # publishes ZERO us-gaap elements, so under a us-gaap-only read its investments
+    # were structurally incapable of tying to anything -- the gate reported "nothing
+    # carries it" as though the filing were silent, when in fact it spoke a different
+    # vocabulary the gate could not hear.
+    #
+    # At 2025-03-31, in USD millions, which is the presentation currency of the ADR
+    # filing and the unit the engine already reports in (its cash of 2,861 matches
+    # `CashAndCashEquivalents` of 2,861,000,000 exactly):
+    #
+    #   ifrs-full:CurrentInvestments                                          1,460
+    #   ifrs-full:NoncurrentInvestmentsOtherThan...UsingEquityMethod         1,294
+    #
+    # Note what those figures imply about the engine, which reports 8,498 for
+    # marketable securities. That is roughly three times the filing's TOTAL
+    # investments, current and non-current combined. Adding this mapping will not make
+    # the gate green; it will make the gate report the true size of a disagreement
+    # that was previously invisible because the gate could not read the filing.
+    "Current investments": ("CurrentInvestments",),
+    "Non-current investments": (
+        "NoncurrentInvestmentsOtherThanInvestmentsAccountedForUsingEquityMethod",
+        "NoncurrentInvestments",
+    ),
     "Inventory": ("Inventories",),
     "Trade receivables": (
         "TradeAndOtherCurrentReceivables",
