@@ -66,7 +66,30 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Other non-current assets": ("canonical.bs.other_non_current_assets", "bs"),
     "Total non-current assets": ("canonical.bs.total_non_current_assets", "bs"),
     "Current investments": ("canonical.bs.current_investments", "bs"),
-    "Investments": ("canonical.bs.current_investments", "bs"),
+    # NOT "Investments", for the same reason as "Other Assets" above: Screener's
+    # Data Sheet prints an aggregate, not the filer's caption.
+    #
+    # Infosys' own balance sheet separates them -- "Current investments 12,950" and
+    # "Non-current investments 8,930" -- and Screener collapses both into one
+    # "Investments" row reading 21,880. Mapped to the CURRENT line that is the
+    # whole total, and `Non-current investments` is read separately, so the money is
+    # counted twice:
+    #
+    #     FY24  12,915 current + 11,708 non-current = 24,623  published as current
+    #     FY25  12,482 current + 11,059 non-current = 23,541  published as current
+    #     FY26  12,950 current +  8,930 non-current = 21,880  published as current
+    #
+    # Exact to the rupee in all three years, which is what identifies it: the
+    # published current figure equals current PLUS non-current precisely.
+    #
+    # The honest position is the one taken for "Other Assets": the engine does not
+    # know how much of that total is current, so it does not claim to. An
+    # under-count is visible and checkable, and `current_assets_reconcile` reports
+    # the shortfall. An over-count wearing a filed caption's name is neither.
+    #
+    # A filer that prints a line genuinely captioned "Current investments" reaches
+    # this key through that caption, below.
+    "Current investments": ("canonical.bs.current_investments", "bs"),
     "- Certificates of deposit": ("canonical.bs.current_investments", "bs"),
     "- Commercial paper": ("canonical.bs.current_investments", "bs"),
     "- Mutual fund units": ("canonical.bs.current_investments", "bs"),
