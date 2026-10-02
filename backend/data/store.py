@@ -38,6 +38,26 @@ class RawDatapoint(BaseModel):
     units: str
     source: Source
     source_location: str
+    # Which statement the caption was printed in: "BALANCE SHEET",
+    # "PROFIT & LOSS", "CASH FLOW:", or None where the reader has no such notion.
+    #
+    # This is not metadata. Two statements print the same words for opposite things:
+    #
+    #     p.104  Consolidated Statement of Cash Flows
+    #            "Prepayments and other assets        (2,312)"   a MOVEMENT
+    #     p.100  Consolidated Balance Sheet
+    #            "Prepayments and other current assets 15,703"   a STOCK
+    #
+    # Without the statement, both arrive as the bare label "Prepayments and other
+    # assets", the mapper cannot tell them apart, and the cash-flow figure
+    # overwrites the balance-sheet one. That is how Infosys published -2,312 as a
+    # balance-sheet stock where its own filing says +15,703: a movement published
+    # as a balance, and negative where an asset cannot be.
+    #
+    # Every reader already KNOWS this -- each passes `section` into its datapoint
+    # id hash. It was hashed and then discarded, so the knowledge existed and was
+    # thrown away at the boundary.
+    section: Optional[str] = None
     status: Status
     update_date: datetime = datetime.now()
     superseded_by_id: Optional[str] = None
@@ -57,7 +77,8 @@ CREATE TABLE IF NOT EXISTS raw_datapoints (
     source_location TEXT NOT NULL,
     status TEXT NOT NULL,
     update_date TEXT NOT NULL,
-    superseded_by_id TEXT
+    superseded_by_id TEXT,
+    section TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_raw_company ON raw_datapoints(company_id);
 CREATE INDEX IF NOT EXISTS idx_raw_lookup ON raw_datapoints(company_id, period_label, source);
@@ -94,9 +115,35 @@ CREATE INDEX IF NOT EXISTS idx_tax_lookup ON taxonomy_mappings(company_id, metri
 """
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add columns that `CREATE TABLE IF NOT EXISTS` cannot add.
+
+    That statement is a no-op when the table already exists, so a column added to
+    `_SCHEMA` is silently absent from every database created before it. The symptom
+    is an INSERT whose placeholder count no longer matches the table, which surfaces
+    as a failure in an unrelated test rather than as a schema error.
+
+    Observed on 2026-10-02 with `section`: `raw_datapoints` in the local store kept
+    its 13 columns, the 14-value INSERT failed, and five tests failed in a full
+    suite while passing in isolation. Additive only -- SQLite has no
+    `ADD COLUMN IF NOT EXISTS`, so existing columns are checked first and the
+    migration is a no-op on a database that is already current.
+    """
+    additions = {"raw_datapoints": [("section", "TEXT")]}
+    for table, columns in additions.items():
+        present = {r[1] for r in conn.execute("PRAGMA table_info(%s)" % table)}
+        if not present:
+            continue  # table not created yet; _SCHEMA will make it correctly
+        for name, decl in columns:
+            if name not in present:
+                conn.execute("ALTER TABLE %s ADD COLUMN %s %s" % (table, name, decl))
+    conn.commit()
+
+
 def _connect(db_path: str | Path) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path))
     conn.executescript(_SCHEMA)
+    _migrate(conn)
     return conn
 
 
@@ -135,12 +182,12 @@ def save_datapoints(db_path: str | Path, datapoints: list[RawDatapoint], clear_e
             d.id, d.company_id, d.metric_raw, d.period_label,
             d.period_end_date.isoformat(), d.value, d.currency, d.units,
             d.source, d.source_location, d.status,
-            d.update_date.isoformat(), d.superseded_by_id,
+            d.update_date.isoformat(), d.superseded_by_id, d.section,
         )
         for d in datapoints
     ]
     conn.executemany(
-        "INSERT OR REPLACE INTO raw_datapoints VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT OR REPLACE INTO raw_datapoints VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         rows,
     )
     conn.commit()

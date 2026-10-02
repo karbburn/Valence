@@ -130,6 +130,7 @@ def parse_predicted_statement_page(
                         units="crores",
                         source=source,  # type: ignore[arg-type]
                         source_location=f"{Path(pdf_path).name} p.{page_index + 1} {label}",
+                        section=section,
                         status="reported",
                         update_date=datetime.now(),
                     )
