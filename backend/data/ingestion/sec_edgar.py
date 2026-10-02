@@ -291,6 +291,29 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
         "AccountsReceivableNetCurrent", 
         "ReceivablesNetCurrent"
     ], "BALANCE SHEET"),
+    # Trade payables, from the filing rather than from a market feed.
+    #
+    # Every shipped US model was taking this line from `us_live`, so a balance-sheet
+    # caption the filer itself reports was being read from a vendor's rendering of it.
+    # NVIDIA's nine feed-sourced figures included trade payables of 2,699 / 6,310 /
+    # 9,812, which the tie-out confirmed equal the filing's `AccountsPayableCurrent`
+    # -- right number, wrong provenance, and indistinguishable on the page.
+    #
+    # Tag presence verified per filer against SEC companyfacts rather than assumed, so
+    # this fires where the filer files it and stays silent where it does not:
+    #
+    #     AccountsPayableCurrent     present  nvda aapl msft amzn meta googl amba awi
+    #                               absent   dox infy_us tsm
+    #
+    # `AccountsPayableCurrent` is deliberately not repeated in the candidate list -- it
+    # appears once, and a duplicate makes the map look like it covers more filers than
+    # it does.
+    ("Trade payables", [
+        "AccountsPayableCurrent",
+        # Filers that combine trade payables with accrued liabilities print one line,
+        # so the combined element is the closer match for them and comes second.
+        "AccountsPayableAndAccruedLiabilitiesCurrent",
+    ], "BALANCE SHEET"),
     # ONE current-asset catch-all, and the filer's own caption for it.
     #
     # `OtherAssetsCurrent` and `OtherAssetsMiscellaneousCurrent` belong here rather
@@ -490,6 +513,74 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
     ("Stock Based Compensation", [
         "ShareBasedCompensation",
         "AllocatedShareBasedCompensationExpense"
+    ], "CASH FLOW:"),
+    # Dividends paid, from the filing rather than from a market feed.
+    #
+    # NVIDIA's nine feed-sourced figures included dividends of -395 / -834 / -974,
+    # which the tie-out confirmed equal the filing's `PaymentsOfDividends`. The
+    # numbers were right and the provenance was not: a cash-flow caption the filer
+    # publishes was being read from a vendor's rendering of it.
+    #
+    # Presence verified per filer against SEC companyfacts:
+    #
+    #     PaymentsOfDividends              nvda aapl meta googl
+    #     PaymentsOfDividendsCommonStock   aapl msft meta
+    #
+    # MSFT pays no dividend, so its own filings carry neither element and this stays
+    # silent for it -- correctly, rather than by omission. The two spellings are both
+    # listed because filers switch between them, and a filer that pays nothing must
+    # produce no figure rather than a zero that looks like a fact.
+    #
+    # `PaymentsOfDividendsMinorityInterest` is deliberately excluded: it is dividends
+    # to minority holders, which is not the same money, and admitting it beside the
+    # common-stock element would sum two different claims in one line.
+    # The raw label is the one the taxonomy already knows. The key is
+    # `canonical.cf.dividends_paid`, and the label that reaches it from a market feed
+    # is not "Dividends paid":
+    #
+    #     "Dividends paid"      registry None, suggestion low   -> unmapped, refused
+    #     "Cash Dividends Paid" suggestion medium -> canonical.bs.cash_and_bank
+    #
+    # The second is worse than the first. Cash dividends paid is a movement in the
+    # cash-flow statement, and the suggestion would file it as CASH ON THE BALANCE
+    # SHEET -- so trusting the suggestion here does not merely fail to help, it points
+    # the line at the wrong statement. "Total Payables" has the same problem in
+    # reverse: it suggests `trade_payables` at medium confidence, and several filers
+    # print "Total payables" for trade payables plus accruals, so the narrow key would
+    # understate them.
+    #
+    # So the label is spelled as the filing spells it and the statement is asserted:
+    # the mapper's cross-statement guard then refuses the cash-flow reading of any
+    # caption that reaches `cash_and_bank` from a cash-flow page.
+    # The raw label is spelled as the filing spells it, and the taxonomy entry that
+    # carries it states the CASH FLOW statement explicitly.
+    #
+    # Getting this right took two attempts, and the first was worse than useless:
+    #
+    #     "Dividends paid"      registry None, suggestion low    -> unmapped, refused
+    #     "Cash Dividends Paid" registry None, suggestion MEDIUM -> canonical.bs.cash_and_bank
+    #
+    # The second is a trap rather than a fallback. Cash dividends paid is a movement in
+    # the cash-flow statement, and the suggestion files it as CASH ON THE BALANCE
+    # SHEET. Mapping it therefore does not merely fail to help -- it points the line at
+    # the wrong statement, and the resulting figure would be a dividend payment
+    # presented as cash in the bank. The cross-statement guard refuses it, which is
+    # correct behaviour and means the entry is useless: verified, a cash-flow
+    # "Cash Dividends Paid" produced ZERO canonical datapoints.
+    #
+    # So the label is mapped here rather than left to inference. It is the one the
+    # taxonomy already carries to `canonical.cf.dividends_paid`, which is the key the
+    # shipped models use for this line -- checked, not assumed, because the labels a
+    # filer prints ("Dividends", "Cash Dividends Paid", "Common Stock Dividend Paid")
+    # are all unmapped or worse, and only "Dividend Amount" reaches the key at all.
+    #
+    #     "Dividends"                 suggestion low    -> unmapped
+    #     "Cash Dividends Paid"       suggestion medium -> canonical.bs.cash_and_bank
+    #     "Common Stock Dividend Paid" suggestion low   -> unmapped
+    #     "Dividend Amount"           registry          -> canonical.cf.dividends_paid
+    ("Dividend Amount", [
+        "PaymentsOfDividends",
+        "PaymentsOfDividendsCommonStock",
     ], "CASH FLOW:"),
     ("Basic (in shares)", [
         "CommonStockSharesOutstanding",
