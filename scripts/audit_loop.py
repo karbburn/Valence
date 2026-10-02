@@ -555,8 +555,48 @@ def gate_site() -> GateResult:
             payload = json.loads(_api_model(cid).decode("utf-8"))
             payload = payload.get("model", payload)
             ticker = (payload.get("metadata") or {}).get("ticker")
-        except Exception:
-            g.fail(f"{cid}: could not read the served model")
+        except urllib.error.HTTPError as exc:
+            # Name the status, and say what a status MEANS here.
+            #
+            # `except Exception` reported one line for a 503, a timeout and a
+            # parse failure alike. On 2026-10-02 that read
+            #
+            #     FAIL  tatasteel_tatasteel: could not read the served model
+            #
+            # when the truth was that the ingest throttle had answered 503 to 11
+            # of the 23 shipped companies -- the cache was being defeated by the
+            # freshness check, and the single line named neither the cause nor
+            # the eleven companies. Three conditions with three different fixes,
+            # collapsed into one sentence that reads like a broken model.
+            detail = ""
+            try:
+                detail = json.loads(exc.read().decode("utf-8", "replace")).get("detail", "")
+            except Exception:
+                pass
+            g.fail(
+                f"{cid}: the API answered HTTP {exc.code}"
+                + (f" -- {detail}" if detail else "")
+                + (
+                    "  (503 from the ingest throttle means a shipped snapshot was "
+                    "being re-ingested; that is a cache defect, not a broken model)"
+                    if exc.code == 503
+                    else ""
+                )
+            )
+            continue
+        except TimeoutError:
+            g.fail(
+                f"{cid}: the API did not answer within "
+                f"{API_MODEL_TIMEOUT}s -- a timeout is a latency problem, and it "
+                "reads the same as a 503 only if the harness declines to say which "
+                "it was"
+            )
+            continue
+        except (ValueError, KeyError, TypeError, AttributeError) as exc:
+            g.fail(f"{cid}: the API answered but the payload was unreadable -- {type(exc).__name__}: {exc}")
+            continue
+        except Exception as exc:
+            g.fail(f"{cid}: could not reach the API -- {type(exc).__name__}: {exc}")
             continue
         if not ticker:
             g.fail(f"{cid}: the served model carries no ticker, so its page cannot be located")
@@ -620,9 +660,12 @@ def gate_site() -> GateResult:
     return g
 
 
+API_MODEL_TIMEOUT = 600
+
+
 def _api_model(cid: str) -> bytes:
     req = urllib.request.Request(f"{API}/api/model/{cid}", headers={"x-valence-build": "1"})
-    with urllib.request.urlopen(req, timeout=600) as r:
+    with urllib.request.urlopen(req, timeout=API_MODEL_TIMEOUT) as r:
         return r.read()
 
 
