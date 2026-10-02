@@ -69,11 +69,13 @@ _US_GAAP_ELEMENTS: Dict[str, Tuple[str, ...]] = {
         *_US_BY_LABEL.get("Borrowings", ()),
         *_US_BY_LABEL.get("Short term borrowings", ()),
     ),
+    "non_current_investments": _US_BY_LABEL.get("Non-current investments", ()),
 }
 _IFRS_ELEMENTS: Dict[str, Tuple[str, ...]] = {
     "cash_and_equivalents": _IFRS_BY_LABEL.get("Cash & Bank", ()),
     "marketable_securities": _IFRS_BY_LABEL.get("Current investments", ()),
     "total_debt": _IFRS_BY_LABEL.get("Borrowings", ()),
+    "non_current_investments": _IFRS_BY_LABEL.get("Non-current investments", ()),
 }
 
 REPO = Path(__file__).resolve().parents[1]
@@ -303,10 +305,21 @@ FIELDS = [
     # inside it. Ranking the subset first reports both as wrong and invites fixing
     # something that is already exact.
     ("non_current_investments", "Long-term and non-current investments", [
-        "MarketableSecuritiesNoncurrent",
-        "AvailableForSaleSecuritiesDebtSecuritiesNoncurrent",
+        # Resolved through both taxonomies, as cash and marketable securities
+        # are. This is the last field that restated us-gaap element names inline,
+        # and it cost a real signal: Infosys reports long-term investments under
+        # `ifrs-full:NoncurrentInvestmentsOtherThanInvestmentsAccountedForUsingEquityMethod`
+        # and us-gaap publishes none of the names below, so the gate reported a
+        # figure that was correct AND filed as carrying no filed caption.
+        *_US_GAAP_ELEMENTS.get("non_current_investments", ()),
+        *_IFRS_ELEMENTS.get("non_current_investments", ()),
+        # `OtherLongTermInvestments` and `LongTermInvestments` have no IFRS
+        # counterpart and no filer on the shipped set reports them, so they are
+        # kept here rather than in the resolver, which is keyed on ingestion labels.
         "OtherLongTermInvestments",
         "LongTermInvestments",
+        # NVIDIA reports these under its OWN extension element, which
+        # companyfacts does not carry under either standard namespace.
         "EquitySecuritiesWithoutReadilyDeterminableFairValueAmount",
     ]),
     ("marketable_securities", "Marketable securities", [
