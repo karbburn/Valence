@@ -30,6 +30,72 @@ from backend.data.store import RawDatapoint
 logger = logging.getLogger(__name__)
 
 
+def filed_period_ends(company_id: str) -> Dict[str, date]:
+    """The period-end date each period ACTUALLY has, according to the filing.
+
+    A period is a span of time with one end. Yahoo names its columns by the last day
+    of the calendar month, so a filer whose fiscal year ends on its own 52/53-week
+    date gets a month end from the feed:
+
+        intc_us   FY24  filed 2024-12-28   feed 2024-12-31
+        nvda_us   FY24  filed 2024-01-28   feed 2024-01-31
+        qcom_us   FY25  filed 2025-09-28   feed 2025-09-30
+
+    and for two filers the two dates fall in DIFFERENT MONTHS, so this is not a
+    rounding difference:
+
+        sbux_us   FY23  filed 2023-10-01   feed 2023-09-30
+        tjx_us    FY24  filed 2024-02-03   feed 2024-01-31
+
+    Storing the feed's date put two different period ends for the same period into one
+    statement -- 47 such periods across 18 of the shipped US models. The filing is the
+    authority on when its own period ended, so its date wins and the feed supplies the
+    figure only.
+
+    Read from the store rather than recomputed, because the SEC reader already parsed
+    the filed statements and `batch` ingests them before this module runs. A period the
+    filing says nothing about is absent here, and the caller keeps the feed's date --
+    which is then the only date for that period, so there is nothing to disagree with.
+    """
+    from backend.data.universe.store import DB_PATH
+
+    if not DB_PATH.exists():
+        return {}
+    import sqlite3
+
+    try:
+        conn = sqlite3.connect("file:%s?mode=ro" % DB_PATH.as_posix(), uri=True)
+    except sqlite3.Error as exc:  # noqa: PERF203
+        logger.warning("could not read filed period ends for %s: %s", company_id, exc)
+        return {}
+
+    counts: Dict[str, Dict[date, int]] = {}
+    try:
+        for period_label, ped in conn.execute(
+            "SELECT period_label, period_end_date FROM raw_datapoints "
+            "WHERE company_id = ? AND source = 'sec_edgar'",
+            (company_id,),
+        ):
+            try:
+                parsed = date.fromisoformat(str(ped)[:10])
+            except ValueError:
+                continue
+            counts.setdefault(period_label, {})
+            counts[period_label][parsed] = counts[period_label].get(parsed, 0) + 1
+    except sqlite3.Error as exc:
+        logger.warning("could not read filed period ends for %s: %s", company_id, exc)
+        return {}
+    finally:
+        conn.close()
+
+    # The most frequent filed date wins, so one odd row cannot move a period.
+    return {
+        label: max(dates.items(), key=lambda kv: (kv[1], -kv[0].toordinal()))[0]
+        for label, dates in counts.items()
+        if dates
+    }
+
+
 def _datapoint_id(company_id: str, metric: str, period: str, source: str, section: str, row: int) -> str:
     return hashlib.sha1(f"{company_id}|{section}|{metric}|{period}|{source}|{row}".encode()).hexdigest()
 
@@ -178,6 +244,21 @@ def fetch_and_parse_us_live(company_id: str) -> List[RawDatapoint]:
     for c_d in target_cols:
         period_map[str(c_d)[:10]] = f"FY{str(c_d.year)[2:]}"
 
+    # The filing's own end date for each period, where it has filed one.
+    #
+    # `period_map` still keys on the feed's date string -- that is how a feed column is
+    # matched to a period -- but the date STORED is the filed one. The two jobs are
+    # separate and conflating them is what put 2024-01-31 next to NVIDIA's filed
+    # 2024-01-28 in the same statement.
+    filed_ends = filed_period_ends(company_id)
+    if filed_ends:
+        logger.info(
+            "%s: %d of %d periods take their end date from the filing",
+            company_id,
+            len([p for p in period_map.values() if p in filed_ends]),
+            len(period_map),
+        )
+
     datapoints: List[RawDatapoint] = []
     now = datetime.now()
 
@@ -227,7 +308,13 @@ def fetch_and_parse_us_live(company_id: str) -> List[RawDatapoint]:
                         company_id=company_id,
                         metric_raw=metric_label,
                         period_label=period_lbl,
-                        period_end_date=c_d if isinstance(c_d, date) else date.today(),
+                        # The filing's end date for this period, where there is one.
+                        # See `filed_period_ends`: a period has one end, and the filer
+                        # is the authority on its own. Without this the same statement
+                        # carries NVIDIA's filed 2024-01-28 and Yahoo's 2024-01-31.
+                        period_end_date=filed_ends.get(
+                            period_lbl, c_d if isinstance(c_d, date) else date.today()
+                        ),
                         value=round(final_val, 4),
                         currency="USD",
                         units="millions",
@@ -266,7 +353,13 @@ def fetch_and_parse_us_live(company_id: str) -> List[RawDatapoint]:
                         company_id=company_id,
                         metric_raw=metric_label,
                         period_label=period_lbl,
-                        period_end_date=c_d if isinstance(c_d, date) else date.today(),
+                        # The filing's end date for this period, where there is one.
+                        # See `filed_period_ends`: a period has one end, and the filer
+                        # is the authority on its own. Without this the same statement
+                        # carries NVIDIA's filed 2024-01-28 and Yahoo's 2024-01-31.
+                        period_end_date=filed_ends.get(
+                            period_lbl, c_d if isinstance(c_d, date) else date.today()
+                        ),
                         value=round(value / 1e6 / fx, 4),
                         currency="USD",
                         units="millions",
