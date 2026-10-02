@@ -18,6 +18,7 @@ from backend.validation.accounting_checks import (
     check_current_assets_reconcile,
     check_debt_schedule_reconciles,
     check_share_count_consistent,
+    check_units_agree_within_a_model,
 )
 from backend.validation.data_quality import (
     check_data_provenance_quality,
@@ -55,6 +56,7 @@ CHECK_SUITE: List[Tuple[str, Callable[[ModelSpecification], ModelCheckResult]]] 
     # the same money twice or omits a large asset entirely, and no other check looks
     # here: they all read the subtotals.
     ("accounting", check_current_assets_reconcile),
+    ("accounting", check_units_agree_within_a_model),
     ("accounting", check_cash_flow_reconciles),
     ("accounting", check_debt_schedule_reconciles),
     ("accounting", check_share_count_consistent),

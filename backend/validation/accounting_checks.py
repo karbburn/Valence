@@ -12,6 +12,7 @@ Checks:
    own current-asset subtotal.
 """
 
+from collections import Counter
 from typing import List
 
 from backend.forecast.debt import reconcile as reconcile_debt_schedule
@@ -42,6 +43,17 @@ CURRENT_ASSET_LINES: List[str] = [
     "canonical.bs.current_income_tax_assets",
     "canonical.bs.derivative_financial_assets_current",
 ]
+
+
+# Lines whose figures are not money in the reporting currency, so a `units` of
+# "millions" is not a claim that can be true or false. EPS of 2.31 in USD millions
+# would be a different sort of wrong from a mislabelled revenue line, and forcing one
+# onto it would make the check noisy on exactly the models with the most periods.
+UNITLESS_LINES: set = {
+    "canonical.is.eps_basic",
+    "canonical.is.eps_diluted",
+    "canonical.is.dividend_per_share",
+}
 
 
 def check_balance_sheet_balances(spec: ModelSpecification) -> ModelCheckResult:
@@ -201,6 +213,84 @@ def check_current_assets_reconcile(spec: ModelSpecification) -> ModelCheckResult
             if passed
             else f"Itemised current assets do not reach the filer's subtotal in "
             f"{len(errors)} period(s): " + "; ".join(errors[:3])
+        ),
+        implicated_canonical_keys=failing_keys,
+        implicated_periods=failing_periods,
+    )
+
+
+def check_units_agree_within_a_model(spec: ModelSpecification) -> ModelCheckResult:
+    """Every published line carries the unit the model itself declares.
+
+    A figure and its unit travel together through the engine, and every other check in
+    this suite reads the figure alone. That is how 616 line items across 11 shipped
+    models came to be labelled INR in crores while holding USD millions, with the
+    model metadata on the same object saying USD/millions: nothing compared the two.
+
+    Per-share figures and ratios are exempt. "millions" is not the unit of an EPS, so
+    requiring one would be the same defect wearing a check's clothes -- and the first
+    filers to hit it would be the ones with the most periods.
+    """
+    declared = (getattr(spec.metadata, "currency", None), getattr(spec.metadata, "units", None))
+    if not declared[0] or not declared[1]:
+        # Nothing to compare against. Say so rather than passing silently: a model that
+        # declares no unit and one that was never asked are different states.
+        return ModelCheckResult(
+            check_name="units_agree_within_a_model",
+            category="accounting",
+            passed=True,
+            detail=(
+                "model declares no currency/units, so line units cannot be compared; "
+                "no line disagrees with a declaration that does not exist"
+            ),
+        )
+
+    disagree: List[str] = []
+    seen = Counter()
+    failing_keys: List[str] = []
+    failing_periods: List[str] = []
+
+    for it in spec.historicals.line_items:
+        if it.value is None:
+            continue
+        if it.canonical_key in UNITLESS_LINES or it.canonical_key.startswith("canonical.ratio."):
+            continue
+        if not it.currency and not it.units:
+            continue
+        seen[(it.currency, it.units)] += 1
+        if (it.currency, it.units) != declared:
+            if len(disagree) < 8:
+                disagree.append(
+                    f"{it.canonical_key} {it.period_label}: labelled "
+                    f"{it.currency or '?'}/{it.units or '?'} against a declared "
+                    f"{declared[0]}/{declared[1]}"
+                )
+            if it.canonical_key not in failing_keys:
+                failing_keys.append(it.canonical_key)
+            if it.period_label not in failing_periods:
+                failing_periods.append(it.period_label)
+
+    passed = not disagree and not (seen - Counter({declared: sum(seen.values())}))
+    if not seen:
+        return ModelCheckResult(
+            check_name="units_agree_within_a_model",
+            category="accounting",
+            passed=True,
+            detail="no unit-bearing line items to compare",
+        )
+
+    mixed = {c: n for c, n in seen.items() if c != declared}
+    return ModelCheckResult(
+        check_name="units_agree_within_a_model",
+        category="accounting",
+        passed=passed,
+        detail=(
+            ""
+            if passed
+            else f"{sum(mixed.values())} of {sum(seen.values())} line items carry a "
+            f"unit other than the declared {declared[0]}/{declared[1]} "
+            f"({', '.join(f'{c[0] or chr(63)}/{c[1] or chr(63)}={n}' for c, n in sorted(mixed.items()))}): "
+            + "; ".join(disagree[:3])
         ),
         implicated_canonical_keys=failing_keys,
         implicated_periods=failing_periods,

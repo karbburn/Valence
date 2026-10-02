@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from backend.data.store import RawDatapoint
-from backend.models.statements.selector import select_primary_datapoints
+from backend.models.statements.selector import dominant_units, select_primary_datapoints
 from backend.normalization.taxonomy.models import CanonicalDatapoint
 
 
@@ -94,14 +94,23 @@ def assemble_income_statement(
     dp_map = select_primary_datapoints(is_dps, "is", raw_datapoints_map=raw_datapoints_map)
 
     items: List[IncomeStatementLineItem] = []
+    dom_curr, dom_un = dominant_units(is_dps)
 
     for c_key, label in IS_LINE_ITEM_CONFIG:
         values: Dict[str, float] = {}
         lineage: Dict[str, List[str]] = {}
         status: Dict[str, str] = {}
         rules: Dict[str, str] = {}
-        curr = "INR"
-        un = "crores"
+        # The unit a figure is published in is the unit the filer used, so it is read
+        # from the datapoint rather than assumed. This opened as a hardcoded
+        # "INR"/"crores" and was only overwritten inside the `if _rule:` branch below,
+        # which is reached solely for a DERIVED datapoint -- so every reported line
+        # kept the default, and 616 line items across 11 shipped models were published
+        # labelled INR in crores while carrying USD millions. A crore is ten million,
+        # so a consumer trusting the label read them 10x wrong, and the model's own
+        # metadata said USD/millions on the same object.
+        curr = dom_curr
+        un = dom_un
         period_ends: Dict[str, date] = {}
 
         for p in periods:
@@ -110,12 +119,12 @@ def assemble_income_statement(
                 values[p] = dp.value
                 lineage[p] = dp.source_datapoint_ids
                 period_ends[p] = dp.period_end_date
+                curr = dp.currency
+                un = dp.units
             status[p] = getattr(dp, "status", "reported") or "reported"
             _rule = getattr(dp, "derivation_rule", None)
             if _rule:
                 rules[p] = _rule
-                curr = dp.currency
-                un = dp.units
 
         if values:
             items.append(
