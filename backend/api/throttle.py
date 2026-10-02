@@ -125,6 +125,12 @@ def single_flight(company_id: str) -> Iterator[bool]:
     Yields False immediately for the callers that lose the race. Combined with
     the LRU, the losers then read the winner's freshly-stored spec instead of
     starting a second identical build.
+
+    Note that the second half is a promise about the CALLER, not about this
+    function: the loser is told it lost and is expected to wait and read the LRU.
+    On 2026-10-02 it did not -- `_get_or_build_spec` answered 503 instead -- so the
+    duplicate suppression worked and the reuse did not, and the mechanism bought an
+    error instead of a saved build. See `wait_for_build`.
     """
     lock = _lock_for(company_id)
     if not lock.acquire(blocking=False):
@@ -134,6 +140,28 @@ def single_flight(company_id: str) -> Iterator[bool]:
         yield True
     finally:
         lock.release()
+
+
+def wait_for_build(company_id: str, timeout: float) -> bool:
+    """Block until this company's in-flight build releases its lock.
+
+    For the caller that LOST a `single_flight` race. True once the winner has
+    finished, so its result is in the LRU and can be read; False on timeout.
+
+    Refusing the duplicate outright is the alternative, and it is what happened:
+    the frontend and the audit loop asked for one company at the same moment and
+    the loser was answered 503 -- "This model is being compiled right now" -- even
+    though the model was already on disk and the build takes ten seconds or more
+    for the India names whose live price comes off the market feed. Two readers of
+    one cached value is not a reason to fail either of them.
+    """
+    if timeout <= 0:
+        return False
+    lock = _lock_for(company_id)
+    if not lock.acquire(timeout=timeout):
+        return False
+    lock.release()
+    return True
 
 
 def in_flight_count() -> int:

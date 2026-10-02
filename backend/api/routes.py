@@ -51,6 +51,16 @@ PROJECT_ROOT = API_DIR.parent.parent
 # ingestion triggers.
 COMPANY_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_]{1,62}[a-z0-9]$")
 
+# How long a request that lost a single-flight race waits for the winner's result
+# before being told the build really is still running.
+#
+# It must exceed the slowest real build, or ordinary contention becomes a 503. The
+# India models take 10-27s because their live price is fetched per request, so a
+# shorter wait converts the busiest models into the ones that fail -- the failure
+# is worst exactly where the product is slowest. 45s clears the slowest observed
+# build with room, and a genuine hang still surfaces as a 503 rather than hanging.
+SINGLE_FLIGHT_WAIT_SECONDS = 45.0
+
 
 def _require_valid_company_id(company_id: str) -> str:
     if not COMPANY_ID_PATTERN.match(company_id):
@@ -279,12 +289,45 @@ def _forecast_contract(spec: ModelSpecification) -> frozenset:
 def _expected_forecast_contract(company_id: str) -> frozenset:
     """Canonical keys the CURRENT forecast engine emits for this company.
 
-    Derived by running the engine rather than from a hardcoded list, so the
-    check cannot itself drift out of date when the engine gains a line item.
+    Derived by running the engine rather than from a hardcoded list, so the check
+    cannot itself drift out of date when the engine gains a line item.
+
+    EXPENSIVE, and only ever called when it is needed: assembling the statements
+    and running the whole forecast pipeline -- 162 assumptions, 405 line items,
+    three scenarios, debt and tax schedules -- to keep a set of 27 key strings.
+    MEASURED 2026-10-02 at 9.89s per call.
+
+    The caller short-circuits it by comparing `metadata.model_version` first, so
+    this runs only when a snapshot was produced by a DIFFERENT engine -- which is
+    the case where a rebuild is about to happen and 9.89s buys an avoided wrong
+    answer. See `_snapshot_is_from_current_engine`.
     """
     from backend.forecast.pipeline import run as run_forecast_pipeline
 
     return _forecast_contract(run_forecast_pipeline(_get_hist_model(company_id)))
+
+
+def _snapshot_is_from_current_engine(cached_spec: ModelSpecification) -> bool:
+    """True when the snapshot's own version says this engine wrote it.
+
+    `metadata.model_version` is declared for exactly this purpose -- "schema
+    version, NOT data refresh" -- so a snapshot carrying the current version was
+    produced by the code now running, and its forecast necessarily carries every
+    key the current engine emits.
+
+    Without this the answer is obtained by RUNNING the engine to see what keys it
+    emits, which is the 9.89s above, paid on the read path while holding the
+    single-flight lock. That cost is the width of the window in which a second
+    reader of an already-built model is refused, so it is not a performance
+    nicety: it is what produced the 503s.
+
+    A snapshot from an older engine still runs the real check, which is the point
+    of the check -- so this is a fast path for the common case and not a
+    weakening of the guard.
+    """
+    from backend.models.spec.metadata import MODEL_SPEC_VERSION
+
+    return getattr(cached_spec.metadata, "model_version", None) == MODEL_SPEC_VERSION
 
 
 def _database_has_company(company_id: str) -> bool:
@@ -365,7 +408,9 @@ def _cache_matches_database(cached_spec: ModelSpecification) -> bool:
         if _historicals_fingerprint(cached_spec) != anchors:
             return False
 
-        missing = _expected_forecast_contract(company_id) - _forecast_contract(cached_spec)
+        missing = set()
+        if not _snapshot_is_from_current_engine(cached_spec):
+            missing = _expected_forecast_contract(company_id) - _forecast_contract(cached_spec)
         if missing:
             logger.info(
                 "Rebuilding %s: cached forecast is missing %d canonical key(s) the "
@@ -506,14 +551,40 @@ def _get_or_build_spec(
         )
 
     # Single-flight: concurrent requests for one uncached ticker produce one
-    # build. The loser does not start a duplicate.
+    # build. The loser does not start a duplicate -- it WAITS and reads the winner's
+    # result, which is what `single_flight`'s own docstring promises.
+    #
+    # The loser used to be answered 503 immediately, which made duplicate
+    # suppression an error rather than a saving: on 2026-10-02 the frontend and the
+    # audit loop asked for the same company at the same moment and the second
+    # request failed with "This model is being compiled right now" -- for a model
+    # that was already on disk, and whose build takes 10-27s for the India names
+    # because their live price comes off the market feed. The longer a build takes,
+    # the longer that window stays open, so the failure was worst exactly where the
+    # product is slowest.
+    #
+    # Two readers of one cached value is not a reason to fail either of them.
     with ingest_throttle.single_flight(company_id) as is_first:
-        if not is_first:
-            raise HTTPException(
-                status_code=503,
-                detail="This model is being compiled right now. Retry in a few seconds.",
-            )
-        return _build_spec_locked(company_id, cache_path, has_snapshot)
+        if is_first:
+            return _build_spec_locked(company_id, cache_path, has_snapshot)
+
+        won = ingest_throttle.wait_for_build(
+            company_id, timeout=SINGLE_FLIGHT_WAIT_SECONDS
+        )
+        if won:
+            produced = _lru_get(_MODEL_CACHE, company_id)
+            if produced is not None:
+                return produced
+            # The winner finished but kept nothing in the LRU, so there is nothing
+            # to reuse. Fall through to the honest answer rather than rebuilding:
+            # a second identical build is what this path exists to avoid.
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "This model is still being compiled after waiting "
+                f"{SINGLE_FLIGHT_WAIT_SECONDS}s. Retry shortly."
+            ),
+        )
 
 
 def _build_spec_locked(
