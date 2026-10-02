@@ -1080,7 +1080,22 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
 
         for period_end, item in resolved.items():
             period_lbl = target_labels[period_end]
-            raw_val = float(item["val"])
+            # `resolved` holds one of two shapes, and reading the wrong one is a
+            # TypeError rather than a wrong number, which is how it was found:
+            #
+            #   the filed path   -- {date: fact dict}, so the value is item["val"]
+            #   the derived path -- {date: float}, already in millions
+            #
+            # `_derive_noncurrent_borrowings` returns the second shape, so a filer
+            # with a combined debt tag and no non-current tag reached `item["val"]`
+            # on a float. Measured on 2026-10-02: RYZ raised
+            # TypeError: 'float' object is not subscriptable, and the API answered
+            # 500 "Failed to build model" -- a crash presented as a fault for a
+            # company that files perfectly good accounts.
+            #
+            # `isinstance` rather than a try/except around the subscript, so an
+            # unrecognised shape fails loudly here instead of silently reading 0.
+            raw_val = float(item["val"] if isinstance(item, dict) else item)
 
             # Unit conversion: monetary values to USD millions; share counts are
             # likewise stored in millions so downstream per-share math stays consistent.
@@ -1090,7 +1105,16 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
             # then divides by zero and falls through to the provider, which is the
             # state this line was added to end. EPS is stored as filed, in currency
             # per share.
-            val = raw_val if metric_label in _PER_SHARE_LABELS else raw_val / 1e6
+            #
+            # The derived path is ALREADY in millions and must not be divided again;
+            # that would report a filer's borrowings as 1e-6 of the filed figure,
+            # which is the direction that flatters equity value.
+            already_millions = not isinstance(item, dict)
+            val = (
+                raw_val
+                if (metric_label in _PER_SHARE_LABELS or already_millions)
+                else raw_val / 1e6
+            )
 
             # IFRS states capex as a negative outflow; this engine stores a positive
             # magnitude for every other filer, so the sign is normalised here rather
