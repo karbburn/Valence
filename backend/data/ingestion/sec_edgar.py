@@ -693,7 +693,18 @@ def resolve_cik(company_id: str) -> str:
 
     # Never silently fall back to a different company's CIK — that would fetch the
     # wrong company's financials. Fail loudly so the caller can fix the registry.
-    raise ValueError(
+    #
+    # This raises NoFinancialsAvailable, not ValueError, and the type is the whole
+    # point. A ticker SEC's own file does not list is a listed company with no
+    # filing in reach -- an ordinary outcome that the API answers 503, records in
+    # the negative cache, and lets a user retry. Raised as a ValueError it became a
+    # bare Exception at the route, which reports 500 "Failed to build model. See
+    # server logs": a broken service, for a company that simply has no filing.
+    #
+    # Measured on 2026-10-02 across a 50-company sweep, CWDV answered 500 while
+    # four other unsourceable tickers in the same run answered 503 correctly. Same
+    # condition, two answers, and only the wrong one produces a stack trace.
+    raise NoFinancialsAvailable(
         f"Could not resolve SEC CIK for '{company_id}' (ticker '{ticker}'). "
         f"Add it to CIK_REGISTRY or verify the SEC company_tickers lookup."
     )

@@ -26,6 +26,7 @@ import json
 
 import pytest
 
+from backend.data.errors import NoFinancialsAvailable
 from backend.data.ingestion import sec_edgar
 from backend.data.ingestion.sec_edgar import CIK_REGISTRY, resolve_cik
 
@@ -140,8 +141,35 @@ class TestTheFallbackIsNotSilent:
 
     def test_unknown_ticker_raises_rather_than_guessing(self, monkeypatch):
         _stub_sec(monkeypatch)
-        with pytest.raises(ValueError):
+        # NoFinancialsAvailable, not ValueError.
+        #
+        # A ticker absent from SEC's own file is a listed company with no filing in
+        # reach -- the "not available" case that the API answers 503, and the one
+        # `backend/data/errors.py` exists to keep distinct from a broken build.
+        # As a bare ValueError it became a 500 "Failed to build model. See server
+        # logs": a fabricated fault, for a company that simply files nothing.
+        #
+        # The point of this test is unchanged and still holds: nothing is guessed.
+        with pytest.raises(NoFinancialsAvailable):
             resolve_cik("nosuch_us")
+
+    def test_an_unknown_ticker_still_refuses_to_guess(self, monkeypatch):
+        """The behaviour the original test guarded, stated in its own terms.
+
+        `resolve_cik` must never return an identifier it has not verified. Raising
+        a different exception type does not make this easier to satisfy by accident,
+        so it is asserted directly rather than as a side effect of the raise.
+        """
+        _stub_sec(monkeypatch)
+        try:
+            resolved = resolve_cik("nosuch_us")
+        except NoFinancialsAvailable:
+            return
+        pytest.fail(
+            "resolve_cik returned %r for a ticker SEC does not list; falling back "
+            "to another company's CIK would read the wrong filer's financials"
+            % (resolved,)
+        )
 
 
 @pytest.mark.network
