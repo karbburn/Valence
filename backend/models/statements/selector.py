@@ -21,6 +21,29 @@ LOCAL_EXPORT_SOURCES = {"local_export"}
 LOCAL_FIXTURE_SOURCES = SECONDARY_SOURCES | LOCAL_EXPORT_SOURCES
 
 
+def dominant_units(
+    datapoints: list[CanonicalDatapoint],
+) -> Tuple[str, str]:
+    """The (currency, units) a company's own datapoints are overwhelmingly in.
+
+    Used as the starting value for a statement line, so that a line which ends up with
+    no datapoint at all cannot be published wearing a hardcoded unit that may be
+    wrong by a factor of ten.
+
+    A company whose figures are genuinely mixed has no dominant unit, and the tie is
+    broken deterministically rather than by dict order so two runs of the same build
+    cannot disagree with each other. `check_units_agree_within_a_model` is what
+    actually reports a genuine mix; this only has to be stable and honest.
+    """
+    tally: Dict[Tuple[str, str], int] = {}
+    for d in datapoints:
+        if d.currency and d.units:
+            tally[(d.currency, d.units)] = tally.get((d.currency, d.units), 0) + 1
+    if not tally:
+        return ("", "")
+    return max(tally.items(), key=lambda kv: (kv[1], kv[0]))[0]
+
+
 def select_primary_datapoints(
     canonical_datapoints: list[CanonicalDatapoint],
     statement_type: str,  # "is", "bs", or "cf"

@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from backend.data.store import RawDatapoint
 from backend.models.spec.historicals import REPORTED_STATUSES
-from backend.models.statements.selector import select_primary_datapoints
+from backend.models.statements.selector import dominant_units, select_primary_datapoints
 from backend.normalization.taxonomy.models import CanonicalDatapoint
 
 # Statuses a SOURCE published, as distinct from one this engine computed. Both
@@ -182,6 +182,7 @@ def assemble_balance_sheet(
     dp_map = select_primary_datapoints(bs_dps, "bs", raw_datapoints_map=raw_datapoints_map)
 
     items: List[BalanceSheetLineItem] = []
+    dom_curr, dom_un = dominant_units(bs_dps)
 
     for c_key, label, cat in BS_LINE_ITEM_CONFIG:
         values: Dict[str, float] = {}
@@ -189,8 +190,12 @@ def assemble_balance_sheet(
         period_ends: Dict[str, date] = {}
         status: Dict[str, str] = {}
         rules: Dict[str, str] = {}
-        curr = "INR"
-        un = "crores"
+        # This builder already read the unit from inside `if dp is not None`, so its
+        # lines were never the mislabelled ones. The hardcoded default was still wrong
+        # for any line left without a datapoint, so it is corrected rather than left
+        # as a second, contradictory default beside a correct one.
+        curr = dom_curr
+        un = dom_un
 
         for p in periods:
             dp = dp_map.get((c_key, p))

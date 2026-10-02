@@ -5,6 +5,7 @@ from datetime import date
 from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
+from backend.models.statements.selector import dominant_units
 from backend.normalization.taxonomy.models import CanonicalDatapoint
 
 logger = logging.getLogger(__name__)
@@ -88,14 +89,19 @@ def assemble_cash_flow(
         dp_map[(d.canonical_key, d.period_label)] = d
 
     items: List[CashFlowLineItem] = []
+    dom_curr, dom_un = dominant_units(cf_dps)
 
     for c_key, label, cat in CF_LINE_ITEM_CONFIG:
         values: Dict[str, float] = {}
         lineage: Dict[str, List[str]] = {}
         status: Dict[str, str] = {}
         rules: Dict[str, str] = {}
-        curr = "INR"
-        un = "crores"
+        # Read the unit from the datapoint every time one exists. See the note in
+        # assemble_income_statement: the hardcoded default this replaces was
+        # overwritten only for derived rows, so every reported cash flow line on a US
+        # filer shipped labelled INR in crores while carrying USD millions.
+        curr = dom_curr
+        un = dom_un
         period_ends: Dict[str, date] = {}
 
         for p in periods:
@@ -104,12 +110,12 @@ def assemble_cash_flow(
                 values[p] = dp.value
                 lineage[p] = dp.source_datapoint_ids
                 period_ends[p] = dp.period_end_date
+                curr = dp.currency
+                un = dp.units
             status[p] = getattr(dp, "status", "reported") or "reported"
             _rule = getattr(dp, "derivation_rule", None)
             if _rule:
                 rules[p] = _rule
-                curr = dp.currency
-                un = dp.units
 
         if values:
             items.append(
