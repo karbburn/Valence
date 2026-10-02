@@ -1,10 +1,12 @@
 # Valence — Equity Valuation & Financial Modeling Workbench
 
 <p align="center">
-  <img src="backend/api/static/icon.png" width="128" height="128" alt="Valence">
+  <img src="frontend/public/opengraph.png" width="880" alt="Valence — equity valuation and financial modeling workbench">
 </p>
 
-Valence is a browser-based equity valuation workbench. It ingests filings, normalizes them into a canonical taxonomy, runs a driver-based five-year three-statement forecast, discounts unlevered FCFF at a CAPM-derived WACC, solves the reverse DCF, benchmarks public comps, runs a ten-check accounting and model audit, and exports the whole thing to a 31-tab Excel workbook with live formulas.
+Valence is a browser-based equity valuation workbench. It ingests filings, normalizes them into a canonical taxonomy, runs a driver-based five-year three-statement forecast, discounts unlevered FCFF at a CAPM-derived WACC, solves the reverse DCF, benchmarks public comps, audits the result against 23 accounting and model checks, and exports the whole thing to a 31-tab Excel workbook with live formulas.
+
+Every published figure traces to an official filing, and anything that does not is labelled as something else rather than presented as a filing-derived number.
 
 Every company has its own public URL. `valence.sourabhpradhan.in/NVDA` is a deep link that opens with the model already in the HTML, so the figures are readable before any script runs.
 
@@ -19,7 +21,7 @@ Every company has its own public URL. `valence.sourabhpradhan.in/NVDA` is a deep
 - **Public Trading Comps & Football Field Synthesis**: benchmarks the company against sector peers (EV/Sales, EV/EBITDA, P/E, FCF Yield %, ROIC %) and synthesizes cross-methodology valuation ranges. *Football field and comps are Excel-export features; the web workbench shows the DCF and the scenario matrix.*
 - **Private Equity Exit Returns & IRR Waterfall**: 3-year and 5-year Exit Equity Value, MoIC, and Equity IRR under each exit scenario with entry-price sensitivity grids.
 - **Multi-Market & Multi-Currency Support**: US equities (NASDAQ/NYSE, USD millions) and Indian equities (NSE/BSE, INR crores), with currency and unit localization across all statements.
-- **Ten-Check QA Engine**: balance sheet balancing, cash flow reconciliation, debt schedule ties, share count consistency, DCF bridge tie-out, WACC validity, terminal growth below WACC, missing critical inputs, data provenance quality, and historical reporting coverage. A model with failing checks is still served, with the failures listed. A check that could not run is marked skipped and is never counted as a pass.
+- **23-Check QA Engine**: balance sheet balancing, cash flow reconciliation, debt schedule ties, share count consistency, DCF bridge tie-out, WACC validity, terminal growth below WACC, year-one growth plausibility, missing critical inputs, data provenance quality, historical reporting coverage, unit agreement within a model, and — the checks that decide whether a number may be published at all — `inputs_trace_to_a_filing`, `debt_is_actually_sourced`, and `valuation_is_meaningful`. A model with failing checks is still served, with the failures listed. A check that could not run is marked skipped and is never counted as a pass.
 - **31-Tab Interactive Excel Exporter**: detail schedules drive the operating model through live Excel formulas (CAPM, FCFF sums, cross-sheet references, sensitivity grids, and live `=IF(...)` audit checks).
 - **Live Web Workbench**: scenario switching, driver overrides with revert, methodology breakdown, and a model library kept in the browser.
 
@@ -31,6 +33,51 @@ These look like gaps and are not. They are recorded here so nobody "fixes" them.
 - **Throttled live ingestion.** `VALENCE_INGEST_CONCURRENCY` defaults to 2. Measured on a single instance: one cached specification costs 1.15 MB resident, so a 50-entry cache is about 58 MB against 512 MB, and a live build costs 2.5 MB over roughly seven seconds. Memory is not the binding constraint. What remains is politeness toward the upstream filing and market-data providers, which rate-limit under concurrency. Raise it alongside a provider measurement, not a memory one.
 - **Single-flight builds.** A slug that is being built is not built twice, an unsourceable slug is negatively cached, and the cache is an LRU of 50.
 - **Prices self-heal.** A live quote failure falls back to the last cached close *preserving the original date*, and the UI says so rather than presenting a stale number as current.
+- **A valuation is published only where a filing is behind it.** Coverage is a sourcing problem, not an engine problem: a company ships if a filing contributed its historicals, and 9 of the 23 shipped models publish while the rest are built but withheld with the reason stated on the page. A model that no filing is behind returns a verdict rather than a number.
+- **A DCF below market price is a view, not an error.** `implied_price_deviation_is_explainable` holds a deviation inside a band symmetric in both directions. Negative equity value for a filer with negative book equity is arithmetic, so it is reported as such rather than suppressed.
+
+---
+
+## The gates
+
+Every defect found while building this engine was invisible from the inside. A model
+footed to the dollar on a debt figure 15% above the filing, balanced perfectly, passed
+every arithmetic check, and was wrong. A statement can tie across every identity and
+still be built on an input the issuer never published.
+
+So the loop cannot ask "does it add up" — adding up is a property of the model.
+Correctness is a property of the *inputs*, and the only way to know an input is right
+is to compare it with something that does not share code with what it audits.
+
+```bash
+python scripts/audit_loop.py                 # all seven gates
+python scripts/audit_loop.py --only tieout   # one gate
+python scripts/audit_loop.py --no-server     # skip the live site gates
+```
+
+| # | Gate | Oracle |
+| :--- | :--- | :--- |
+| 1 | `tieout` | SEC XBRL, plus the filing's own rendered balance sheet for concepts us-gaap does not expose |
+| 2 | `excel` | The served API payload, read fresh, against the generated workbook |
+| 3 | `identities` | Arithmetic that must hold regardless of inputs |
+| 4 | `qa` | A committed baseline, so a NEW failure is distinguishable from a known one |
+| 5 | `tests` | pytest and jest |
+| 6 | `self_check` | The Excel sheet contract and formula wiring, end to end |
+| 7 | `site` | A running server, over HTTP |
+
+Ordered cheapest-and-most-decisive first: a tie-out failure invalidates every figure
+downstream, so there is no value in reading a workbook whose inputs are already wrong.
+Exit code is non-zero when any gate blocks.
+
+Both taxonomies are read. A foreign private issuer filing a 20-F reports under
+`ifrs-full`, and reading only us-gaap reported TSMC's cash as carrying no filed caption
+at all — a gate reporting a disagreement that does not exist, which is as damaging as
+one that misses a real disagreement.
+
+On current `main`: **tie-out 0 untied figures, 10 of 11 US filers audited clean**
+(the eleventh is TSMC, disclosed rather than counted), **QA 0 regressions across 23
+models**, **589 backend tests**, and a current-asset reconciliation that lands exactly
+on Infosys' filed subtotal in all three years.
 
 ---
 
@@ -82,7 +129,7 @@ flowchart TB
         Reverse[Reverse DCF Solver]
         Comps[Comps & Football Field]
         Returns[PE Returns & IRR]
-        QA[10-Check QA Engine]
+        QA[23-Check QA Engine]
         Schedules --> WACC & DCF
         DCF --> Reverse & Comps & Returns
         WACC & DCF & Reverse & Comps & Returns --> QA
@@ -114,10 +161,12 @@ flowchart TB
 ## Tech Stack
 
 - **Core Engine**: Python 3.12, Pydantic v2
-- **API**: FastAPI, Uvicorn, Requests
+- **API**: FastAPI, Uvicorn, Requests, HTTPX
+- **Data**: SQLite, committed per-company model snapshots (`backend/data/cache/*.json`)
 - **Excel Renderer**: OpenPyXL (live formulas via OpenXML value patching)
-- **Database & Persistence**: SQLite, precomputed model cache on disk
-- **Frontend**: Next.js 16.3.6 (App Router), React 19, Tailwind CSS v4, TypeScript
+- **Frontend**: Next.js 16 (App Router), React 19, Tailwind CSS v4, TypeScript
+
+Dependencies are declared in `pyproject.toml`, so `pip install -e .` is enough.
 
 ---
 
@@ -157,7 +206,7 @@ Valence/
 │   ├── forecast/                      # engine, assumptions, debt, share_count
 │   ├── models/                        # Pydantic contracts (spec, statements)
 │   ├── normalization/                 # taxonomy/ and financials/
-│   ├── validation/                    # accounting_checks.py, pipeline.py
+│   ├── validation/                    # accounting_checks.py, pipeline.py (CHECK_SUITE)
 │   ├── valuation/                     # dcf, wacc, reverse_dcf, comps,
 │   │                                  # football_field, returns, sensitivity
 │   └── tests/                         # Pytest suite
@@ -175,6 +224,15 @@ Valence/
 │   ├── src/components/                # Workbench views, modals, landing blocks
 │   ├── src/lib/                       # API client, formatters, tickers, site config
 │   └── public/media/                  # Launch clip and poster
+├── scripts/                           # The launch gates (see The gates below)
+│   ├── audit_loop.py                  # Runs all seven gates, prints a verdict
+│   ├── tieout.py                      # Every bridge input vs the filing that published it
+│   ├── qa_gate.py                     # Plausibility over every covered company, vs a baseline
+│   ├── audit_valuation_figures.py     # Served API payload vs the generated workbook
+│   └── check_shipped_set.py           # What the site serves vs what is committed
+├── data/
+│   └── qa_gate_baseline.json          # Recorded failures, so a new one is distinguishable
+├── .github/workflows/                 # tests.yml, qa-gate.yml, and two market-data jobs
 ├── assets/                            # Gitignored: plans, reviews, screenshots, media sources
 └── README.md
 ```
@@ -269,22 +327,24 @@ curl -o model.xlsx "http://127.0.0.1:8111/api/export/excel?company_id=nvda_us"
 ## Tests
 
 ```bash
-# Engine, export and layout contracts
-python -m pytest backend/tests -q
+# The whole launch loop, in one command: seven gates, one verdict
+python scripts/audit_loop.py
 
-# Excel exporter self-check: asserts the 31-sheet contract and formula wiring
-python -m backend.export.excel.self_check
-
-# Web API and recomputation self-check
-python -m backend.api.self_check
-
-# Frontend unit tests, typecheck, lint, production build
+# Or individually
+python -m pytest backend/tests -q                              # 589 tests
+python -m backend.export.excel.self_check                      # 31-sheet contract + formula wiring
+python -m backend.api.self_check                               # Web API and recomputation
 cd frontend && npm test && npx tsc --noEmit && npm run lint && npm run build
 ```
 
-278 backend tests and 20 frontend tests. A commit that touches `backend/` is not
-finished until the backend suite passes; it takes about eight minutes and it is
-the only thing guarding the engine.
+A commit that touches `backend/` is not finished until the suite passes. The backend
+suite takes about ten minutes and, together with the tie-out gate, is the only thing
+guarding the engine.
+
+On every push to `main`, CI runs the backend suite, the frontend typecheck/lint/test/build,
+and `qa_gate.py` in snapshot mode — offline, over the committed snapshots, against the
+committed baseline. The gate fails on a *new* regression, not on the recorded failures,
+so a permanently red gate is not a thing anyone learns to ignore.
 
 ---
 
