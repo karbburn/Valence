@@ -1,6 +1,28 @@
 from __future__ import annotations
 
-from typing import Tuple, Dict
+from typing import Tuple, Dict, FrozenSet
+
+# Labels deliberately NOT mapped, and which must stay unmapped.
+#
+# WITHDRAWN_LABELS exists because removing an entry from RAW_METRIC_MAP does not
+# actually withdraw it. `map_raw_datapoints` falls through to the confidence engine
+# when the registry returns None, and that engine proposes these very labels at
+# MEDIUM confidence:
+#
+#     "Investments"  -> canonical.bs.non_current_investments
+#     "Other Assets"  -> canonical.bs.other_non_current_assets
+#
+# So the withdrawals recorded in this file were inert. Screener's "Investments"
+# aggregate kept publishing -- it simply moved from the current-asset key to the
+# non-current one, so Infosys showed 21,880 of non-current investments against a
+# filed 8,930 and the double count survived the fix that was meant to end it.
+#
+# A medium-confidence suggestion is a guess, and it must not overrule a decision
+# that was made on evidence. Each label here is one where the figure is an AGGREGATE
+# the filer did not print as a caption, so mapping it to a narrow key states
+# something the engine does not know. The reasoning for each is at its would-be entry
+# below; `current_assets_reconcile` reports the resulting shortfall.
+WITHDRAWN_LABELS: FrozenSet[str] = frozenset({"Investments", "Other Assets"})
 
 # Mapping entry type: (canonical_key, statement)
 RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {

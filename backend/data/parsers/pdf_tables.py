@@ -41,9 +41,23 @@ def _year_anchors(page) -> list[tuple[float, int]]:
 
 # How far apart a caption's words and its figures may sit and still be one row.
 #
-# A printed table puts them on one baseline, but pdfplumber reports their `top`
-# coordinates with sub-point drift. See `_rows`.
-_ROW_TOLERANCE_PT = 3.0
+# This number is measured, not chosen. On Infosys' FY26 balance sheet (p.100):
+#
+#     spread WITHIN one printed line          0.00 pt
+#     caption -> its own figures              0.12 pt   <- the defect
+#     page title -> the date-header below it  0.72 pt   <- must not be bridged
+#     one printed line -> the next            ~8.8 pt
+#
+# The 0.12pt gap is the defect: `round(top, 1)` puts a caption at 108.9 and its
+# figures at 109.0, in different buckets, and each half is then dropped for having no
+# counterpart. p.100 yields 60 captions where it yields 86.
+#
+# A fixed window cannot fix it, because the 0.72pt gap must NOT be bridged and no
+# threshold separates 0.12 from 0.72 in a way that holds across layouts. See `_rows`,
+# which now takes the printed line exactly and records the consequence.
+#
+# MEASURED on backend/data/filings/infosys-fy26-q4-outcome.pdf p.100, by
+# assets/gsd/spread.py.
 
 
 # Headers a balance sheet prints to open its current and non-current halves.
@@ -107,20 +121,36 @@ def _rows(page) -> list[tuple[str, list[tuple[float, str]]]]:
     Captions on a real financial statement are within a couple of points of their
     own figures. 3pt is comfortably inside that and far below the ~12pt line
     spacing, so genuine neighbours still separate.
+
+    MEASURED, AND THE MEASUREMENT SAYS A FIXED WINDOW CANNOT DO IT. The gaps that
+    have to be told apart are the same size:
+
+        spread WITHIN one printed line          0.00 pt
+        caption -> its own figures              0.12 pt   <- must be bridged
+        page title -> the date-header below it  0.72 pt   <- must NOT be bridged
+
+    At 3.0pt the second is bridged too, and the merged row then reads the date
+    header's "31," as a figure of 31.0 -- a year fragment published as a
+    balance-sheet line. On the FY25 PDF the title sits closer still, so no fixed
+    window is safe across layouts, and on the profit-and-loss page the columns sit
+    differently again, enough that a share count (4,120,108,168) is read as rupees.
+
+    So this takes the printed line exactly as pdfplumber reports it, loses the
+    captions that straddle a rounding boundary, and lets `current_assets_reconcile`
+    report the shortfall. Under-counting a statement is visible and checkable; a
+    caption quietly merged with a neighbour's numbers is published as fact.
+
+    Fixing it properly means grouping on the printed baseline rather than on `top`:
+    ruling detection, or the row rectangles the PDF draws. Recorded in
+    assets/gsd/OPEN_DEFECTS.md with the measurements and the cost of leaving it.
     """
     words = page.extract_words()
-    rows: list[list[tuple[float, str]]] = []
-    anchors: list[float] = []  # the `top` each open row was started at
-    for w in sorted(words, key=lambda t: t["top"]):
-        if rows and abs(anchors[-1] - w["top"]) <= _ROW_TOLERANCE_PT:
-            rows[-1].append((w["x0"], w["text"]))
-        else:
-            rows.append([(w["x0"], w["text"])])
-            anchors.append(w["top"])
-
+    by_top: dict[float, list[tuple[float, str]]] = {}
+    for w in words:
+        by_top.setdefault(round(w["top"], 1), []).append((w["x0"], w["text"]))
     out = []
-    for ws in rows:
-        ws.sort(key=lambda t: t[0])
+    for key in sorted(by_top):
+        ws = sorted(by_top[key], key=lambda t: t[0])
         label = " ".join(t for x, t in ws if x < LABEL_X_MAX).strip()
         vals = [(x, t) for x, t in ws if x >= LABEL_X_MAX]
         if not label:

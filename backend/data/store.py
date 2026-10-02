@@ -227,14 +227,23 @@ def query_datapoints(
     if source:
         sql += " AND source = ?"
         params.append(source)
-    rows = conn.execute(sql, params).fetchall()
+    cur = conn.execute(sql, params)
+    rows = cur.fetchall()
     conn.close()
-    cols = (
-        "id", "company_id", "metric_raw", "period_label",
-        "period_end_date", "value", "currency", "units",
-        "source", "source_location", "status",
-        "update_date", "superseded_by_id",
-    )
+    # The column names come from the cursor, not from a list written out here.
+    #
+    # This used to zip the row against a hardcoded 13-name tuple. `SELECT *` returns
+    # every column, so when `section` and `bs_half` were added the row grew to 15 and
+    # `zip` quietly truncated the last two -- no error, no warning, just two dropped
+    # fields. The consequence was that the mapper's statement guard could never fire
+    # against stored data: `_statement_agrees(None, "bs")` is True by design, so
+    # Infosys' cash-flow "Prepayments and other assets (2,312)" was mapped onto a
+    # balance-sheet line and published as a stock, and the guard that exists
+    # specifically to prevent that reported agreement.
+    #
+    # Naming the columns from the cursor makes the reader follow the schema, so a
+    # future column is read rather than discarded.
+    cols = [c[0] for c in cur.description]
     result = []
     for r in rows:
         d = dict(zip(cols, r))
