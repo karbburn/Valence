@@ -3,10 +3,67 @@ from __future__ import annotations
 from backend.data.store import RawDatapoint
 from backend.normalization.taxonomy.models import CanonicalDatapoint, TaxonomyMapping
 from backend.normalization.taxonomy.registry import get_canonical_mapping
+from backend.validation.accounting_checks import CURRENT_ASSET_LINES
+
+# The balance-sheet keys `current_assets_reconcile` treats as current. Imported
+# rather than restated, so the two lists cannot drift apart -- the reconciliation
+# summing a different set from the mapper's notion of current is the same defect
+# wearing a different name.
+_CURRENT_ASSET_KEYS = frozenset(
+    "canonical.bs." + line.replace("canonical.bs.", "")
+    for line in CURRENT_ASSET_LINES
+)
 from backend.normalization.taxonomy.mapping_engine import (
     suggest_canonical_mapping,
     route_to_review_queue,
 )
+
+
+def _half_agrees(bs_half: str | None, canonical_key: str | None) -> bool:
+    """True when a caption's printed half of the balance sheet fits its canonical key.
+
+    A filer may print one caption on both sides:
+
+        Current assets      Unbilled revenue 15,483    Income tax assets 1,835
+        Non-current assets  Unbilled revenue  1,738    Income tax assets   666
+
+    Each pair reaches ONE canonical key, so the later row overwrites the earlier and
+    the reader is shown the non-current figure as though it were the current one.
+
+    Only the CURRENT-asset keys are claimed here. A non-current caption reaching a
+    non-current key is not this defect and is left alone; the mapping registry is
+    where that distinction belongs, and guessing at it would refuse filers whose
+    statements group things differently.
+    """
+    if not bs_half or not canonical_key or not canonical_key.startswith("canonical.bs."):
+        return True
+    if canonical_key not in _CURRENT_ASSET_KEYS:
+        # Not a line the reconciliation calls current -- a subtotal, a liability, an
+        # equity line. Whether a caption belongs in it is the registry's business,
+        # and this check makes no claim about it.
+        return True
+    return bs_half == "current"
+
+
+def _key_for_half(canonical_key: str, bs_half: str | None) -> str:
+    """Move a caption printed in one half of the balance sheet to that half's key.
+
+    "Income tax assets" appears on both sides of Infosys' balance sheet -- 1,835
+    current and 666 non-current -- and the registry gives both the same key,
+    `income_tax_assets`, which is not one of the lines the reconciliation sums. So
+    the current caption was published under a key that no current-asset total
+    contains, which is an under-count that reconciles against nothing.
+
+    The reader knows which half it parsed, so the current half is routed to the
+    current key. The non-current half keeps the existing key, which is where it
+    already went and where `total_non_current_assets` can find it.
+
+    Narrow on purpose: only this pair, because only this pair is observed to be
+    printed on both sides. Generalising it would invent a naming convention.
+    """
+    if bs_half == "current" and canonical_key == "canonical.bs.income_tax_assets":
+        return "canonical.bs.current_income_tax_assets"
+    return canonical_key
 
 
 def _statement_agrees(section: str | None, statement: str | None) -> bool:
@@ -86,6 +143,7 @@ def map_raw_datapoints(
             continue
 
         canonical_key, statement = mapping
+        canonical_key = _key_for_half(canonical_key, d.bs_half)
 
         # A caption may not become a line of a statement it was not printed in.
         #
