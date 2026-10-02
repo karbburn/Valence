@@ -287,6 +287,26 @@ def _expected_forecast_contract(company_id: str) -> frozenset:
     return _forecast_contract(run_forecast_pipeline(_get_hist_model(company_id)))
 
 
+def _database_has_company(company_id: str) -> bool:
+    """True when this process's database already holds a company's statements.
+
+    A PURE read. It deliberately does not go through `_get_hist_model` or
+    `ensure_company_ingested`, because both of those ingest.
+
+    Asking whether we already hold something must never be the act that fetches
+    it. That is the whole of the defect this exists to prevent -- see
+    `_cache_matches_database`.
+    """
+    try:
+        from backend.data.store import query_canonical_datapoints
+        from backend.data.batch import DB_PATH as _INGEST_DB_PATH
+
+        return bool(query_canonical_datapoints(_INGEST_DB_PATH, company_id=company_id))
+    except Exception:
+        # A database we cannot read is a database we cannot compare against.
+        return False
+
+
 def _cache_matches_database(cached_spec: ModelSpecification) -> bool:
     """True when the cached snapshot was built from the current database state.
 
@@ -297,9 +317,44 @@ def _cache_matches_database(cached_spec: ModelSpecification) -> bool:
     2. The cached forecast carries every canonical key the current forecast
        engine emits, so a snapshot written by an older engine is rebuilt rather
        than served with substituted inputs.
+
+    AND the comparison is only attempted when there is a database to compare
+    against.
+
+    Measured on 2026-10-02: both conditions were built out of `_get_hist_model`,
+    which calls `ensure_company_ingested`. So the routine that asks "is this
+    snapshot still current?" performed a FULL live SEC ingestion for every shipped
+    company whose model was not already in the in-memory LRU -- and
+    `_expected_forecast_contract` did it a second time. `backend/data/valence.db`
+    is gitignored: 23 snapshots are tracked, no database is. On a cold deploy
+    every one of those 23 missed the LRU, so all 23 re-ingested from EDGAR on
+    first request, and at `VALENCE_INGEST_CONCURRENCY=2` the site answered
+
+        HTTP 503 "The engine is busy compiling other models. Retry shortly."
+
+    to 11 of the 23 shipped companies. The `site` gate caught it as
+    `tatasteel_tatasteel: could not read the served model`.
+
+    So a cache-validation function defeated the cache, and the product's own
+    headline -- every listed ticker builds on first open -- failed on the
+    companies that were already built and already on disk.
+
+    With no database there is no correction to detect, so the snapshot IS the
+    release artifact and is treated as current. That is the same position
+    `data/cache/` already holds: what is in it is what the site serves, and adding
+    to it is a deliberate act rather than something traffic does.
     """
     try:
         company_id = cached_spec.metadata.company_id
+
+        if not _database_has_company(company_id):
+            logger.info(
+                "No stored statements for %s; serving its tracked snapshot as the "
+                "release artifact rather than re-ingesting to validate it.",
+                company_id,
+            )
+            return True
+
         fresh = _get_hist_model(company_id)
         fresh_periods = fresh.periods or []
         last = fresh_periods[-1] if fresh_periods else ""
