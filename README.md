@@ -76,7 +76,7 @@ one that misses a real disagreement.
 
 On current `main`: **tie-out 0 untied figures, 10 of 11 US filers audited clean**
 (the eleventh is TSMC, disclosed rather than counted), **QA 0 regressions across 23
-models**, **589 backend tests**, and a current-asset reconciliation that lands exactly
+models**, **694 backend tests**, and a current-asset reconciliation that lands exactly
 on Infosys' filed subtotal in all three years.
 
 ---
@@ -331,7 +331,7 @@ curl -o model.xlsx "http://127.0.0.1:8111/api/export/excel?company_id=nvda_us"
 python scripts/audit_loop.py
 
 # Or individually
-python -m pytest backend/tests -q                              # 589 tests
+python -m pytest backend/tests -q                              # 694 tests
 python -m backend.export.excel.self_check                      # 31-sheet contract + formula wiring
 python -m backend.api.self_check                               # Web API and recomputation
 cd frontend && npm test && npx tsc --noEmit && npm run lint && npm run build
@@ -375,8 +375,20 @@ synchronised.
 
 ## Licensing & Data
 
-Figures come from public filings (SEC EDGAR, Screener.in) and public market-data
-providers. Prices refresh daily. Valuation output is model-generated and is not
-a recommendation or investment advice.
+Figures come from public filings (SEC EDGAR, NSE annual reports, Screener.in) and
+public market-data providers, and **every figure on the site states which of those it
+came from** -- a caption the filer itself prints is read from the filing, and one the
+filing does not carry is marked as coming from a market feed rather than presented as
+filed. Prices refresh daily. Valuation output is model-generated and is not a
+recommendation or investment advice.
+
+Known and stated limits, rather than discovered by a reader:
+
+  - 10 of the 12 India models read a market feed rather than a filing, because the NSE
+    annual reports have to be obtained and committed; only Infosys reads one today.
+  - where a caption is dropped rather than guessed, the reconciliation reports the
+    shortfall instead of leaving it to be found.
+  - a period has one end date, taken from the filing; market feeds name columns by
+    calendar month end and are not authoritative about when a fiscal period closed.
 
 Built by [Sourabh Pradhan](https://www.sourabhpradhan.in/).
