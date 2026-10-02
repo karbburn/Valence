@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from backend.data.store import RawDatapoint
 from backend.normalization.taxonomy.models import CanonicalDatapoint, TaxonomyMapping
-from backend.normalization.taxonomy.registry import get_canonical_mapping
+from backend.normalization.taxonomy.registry import (
+    WITHDRAWN_LABELS,
+    get_canonical_mapping,
+)
 from backend.validation.accounting_checks import CURRENT_ASSET_LINES
 
 # The balance-sheet keys `current_assets_reconcile` treats as current. Imported
@@ -126,6 +129,29 @@ def map_raw_datapoints(
 
         mapping = get_canonical_mapping(d.metric_raw)
         human_confirmed = True
+
+        # A withdrawal outranks a suggestion.
+        #
+        # Removing a label from RAW_METRIC_MAP is not a withdrawal on its own: the
+        # confidence engine below proposes these labels at MEDIUM confidence, and a
+        # medium suggestion is accepted. So "Investments" and "Other Assets" were
+        # still being mapped after being deliberately unmapped -- the aggregate
+        # merely moved keys (21,880 published as NON-current investments against a
+        # filed 8,930) and the double count outlived the fix meant to end it.
+        #
+        # These labels are routed to review and counted as neither mapped nor
+        # unmapped: the decision is recorded, so failing the build over it would
+        # report a known-and-accepted gap as a fresh one, while leaving the value in
+        # the model would state something the engine does not know.
+        if mapping is None and d.metric_raw in WITHDRAWN_LABELS:
+            key = (d.company_id, d.metric_raw)
+            if key not in queued_for_review:
+                route_to_review_queue(
+                    d.company_id, d.metric_raw, suggest_canonical_mapping(d.metric_raw)
+                )
+                queued_for_review.add(key)
+            continue
+
         if mapping is None and use_confidence_engine:
             suggestion = suggest_canonical_mapping(d.metric_raw)
             if suggestion.level in ("high", "medium") and suggestion.canonical_key is not None:
@@ -145,20 +171,29 @@ def map_raw_datapoints(
         canonical_key, statement = mapping
         canonical_key = _key_for_half(canonical_key, d.bs_half)
 
-        # A caption may not become a line of a statement it was not printed in.
+        # A caption may not become a line of a statement it was not printed in, or of
+        # a half of the balance sheet it was not printed under.
         #
-        # Infosys prints "Prepayments and other assets" in its CASH FLOW statement
-        # as a working-capital movement, and "Prepayments and other current assets"
-        # on its balance sheet as a stock. The two share a stem, and the cash-flow
-        # page was parsed second, so the movement overwrote the stock and the model
-        # published -2,312 as a balance-sheet asset where the filing says +15,703.
+        # Infosys prints "Prepayments and other assets" in its CASH FLOW statement as
+        # a working-capital movement, and "Prepayments and other current assets" on
+        # its balance sheet as a stock. The two share a stem and the cash-flow page is
+        # parsed second, so the movement overwrote the stock and the model published
+        # -2,312 as a balance-sheet asset where the filing says +15,703.
         #
-        # Refusing the cross-statement mapping is the fix; ordering alone would only
-        # hide which of the two happened to win. The label goes to the review queue
-        # rather than being dropped silently, because a filer whose own balance
-        # sheet prints that exact caption still has to reach this key.
-        if not _statement_agrees(d.section, statement):
-            unmapped_labels.add(d.metric_raw)
+        # Refusing the mapping is the fix; ordering alone would only hide which of the
+        # two happened to win.
+        #
+        # A REFUSAL IS NOT AN UNMAPPED LABEL, and conflating the two fails builds for
+        # the wrong reason. The cash-flow page also carries the note breaking down
+        # "Fair value changes on investments, net" -- "- Quoted debt securities",
+        # "- Mutual fund units", "- Certificates of deposit" and five more. Every one
+        # of those is correctly refused, and a filing containing notes is normal
+        # rather than an error, so counting them as unmapped made Infosys answer 422
+        # for having notes. They are declined and queued; only a caption the engine
+        # has no mapping for at all is reported unmapped.
+        if not _statement_agrees(d.section, statement) or not _half_agrees(
+            d.bs_half, canonical_key
+        ):
             if use_confidence_engine:
                 key = (d.company_id, d.metric_raw)
                 if key not in queued_for_review:
