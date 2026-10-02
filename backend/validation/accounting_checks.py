@@ -13,7 +13,8 @@ Checks:
 """
 
 from collections import Counter
-from typing import List
+from collections import OrderedDict
+from typing import Any, Callable, List
 
 from backend.forecast.debt import reconcile as reconcile_debt_schedule
 from backend.models.spec.model_specification import ModelSpecification
@@ -151,6 +152,46 @@ def check_balance_sheet_balances(spec: ModelSpecification) -> ModelCheckResult:
     )
 
 
+def _absent_lines_note(
+    absent: "OrderedDict[str, Any]",
+    failing_periods: List[str],
+    missing_in: "Callable[[str, str], bool]",
+) -> str:
+    """Name the current-asset lines that carry no value, so the gap decomposes.
+
+    Split by direction, because the two need opposite investigations and lumping them
+    together hides that:
+
+      * UNDER-count -- a line is absent. Either the filer does not print it, or the
+        reader dropped it. Those are very different, and the first is not a defect.
+      * OVER-count -- no line is absent, so the itemised block exceeds the filer's own
+        subtotal, which means something is counted twice.
+
+    Only lines absent in EVERY failing period are named. A line present in one period
+    and missing in another is a period-specific ingestion problem, and listing it
+    alongside lines missing everywhere would misdescribe it.
+    """
+    if not absent:
+        return (
+            " No current-asset line is absent, so the itemised block EXCEEDS the "
+            "filer's own subtotal: something is counted twice."
+        )
+    everywhere = [
+        k for k in absent
+        if all(missing_in(k, p) for p in failing_periods)
+    ]
+    if not everywhere:
+        return (
+            " No current-asset line is absent in every failing period, so this is a "
+            "period-specific ingestion gap rather than a line the filer never prints."
+        )
+    named = ", ".join(k.replace("canonical.bs.", "") for k in everywhere)
+    return (
+        f" Absent in every failing period: {named}. A line the filer does not print is "
+        f"correctly absent; a line it does print is a reader that dropped it."
+    )
+
+
 def check_current_assets_reconcile(spec: ModelSpecification) -> ModelCheckResult:
     """The itemised current-asset lines must sum to the filer's own subtotal.
 
@@ -174,10 +215,26 @@ def check_current_assets_reconcile(spec: ModelSpecification) -> ModelCheckResult
     Reported as a signed gap per period rather than a verdict, because a gap of
     minus three is a missing line and a gap of plus three is a double count, and
     those need opposite fixes.
+
+    And it NAMES the lines that are absent, because a gap a reader cannot decompose is
+    a gap they cannot act on -- and from the outside it is indistinguishable from a
+    figure that is simply wrong. Infosys' FY26 gap is 17,621, which is exactly:
+
+        prepayments_other_current_assets            15,703
+        current_income_tax_assets                    1,835
+        derivative_financial_assets_current             83
+
+    Three captions the filer prints on p.100, all dropped by the row-grouping defect in
+    the PDF reader (assets/gsd/OPEN_DEFECTS.md section 6). Naming them is the difference
+    between "this company is short 17,621" and "these three lines are missing and here is
+    what each is worth" -- and the second one is a fix with an owner.
     """
     failing_keys: List[str] = []
     failing_periods: List[str] = []
     errors: List[str] = []
+    # Which lines were missing in the periods that failed, and the first period seen,
+    # so the message can list them once rather than per period.
+    absent: "OrderedDict[str, None]" = OrderedDict()
 
     for p in spec.historicals.periods:
         subtotal = spec.historicals.get_value("canonical.bs.total_current_assets", p)
@@ -197,10 +254,14 @@ def check_current_assets_reconcile(spec: ModelSpecification) -> ModelCheckResult
         # crores is nothing and a rupee on a company reporting in units is not.
         if abs(gap) > max(float(subtotal) * 0.005, 1.0):
             failing_periods.append(p)
+            missing_here = [k for k in CURRENT_ASSET_LINES
+                            if spec.historicals.get_value(k, p) is None]
             errors.append(
                 f"{p}: itemised current assets {itemised:,.0f} against a filed "
                 f"subtotal of {subtotal:,.0f}, gap {gap:+,.0f}"
             )
+            for k in missing_here:
+                absent.setdefault(k, p)
             failing_keys = list(CURRENT_ASSET_LINES)
 
     passed = not errors
@@ -211,8 +272,15 @@ def check_current_assets_reconcile(spec: ModelSpecification) -> ModelCheckResult
         detail=(
             ""
             if passed
-            else f"Itemised current assets do not reach the filer's subtotal in "
-            f"{len(errors)} period(s): " + "; ".join(errors[:3])
+            else (
+                f"Itemised current assets do not reach the filer's subtotal in "
+                f"{len(errors)} period(s): " + "; ".join(errors[:3])
+                + _absent_lines_note(
+                    absent,
+                    failing_periods,
+                    lambda k, p: spec.historicals.get_value(k, p) is None,
+                )
+            )
         ),
         implicated_canonical_keys=failing_keys,
         implicated_periods=failing_periods,
