@@ -39,6 +39,13 @@ def _year_anchors(page) -> list[tuple[float, int]]:
     return anchors
 
 
+# How far apart a caption's words and its figures may sit and still be one row.
+#
+# A printed table puts them on one baseline, but pdfplumber reports their `top`
+# coordinates with sub-point drift. See `_rows`.
+_ROW_TOLERANCE_PT = 3.0
+
+
 def _clean_label(label: str) -> str:
     label = re.sub(r"\s+\d+\.\d+\s*$", "", label)  # trailing note ref
     label = re.sub(r"^\d+\.\d+\s+", "", label)      # leading note ref
@@ -46,13 +53,40 @@ def _clean_label(label: str) -> str:
 
 
 def _rows(page) -> list[tuple[str, list[tuple[float, str]]]]:
+    """Group words into caption-and-figures rows.
+
+    Grouping is by `top`, rounded to 0.1pt, because a table row's words share a
+    baseline closely enough for that to separate one line from the next.
+
+    It was also EXACTLY that, and that split Infosys' current assets in half. pdfplumber
+    reports a caption and its figures at marginally different `top` values:
+
+        top=108.9  [(70.3, 'Prepayments'), (107.6, 'and'), ..., (156.5, 'assets')]
+        top=109.0  [(349.1, '2.4'), (443.8, '15,703'), (506.3, '12,986')]
+
+    Rounding to a tenth did not merge them, so the label formed one row with no
+    values and was dropped, and the figures formed another with no label and were
+    dropped. "Prepayments and other current assets 15,703" never became a datapoint
+    at all -- which is why the line was EMPTY, and why the cash-flow statement's
+    "Prepayments and other assets (2,312)" was the only thing left to fill it.
+
+    Captions on a real financial statement are within a couple of points of their
+    own figures. 3pt is comfortably inside that and far below the ~12pt line
+    spacing, so genuine neighbours still separate.
+    """
     words = page.extract_words()
-    by_top: dict[float, list[tuple[float, str]]] = {}
-    for w in words:
-        by_top.setdefault(round(w["top"], 1), []).append((w["x0"], w["text"]))
+    rows: list[list[tuple[float, str]]] = []
+    anchors: list[float] = []  # the `top` each open row was started at
+    for w in sorted(words, key=lambda t: t["top"]):
+        if rows and abs(anchors[-1] - w["top"]) <= _ROW_TOLERANCE_PT:
+            rows[-1].append((w["x0"], w["text"]))
+        else:
+            rows.append([(w["x0"], w["text"])])
+            anchors.append(w["top"])
+
     out = []
-    for key in sorted(by_top):
-        ws = sorted(by_top[key], key=lambda t: t[0])
+    for ws in rows:
+        ws.sort(key=lambda t: t[0])
         label = " ".join(t for x, t in ws if x < LABEL_X_MAX).strip()
         vals = [(x, t) for x, t in ws if x >= LABEL_X_MAX]
         if label and any(re.match(r"[-(\d]", t) for _, t in vals):

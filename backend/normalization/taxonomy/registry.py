@@ -105,6 +105,15 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Cash & Bank": ("canonical.bs.cash_and_bank", "bs"),
     "Cash and cash equivalents": ("canonical.bs.cash_and_bank", "bs"),
     "Prepayments and other assets": ("canonical.bs.prepayments_other_current_assets", "bs"),
+    # The filer's own caption. Screener and the PDF reader print different words for
+    # the same line, and only one of them was listed, so Infosys' balance sheet lost
+    # the line entirely: it prints "Prepayments and other current assets 15,703" and
+    # that label matched nothing, leaving the key to be filled by the cash-flow
+    # statement's "Prepayments and other assets (2,312)".
+    #
+    # With both captions present the filed figure wins and the movement is refused
+    # for being a cash-flow caption (see mapper._statement_agrees).
+    "Prepayments and other current assets": ("canonical.bs.prepayments_other_current_assets", "bs"),
     # NOT "Other Assets". Screener.in's Data Sheet groups the balance sheet by
     # analysis rather than by caption, and its "Other Assets" row is a broad
     # aggregate: for Infosys at 2026-03-31 it reads 98,112 while the lines beneath
