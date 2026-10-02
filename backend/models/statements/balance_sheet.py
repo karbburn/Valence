@@ -58,6 +58,13 @@ BS_LINE_ITEM_CONFIG: List[tuple[str, str, CategoryType]] = [
     ("canonical.bs.inventory", "Inventory", "current_assets"),
     ("canonical.bs.cash_and_bank", "Cash & Cash Equivalents", "current_assets"),
     ("canonical.bs.prepayments_other_current_assets", "Prepayments & Other Current Assets", "current_assets"),
+    # Two captions Infosys prints below the prepayments line and this contract had
+    # no row for. Without them the canonical datapoints are built and then dropped
+    # by the snapshot, so the line is empty in the workbook and in the engine while
+    # the database holds the right number -- a value that exists and is never read.
+    # That is what made FY23 miss by +385 and FY24 by -353.
+    ("canonical.bs.current_income_tax_assets", "Income Tax Assets (Current)", "current_assets"),
+    ("canonical.bs.derivative_financial_assets_current", "Derivative Financial Instruments", "current_assets"),
     ("canonical.bs.total_current_assets", "Total Current Assets", "current_assets"),
 
     # Total Assets
