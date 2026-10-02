@@ -283,7 +283,21 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
     # Ordered from the statement-level element down to the narrowest, so a filer
     # that publishes the whole line gets the whole line and a filer that publishes
     # only prepaid expenses still has a home.
-    ("Prepayments and other assets", [
+("Current income tax assets", [
+        # No us-gaap element, deliberately, and verified empty rather than guessed:
+        # current income tax assets are not a separate caption anywhere in the
+        # taxonomy. `IncomeTaxReceivableCurrent` and `IncomeTaxesReceivableCurrent`
+        # each 404 on SEC companyconcept for MSFT, AAPL, NVDA, JPM and JNJ, and a US
+        # filer carries this money inside `OtherAssetsCurrent`, already mapped to
+        # "Prepayments and other assets". Naming an element here that returns 404
+        # would not be a harmless no-op -- it would read as a mapping that works.
+], "BALANCE SHEET"),
+("Current derivative financial assets", [
+        # No us-gaap element, on the same evidence: `DerivativeFinancialAssetsCurrent`,
+        # `DerivativeAssetsCurrent` and `HedgingAssetsCurrent` all 404 across those
+        # five filers. See above.
+], "BALANCE SHEET"),
+        ("Prepayments and other assets", [
         "OtherAssetsCurrent",
         "PrepaidExpenseAndOtherAssetsCurrent",
         "OtherAssetsMiscellaneousCurrent",

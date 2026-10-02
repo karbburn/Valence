@@ -39,6 +39,8 @@ CURRENT_ASSET_LINES: List[str] = [
     "canonical.bs.unbilled_revenue",
     "canonical.bs.inventory",
     "canonical.bs.prepayments_other_current_assets",
+    "canonical.bs.current_income_tax_assets",
+    "canonical.bs.derivative_financial_assets_current",
 ]
 
 

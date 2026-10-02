@@ -99,6 +99,8 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     # A filer whose own balance sheet prints a line captioned "Other Assets" is a
     # different thing, and reaches the same key through that filer's own caption
     # list rather than through this aggregator.
+    "Current income tax assets": ("canonical.bs.current_income_tax_assets", "bs"),
+    "Current derivative financial assets": ("canonical.bs.derivative_financial_assets_current", "bs"),
     "Total current assets": ("canonical.bs.total_current_assets", "bs"),
     "Total assets": ("canonical.bs.total_assets", "bs"),
     "Total Assets": ("canonical.bs.total_assets", "bs"),

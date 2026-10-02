@@ -153,6 +153,13 @@ def render_historical_balance_sheet(wb: Workbook, spec: ModelSpecification) -> W
         # mention. ONE row, because the elements behind it are levels of the same
         # money: printed as two, the smaller counts twice.
         ("canonical.bs.prepayments_other_current_assets", "Prepaid Expenses & Other Current Assets", False),
+        # Captions the filer itemises and this sheet did not: current income tax
+        # assets and current derivative instruments. Without rows for them the
+        # column stops short of the filer's own subtotal and a reader checking it
+        # finds assets the statement never mentions -- which is what happened to
+        # Infosys at +385 in FY23 and -353 in FY24.
+        ("canonical.bs.current_income_tax_assets", "Income Tax Assets", False),
+        ("canonical.bs.derivative_financial_assets_current", "Derivative Financial Instruments", False),
         ("canonical.bs.total_current_assets", "Total Current Assets", True),
         ("canonical.bs.total_assets", "TOTAL ASSETS", True),
         ("canonical.bs.equity_capital", "Equity Share Capital", False),

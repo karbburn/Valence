@@ -148,12 +148,40 @@ IFRS_ALTERNATIVES: dict[str, tuple[str, ...]] = {
         # inside the larger.
         "CurrentPrepaymentsAndOtherCurrentAssets",
     ),
+    # Tax and interest receivables were added to this bucket and have been taken back
+    # out. Infosys' 20-F prints no vendor non-trade receivables caption at all, and
+    # `CurrentReceivablesFromTaxesOtherThanIncomeTax` (332 at 2025-03-31) and
+    # `CurrentInterestReceivable` (99) are levels of the filer's own "Income tax
+    # assets" line of 348 -- not a receivables total. Filing them here printed
+    # 398/424/332 on a line the filing does not contain, which is the over-count that
+    # made FY23 miss by +385. The face caption they belong to is mapped below.
     "Vendor non-trade receivables": (
         "NontradeReceivablesCurrent",
-        # 332 and 99 at 2025-03-31. Tax and interest receivables are receivables that
-        # are not trade receivables, which is what this bucket is.
-        "CurrentReceivablesFromTaxesOtherThanIncomeTax",
-        "CurrentInterestReceivable",
+    ),
+    # Two current-asset captions the engine had no line for. They are separate labels
+    # and not one shared "other" bucket because a tag list holds ALTERNATIVE NAMES FOR
+    # ONE CAPTION: the fetcher takes the first element holding data for the target
+    # periods and stops. Filed under a single label, the tax assets arrived and the
+    # derivatives were unreachable by construction -- the line read 348 where the face
+    # said 371, and no error said so.
+    #
+    # Read off the face of each 20-F and reproduced element for element, USD millions:
+    #
+    #                                FY23   FY24   FY25
+    #   Income tax assets              1     767     348
+    #   Derivative instruments        12      10      23
+    #
+    # With both, current assets tie to the filed subtotal exactly -- 8,626 / 10,722 /
+    # 11,359, no remainder -- where before they held 9,011 / 10,369 / 11,320.
+    #
+    # Kept apart from `canonical.bs.income_tax_assets`, which the balance-sheet
+    # contract places on the NON-current side. Infosys prints the caption twice, 348
+    # current and 190 non-current at FY25, and one key cannot hold both.
+    "Current income tax assets": (
+        "CurrentTaxAssetsCurrent",
+    ),
+    "Current derivative financial assets": (
+        "CurrentDerivativeFinancialAssets",
     ),
     "Total current assets": ("CurrentAssets", "CurrentAssetsTotal"),
     "Total assets": ("Assets",),
