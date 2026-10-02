@@ -253,7 +253,19 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
     ("Vendor non-trade receivables", [
         "NontradeReceivablesCurrent",
     ], "BALANCE SHEET"),
-    ("Trade receivables", [
+("Unbilled revenue", [
+        # ASC 606 states unbilled revenue as a contract asset.
+        #
+        # The canonical key `canonical.bs.unbilled_revenue` has been wired through the
+        # renderer, the forecast working-capital driver and the DSO ratio since it was
+        # introduced, and the current-investments derivation subtracts it -- but no
+        # element was ever named for it, so it could never be populated. A subtraction
+        # with no producer is a subtraction that always subtracts zero, and whatever it
+        # failed to remove ended up inside the investments residual.
+        "ContractWithCustomerAsset",
+        "UnbilledReceivablesCurrent",
+], "BALANCE SHEET"),
+        ("Trade receivables", [
         "AccountsReceivableNetCurrent", 
         "ReceivablesNetCurrent"
     ], "BALANCE SHEET"),
