@@ -94,6 +94,23 @@ def _run(
     cwd: Path = REPO,
     env: dict | None = None,
 ) -> tuple[int, str]:
+    # The child must WRITE utf-8, because that is how its output is decoded below.
+    #
+    # Without this the child inherits the console's locale encoding. On a cp1252
+    # Windows console `audit_valuation_figures.py` writes `AAPL — Apple Inc.` and
+    # `rfr 5.24 · beta` as single cp1252 bytes, which `encoding="utf-8"` turns into
+    # U+FFFD on 46 lines. Printing those back to the same console raises
+    # UnicodeEncodeError, so the loop died in `main()` WHILE REPORTING a gate it
+    # had just marked PASS -- exit code 1, no verdict, and gates 4 through 7 never
+    # ran. That is what happened to loops 2-6 on 2026-10-02, and it was
+    # indistinguishable from a genuine block, which is the one thing a gate's exit
+    # code must never be.
+    #
+    # Forcing utf-8 here also makes the decode below exact rather than lossy, so a
+    # figure or a company name can never be reported as a replacement character.
+    child_env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
+    if env:
+        child_env.update(env)
     proc = subprocess.run(
         cmd,
         cwd=str(cwd),
@@ -102,7 +119,7 @@ def _run(
         timeout=timeout,
         encoding="utf-8",
         errors="replace",
-        env=env,
+        env=child_env,
     )
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
@@ -737,6 +754,22 @@ GATES: List[tuple[str, Callable[[], GateResult]]] = [
 
 
 def main() -> int:
+    # Reporting must never be the thing that fails.
+    #
+    # A gate's own print statement raised UnicodeEncodeError on 2026-10-02 while
+    # echoing a PASSING gate, and the process exited 1 with no verdict at all. A
+    # character a console cannot encode is not a finding about the codebase, so it
+    # is replaced rather than raised: the loop's exit code must mean exactly one
+    # thing, "a gate blocked". Without this, `β` in a workbook label, a rupee sign
+    # in a company name, or an em dash in a note can each impersonate a red gate.
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            _stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError, OSError):
+            # A stream that will not reconfigure (a StringIO in a test, a closed
+            # pipe) still works; it just keeps its own error policy.
+            pass
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", action="append", default=[])
     ap.add_argument("--no-server", action="store_true")
