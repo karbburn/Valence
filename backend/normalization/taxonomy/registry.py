@@ -133,6 +133,11 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     # list rather than through this aggregator.
     "Current income tax assets": ("canonical.bs.current_income_tax_assets", "bs"),
     "Current derivative financial assets": ("canonical.bs.derivative_financial_assets_current", "bs"),
+    # The filer's own caption. Infosys prints "Derivative financial instruments" on
+    # both sides of its balance sheet -- 83 in current assets and 593 in current
+    # liabilities -- without the word "current" on the asset side. Without this the
+    # 83 did not reach the reconciliation at all, leaving it short by exactly that.
+    "Derivative financial instruments": ("canonical.bs.derivative_financial_assets_current", "bs"),
     "Total current assets": ("canonical.bs.total_current_assets", "bs"),
     "Total assets": ("canonical.bs.total_assets", "bs"),
     "Total Assets": ("canonical.bs.total_assets", "bs"),

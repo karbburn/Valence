@@ -58,6 +58,23 @@ class RawDatapoint(BaseModel):
     # id hash. It was hashed and then discarded, so the knowledge existed and was
     # thrown away at the boundary.
     section: Optional[str] = None
+    # Which half of a BALANCE SHEET the caption was printed in: "current",
+    # "noncurrent", or None where the reader has no such notion or the page is not
+    # a balance sheet.
+    #
+    # A filer may print the same caption on both sides:
+    #
+    #     Current assets      Unbilled revenue 15,483   Income tax assets 1,835
+    #     Non-current assets  Unbilled revenue  1,738   Income tax assets   666
+    #
+    # Both members of each pair reach ONE canonical key, so without this the later
+    # row overwrites the earlier and the reader is shown the non-current figure as
+    # though it were the current one -- which is exactly what
+    # `current_assets_reconcile` then cannot explain.
+    #
+    # Taken from the filer's own printed headers rather than inferred from position,
+    # so it is the statement answering the question.
+    bs_half: Optional[str] = None
     status: Status
     update_date: datetime = datetime.now()
     superseded_by_id: Optional[str] = None
@@ -78,7 +95,8 @@ CREATE TABLE IF NOT EXISTS raw_datapoints (
     status TEXT NOT NULL,
     update_date TEXT NOT NULL,
     superseded_by_id TEXT,
-    section TEXT
+    section TEXT,
+    bs_half TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_raw_company ON raw_datapoints(company_id);
 CREATE INDEX IF NOT EXISTS idx_raw_lookup ON raw_datapoints(company_id, period_label, source);
@@ -129,7 +147,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
     `ADD COLUMN IF NOT EXISTS`, so existing columns are checked first and the
     migration is a no-op on a database that is already current.
     """
-    additions = {"raw_datapoints": [("section", "TEXT")]}
+    additions = {"raw_datapoints": [("section", "TEXT"), ("bs_half", "TEXT")]}
     for table, columns in additions.items():
         present = {r[1] for r in conn.execute("PRAGMA table_info(%s)" % table)}
         if not present:
@@ -182,12 +200,12 @@ def save_datapoints(db_path: str | Path, datapoints: list[RawDatapoint], clear_e
             d.id, d.company_id, d.metric_raw, d.period_label,
             d.period_end_date.isoformat(), d.value, d.currency, d.units,
             d.source, d.source_location, d.status,
-            d.update_date.isoformat(), d.superseded_by_id, d.section,
+            d.update_date.isoformat(), d.superseded_by_id, d.section, d.bs_half,
         )
         for d in datapoints
     ]
     conn.executemany(
-        "INSERT OR REPLACE INTO raw_datapoints VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT OR REPLACE INTO raw_datapoints VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         rows,
     )
     conn.commit()

@@ -46,6 +46,40 @@ def _year_anchors(page) -> list[tuple[float, int]]:
 _ROW_TOLERANCE_PT = 3.0
 
 
+# Headers a balance sheet prints to open its current and non-current halves.
+#
+# These are the disambiguator for captions that appear on BOTH sides under the same
+# name. Infosys prints:
+#
+#     Current assets
+#         Unbilled revenue      15,483        <- current
+#         Income tax assets      1,835        <- current
+#     Non-current assets
+#         Unbilled revenue       1,738        <- non-current
+#         Income tax assets        666        <- non-current
+#
+# Both members of each pair map to ONE canonical key, so without the boundary the
+# later row overwrites the earlier and a reader is shown the non-current figure as
+# if it were the current one. The header is printed by the filer, so this is the
+# statement answering the question rather than the parser guessing from position.
+_CURRENT_HEADER = re.compile(r"^\s*current assets\s*$", re.I)
+_NONCURRENT_HEADER = re.compile(r"^\s*non[\s-]*current assets\s*$", re.I)
+
+
+def _balance_sheet_half(label: str) -> str | None:
+    """Which half of a balance sheet a caption sits in, from the printed headers.
+
+    Returns "current", "noncurrent", or None when the caption precedes both headers
+    or is not a balance sheet at all. None means no claim, and absence of a claim
+    is not evidence against a mapping.
+    """
+    if _CURRENT_HEADER.match(label):
+        return "current"
+    if _NONCURRENT_HEADER.match(label):
+        return "noncurrent"
+    return None
+
+
 def _clean_label(label: str) -> str:
     label = re.sub(r"\s+\d+\.\d+\s*$", "", label)  # trailing note ref
     label = re.sub(r"^\d+\.\d+\s+", "", label)      # leading note ref
@@ -89,8 +123,18 @@ def _rows(page) -> list[tuple[str, list[tuple[float, str]]]]:
         ws.sort(key=lambda t: t[0])
         label = " ".join(t for x, t in ws if x < LABEL_X_MAX).strip()
         vals = [(x, t) for x, t in ws if x >= LABEL_X_MAX]
-        if label and any(re.match(r"[-(\d]", t) for _, t in vals):
-            out.append((label, vals))
+        if not label:
+            continue
+        if not any(re.match(r"[-(\d]", t) for _, t in vals):
+            # A row of words with no figure is usually a section header -- and the
+            # balance sheet's "Current assets" / "Non-current assets" headers are
+            # exactly that. They are dropped by the figure test, which is why
+            # every caption came back with no half: the disambiguator was being
+            # thrown away by the filter that keeps actual data rows.
+            if _balance_sheet_half(label) is not None:
+                out.append((label, []))
+            continue
+        out.append((label, vals))
     return out
 
 
@@ -132,11 +176,19 @@ def parse_predicted_statement_page(
 
         dps: list[RawDatapoint] = []
         seen: set[tuple[str, str, float]] = set()
+        # Tracked across the rows rather than per-row, because the boundary is a
+        # header that appears once and governs everything printed after it.
+        half: str | None = None
         for raw_label, vals in _rows(page):
             label = _clean_label(raw_label)
             low = label.lower()
             if not label or low in _SKIP_LABELS or re.fullmatch(r"\d+\.\d+", label):
                 continue
+
+            header_half = _balance_sheet_half(label)
+            if header_half is not None:
+                half = header_half
+                continue  # the header carries no figure of its own
             for x, tok in vals:
                 if not (lo_x <= x <= hi_x):
                     continue  # note-reference column, not a figure
@@ -163,8 +215,14 @@ def parse_predicted_statement_page(
                         currency="INR",
                         units="crores",
                         source=source,  # type: ignore[arg-type]
-                        source_location=f"{Path(pdf_path).name} p.{page_index + 1} {label}",
+                        source_location=f"{Path(pdf_path).name} p.{page_index + 1} {label}"
+                                     + (f" [{half}]" if half else ""),
                         section=section,
+                        # Which half of the balance sheet this caption was printed
+                        # in, from the filer's own "Current assets" / "Non-current
+                        # assets" headers. Disambiguates a caption printed on both
+                        # sides under one name.
+                        bs_half=half,
                         status="reported",
                         update_date=datetime.now(),
                     )
