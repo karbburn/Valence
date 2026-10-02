@@ -123,6 +123,37 @@ IFRS_ALTERNATIVES: dict[str, tuple[str, ...]] = {
         "TradeAndOtherCurrentReceivables",
         "AccountsReceivable",
         "TradeReceivables",
+        # Infosys' 20-F: 3,645 at 2025-03-31. `TradeReceivables` alone stops at
+        # 2022-03-31 for this filer, so without this the line silently goes stale
+        # rather than going missing, which is harder to notice.
+        "CurrentTradeReceivables",
+    ),
+    "Unbilled revenue": (
+        # 1,503 at 2025-03-31, verified on Infosys' 20-F.
+        #
+        # With this the engine identifies 11,320 of the filed 11,359 in current assets,
+        # leaving 39 (0.34%) as a declared remainder. That remainder is REPORTED, not
+        # closed. Closing it would mean inventing a caption to absorb it, which is what
+        # the current-investments residual did when it published 7,038 of unidentified
+        # current assets as a security the company does not hold.
+        "CurrentAccruedIncomeIncludingCurrentContractAssets",
+        "ContractAssets",
+    ),
+    "Prepayments and other assets": (
+        "OtherAssetsCurrent",
+        "PrepaidExpenseAndOtherAssetsCurrent",
+        "OtherAssetsMiscellaneousCurrent",
+        # 1,519 at 2025-03-31. The aggregate only: `CurrentPrepaidExpenses` (360) is a
+        # member of this caption, and holding both would double-count the smaller
+        # inside the larger.
+        "CurrentPrepaymentsAndOtherCurrentAssets",
+    ),
+    "Vendor non-trade receivables": (
+        "NontradeReceivablesCurrent",
+        # 332 and 99 at 2025-03-31. Tax and interest receivables are receivables that
+        # are not trade receivables, which is what this bucket is.
+        "CurrentReceivablesFromTaxesOtherThanIncomeTax",
+        "CurrentInterestReceivable",
     ),
     "Total current assets": ("CurrentAssets", "CurrentAssetsTotal"),
     "Total assets": ("Assets",),
