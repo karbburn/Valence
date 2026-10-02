@@ -107,6 +107,7 @@ def parse_screener_export(path: str | Path, company_id: str = "infy_infy") -> li
                             units="crores",
                             source=source,
                             source_location=f"DataSheet!{col}{j + 1}",
+                            section=section,
                             status=status,
                             update_date=datetime.now(),
                         )

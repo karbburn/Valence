@@ -9,6 +9,39 @@ from backend.normalization.taxonomy.mapping_engine import (
 )
 
 
+def _statement_agrees(section: str | None, statement: str | None) -> bool:
+    """True when a caption's printed statement is the one it is being mapped into.
+
+    `None` on either side means no claim is being made -- a reader with no notion of
+    statements, or a mapping with no statement -- and absence of evidence is not
+    evidence of disagreement, so those pass. Only an explicit, positive mismatch is
+    refused.
+
+    The readers spell statements long ("CASH FLOW", "CASH FLOW:") and the registry
+    spells them short ("cf"), so both are normalised to a single code before being
+    compared. Substring matching is deliberately NOT used: "is" is a substring of
+    "BALANCE SHEET"-adjacent text and "cf" of nothing useful, so a reader that
+    "matched" would happily accept a profit-and-loss caption as a balance-sheet one.
+    """
+    if not section or not statement:
+        return True
+
+    LONG_TO_CODE = {
+        "BALANCE SHEET": "bs",
+        "CASH FLOW": "cf",
+        "PROFIT & LOSS": "is",
+        "PROFIT AND LOSS": "is",
+        "INCOME STATEMENT": "is",
+    }
+    left = section.upper().split(":")[0].strip()
+    # The registry stores short codes in lower case, so `right` must be lowered too.
+    # Upper-casing it here made "bs" into "BS" and every positive case failed --
+    # which would have refused EVERY cross-statement mapping in the wrong direction,
+    # silently emptying balance sheets rather than protecting them.
+    right = str(statement).strip().lower()
+    return LONG_TO_CODE.get(left, left) == right
+
+
 def map_raw_datapoints(
     raw_datapoints: list[RawDatapoint],
     include_superseded: bool = False,
@@ -53,6 +86,31 @@ def map_raw_datapoints(
             continue
 
         canonical_key, statement = mapping
+
+        # A caption may not become a line of a statement it was not printed in.
+        #
+        # Infosys prints "Prepayments and other assets" in its CASH FLOW statement
+        # as a working-capital movement, and "Prepayments and other current assets"
+        # on its balance sheet as a stock. The two share a stem, and the cash-flow
+        # page was parsed second, so the movement overwrote the stock and the model
+        # published -2,312 as a balance-sheet asset where the filing says +15,703.
+        #
+        # Refusing the cross-statement mapping is the fix; ordering alone would only
+        # hide which of the two happened to win. The label goes to the review queue
+        # rather than being dropped silently, because a filer whose own balance
+        # sheet prints that exact caption still has to reach this key.
+        if not _statement_agrees(d.section, statement):
+            unmapped_labels.add(d.metric_raw)
+            if use_confidence_engine:
+                key = (d.company_id, d.metric_raw)
+                if key not in queued_for_review:
+                    route_to_review_queue(
+                        d.company_id,
+                        d.metric_raw,
+                        suggest_canonical_mapping(d.metric_raw),
+                    )
+                    queued_for_review.add(key)
+            continue
 
         # Build Canonical Datapoint
         #
