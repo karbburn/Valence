@@ -20,7 +20,7 @@ from backend.forecast.share_count import resolve_shares_outstanding
 from backend.models.spec.forecast import FORECAST_PERIODS
 from backend.models.spec.metadata import FILING_SOURCES
 from backend.models.spec.model_specification import ModelSpecification
-from backend.models.spec.valuation import ValuationOutput
+from backend.models.spec.valuation import ReverseDCF, ValuationOutput
 from backend.valuation.dcf import (
     compute_dcf_bridge,
     compute_fcff_periods,
@@ -398,38 +398,70 @@ def run_valuation(
         )
 
         # 8. Reverse DCF
-        reverse_dcf = compute_reverse_dcf(
-            market_price=current_share_price,
-            fcff_periods=fcff_periods,
-            wacc_pct=wacc_pct,
-            cash_cr=cash_and_bank,
-            debt_cr=debt_cr,
-            shares_cr=shares_cr,
-            marketable_securities_cr=current_inv,
-            non_current_investments_cr=non_current_inv,
-            minority_interest_cr=minority_int,
-            preferred_stock_cr=pref_stock,
-            forecast=spec.forecast,
-            assumptions=spec.assumptions,
-            historical_model=historical_model,
-            terminal_growth_rate=term_g,
-            exit_multiple=exit_mult,
-            timing_convention="mid_year",
-            currency=spec.metadata.currency,
-            scenario=scenario,
-            last_ebit=last_ebit,
-            terminal_tax_rate=term_tax,
-            opening_working_capital=opening_wc,
-        )
+        #
+        # NOT SOLVED against a successor entity's share price.
+        #
+        # When a filer's own ticker stops resolving, `market_data` falls through to
+        # a successor so the model is not pinned to a months-old price. That is
+        # right for keeping a price current and wrong for every comparison built on
+        # it: a demerger splits ONE issuer into several, so the successor's share
+        # price belongs to a different company with a different balance sheet.
+        #
+        # Tata Motors is the live case. TATAMOTORS.NS no longer resolves, so the
+        # model quotes TMPV.NS -- Tata Motors Passenger Vehicles, demerged in
+        # October 2025 -- and the solver returned an implied terminal growth of
+        # -427.20%. The divergence gate CAUGHT it and appended a flag, and the
+        # number was still computed, carried in the payload, and rendered.
+        #
+        # A flag is a note about a number. This is a refusal to produce one: there
+        # is no growth rate that reconciles this issuer's cash flows with another
+        # company's share price, so the honest answer is none, not -427% with a
+        # warning attached. The price itself is still reported, with its source, so
+        # a reader can see that a successor quote is what is being shown.
+        successor_quote = ":successor_ticker" in (mdata.price.source or "")
+        if successor_quote:
+            reverse_dcf = ReverseDCF(
+                market_price=current_share_price,
+                method_note=(
+                    f"Not solved: the quote is the successor entity's, not this "
+                    f"issuer's. {mdata.price.provenance_note}"
+                ),
+            )
+        else:
+            reverse_dcf = compute_reverse_dcf(
+                market_price=current_share_price,
+                fcff_periods=fcff_periods,
+                wacc_pct=wacc_pct,
+                cash_cr=cash_and_bank,
+                debt_cr=debt_cr,
+                shares_cr=shares_cr,
+                marketable_securities_cr=current_inv,
+                non_current_investments_cr=non_current_inv,
+                minority_interest_cr=minority_int,
+                preferred_stock_cr=pref_stock,
+                forecast=spec.forecast,
+                assumptions=spec.assumptions,
+                historical_model=historical_model,
+                terminal_growth_rate=term_g,
+                exit_multiple=exit_mult,
+                timing_convention="mid_year",
+                currency=spec.metadata.currency,
+                scenario=scenario,
+                last_ebit=last_ebit,
+                terminal_tax_rate=term_tax,
+                opening_working_capital=opening_wc,
+            )
+            # Divergence Gate (sanity check on implied terminal growth band [-2%, 5%])
+            if reverse_dcf.implied_terminal_growth is not None:
+                g_impl = reverse_dcf.implied_terminal_growth
+                if g_impl < -2.0 or g_impl > 5.0:
+                    flag_msg = (
+                        f"[DIVERGENCE FLAG: implied growth {g_impl:.2f}% outside "
+                        f"sane band (-2% to 5%)]"
+                    )
+                    reverse_dcf.method_note = f"{reverse_dcf.method_note} {flag_msg}".strip()
         reverse_dcf.market_price_date = mdata.price.fetch_date
         reverse_dcf.market_price_source = mdata.price.source
-
-        # Divergence Gate (sanity check on implied terminal growth band [-2%, 5%])
-        if reverse_dcf.implied_terminal_growth is not None:
-            g_impl = reverse_dcf.implied_terminal_growth
-            if g_impl < -2.0 or g_impl > 5.0:
-                flag_msg = f"[DIVERGENCE FLAG: implied growth {g_impl:.2f}% outside sane band (-2% to 5%)]"
-                reverse_dcf.method_note = f"{reverse_dcf.method_note} {flag_msg}".strip()
 
         # 9. Sensitivity Analysis Grids
         sensitivity_tables = compute_sensitivity_tables(
