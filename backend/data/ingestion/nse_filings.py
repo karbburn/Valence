@@ -88,8 +88,19 @@ GOVERNANCE = re.compile(
 # every Indian filer prints both on the same page.
 _BS_CURRENT_SUBTOTAL = re.compile(r"total current assets", re.I)
 _BS_TOTAL = re.compile(r"total assets", re.I)
-_BS_CAPTION = re.compile(
-    r"(cash and cash equivalents|bank balances|inventor|prepaid|trade receiv)", re.I)
+
+# One pattern per caption rather than a single alternation: the squashed match below
+# strips whitespace from each pattern individually and looks for it as a substring, and
+# an alternation cannot be squashed that way. These five replaced `_BS_CAPTION`, which
+# became dead the moment the squashed form was added -- a pattern that no code consults
+# is a second, quieter definition of what a balance sheet is.
+_BS_CAPTION_PATTERNS = (
+    re.compile(r"cash and cash equivalents", re.I),
+    re.compile(r"bank balances", re.I),
+    re.compile(r"inventor", re.I),
+    re.compile(r"prepaid", re.I),
+    re.compile(r"trade receiv", re.I),
+)
 
 _MONTHS = {m: i + 1 for i, m in enumerate(
     ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -143,6 +154,9 @@ class Candidate:
     url: str
     announced: "datetime | None"
     label: str = ""
+    # How strongly the FILENAME itself claims to be a statements document: 2 if it does,
+    # 1 if only the description does, 0 if neither (which the filter has already excluded).
+    named: int = 0
 
     @property
     def filename(self) -> str:
@@ -174,7 +188,22 @@ class Acquisition:
 
 
 def candidate_attachments(rows: Iterable[dict]) -> list:
-    """PDF attachments worth downloading, newest first by PARSED date."""
+    """PDF attachments worth downloading, best-NAMED first, then newest first.
+
+    The `named` score exists because Tata Steel's feed defeated a date ordering. Of 3025
+    announcements, 91 passed the statements filter and the twelve newest were all disposal
+    notices -- `NIDHIFADNAVIS_..._BSENSE.pdf`, two pages each, whose DESCRIPTIONS disclose
+    the financial results of the divested unit. The audited results were in the set the
+    whole time, at `..._Board_Outcome_-_March_17_2026.pdf`, ranked below a year of
+    notices, and the fetcher reported "no attachment carried a balance sheet".
+
+    So a filename that names itself as results outranks one that only its description
+    suggests. This is a property of the DOCUMENT rather than of the filing date, and it
+    discards nothing. Ordering by size instead was measured and failed identically: the
+    largest candidates were the notices too.
+
+    Undated rows sort LAST within their score: an unknown date cannot be called recent.
+    """
     out = []
     for row in rows:
         url = row.get("attchmntFile") or ""
@@ -183,25 +212,69 @@ def candidate_attachments(rows: Iterable[dict]) -> list:
         blob = " ".join([url, row.get("desc") or "", row.get("attchmntText") or ""])
         if GOVERNANCE.search(blob) or not STATEMENTS_HINT.search(blob):
             continue
+        name = url.rsplit("/", 1)[-1]
         out.append(Candidate(
             url=url,
             announced=announcement_date(row),
             label=(row.get("attchmntText") or row.get("desc") or "")[:90],
+            named=2 if STATEMENTS_HINT.search(name) else 1,
         ))
-    out.sort(key=lambda c: (c.announced is not None,
+    out.sort(key=lambda c: (c.named, c.announced is not None,
                             c.announced or datetime.min), reverse=True)
     return out
 
 
+def _letters(text: str) -> str:
+    """Lowercase letters only, so a caption survives punctuation and spacing.
+
+    Not merely whitespace. Tata Steel's faces print
+
+        Sub-total - C urrent assets        36,765.14   40,515.56
+        T O T A L - A S SE T S
+
+    where the figure sits between the two halves of a caption and the words are both
+    hyphenated and letter-spaced. Dropping whitespace alone leaves `total-assets` and
+    `2,45,634.06` between the halves and neither matches -- which is why squashing
+    whitespace was measured here and rejected, while dropping non-letters was measured
+    and accepted. An earlier claim that whitespace-squashing fixed this filing was wrong.
+    """
+    return re.sub(r"[^a-z]", "", text.lower())
+
+
+def _present(pattern: re.Pattern, text: str, letters: str) -> bool:
+    """True when `pattern` occurs in the text, as written or with punctuation dropped."""
+    if pattern.search(text):
+        return True
+    return re.sub(r"[^a-z]", "", pattern.pattern) in letters
+
+
 def looks_like_balance_sheet(text: str) -> bool:
-    """True when `text` is a balance sheet rather than a document mentioning one."""
+    """True when `text` is a balance sheet rather than a document mentioning one.
+
+    Each of the three checks is tried against the text as extracted and again against its
+    letters alone. The second form exists because some filers position every glyph
+    separately and pdfplumber then inserts a space between each one, so `T O T A L - A S
+    SE T S` is not the string `total assets` under any reading that keeps the punctuation.
+
+    Dropping non-letters is blunt, so the false-positive risk is pinned by measurement
+    rather than by argument. Across the committed TCS (25pp) and HCLTech (45pp) fixtures
+    this rule accepts exactly the pages the previous rule accepted -- 11 and 20, and 5 --
+    and gains none. Across Tata Steel's 30-page outcome it accepts printed pages 17 and
+    21, which are the two real faces, while still REJECTING printed pages 19 and 25:
+    those are Regulation 52(4) ratio disclosures, which print "Total current assets" and
+    "Total assets" as inputs to a current ratio, and they are the reason this rule demands
+    a caption as well as both subtotals. A ratio table is not a balance sheet, and a
+    normalisation loose enough to find `Sub-total - Current assets` could easily have let
+    them in.
+    """
     if not text:
         return False
-    return bool(
-        _BS_CURRENT_SUBTOTAL.search(text)
-        and _BS_TOTAL.search(text)
-        and _BS_CAPTION.search(text)
-    )
+    letters = _letters(text)
+    if not _present(_BS_CURRENT_SUBTOTAL, text, letters):
+        return False
+    if not _present(_BS_TOTAL, text, letters):
+        return False
+    return any(_present(p, text, letters) for p in _BS_CAPTION_PATTERNS)
 
 
 def balance_sheet_pages(pdf, limit: int = 6) -> list:
