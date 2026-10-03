@@ -18,13 +18,24 @@ WORKSPACE_ROOT = HERE.parent.parent
 DB_PATH = WORKSPACE_ROOT / "backend" / "data" / "valence.db"
 
 
-def run(company_id: str = "infy_infy") -> dict:
-    """Run Taxonomy Normalization pipeline for a target company."""
-    if not DB_PATH.exists():
-        raise FileNotFoundError(f"Database not found at {DB_PATH}. Run data ingestion pipeline first.")
+def run(company_id: str = "infy_infy", db_path=None) -> dict:
+    """Run Taxonomy Normalization pipeline for a target company.
+
+    `db_path` defaults to the module-level store. It is a parameter because the caller
+    already has one: `ensure_company_ingested(db_path=...)` passes a store down to the
+    ingestion step, and before this existed that argument was silently ignored here --
+    raw rows went to the store the caller named and canonical rows went to the global one.
+    A caller testing against a copy therefore mutated the LIVE database while believing it
+    was working on the copy, which is how a test of the failure path nearly destroyed the
+    data it was supposed to be protecting.
+    """
+    target = Path(db_path) if db_path is not None else DB_PATH
+    if not target.exists():
+        raise FileNotFoundError(
+            f"Database not found at {target}. Run data ingestion pipeline first.")
 
     # Fetch all non-superseded winning raw datapoints
-    raw_dps = query_datapoints(DB_PATH, company_id)
+    raw_dps = query_datapoints(target, company_id)
     winning_raw_dps = [d for d in raw_dps if d.superseded_by_id is None]
 
     # Map raw labels to canonical taxonomy
@@ -56,10 +67,10 @@ def run(company_id: str = "infy_infy") -> dict:
     # Save canonical datapoints and taxonomy mappings atomically: a failure in either
     # write rolls back both so the DB never ends up with canonical data without its
     # mappings (or vice-versa).
-    conn = connect(DB_PATH)
+    conn = connect(target)
     try:
-        save_canonical_datapoints(DB_PATH, all_canonical_dps, conn=conn)
-        save_taxonomy_mappings(DB_PATH, taxonomy_mappings, conn=conn)
+        save_canonical_datapoints(target, all_canonical_dps, conn=conn)
+        save_taxonomy_mappings(target, taxonomy_mappings, conn=conn)
         conn.commit()
     except Exception:
         conn.rollback()

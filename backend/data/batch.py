@@ -8,6 +8,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel
 
 from backend.data.pipeline import DB_PATH
+from backend.data.store import _connect
 from backend.data.precompute import run_precompute
 from backend.data.errors import NoFinancialsAvailable
 from backend.data.universe.store import update_onboarding_status, get_universe_company
@@ -62,6 +63,56 @@ def _source_file_for(company_id: str) -> Path:
     )
 
 
+def _snapshot_company_rows(db_path: str | Path, company_id: str) -> dict:
+    """Every raw and canonical row for ONE company, as plain tuples.
+
+    Read with `SELECT *` rather than a column list so a schema change cannot make the
+    restore write the wrong columns in the wrong order -- a restore that silently
+    misplaces values is worse than no restore, because it looks like it worked.
+    """
+    conn = _connect(db_path)
+    try:
+        return {
+            "raw": conn.execute(
+                "SELECT * FROM raw_datapoints WHERE company_id = ?",
+                (company_id,)).fetchall(),
+            "canonical": conn.execute(
+                "SELECT * FROM canonical_datapoints WHERE company_id = ?",
+                (company_id,)).fetchall(),
+        }
+    finally:
+        conn.close()
+
+
+def _restore_company_rows(db_path: str | Path, company_id: str,
+                          snapshot: dict) -> None:
+    """Put a company's rows back exactly as they were.
+
+    Best-effort by design: this runs while an exception is already propagating, so a
+    failure here must not replace the ORIGINAL error -- the one that explains why the
+    rebuild was attempted -- with a second, less informative one.
+    """
+    conn = _connect(db_path)
+    try:
+        for table in ("raw_datapoints", "canonical_datapoints"):
+            conn.execute("DELETE FROM %s WHERE company_id = ?" % table, (company_id,))
+        for table, key in (("raw_datapoints", "raw"),
+                           ("canonical_datapoints", "canonical")):
+            rows = snapshot.get(key) or []
+            if rows:
+                conn.executemany(
+                    "INSERT OR REPLACE INTO %s VALUES (%s)"
+                    % (table, ",".join("?" * len(rows[0]))), rows)
+        conn.commit()
+    except Exception:  # noqa: BLE001 -- the propagating error is the one that matters
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+    finally:
+        conn.close()
+
+
 def ensure_company_ingested(
     company_id: str,
     db_path: str | Path = DB_PATH,
@@ -83,6 +134,47 @@ def ensure_company_ingested(
     existing = query_canonical_datapoints(db_path, company_id=company_id)
     if len(existing) > 0 and not force:
         return
+
+    # A rebuild that FAILS must leave the company as it was.
+    #
+    # Observed, not theorised. Running `--force-ingest` against a parser change that
+    # surfaced 17 captions the taxonomy does not know produced:
+    #
+    #     FAIL infy_infy  Normalization failed: 17 unmapped labels found: [...]
+    #
+    # and left the company with 737 fresh raw rows and ZERO canonical rows. The cause is
+    # `clear_db=force` below: it wipes the company first, then normalization raises before
+    # writing anything back. Every test touching that company then failed with
+    # `NoFinancialsAvailable: ingestion produced no canonical datapoints`.
+    #
+    # That is the worst direction for a build tool to fail in. The operator asked for a
+    # rebuild, the rebuild reported failure, and the data that existed before the attempt
+    # was gone -- so a failed experiment cost the working model as well as the experiment.
+    #
+    # So the rows are captured first and restored on any exception. This deliberately does
+    # NOT depend on knowing which statement deletes which table: it holds the previous
+    # state and puts it back, which covers the clear_db path, the raw-replace path, and
+    # any path added later.
+    _snapshot = _snapshot_company_rows(db_path, company_id)
+    try:
+        _ingest_and_normalize(company_id, db_path, force)
+    except Exception:
+        _restore_company_rows(db_path, company_id, _snapshot)
+        raise
+
+
+def _ingest_and_normalize(company_id: str, db_path: str | Path, force: bool) -> None:
+    """Do the destructive work. Split out ONLY so it can be wrapped by the restore guard.
+
+    Every statement here can leave the company partly written: `clear_db` wipes it,
+    `save_datapoints(clear_existing=True)` replaces its raw rows, and `run_norm` raises
+    on a label the taxonomy does not know. The caller holds a snapshot and restores it if
+    anything here raises, so none of that is observable.
+    """
+    from backend.data.ingestion.screener import parse_screener_export
+    from backend.data.ingestion.sec_edgar import parse_sec_edgar_export
+    from backend.data.store import save_datapoints
+    from backend.normalization.pipeline import run as run_norm
 
     if company_id.endswith("_us"):
         # Fall through the providers on the typed "there is nothing there" error
@@ -135,7 +227,7 @@ def ensure_company_ingested(
                     ) from e2
                 dps = parse_sec_edgar_export(src_file, company_id=company_id)
         save_datapoints(db_path, dps, clear_existing=True)
-        run_norm(company_id=company_id)
+        run_norm(company_id=company_id, db_path=db_path)
     else:
         try:
             _source_file_for(company_id)
@@ -144,7 +236,7 @@ def ensure_company_ingested(
             # longer emitted would otherwise linger alongside the corrected ones
             # and the selector could still pick it.
             run_india_pipeline(company_id=company_id, db_path=db_path, clear_db=force)
-            run_norm(company_id=company_id)
+            run_norm(company_id=company_id, db_path=db_path)
         except FileNotFoundError:
             logger.info("Local source file for %s not found, attempting live Indian equity ingestion", company_id)
             from backend.data.ingestion.india_live import fetch_and_parse_india_live
@@ -156,7 +248,7 @@ def ensure_company_ingested(
             # failure could not be found from the outside.
             dps = fetch_and_parse_india_live(company_id=company_id)
             save_datapoints(db_path, dps, clear_existing=True)
-            run_norm(company_id=company_id)
+            run_norm(company_id=company_id, db_path=db_path)
 
     _supplement_missing_lines(company_id, db_path)
 
@@ -233,7 +325,7 @@ def _supplement_missing_lines(company_id: str, db_path: str | Path = DB_PATH) ->
         return 0
 
     save_datapoints(db_path, extra, clear_existing=False)
-    run_norm(company_id=company_id)
+    run_norm(company_id=company_id, db_path=db_path)
     logger.info(
         "Supplemented %s with %d live row(s) for %s",
         company_id,
