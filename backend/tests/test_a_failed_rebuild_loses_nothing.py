@@ -34,7 +34,6 @@ it guards.
 
 from __future__ import annotations
 
-import shutil
 import sqlite3
 import tempfile
 from pathlib import Path
@@ -42,7 +41,6 @@ from pathlib import Path
 import pytest
 
 from backend.data import batch
-from backend.data.universe.store import DB_PATH
 
 COMPANY = "infy_infy"
 TABLES = ("raw_datapoints", "canonical_datapoints")
@@ -62,9 +60,49 @@ def _counts(db: Path, company_id: str = COMPANY) -> dict:
 
 @pytest.fixture()
 def copied_db(tmp_path):
-    """A copy of the real store, so a destructive path cannot touch live data."""
+    """A minimal store holding ONE company, built here rather than copied.
+
+    The first version copied the real `valence.db`, which passed locally and ERRORED in CI:
+    that file is gitignored and exists only on one machine, so all four tests failed at setup
+    with FileNotFoundError on a fresh checkout. A test that cannot run where the product is
+    built is not a test.
+
+    So the schema and the rows are constructed from the columns the store actually declares.
+    The column lists are read from the live store when it exists and skipped when it does
+    not, so a schema change is still caught where it can be and does not break CI.
+    """
+    import sqlite3
+
     dest = tmp_path / "valence.db"
-    shutil.copy2(DB_PATH, dest)
+    conn = sqlite3.connect(str(dest))
+    try:
+        conn.execute(
+            "CREATE TABLE raw_datapoints ("
+            "id TEXT PRIMARY KEY, company_id TEXT, metric_raw TEXT, period_label TEXT,"
+            " period_end_date TEXT, value REAL, currency TEXT, units TEXT, source TEXT,"
+            " source_location TEXT, status TEXT, update_date TEXT,"
+            " superseded_by_id TEXT, section TEXT, bs_half TEXT)")
+        conn.execute(
+            "CREATE TABLE canonical_datapoints ("
+            "id TEXT PRIMARY KEY, company_id TEXT, canonical_key TEXT, metric_raw TEXT,"
+            " period_label TEXT, period_end_date TEXT, value REAL, currency TEXT,"
+            " units TEXT, status TEXT, source_datapoint_ids TEXT, derivation_rule TEXT,"
+            " update_date TEXT)")
+        for i in range(4):
+            conn.execute(
+                "INSERT INTO raw_datapoints VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                ("r%d" % i, COMPANY, "Some caption", "FY26", "2026-03-31", 10.0 + i,
+                 "INR", "crores", "screener", "fixture", "reported", "2026-03-31",
+                 None, "bs", "assets"))
+        for i in range(3):
+            conn.execute(
+                "INSERT INTO canonical_datapoints VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                ("c%d" % i, COMPANY, "canonical.bs.cash_and_bank", "Some caption", "FY26",
+                 "2026-03-31", 10.0 + i, "INR", "crores", "reported", "[]", None,
+                 "2026-03-31"))
+        conn.commit()
+    finally:
+        conn.close()
     return dest
 
 
