@@ -76,7 +76,7 @@ one that misses a real disagreement.
 
 On current `main`: **tie-out 0 untied figures, 10 of 11 US filers audited clean**
 (the eleventh is TSMC, disclosed rather than counted), **QA 0 regressions across 23
-models**, **779 backend tests**, and a current-asset reconciliation that lands exactly
+models**, **783 backend tests**, and a current-asset reconciliation that lands exactly
 on Infosys' filed subtotal in all three years.
 
 ---
@@ -331,7 +331,7 @@ curl -o model.xlsx "http://127.0.0.1:8111/api/export/excel?company_id=nvda_us"
 python scripts/audit_loop.py
 
 # Or individually
-python -m pytest backend/tests -q                              # 779 tests
+python -m pytest backend/tests -q                              # 783 tests
 python -m backend.export.excel.self_check                      # 31-sheet contract + formula wiring
 python -m backend.api.self_check                               # Web API and recomputation
 cd frontend && npm test && npx tsc --noEmit && npm run lint && npm run build
