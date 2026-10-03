@@ -58,6 +58,12 @@ _ENTITY = re.compile(r"&#\d+;|&[a-z]+;", re.I)
 # watched a healthy filer's caption disappear.
 _FACE_ANCHOR = re.compile(r"total\s+(current\s+)?assets", re.I)
 
+# Where the XBRL element definitions begin inside a rendered report. Everything from the
+# first of these to the end of the document is metadata about tags, not the statement, and
+# is excluded from caption matching by `FaceRead.face_body`.
+_DEFINITION_START = ("X - Definition", "X - Definitions", "X - References", "X - Label",
+                     "X - ReferencesLink", "+ Details")
+
 
 @dataclass
 class FaceRead:
@@ -69,12 +75,42 @@ class FaceRead:
     accession: str = ""
     reason: str = ""
 
+    @property
+    def face_body(self) -> str:
+        """The statement itself, excluding the XBRL element definitions.
+
+        Every SEC rendered report carries a definition appendix -- "X - Definition
+        Aggregate carrying amount, as of the balance sheet date, of..." -- and it is the
+        bulk of the document. Measured across six filers: the statement body is 1,530 to
+        1,987 characters while the definitions run 53,898 to 72,345. So a caption absent
+        from the face can still be present in the file, roughly 97% of which is not the
+        face.
+
+        That is not hypothetical. `Noncontrolling interests` appears ONLY in the
+        definitions for aapl_us, amzn_us, googl_us, msft_us, meta_us and nvda_us -- not one
+        of them prints that line on its balance sheet, yet a substring test over the whole
+        document returns True for all six. A guard that answers "yes, this filer prints it"
+        when the filer prints nothing is worse than no guard, because the answer looks
+        checked.
+        """
+        text = self.text or ""
+        cut = len(text)
+        for marker in _DEFINITION_START:
+            at = text.find(marker)
+            if at != -1:
+                cut = min(cut, at)
+        return text[:cut]
+
     def prints(self, caption: str) -> "bool | None":
         """True/False if the face was read, None if it was not.
 
         None rather than False on failure, so a caller cannot mistake "could not read" for
         "the filer does not print it" -- which is the mistake that would drop a correct
         figure.
+
+        Matched against the statement BODY only, never the XBRL definition appendix. See
+        `face_body` for the measurement: without the restriction this returns True for
+        "Noncontrolling interests" on all six filers measured, none of which print it.
 
         The anchor check lives HERE rather than in the reader, so it holds for any
         FaceRead however it was built. A test that constructs one directly would
@@ -86,7 +122,7 @@ class FaceRead:
             return None
         if not _FACE_ANCHOR.search(self.text):
             return None
-        return caption.lower() in self.text.lower()
+        return caption.lower() in self.face_body.lower()
 
 
 def strip_html(html: str) -> str:

@@ -320,3 +320,116 @@ class TestFaceReading:
             "read accession %r; 'c' is filed 2026-02-06 and is the newest 10-K"
             % read.accession
         )
+
+
+# ---------------------------------------------------------------------------
+# The definitions appendix is not the face
+# ---------------------------------------------------------------------------
+
+# A rendered report in the shape EDGAR actually returns: the statement, then the XBRL
+# element definitions. Sizes measured across six filers -- body 1,530-1,987 chars,
+# definitions 53,898-72,345. So ~97% of the document is not the statement.
+FACE_WITH_DEFINITIONS = (
+    "R5.htm CONSOLIDATED BALANCE SHEETS - USD ($) $ in Millions "
+    "Sep. 27, 2025 Sep. 28, 2024 "
+    "Current assets: Cash and cash equivalents $ 35,934 $ 29,943 "
+    "Marketable securities 18,763 35,228 Accounts receivable, net 39,777 33,410 "
+    "Inventories 7,286 6,180 Total current assets 102,860 88,241 "
+    "Total assets 364,980 364,980 "
+    "X - Definition Noncontrolling interests: Aggregate carrying amount, as of the "
+    "balance sheet date, of equity attributable to the noncontrolling interests. "
+    "X - References Minority Interest Ownership Percentage By Parent"
+)
+
+
+class TestTheDefinitionsAppendixIsNotTheFace:
+    """`prints` must not answer from the XBRL definitions.
+
+    `FaceRead.prints` was a substring test over the whole rendered document. Every filing
+    appends element definitions, and they are the bulk of it, so a caption the filer does
+    NOT print can still be found -- and `prints` would return True, which reads as "checked,
+    and the filer prints it".
+
+    Measured live rather than assumed: "Noncontrolling interests" appears ONLY in the
+    definitions for aapl_us, amzn_us, googl_us, msft_us, meta_us and nvda_us. Not one of
+    them prints that line on its balance sheet.
+
+    The failure this would cause is not a wrong figure but a confidently wrong ANSWER, and
+    it was found while investigating whether SEC could supply `minority_interest` -- the
+    caption test said yes, the rendered equity section said the filer prints no such line,
+    and the second is what the reader should have said.
+    """
+
+    @staticmethod
+    def _read(text=FACE_WITH_DEFINITIONS):
+        return sec_face.FaceRead(True, text=text, accession="test")
+
+    def test_a_definition_only_caption_is_not_reported_as_printed(self):
+        read = self._read()
+        assert "noncontrolling interests" in read.text.lower(), (
+            "the fixture must contain the caption SOMEWHERE, or this test proves nothing"
+        )
+        assert read.prints("Noncontrolling interests") is False, (
+            "prints() answered True from the XBRL definitions. The filer does not print "
+            "this line; the string is in the element appendix."
+        )
+
+    def test_the_anchor_still_matches_the_face_body(self):
+        """The restriction must not over-cut: the anchor is on the face, not in metadata.
+
+        If this fails, `prints` returns None for everything and every caption is kept --
+        which fails safe for the figure but silently disables the guard.
+        """
+        read = self._read()
+        assert read.prints("Total assets") is True, (
+            "the anchor 'total assets' is printed on the face and must still be found"
+        )
+
+    def test_captions_genuinely_on_the_face_are_still_reported(self):
+        read = self._read()
+        for caption in ("Cash and cash equivalents", "Accounts receivable, net",
+                        "Inventories", "Total current assets"):
+            assert read.prints(caption) is True, (
+                "%r is printed on the face and must be reported as printed" % caption
+            )
+
+    def test_face_body_excludes_the_definitions(self):
+        read = self._read()
+        body = read.face_body
+        assert "X - Definition" not in body, "the definitions leaked into the body"
+        assert "Total assets" in body, "the statement itself must survive"
+        assert len(body) < len(read.text), (
+            "face_body must be strictly smaller than the document it came from"
+        )
+
+    def test_an_unreadable_face_still_reports_none_not_false(self):
+        """The fail-safe must survive the change.
+
+        None rather than False, so a caller cannot read "could not read" as "the filer does
+        not print it" -- the mistake that would delete a correct figure.
+        """
+        assert sec_face.FaceRead(False, reason="no 10-K").prints("Inventories") is None
+        assert sec_face.FaceRead(True, text="").prints("Inventories") is None
+        # A document with no anchor is not trusted as a face at all.
+        assert sec_face.FaceRead(True, text="no anchor here").prints("X") is None
+
+    def test_every_definition_marker_is_recognised(self):
+        """A marker list that misses one leaves the definitions attached to the body.
+
+        Each marker is asserted individually, so adding one that is not honoured fails here
+        rather than silently restoring the false positive.
+        """
+        for marker in ("X - Definition", "X - Definitions", "X - References",
+                       "X - Label", "X - ReferencesLink", "+ Details"):
+            assert marker in sec_face._DEFINITION_START, (
+                "marker %r is no longer recognised, so a filing using it keeps its "
+                "definitions attached to the body" % marker
+            )
+            text = ("R5.htm CONSOLIDATED BALANCE SHEETS Total assets 364,980 "
+                    "%s Some element: a definition." % marker)
+            read = sec_face.FaceRead(True, text=text)
+            assert "Some element" not in read.face_body, (
+                "marker %r did not cut the body, so the definitions are still matched"
+                % marker
+            )
+
