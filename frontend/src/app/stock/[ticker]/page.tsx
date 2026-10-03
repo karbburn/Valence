@@ -6,6 +6,7 @@ import { getModelSpecServer, getPrerenderSlugs, resolveSlugServer } from '@/lib/
 import { isValidSlug, normalizeSlug, stockUrl } from '@/lib/tickers'
 import { SITE_NAME, SITE_URL, PRERENDER_LIMIT } from '@/lib/site'
 import { fmtPrice } from '@/lib/formatters'
+import { mayPublishPrice, withheldReason } from '@/lib/publication'
 
 /** Slugs are matched case-insensitively, so lowercase and uppercase must both build. */
 export const dynamicParams = true
@@ -77,14 +78,31 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const spec = await getModelSpecServer(company.company_id)
   const v = valuationLines(spec)
 
+  // The publication verdict gates the DESCRIPTION, not only the body.
+  //
+  // `implied_share_price` is computed for every model; the verdict decides whether it may
+  // be SHOWN. This description formatted it unconditionally, so the twelve `opinion_only`
+  // companies published the exact number the product says it withholds. Verified live: the
+  // /stock/INFY headline reads "n/a" while its meta description read
+  // "DCF implied value 1,079.32 vs 1,035.00 market".
+  //
+  // The meta description is the outermost surface in the product: what Google indexes, what
+  // Slack and X unfurl, what an answer engine quotes. A guard applied everywhere except
+  // here is not applied.
+  const mayPublish = mayPublishPrice(spec)
+  const reason = withheldReason(spec)
+
   const delta =
-    v?.implied && v?.market
+    mayPublish && v?.implied && v?.market
       ? ` vs ${v.market} market${v.priceDate ? ` (${v.priceDate})` : ''}`
       : ''
 
-  const description = v?.implied
-    ? `DCF implied value ${v.implied}${delta}${v.wacc ? ` at a ${v.wacc} WACC` : ''}. Full unlevered FCFF model, three scenarios, trading comps and a 31-tab Excel export, free in the browser.`
-    : `Unlevered FCFF discounted cash flow valuation for ${company.name} (${company.ticker}). Three scenarios, live WACC build, trading comps and a 31-tab Excel export, free in the browser.`
+  const description =
+    v?.implied
+      ? `DCF implied value ${v.implied}${delta}${v.wacc ? ` at a ${v.wacc} WACC` : ''}. Full unlevered FCFF model, three scenarios, trading comps and a 31-tab Excel export, free in the browser.`
+      : reason
+        ? `No valuation is published for ${company.name} (${company.ticker}). ${reason} Three-scenario unlevered FCFF model and a 31-tab Excel export, free in the browser.`
+        : `Unlevered FCFF discounted cash flow valuation for ${company.name} (${company.ticker}). Three scenarios, live WACC build, trading comps and a 31-tab Excel export, free in the browser.`
 
   const title = `${company.name} (${company.ticker}), DCF Valuation`
 
