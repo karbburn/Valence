@@ -758,13 +758,23 @@ def _price_at_date(html: str, date: str):
     it healthy: it must still show a figure that belongs to the date it claims, or the
     reader is looking at a number with nothing tying it to anything.
 
-    Matched against the caption page.tsx builds -- "vs 158.11 market (2026-10-02)" --
-    which is the only place the two appear together. Returns None rather than a loose
-    number found elsewhere on the page: any figure would do here, which is exactly why
-    this cannot be a substring search.
+    Matched against the caption page.tsx builds, which is the only place the two appear
+    together. The currency symbol is part of it -- measured on a live page, not assumed:
+
+        DCF implied value $156.48 vs $234.54 market (2026-10-02) at a 11.8% WACC.
+
+    A first version required the digits immediately after "vs ", and returned None on every
+    real page because of the `$`. That was not a harmless miss: the staleness branch
+    forgives a page only when this finds a figure, so a genuinely stale page would have
+    been FAILED -- the exact behaviour this change exists to remove -- while every
+    synthetic test still passed, since the fixtures had no currency symbol.
+
+    Returns None rather than a loose number found elsewhere on the page: any figure would
+    do here, which is exactly why this cannot be a substring search.
     """
     m = re.search(
-        r"vs\s+([0-9][0-9,]*\.[0-9]{2})\s+market\s*\(" + re.escape(date) + r"\)", html)
+        r"vs\s+[$€£₹]?\s*([0-9][0-9,]*\.[0-9]{2})\s+market\s*\("
+        + re.escape(date) + r"\)", html)
     if m:
         return m.group(1)
     return None
