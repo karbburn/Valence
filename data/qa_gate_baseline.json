@@ -6,11 +6,11 @@
     "valuation_is_meaningful"
   ],
   "amzn_us": [
-    "current_assets_reconcile",
     "implied_price_deviation_is_explainable"
   ],
   "awi_us": [],
   "bhartiartl_bhartiartl": [
+    "current_assets_reconcile",
     "inputs_trace_to_a_filing"
   ],
   "dox_us": [],
@@ -18,10 +18,12 @@
     "implied_price_deviation_is_explainable"
   ],
   "hcltech_hcltech": [
+    "current_assets_reconcile",
     "historicals_are_reported",
     "inputs_trace_to_a_filing"
   ],
   "idea_idea": [
+    "current_assets_reconcile",
     "equity_value_positive",
     "implied_price_deviation_is_explainable",
     "inputs_trace_to_a_filing",
@@ -34,6 +36,7 @@
   ],
   "infy_us": [],
   "lt_lt": [
+    "current_assets_reconcile",
     "historicals_are_reported",
     "inputs_trace_to_a_filing"
   ],
@@ -41,30 +44,36 @@
   "msft_us": [],
   "nvda_us": [],
   "ongc_ongc": [
+    "current_assets_reconcile",
     "implied_price_deviation_is_explainable",
     "inputs_trace_to_a_filing"
   ],
   "reliance_reliance": [
+    "current_assets_reconcile",
     "inputs_trace_to_a_filing"
   ],
   "sunpharma_sunpharma": [
     "bridge_inputs_plausible",
+    "current_assets_reconcile",
     "historicals_are_reported",
     "implied_price_deviation_is_explainable",
     "inputs_trace_to_a_filing"
   ],
   "tatamotors_tatamotors": [
+    "current_assets_reconcile",
     "historicals_are_reported",
     "implied_price_deviation_is_explainable",
     "inputs_trace_to_a_filing"
   ],
   "tatasteel_tatasteel": [
+    "current_assets_reconcile",
     "historicals_are_reported",
     "implied_price_deviation_is_explainable",
     "inputs_trace_to_a_filing",
     "valuation_is_meaningful"
   ],
   "tcs_tcs": [
+    "current_assets_reconcile",
     "historicals_are_reported",
     "inputs_trace_to_a_filing"
   ],
@@ -73,6 +82,7 @@
     "inputs_trace_to_a_filing"
   ],
   "wipro_wipro": [
+    "current_assets_reconcile",
     "historicals_are_reported",
     "inputs_trace_to_a_filing"
   ]
