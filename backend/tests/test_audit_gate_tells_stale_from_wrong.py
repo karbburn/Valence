@@ -184,3 +184,44 @@ class TestReadingTheDateOffThePage:
         html = _page("2026-10-02", "158.11")
         assert GATE_MOD._price_at_date(html, "2026-10-02") == "158.11"
         assert GATE_MOD._price_at_date(html, "2026-10-03") is None
+
+
+class TestTheCaptionAsThePageActuallyPrintsIt:
+    """Copied from a live page, because the synthetic shape was wrong.
+
+    Measured against `http://127.0.0.1:3111/stock/NVDA`, the caption is
+
+        DCF implied value $156.48 vs $234.54 market (2026-10-02) at a 11.8% WACC.
+
+    with a currency symbol between "vs" and the digits. A first version of
+    `_price_at_date` required the digits there and returned None on every real page.
+
+    That was not a harmless miss. The staleness branch forgives a page only when this
+    finds a figure, so a genuinely stale page would have been FAILED -- the exact
+    behaviour the change exists to remove -- while all five synthetic cases still passed,
+    because none of the fixtures carried a currency symbol. The gate reported CLEAN
+    against real pages and would have failed the first time it mattered.
+    """
+
+    LIVE = ('<meta name="description" content="DCF implied value $156.48 vs $234.54 '
+            'market (2026-10-02) at a 11.8% WACC. Full unlevered FCFF model.">')
+
+    def test_it_reads_the_price_from_a_currency_prefixed_caption(self):
+        assert GATE_MOD._price_at_date(self.LIVE, "2026-10-02") == "234.54"
+
+    def test_a_caption_at_another_date_is_not_matched(self):
+        assert GATE_MOD._price_at_date(self.LIVE, "2026-10-03") is None
+
+    def test_a_stale_page_with_a_real_caption_is_reported_not_failed(self):
+        """The end-to-end case this whole change exists for."""
+        page = ('<script type="application/ld+json">{"@type":"Dataset",'
+                '"temporalCoverage":"2026-10-01"}</script>'
+                '<meta name="description" content="DCF implied value $160.65 vs '
+                '$234.54 market (2026-10-01) at a 11.8% WACC.">')
+        v = GATE_MOD._judge_market_price(page, 236.10, "2026-10-02", "yfinance_history",
+                                         cid="nvda_us", ticker="NVDA")
+        assert not v.failed, (
+            "a correctly-cached page was failed. The page states 2026-10-01 and shows "
+            "$234.54 beside it; the model has moved to 236.10 at 2026-10-02. That is "
+            "caching, not a wrong figure. Message was: %s" % v.message)
+        assert v.stale, "and it must be reported as stale rather than silently passed"
