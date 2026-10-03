@@ -82,13 +82,24 @@ def _payload(cid):
 
 
 def _live_models():
+    """(cid, model) for every shipped model, or a skip if no server is listening.
+
+    Called from inside tests and fixtures, NEVER at module scope. The first version of this
+    file was parametrised over `_live_models()` in the `@pytest.mark.parametrize` decorator,
+    which evaluates it during COLLECTION -- and calling `pytest.skip` there aborts the whole
+    module. In CI, where no backend runs, that turned into "1 error during collection" and
+    failed the run with exit code 2 rather than skipping.
+
+    So the skip is raised where it is meaningful: inside a test, which reports as a skip and
+    leaves the rest of the suite running.
+    """
     try:
-        urllib.request.urlopen(f"{API}/api/model/", timeout=30)
+        urllib.request.urlopen(f"{API}/api/model/aapl_us", timeout=30)
     except urllib.error.HTTPError:
         pass  # a 404 still proves something is listening
     except Exception as exc:  # noqa: BLE001
-        pytest.skip("no backend on %s (%s); this is a live-payload check"
-                    % (API, type(exc).__name__))
+        pytest.skip("no backend on %s (%s); this checks the SERVED payload, so it has "
+                    "nothing to say without one" % (API, type(exc).__name__))
     out = []
     for cid in _shipped_ids():
         try:
@@ -114,26 +125,38 @@ def _bridge_source(model):
     return None
 
 
-@pytest.mark.parametrize("cid,model", _live_models(),
-                         ids=[cid for cid, _ in _live_models()])
 class TestNoPublishingModelIsOffFiling:
-    def test_it_does_not_publish_with_a_non_filing_balance_sheet(self, cid, model):
-        source = _bridge_source(model)
-        publishable = bool((model.get("publication") or {}).get("publishable"))
-        assert not (publishable and source != FILED), (
-            "%s PUBLISHES while declaring balance_sheet_source=%r. A reader would see a "
-            "valuation whose balance-sheet inputs no filing supplied. Either file the "
-            "inputs or withhold the model -- both are acceptable, publishing this is not."
-            % (cid, source)
+    """One assertion per shipped model, gathered at run time rather than at collection.
+
+    Parametrising over live data is the natural way to write this and it is wrong here: the
+    parameter list is built during collection, before any test runs, so it cannot skip
+    gracefully and it hits the network before the suite has decided to. Gathering inside the
+    test keeps collection pure and lets the skip behave.
+    """
+
+    def test_it_does_not_publish_with_a_non_filing_balance_sheet(self):
+        offenders = []
+        for cid, model in _live_models():
+            source = _bridge_source(model)
+            publishable = bool((model.get("publication") or {}).get("publishable"))
+            if publishable and source != FILED:
+                offenders.append("%s (source=%r)" % (cid, source))
+        assert not offenders, (
+            "these models PUBLISH while declaring balance-sheet inputs no filing "
+            "supplied. A reader would see a valuation they cannot trace to a document. "
+            "Either file the inputs or withhold the model -- publishing this is not "
+            "acceptable: %s" % offenders
         )
 
-    def test_a_withheld_model_says_why(self, cid, model):
-        publication = model.get("publication") or {}
-        if publication.get("publishable"):
-            return
-        assert publication.get("reasons"), (
-            "%s is withheld but gives no reason, so the page cannot tell a reader why. A "
-            "silent withholding reads as a broken product." % cid
+    def test_a_withheld_model_says_why(self):
+        silent = []
+        for cid, model in _live_models():
+            publication = model.get("publication") or {}
+            if not publication.get("publishable") and not publication.get("reasons"):
+                silent.append(cid)
+        assert not silent, (
+            "these models are withheld but give no reason, so the page cannot tell a "
+            "reader why. A silent withholding reads as a broken product: %s" % silent
         )
 
 
