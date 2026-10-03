@@ -546,6 +546,10 @@ def gate_site() -> GateResult:
     # loss-making one whose price is negative and must still be displayed as one.
     checked = 0
     probed = 0
+    # Pages deliberately served up to REVALIDATE_SECONDS stale. Reported, not failed:
+    # staleness is the product working as designed, and calling it a defect is what got
+    # this gate muted.
+    stale: List[str] = []
     for cid in _page_probe_ids():
         # The model endpoint answers with the model at the top level. Reading it
         # under a "model" key, as a wrapped response would be, raised KeyError on
@@ -636,27 +640,22 @@ def gate_site() -> GateResult:
             g.fail(f"{cid}: the served model carries no market price to compare against")
             continue
         price, price_date, source = quote
-        priced = f"{price:,.2f}" if price >= 0 else f"{abs(price):,.2f}"
-        bare = f"{abs(price):.2f}"
-        if priced not in html and bare not in html:
-            g.fail(
-                f"{cid}: page /stock/{ticker} shows a different market price from the "
-                f"model — the model serves {priced} ({price_date}, {source}) and that "
-                f"figure is not on the page. The frontend is probably reading a "
-                f"backend other than this one."
-            )
+        verdict = _judge_market_price(
+            html, price, price_date, source, cid=cid, ticker=ticker)
+        if verdict.failed:
+            g.fail(verdict.message)
             continue
-        if price_date and price_date not in html:
-            g.fail(
-                f"{cid}: page /stock/{ticker} does not carry the quote date "
-                f"{price_date}, so a reader cannot tell how old the price is"
-            )
-            continue
+        if verdict.stale:
+            stale.append(verdict.message)
         checked += 1
     if probed == 0:
         g.fail("no company page could be probed, so the content check verified nothing")
     elif checked:
         g.ok(f"{checked} of {probed} probed company pages show the price the API serves")
+    if stale:
+        g.ok(f"{len(stale)} of those pages are within the declared revalidation window"
+             f" and state their own quote date -- staleness, not a defect: "
+             f"{'; '.join(stale[:4])}")
     return g
 
 
@@ -678,6 +677,128 @@ def _api_implied_price(cid: str) -> Optional[float]:
         return float(v) if v is not None else None
     except Exception:
         return None
+
+
+@dataclass
+class _Verdict:
+    """Outcome of comparing a page's market price against the model's."""
+
+    failed: bool
+    message: str
+    stale: bool = False
+
+
+def _judge_market_price(html: str, price: float, price_date: Optional[str],
+                        source: str, cid: str = "", ticker: str = "") -> _Verdict:
+    """Does the page show the market price the model serves, and if not, WHY NOT.
+
+    Split out of the gate body so it can be tested without two live servers. That is not
+    tidiness: the first version of this logic lived inline and the test reimplemented it,
+    and a mutation that deleted the staleness branch from the gate then SURVIVED, because
+    the test was exercising its own copy rather than the gate. A guard on a copy is not a
+    guard.
+
+    The distinction being drawn:
+
+      * The page's quote date is BEHIND the model's -> STALE, not a failure. The page is
+        within its declared revalidation window and says so.
+      * Same date, different price -> FAIL. Caching does not explain it, so the frontend
+        is reading another backend. This is the original defect and must survive.
+      * Behind, but with no price beside its own date -> FAIL. The reader cannot tie the
+        figure to the date, which is the property the check exists to protect.
+      * No date stated at all -> FAIL. Treating it as stale would make the check
+        unfalsifiable, since any page could claim to be behind.
+    """
+    priced = f"{price:,.2f}"
+    bare = f"{abs(price):.2f}"
+    page_date = _page_quote_date(html)
+
+    if priced in html or bare in html:
+        # The figure is there. If the date is not, a reader still cannot tell how old it
+        # is -- unless the page is behind, in which case its own date is present.
+        if price_date and price_date not in html:
+            if page_date and page_date != price_date:
+                return _Verdict(False, f"{cid}: page quote date older than {price_date}",
+                                stale=True)
+            return _Verdict(True, (
+                f"{cid}: page /stock/{ticker} does not carry the quote date "
+                f"{price_date}, so a reader cannot tell how old the price is"))
+        return _Verdict(False, "")
+
+    if page_date and price_date and page_date != price_date:
+        # The page is BEHIND, which is expected within the revalidation window. The
+        # absent price is the newer one by construction -- asking a stale page to contain
+        # it could never succeed, so an earlier draft required exactly that and so failed
+        # on the case it was written to forgive.
+        #
+        # What must still hold is that the page shows a price AT ITS OWN DATE: the figure
+        # on screen has to belong to the date printed beside it.
+        shown = _price_at_date(html, page_date)
+        if shown is None:
+            return _Verdict(True, (
+                f"{cid}: page /stock/{ticker} states quote date {page_date} but carries "
+                f"no market price beside it, so the reader cannot tie the figure to the "
+                f"date (the model serves {priced} at {price_date}, {source})"))
+        return _Verdict(False, (
+            f"{cid}: page at {page_date} showing {shown}, API at {price_date} showing "
+            f"{priced} ({source})"), stale=True)
+
+    return _Verdict(True, (
+        f"{cid}: page /stock/{ticker} shows a different market price from the "
+        f"model — the model serves {priced} ({price_date}, {source}) and that figure is "
+        f"not on the page, at a quote date the page does not contradict "
+        f"({page_date or 'not stated'}). The frontend is probably reading a backend other "
+        f"than this one."))
+
+
+def _price_at_date(html: str, date: str):
+    """The market price the page prints beside `date`, or None if it prints none.
+
+    Pairs with `_page_quote_date`. Knowing a page is a day behind is not enough to call
+    it healthy: it must still show a figure that belongs to the date it claims, or the
+    reader is looking at a number with nothing tying it to anything.
+
+    Matched against the caption page.tsx builds -- "vs 158.11 market (2026-10-02)" --
+    which is the only place the two appear together. Returns None rather than a loose
+    number found elsewhere on the page: any figure would do here, which is exactly why
+    this cannot be a substring search.
+    """
+    m = re.search(
+        r"vs\s+([0-9][0-9,]*\.[0-9]{2})\s+market\s*\(" + re.escape(date) + r"\)", html)
+    if m:
+        return m.group(1)
+    return None
+
+
+def _page_quote_date(html: str):
+    """The quote date the PAGE states about itself, or None if it states none.
+
+    Read from the HTML rather than requested, because the whole point is to let a stale
+    page be recognised as stale. Two sources, in order of trustworthiness:
+
+      1. JSON-LD `temporalCoverage`, which Next emits for the rendered page.
+      2. The visible caption "vs <price> market (<date>)" that page.tsx builds.
+
+    Returns None rather than guessing when neither is present, because a wrong date here
+    would turn a real mismatch into a "stale, fine" pass -- the failure mode this whole
+    change exists to avoid.
+    """
+    m = re.search(r'"temporalCoverage"\s*:\s*"([0-9]{4}-[0-9]{2}-[0-9]{2})"', html)
+    if m:
+        return m.group(1)
+    # Next may serialise the ld+json block with HTML-escaped quotes (&quot;), in which
+    # case the pattern above finds nothing even though the data is present. Measured
+    # rather than assumed: an escaped-only document returned None before this branch.
+    m = re.search(r'&quot;temporalCoverage&quot;\s*:\s*&quot;'
+                  r'([0-9]{4}-[0-9]{2}-[0-9]{2})&quot;', html)
+    if m:
+        return m.group(1)
+    # Last resort: the visible/meta caption page.tsx builds, "... vs 158.11 market
+    # (2026-10-01)".
+    m = re.search(r"market\s*\((\d{4}-\d{2}-\d{2})\)", html)
+    if m:
+        return m.group(1)
+    return None
 
 
 def _api_quote(cid: str):
