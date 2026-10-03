@@ -313,15 +313,42 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
               </td>
             </tr>
 
-            <tr className="bg-positive-subtle border-t border-positive">
-              <td className="sticky-col px-3 py-1.5 font-bold text-[#6ee7b7]">
-                Equity Value → DCF Implied Share Price
+            {/* Same gate as the headline, and it has to be. The KPI bar reads "n/a" for a
+                model the engine will not certify, and this row printed the implied share
+                price in GREEN about 800px below it: the withheld number, in the most
+                emphatic styling on the page, for a reader who simply scrolled.
+                Verified live: /stock/INFY served "445,168 -> 1,079.32 / share" here while
+                its own headline read "n/a". `priceWithheld` is reused rather than a second
+                copy of the rule, because a second copy is how these two came to disagree. */}
+            <tr
+              className={
+                priceWithheld
+                  ? 'bg-surface-2 border-t border-[#f59e0b]/40'
+                  : 'bg-positive-subtle border-t border-positive'
+              }
+            >
+              <td
+                className={
+                  priceWithheld
+                    ? 'sticky-col px-3 py-1.5 font-bold text-[#f59e0b]'
+                    : 'sticky-col px-3 py-1.5 font-bold text-[#6ee7b7]'
+                }
+              >
+                {priceWithheld
+                  ? 'Equity Value and implied share price'
+                  : 'Equity Value  DCF Implied Share Price'}
               </td>
               <td
                 colSpan={fcffs.length}
-                className="px-3 py-1.5 text-right font-bold text-[#6ee7b7]"
+                className={
+                  priceWithheld
+                    ? 'px-3 py-1.5 text-left font-bold text-[#f59e0b]'
+                    : 'px-3 py-1.5 text-right font-bold text-[#6ee7b7]'
+                }
               >
-                {currencySym}{fmtNum(bridge.equity_value)} → {currencySym}{fmtNum(bridge.implied_share_price, 2)} / share
+                {priceWithheld
+                  ? 'not published: this model failed a check that decides whether its output may be presented as a valuation'
+                  : `${currencySym}${fmtNum(bridge.equity_value)}  ${currencySym}${fmtNum(bridge.implied_share_price, 2)} / share`}
               </td>
             </tr>
           </tbody>
