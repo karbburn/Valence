@@ -204,6 +204,62 @@ class TestCandidatesAreOrderedNewestFirst:
             )
 
 
+class TestCandidatesThatNameThemselvesRankFirst:
+    """Tata Steel's feed defeated a pure date ordering.
+
+    Of 3025 announcements, 91 passed the statements filter and the twelve NEWEST were
+    disposal notices -- `NIDHIFADNAVIS_..._BSENSE.pdf`, two pages each -- whose
+    DESCRIPTIONS disclose the financial results of the divested unit. The audited results
+    sat at `..._Board_Outcome_-_March_17_2026.pdf`, ranked below a year of notices.
+
+    A filename that names itself as results now outranks one that only its description
+    suggests. Ordering by size instead was measured and failed identically: the largest
+    candidates were the notices too.
+    """
+
+    # Two documents from that feed: the results, and a notice that is newer.
+    TATA = [
+        # A disposal notice: newer, and its DESCRIPTION discloses financial results.
+        # The filename is deliberately generic, because the real one is
+        # `NIDHIFADNAVIS_..._BSENSE.pdf` and this fixture is about ORDERING, not about
+        # which document classes the governance filter removes -- a separate test covers
+        # that, and mixing the two made this one fail for an unrelated reason.
+        {"attchmntFile": "https://x/DISPOSAL_29092026164617_Annexure.pdf",
+         "attchmntText": "Tata Steel Limited has informed the Exchange of the outcome "
+                         "and financial results of the divested unit",
+         "an_dt": "29-Sep-2026 16:46:17", "dt": "29092026164617",
+         "desc": "outcome and financial results of the divested unit"},
+        {"attchmntFile": "https://x/AUDITED_17032026184358_Board_Outcome_-_"
+                         "March_17_2026.pdf",
+         "attchmntText": "Tata Steel Limited has informed the Exchange",
+         "an_dt": "17-Mar-2026 18:43:58", "dt": "17032026184358",
+         "desc": "Board Outcome"},
+    ]
+
+    def test_the_named_document_comes_first_despite_being_older(self):
+        cands = candidate_attachments(self.TATA)
+        assert cands[0].filename.startswith("AUDITED_17032026"), (
+            "the disposal notice outranked the audited results: %r"
+            % [c.filename for c in cands]
+        )
+
+    def test_the_score_records_where_the_signal_came_from(self):
+        cands = candidate_attachments(self.TATA)
+        # Keyed on the whole filename: both attachments share a long prefix
+        # ("NIDHIFADNAVIS_"), so a truncated key silently collapsed them into one entry
+        # and this test asserted against a set of one.
+        scores = {c.filename: c.named for c in cands}
+        assert len(scores) == 2, "the two fixtures collapsed into one key: %r" % scores
+        assert sorted(scores.values()) == [1, 2], (
+            "expected one candidate scoring 2 (named in the filename) and one scoring 1 "
+            "(description only): %r" % scores
+        )
+
+    def test_nothing_is_discarded_by_the_ranking(self):
+        """Ordering, not filtering -- a bigger budget must remain a fallback."""
+        assert len(candidate_attachments(self.TATA)) == 2
+
+
 class TestTheBalanceSheetDetector:
     """Tested on text directly, because that is the level the rule lives at."""
 
@@ -244,6 +300,78 @@ class TestTheBalanceSheetDetector:
     def test_empty_text_is_not_a_balance_sheet(self):
         for empty in ("", None, "   \n  "):
             assert not looks_like_balance_sheet(empty)
+
+    def test_a_statement_set_one_glyph_at_a_time_is_still_recognised(self):
+        """Some filers position every glyph separately.
+
+        Tata Steel's audited results extract as `T O T A L - A S SE T S` and
+        `Sub-total - C urrent assets`, so no caption appears as a contiguous string even
+        with whitespace collapsed, and a 30-page audited filing was reported as
+        "no balance sheet in 30 pages". Letters alone are matched.
+        """
+        assert looks_like_balance_sheet(
+            "6 1 % | T A T A\n"
+            "T o t a l   c u r r e n t   a s s e t s   1 , 2 3 4\n"
+            "c a s h   a n d   c a s h   e q u i v a l e n t s   8 7 2\n"
+            "T o t a l   a s s e t s   4 , 5 0 0"
+        )
+
+    def test_a_figure_split_across_a_caption_does_not_hide_it(self):
+        """The real Tata Steel layout, verbatim in shape.
+
+        These are printed-page lines from `TATASTEEL_29052024190643_OUTCOME.pdf`, printed
+        pages 17 and 21. Two separate normalisations are needed and neither alone is
+        enough: the caption is hyphenated AND letter-spaced, and in the subtotal the
+        figure sits between the two halves of the words.
+        """
+        face = (
+            "61 TATA\n"
+            "Sub-total - C urrent assets        36,765.14   40,515.56\n"
+            "Inventories\n"
+            "T O T A L - A S SE T S            2,45,634.06 2,42,695.73\n"
+        )
+        assert looks_like_balance_sheet(face), (
+            "a real balance-sheet face was rejected. This is printed page 21 of a "
+            "committed-shape document; rejecting it reports a filer as unreadable when "
+            "its statements are plainly present."
+        )
+
+    def test_a_ratio_disclosure_is_not_a_balance_sheet(self):
+        """What the looser matching must NOT let in.
+
+        Tata Steel's Regulation 52(4) disclosures print "Total current assets" and
+        "Total assets" as INPUTS to a current ratio, and they sit two pages away from the
+        real face. Under the same letters-only match they carry both subtotals, so the
+        caption requirement is the only thing separating them -- which is why it is
+        asserted here rather than assumed.
+        """
+        ratio = (
+            "Additional information pursuant to Regulation 52(4)\n"
+            "Current ratio\n"
+            "(Total current assets Current habhtes)\n"
+            "0 80 0 78 0 90 0 80 0 90\n"
+            "Long term debt to working capital ratio\n"
+            "((Non-current borrowings Total current assets - Current hahes))\n"
+        )
+        assert not looks_like_balance_sheet(ratio), (
+            "a Regulation 52(4) ratio table was accepted as a balance sheet. Both "
+            "subtotals appear in it, so the caption requirement is the only guard."
+        )
+
+    def test_punctuation_dropping_does_not_weaken_the_prose_guard(self):
+        """The blunt instrument, pinned.
+
+        Dropping every non-letter could turn a paragraph naming both subtotals into a
+        match, so the prose case is re-asserted in the letter-spaced form where that
+        normalisation is the only route to a match.
+        """
+        assert not looks_like_balance_sheet(
+            "T h e   t o t a l   c u r r e n t   a s s e t s   a n d   "
+            "t h e   t o t a l   a s s e t s   w e r e   r e s t a t e d"
+        ), (
+            "punctuation-dropping made prose pass. Both subtotals in a paragraph and no "
+            "caption is still not a balance sheet."
+        )
 
     def test_it_finds_the_committed_filing_s_own_pages(self):
         """The rule against the document it will actually meet."""
