@@ -235,11 +235,24 @@ def check_current_assets_reconcile(spec: ModelSpecification) -> ModelCheckResult
     # Which lines were missing in the periods that failed, and the first period seen,
     # so the message can list them once rather than per period.
     absent: "OrderedDict[str, None]" = OrderedDict()
+    # How many periods this check could actually compare. A period with no filed
+    # current-asset subtotal is skipped, and if that is true of EVERY period then the
+    # loop body never runs, nothing fails, and the check returns PASS having verified
+    # nothing at all.
+    #
+    # Measured before this was fixed: 11 of the 23 shipped models -- every India name --
+    # hold no `canonical.bs.total_current_assets` in any period, so all 11 reported
+    # "current assets reconcile" without reading a single figure. That is the project's
+    # own rule inverted: a check that cannot find its subject has not verified it, and an
+    # unverified check that reports success is believed. The count below is what makes
+    # that state visible instead of silent.
+    examined = 0
 
     for p in spec.historicals.periods:
         subtotal = spec.historicals.get_value("canonical.bs.total_current_assets", p)
         if subtotal is None:
             continue
+        examined += 1
         itemised = 0.0
         seen_any = False
         for key in CURRENT_ASSET_LINES:
@@ -263,6 +276,23 @@ def check_current_assets_reconcile(spec: ModelSpecification) -> ModelCheckResult
             for k in missing_here:
                 absent.setdefault(k, p)
             failing_keys = list(CURRENT_ASSET_LINES)
+
+    if examined == 0:
+        # Failing rather than passing is the rule. The alternative is a green check that
+        # examined nothing, which is worse than a red one: a red check gets looked at.
+        return ModelCheckResult(
+            check_name="current_assets_reconcile",
+            category="accounting",
+            passed=False,
+            detail=(
+                f"No period carries a filed current-asset subtotal "
+                f"(canonical.bs.total_current_assets), so this check compared nothing "
+                f"across {len(spec.historicals.periods)} period(s) and cannot report a "
+                f"reconciliation. It fails rather than passes: an unverified check that "
+                f"reports success is believed."
+            ),
+            implicated_scenarios=["base", "bull", "bear"],
+        )
 
     passed = not errors
     return ModelCheckResult(
