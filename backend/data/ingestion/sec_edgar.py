@@ -719,6 +719,72 @@ _OUTFLOW_ELEMENTS = frozenset({
 })
 
 
+# Elements whose being TAGGED does not mean the filer PRINTS them, mapped to the word
+# that proves they do.
+#
+# Narrow on purpose. Most us-gaap elements a filer tags are printed on the face, or are
+# note items that legitimately roll into a face line. This table is not "every element must
+# appear on the face" -- that would drop a great many correct figures. It is the short list
+# where the absence of a face line is itself the defect.
+#
+# `PrepaidExpenseAndOtherAssetsCurrent` is the case that forced it. Amazon tags it, but
+# does not print it: its note places the prepaid amount INSIDE "Accounts receivable, net
+# and other", and `trade_receivables` already reads that element in full. So Amazon's
+# itemised current assets exceeded its own filed subtotal by exactly the receivables line
+# -- 6,900 / 7,900 / 6,900 by year -- while meta, nvda, dox and amba used the SAME element,
+# printed it on the face, and reconciled.
+#
+# Verified against each filer's rendered balance sheet rather than assumed:
+#
+#     AMZN  not printed        META / NVDA / DOX / AMBA  printed
+#
+# So this cannot be a taxonomy decision -- the taxonomy is shared and the answer is not.
+# It is read off the filer's own statement, which is what `sec_face` does.
+FACE_PRINTED_ELEMENTS = {
+    "PrepaidExpenseAndOtherAssetsCurrent": "prepaid",
+}
+
+
+def _drop_captions_not_printed_on_the_face(tag_map, cik) -> list:
+    """Remove an element for a filer whose own balance sheet does not print it.
+
+    FAIL-SAFE: if the face cannot be read, nothing is dropped. Losing a correct figure
+    because a request failed would trade a known-good number for a silent omission, and the
+    omission is the harder error to notice.
+    """
+    if not FACE_PRINTED_ELEMENTS:
+        return tag_map
+    try:
+        from backend.data.ingestion.sec_face import SECFaces
+
+        face = SECFaces().balance_sheet_face(cik)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("face check unavailable for CIK %s (%s); keeping every element",
+                       cik, type(exc).__name__)
+        return tag_map
+
+    if not face.ok:
+        logger.info("face of CIK %s not read (%s); keeping every element",
+                    cik, face.reason)
+        return tag_map
+
+    kept, dropped = [], []
+    for label, tags, section in tag_map:
+        keep = []
+        for tag in tags:
+            word = FACE_PRINTED_ELEMENTS.get(tag)
+            if word is not None and face.prints(word) is False:
+                dropped.append(tag)
+                continue
+            keep.append(tag)
+        if keep:
+            kept.append((label, keep, section))
+    if dropped:
+        logger.info("CIK %s does not print %s on the face of its balance sheet; "
+                    "not reading those elements", cik, ", ".join(sorted(set(dropped))))
+    return kept
+
+
 def _is_outflow_element(metric_label: str, tags: Sequence[str] | None = None) -> bool:
     """True when this line's us-gaap element stores an OUTFLOW MAGNITUDE.
 
@@ -1114,7 +1180,7 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
     us_gaap = all_facts.get("us-gaap", {})
     ifrs_facts = all_facts.get("ifrs-full", {})
     if us_gaap:
-        tag_map = US_GAAP_TAG_MAP
+        tag_map = _drop_captions_not_printed_on_the_face(US_GAAP_TAG_MAP, cik)
         tag_namespace_used = "us-gaap"
         capex_is_negative = False
     elif ifrs_facts:
