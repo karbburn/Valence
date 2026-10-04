@@ -1,9 +1,17 @@
 'use client'
 
-import React, { useRef } from 'react'
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Save, Bookmark, FileSpreadsheet, CheckCircle2, AlertTriangle, Copy } from 'lucide-react'
+import {
+  Save,
+  Bookmark,
+  FileSpreadsheet,
+  CheckCircle2,
+  AlertTriangle,
+  Copy,
+  Ellipsis,
+} from 'lucide-react'
 import { ModelSpecification, ScenarioLabel, CompanySummary } from '@/lib/types'
 import { fmtPct } from '@/lib/formatters'
 import { CompanySearch } from './CompanySearch'
@@ -72,6 +80,110 @@ export function Header({
   }
 
   const modeListRef = useRef<HTMLDivElement>(null)
+
+  /* ------------------------------------------------------------------ *
+   * The overflow menu.
+   *
+   * Measured in a browser on 2026-10-04, this header needs 1416px:
+   *
+   *     900px  overflows by 500   scenario chips, QA, Copy, Save, Library, Excel cut off
+   *    1024px  overflows by 392   QA, Copy, Save, Library, Excel cut off
+   *    1152px  overflows by 264   Copy, Save, Library, Excel cut off
+   *    1280px  overflows by 136   Library and Excel cut off, Excel by 132px
+   *    1366px  overflows by  50   Excel cut off
+   *    1440px  fits
+   *
+   * So the Excel export -- the primary export, per the comment above it -- was not merely
+   * off-screen at 1280px as recorded. It was unreachable at EVERY width from 900px to
+   * 1439px, while MobileGuard promises the workbench works from 900px. The bar is a single
+   * non-wrapping row, so the overflow lands on whichever control sits furthest right: the
+   * one a reader is most likely to be reaching for.
+   *
+   * The four actions collapse into one menu below 1440px. 1440 is not arbitrary, it is where
+   * the row first fits, measured rather than guessed, and above it nothing changes at all,
+   * so every width that works today looks identical.
+   *
+   * Collapsing these four takes the row from 1416px to 1163px, measured, so the floor
+   * becomes 1163px rather than 1416px, and 1280px -- the width the defect was recorded
+   * against -- goes from 136px short to 117px clear. Reaching 900px as well would need the
+   * view tabs and scenario chips collapsed too, which removes functionality rather than
+   * relocating it -- so MobileGuard's stated minimum is corrected to 1163px in the same
+   * change. That correction is the point: a guard promising a width the layout cannot honour
+   * is the same defect as the off-screen button, one layer up.
+   *
+   * 1163 is where the row fits EXACTLY: at 1162px it overflows by 1px, and at 1163px by
+   * nothing. Pinning that down took a per-pixel sweep, because reading a stretched viewport's
+   * width as the row's intrinsic requirement gives the wrong answer by 79px -- which is what
+   * an earlier draft of this comment did, and it would have needlessly hidden the workbench
+   * across widths that work.
+   * ------------------------------------------------------------------ */
+  const [actionsOpen, setActionsOpen] = useState(false)
+  const actionsRef = useRef<HTMLDivElement>(null)
+  const actionsButtonRef = useRef<HTMLButtonElement>(null)
+  const actionsMenuId = useId()
+  const closeActions = useCallback(() => setActionsOpen(false), [])
+
+  useEffect(() => {
+    if (!actionsOpen) return
+    const onPointerDown = (e: PointerEvent) => {
+      if (!actionsRef.current?.contains(e.target as Node)) setActionsOpen(false)
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      setActionsOpen(false)
+      // Focus returns to the control that opened the menu. Without this, Escape leaves focus
+      // on <body> and a keyboard user has to Tab from the top of the document to find where
+      // they were.
+      actionsButtonRef.current?.focus()
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [actionsOpen])
+
+  /** Each entry runs its action and closes, so the menu never hangs open behind a modal. */
+  const runAction = (fn?: () => void) => {
+    closeActions()
+    fn?.()
+  }
+
+  const ACTION_ITEMS = [
+    {
+      key: 'copy',
+      label: 'Copy memo',
+      hint: 'Copy valuation memo to clipboard',
+      Icon: Copy,
+      disabled: false,
+      run: () => runAction(onCopySummary),
+    },
+    {
+      key: 'save',
+      label: 'Save',
+      hint: undefined,
+      Icon: Save,
+      disabled: false,
+      run: () => runAction(onSave),
+    },
+    {
+      key: 'library',
+      label: 'Library',
+      hint: 'Open model library (saved models)',
+      Icon: Bookmark,
+      disabled: false,
+      run: () => runAction(onOpenSaved),
+    },
+    {
+      key: 'excel',
+      label: exporting ? 'Exporting…' : 'Excel',
+      hint: 'Export the model to a workbook',
+      Icon: FileSpreadsheet,
+      disabled: Boolean(exporting),
+      run: () => runAction(onExportExcel),
+    },
+  ]
 
   // Roving-tabindex tab pattern: arrows move focus and selection inside the list.
   const handleModeKeyDown = (e: React.KeyboardEvent) => {
@@ -269,11 +381,17 @@ export function Header({
             past the KPI bar that a screen reader can jump to; header, main and
             footer alone gave no way past the bar itself. */}
         <nav aria-label="Model actions" className="flex items-center space-x-1 sm:space-x-1.5 shrink-0">
+          {/* `max-[1439px]:hidden` on the four inline actions, and the menu below
+              1440px, is one decision made in two class lists. The breakpoint is
+              duplicated by necessity -- Tailwind has no way to say "the other one" --
+              so `the header breakpoint is stated once` asserts the two agree, because a
+              mismatch here shows up as both the row and the menu at once, which looks
+              like a duplicate control rather than an overflow. */}
           <button
             type="button"
             onClick={onCopySummary}
             title="Copy valuation memo to clipboard"
-            className="flex items-center space-x-1 px-2 py-1 bg-surface-2 hover:bg-surface text-text-muted hover:text-text-main border border-border text-[11px] font-medium rounded-sm transition-colors cursor-pointer shrink-0"
+            className="max-[1439px]:hidden flex items-center space-x-1 px-2 py-1 bg-surface-2 hover:bg-surface text-text-muted hover:text-text-main border border-border text-[11px] font-medium rounded-sm transition-colors cursor-pointer shrink-0"
           >
             <Copy className="w-3.5 h-3.5 shrink-0" aria-hidden />
             <span>Copy</span>
@@ -282,17 +400,25 @@ export function Header({
           <button
             type="button"
             onClick={onSave}
-            className="flex items-center space-x-1 px-2 py-1 bg-transparent hover:bg-accent-subtle text-accent hover:text-accent-hover border border-accent-border text-[11px] font-medium rounded-sm transition-colors cursor-pointer shrink-0"
+            className="max-[1439px]:hidden flex items-center space-x-1 px-2 py-1 bg-transparent hover:bg-accent-subtle text-accent hover:text-accent-hover border border-accent-border text-[11px] font-medium rounded-sm transition-colors cursor-pointer shrink-0"
           >
             <Save className="w-3.5 h-3.5 shrink-0" aria-hidden />
             <span>Save</span>
           </button>
 
+          {/* `max-[1439px]:hidden` and NOT `hidden sm:flex`. The original button used
+              `hidden sm:flex` to drop Library on narrow screens, and adding the max-width
+              variant alongside it does not compose: both match between 640px and 1439px,
+              and `sm:flex` won, so Library stayed on the row for the whole band while the
+              other three collapsed. Measured at 1152px with `sm:flex` present: Library
+              visible and 90px off the edge. The max-width variant alone is the whole
+              condition now, because the menu covers the narrow case that `sm:` was
+              guarding. */}
           <button
             type="button"
             onClick={onOpenSaved}
             title="Open model library (saved models)"
-            className="hidden sm:flex items-center space-x-1 px-2 py-1 bg-surface-2 hover:bg-surface text-text-muted hover:text-text-main border border-border text-[11px] font-medium rounded-sm transition-colors cursor-pointer shrink-0"
+            className="max-[1439px]:hidden flex items-center space-x-1 px-2 py-1 bg-surface-2 hover:bg-surface text-text-muted hover:text-text-main border border-border text-[11px] font-medium rounded-sm transition-colors cursor-pointer shrink-0"
           >
             <Bookmark className="w-3.5 h-3.5 shrink-0" aria-hidden />
             <span>Library</span>
@@ -302,12 +428,54 @@ export function Header({
             type="button"
             onClick={onExportExcel}
             disabled={exporting}
-            className="flex items-center space-x-1 px-2.5 py-1 bg-excel-bg hover:bg-excel-bg-hover disabled:opacity-60 text-excel-text border border-excel-border text-[11px] font-semibold rounded-sm transition-colors cursor-pointer disabled:cursor-wait shrink-0"
+            className="max-[1439px]:hidden flex items-center space-x-1 px-2.5 py-1 bg-excel-bg hover:bg-excel-bg-hover disabled:opacity-60 text-excel-text border border-excel-border text-[11px] font-semibold rounded-sm transition-colors cursor-pointer disabled:cursor-wait shrink-0"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" aria-hidden />
             <span>{exporting ? 'Exporting…' : 'Excel'}</span>
           </button>
 
+          {/* The same four actions, for the widths where the row does not fit. A menu
+              rather than a narrower row because the row is a single non-wrapping line in
+              a fixed 48px bar: there is nowhere for a control to go but off the end. */}
+          <div ref={actionsRef} className="relative min-[1440px]:hidden shrink-0">
+            <button
+              ref={actionsButtonRef}
+              type="button"
+              onClick={() => setActionsOpen((v) => !v)}
+              aria-expanded={actionsOpen}
+              aria-haspopup="menu"
+              aria-controls={actionsOpen ? actionsMenuId : undefined}
+              aria-label={`Model actions${actionsOpen ? ', open' : ''}`}
+              title="Model actions"
+              className="flex items-center px-2 py-1 bg-surface-2 hover:bg-surface text-text-muted hover:text-text-main border border-border text-[11px] font-medium rounded-sm transition-colors cursor-pointer"
+            >
+              <Ellipsis className="w-3.5 h-3.5" aria-hidden />
+            </button>
+
+            {actionsOpen && (
+              <div
+                id={actionsMenuId}
+                role="menu"
+                aria-label="Model actions"
+                className="absolute right-0 top-[calc(100%+6px)] z-50 min-w-[190px] rounded-sm border border-border-interactive bg-surface-2 py-1 shadow-[var(--shadow-pop)]"
+              >
+                {ACTION_ITEMS.map(({ key, label, hint, Icon, disabled, run }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    role="menuitem"
+                    title={hint}
+                    disabled={disabled}
+                    onClick={run}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[12px] text-text-main hover:bg-surface-3 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  >
+                    <Icon className="w-3.5 h-3.5 shrink-0 text-text-dim" aria-hidden />
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </nav>
       </div>
     </header>
