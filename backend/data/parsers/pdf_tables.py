@@ -11,6 +11,23 @@ from backend.data.store import RawDatapoint
 
 LABEL_X_MAX = 330.0  # left of this = label text; right = value columns
 
+# A note reference: dotted, optionally with a letter. `3.5`, `3.4(a)`, `2.12`.
+#
+# The figures in these statements are comma-grouped (`2,487`), parenthesised (`(215)`) or bare
+# integers standing in a dense aligned column (`59`, `971`), so the dotted shape separates a
+# reference from a figure and the column position confirms it.
+_NOTE_SHAPE = re.compile(r"^\d+(?:\.\d+)+(?:\([a-z]\))?$", re.I)
+
+# A value column needs this many numeric tokens at one x to be a column rather than a coincidence.
+_MIN_COLUMN_ROWS = 6
+# How far left of a note reference the boundary goes, so the reference itself lands on the value
+# side rather than exactly on the edge.
+_NOTE_MARGIN = 4.0
+# How close a numeric column must sit to a year header to count as a period column. This is what
+# tells the NOTE column apart from a VALUE column, and density alone cannot: HCLTech printed 5
+# carries eleven references in a column as dense as either of its two value columns.
+_ANCHOR_PROXIMITY = 40.0
+
 _SKIP_LABELS = {
     "three", "two", "year", "as", "the", "particulars",
     "mar", "note", "notes", "total",
@@ -21,7 +38,84 @@ def _datapoint_id(company_id: str, section: str, metric: str, period: str, sourc
     return hashlib.sha1(f"{company_id}|{section}|{metric}|{period}|{source}|{page}|{label}|{value:.4f}".encode()).hexdigest()
 
 
-def _year_anchors(page) -> list[tuple[float, int]]:
+def _numeric(token: str) -> float | None:
+    s = token.replace(",", "").replace("(", "-").replace(")", "")
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _value_columns(words, page_height: float) -> list[float]:
+    """x positions of numeric columns that have a year header above them.
+
+    The year header is the discriminator, not density. HCLTech printed 5 has eleven note
+    references in a column at x=330, as dense as either of its value columns at 448 and 546, so
+    a density scan alone cannot tell a note column from a period column -- and treating the note
+    column as a value column is what put those references on the wrong side of the boundary in
+    the first place.
+    """
+    hist: dict[float, int] = {}
+    for w in words:
+        if _numeric(w["text"]) is not None:
+            key = float(int(w["x0"] // 2.0) * 2.0)
+            hist[key] = hist.get(key, 0) + 1
+    years = [
+        float(w["x0"]) for w in words
+        if re.fullmatch(r"20\d\d", w["text"]) and w["top"] < page_height * 0.5
+    ]
+    return [
+        x for x, n in sorted(hist.items())
+        if n >= _MIN_COLUMN_ROWS
+        and any(abs(x - y) <= _ANCHOR_PROXIMITY for y in years)
+    ]
+
+
+def _caption_boundary(words, page_height: float) -> float:
+    """`LABEL_X_MAX`, lowered only where a note reference is caught on the caption side.
+
+    The boundary separates caption words from everything else. `parse_predicted_statement_page`
+    already discards anything outside the year-anchor window, so a note reference on the VALUE
+    side costs nothing, while one on the CAPTION side corrupts the caption -- "Investments
+    3.4(b)" instead of "Investments" -- which is why HCLTech's captions fail to map.
+
+    Measured across all four committed filings: Infosys prints its references at x=347.5 and
+    357.7, safely right of 330, and TCS prints none at all, so both keep 330 exactly. HCLTech
+    prints them at 327.2-335.8, which straddles it -- `3.4(b)` at 329.7 lands in the caption and
+    `3.4(a)` at 330.0 does not. So the constant is wrong for exactly one of three layouts, and the
+    fix lowers it for that one.
+
+    **Only ever downward.** Raising it would move words from the discarded side into captions, and
+    two placements that would have raised it were measured and rejected first:
+
+      * the widest gap between x-clusters lands at 334->390 on HCLTech printed 5, to the RIGHT of
+        the note column, so every reference would go into the caption. The caption's own internal
+        spacing makes wider gaps than the gap that separates text from notes.
+      * the right edge of the non-numeric words is 525-575 on every page, because ordinary words
+        sit out in the value area too. It would have swallowed the figures.
+
+    A page with no detected value column returns the constant untouched. That is what keeps the
+    two Infosys NOTES pages safe: their `1.1`, `1.2` tokens are numbered list items in prose at
+    x=40, and treating them as references would have moved the boundary to 36 and pulled 255
+    words into captions.
+    """
+    if not _value_columns(words, page_height):
+        return LABEL_X_MAX
+    columns = _value_columns(words, page_height)
+    leftmost = None
+    for w in words:
+        if not _NOTE_SHAPE.match(w["text"]):
+            continue
+        if any(abs(w["x0"] - c) <= 2.0 for c in columns):
+            continue
+        if leftmost is None or w["x0"] < leftmost:
+            leftmost = w["x0"]
+    if leftmost is None or leftmost >= LABEL_X_MAX:
+        return LABEL_X_MAX
+    return leftmost - _NOTE_MARGIN
+
+
+def _year_anchors(page, boundary: float = LABEL_X_MAX) -> list[tuple[float, int]]:
     """All fiscal-year value columns: [(x, year)] sorted by x."""
     words = page.extract_words()
     by_top: dict[float, list[tuple[float, str]]] = {}
@@ -31,7 +125,7 @@ def _year_anchors(page) -> list[tuple[float, int]]:
     for key in sorted(by_top):
         ws = sorted(by_top[key], key=lambda t: t[0])
         for x, t in ws:
-            if x >= LABEL_X_MAX and re.fullmatch(r"20\d\d", t):
+            if x >= boundary and re.fullmatch(r"20\d\d", t):
                 anchors.append((x, int(t)))
     anchors.sort()
     if not anchors:
@@ -100,7 +194,7 @@ def _clean_label(label: str) -> str:
     return label.strip()
 
 
-def _rows(page) -> list[tuple[str, list[tuple[float, str]], float]]:
+def _rows(page, boundary: float = LABEL_X_MAX) -> list[tuple[str, list[tuple[float, str]], float, float]]:
     """Group words into caption-and-figures rows, with each row's own `top`.
 
     The coordinate is returned because it is the only thing that distinguishes two
@@ -163,10 +257,29 @@ def _rows(page) -> list[tuple[str, list[tuple[float, str]], float]]:
     out = []
     for key in sorted(by_top):
         ws = sorted(by_top[key], key=lambda t: t[0])
-        label = " ".join(t for x, t in ws if x < LABEL_X_MAX).strip()
-        vals = [(x, t) for x, t in ws if x >= LABEL_X_MAX]
+        label = " ".join(t for x, t in ws if x < boundary).strip()
+        vals = [(x, t) for x, t in ws if x >= boundary]
         if not label:
             continue
+        # The caption's own left edge, which is the ONLY nesting signal in the document.
+        #
+        # TCS prints three levels deep and HCLTech two:
+        #
+        #     x0 79.7   Financial assets
+        #     x0 87.0     Trade receivables
+        #     x0 94.2       Billed        3.5   2,487   2,284
+        #     x0 94.2       Unbilled      3.5     839     739
+        #
+        # A flat (caption, values) pair cannot tell "Trade receivables heads these two" from
+        # "Trade receivables is a line in its own right", so the parser emitted the parent
+        # with no value and the children as though they were top-level captions. Measured on
+        # the four committed pages that nest: 22 nested parents, none of which prints a
+        # figure of its own, so every one of those parents was silently losing its amount.
+        #
+        # Recorded rather than used yet. The roll-up that consumes this is a separate change,
+        # and keeping them apart means this one is provably output-neutral: Infosys is flat at
+        # one indent throughout, so a field nothing reads cannot change a single row.
+        indent = min((x for x, _ in ws if x < boundary), default=0.0)
         if not any(re.match(r"[-(\d]", t) for _, t in vals):
             # A row of words with no figure is usually a section header -- and the
             # balance sheet's "Current assets" / "Non-current assets" headers are
@@ -174,9 +287,9 @@ def _rows(page) -> list[tuple[str, list[tuple[float, str]], float]]:
             # every caption came back with no half: the disambiguator was being
             # thrown away by the filter that keeps actual data rows.
             if _balance_sheet_half(label) is not None:
-                out.append((label, [], key))
+                out.append((label, [], key, indent))
             continue
-        out.append((label, vals, key))
+        out.append((label, vals, key, indent))
     return out
 
 
@@ -211,7 +324,10 @@ def parse_predicted_statement_page(
     """
     with pdfplumber.open(pdf_path) as pdf:
         page = pdf.pages[page_index]
-        anchors = _year_anchors(page)
+        # One boundary for the page, decided once and used by both the anchor search and the
+        # caption split, so the two cannot disagree about which tokens are figures.
+        boundary = _caption_boundary(page.extract_words(), page.height)
+        anchors = _year_anchors(page, boundary)
         annual_x = {a[0] for a in (anchors[len(anchors) // 2:] if annual_only else anchors)}
         lo_x = anchors[0][0] - 50.0
         hi_x = anchors[-1][0] + 50.0
@@ -221,7 +337,7 @@ def parse_predicted_statement_page(
         # Tracked across the rows rather than per-row, because the boundary is a
         # header that appears once and governs everything printed after it.
         half: str | None = None
-        for raw_label, vals, _row_top in _rows(page):
+        for raw_label, vals, _row_top, _indent in _rows(page, boundary):
             label = _clean_label(raw_label)
             low = label.lower()
             if not label or low in _SKIP_LABELS or re.fullmatch(r"\d+\.\d+", label):
