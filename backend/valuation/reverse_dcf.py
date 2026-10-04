@@ -154,7 +154,7 @@ def compute_reverse_dcf(
             non_current_investments_cr=non_current_investments_cr,
             minority_interest_cr=minority_interest_cr,
             preferred_stock_cr=preferred_stock_cr,
-        mezzanine_equity_cr=mezzanine_equity_cr,
+            mezzanine_equity_cr=mezzanine_equity_cr,
             terminal_growth_rate=terminal_growth_rate,
             exit_multiple=exit_multiple,
             timing_convention=timing_convention,
@@ -189,6 +189,7 @@ def _solve_implied_revenue_cagr(
     non_current_investments_cr: float = 0.0,
     minority_interest_cr: float = 0.0,
     preferred_stock_cr: float = 0.0,
+    mezzanine_equity_cr: float = 0.0,
     terminal_growth_rate: float = 4.0,
     exit_multiple: float = 20.0,
     timing_convention: str = "mid_year",
@@ -262,6 +263,7 @@ def _solve_implied_revenue_cagr(
             non_current_investments_cr=non_current_investments_cr,
             minority_interest_cr=minority_interest_cr,
             preferred_stock_cr=preferred_stock_cr,
+            mezzanine_equity_cr=mezzanine_equity_cr,
         )
         return bridge.implied_share_price
 
