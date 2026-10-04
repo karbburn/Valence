@@ -141,7 +141,7 @@ export function SavedModelsModal({
                     <>
                       <button
                         onClick={() => handleSelectModel(m.model_id)}
-                        className="flex items-center space-x-1 px-3 py-1 bg-[#0ea5e9] hover:bg-[#38bdf8] text-white text-[12px] font-semibold rounded-[4px] transition-colors"
+                        className="flex items-center space-x-1 px-3 py-1 bg-accent hover:bg-accent-hover text-on-accent text-[12px] font-semibold rounded-[4px] transition-colors"
                       >
                         <FolderOpen className="w-3.5 h-3.5" />
                         <span>Load</span>

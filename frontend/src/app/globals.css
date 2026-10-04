@@ -25,6 +25,18 @@
   --c-accent-hover: #38bdf8;
   --c-accent-subtle: rgba(14, 165, 233, 0.10);
   --c-accent-border: rgba(14, 165, 233, 0.30);
+  /* The ink to read ON an accent fill, and it is the page's own canvas colour.
+     A light label on this fill is arithmetically impossible rather than merely
+     unsuccessful: the accent's relative luminance is 0.329, so 4.5:1 against it would
+     need a foreground above 1.0, and white is the brightest colour that exists. Measured,
+     white scores 2.77:1 here and 2.14:1 on --c-accent-hover, and --c-text's #f8fafc is no
+     better at 2.65:1, so there is nothing to lighten toward. A muted grey fails too, at
+     1.72:1, because it is lighter than the fill rather than darker.
+     The label therefore has to be DARK, and the only inks that clear it are near-black:
+     this scores 7.06:1 steady and 9.14:1 on hover. It is a token rather than a literal
+     because "the ink for an accent fill" is a role of its own, and naming it is what stops
+     the next `text-white` from being written on an accent background. */
+  --c-on-accent: #080c14;
 
   /* Semantic */
   --c-positive: #10b981;
@@ -48,6 +60,13 @@
   --c-excel-bg: #065f46;
   --c-excel-text: #6ee7b7;
   --c-excel-border: #047857;
+  /* Hover steps the fill DOWN, not up. The label is already the lightest green in the
+     palette, so a lighter fill moves the two toward each other and the contrast falls:
+     excel-text on excel-bg is 5.04:1 and on excel-border it is 3.60:1, under the 4.5:1
+     a 11px label needs. This is 5.80:1, so the control gets more legible as the pointer
+     approaches it. A hover that dims is unusual on a dark surface, but the alternative is
+     a control that becomes harder to read the moment you reach for it. */
+  --c-excel-bg-hover: #04553e;
 
   /* Elevation — neutral, no colored glow */
   --shadow-pop: 0 8px 24px rgba(2, 6, 16, 0.55);
@@ -74,6 +93,7 @@
   --color-accent-hover: var(--c-accent-hover);
   --color-accent-subtle: var(--c-accent-subtle);
   --color-accent-border: var(--c-accent-border);
+  --color-on-accent: var(--c-on-accent);
 
   --color-positive: var(--c-positive);
   --color-positive-subtle: var(--c-positive-subtle);
@@ -87,6 +107,7 @@
   --color-excel-bg: var(--c-excel-bg);
   --color-excel-text: var(--c-excel-text);
   --color-excel-border: var(--c-excel-border);
+  --color-excel-bg-hover: var(--c-excel-bg-hover);
 
   --font-sans: var(--font-inter), Inter, -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: var(--font-mono), "JetBrains Mono", Fira Code, monospace;

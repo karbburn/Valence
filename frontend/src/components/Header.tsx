@@ -302,11 +302,12 @@ export function Header({
             type="button"
             onClick={onExportExcel}
             disabled={exporting}
-            className="flex items-center space-x-1 px-2.5 py-1 bg-excel-bg hover:bg-excel-border disabled:opacity-60 text-excel-text border border-excel-border text-[11px] font-semibold rounded-sm transition-colors cursor-pointer disabled:cursor-wait shrink-0"
+            className="flex items-center space-x-1 px-2.5 py-1 bg-excel-bg hover:bg-excel-bg-hover disabled:opacity-60 text-excel-text border border-excel-border text-[11px] font-semibold rounded-sm transition-colors cursor-pointer disabled:cursor-wait shrink-0"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" aria-hidden />
             <span>{exporting ? 'Exporting…' : 'Excel'}</span>
           </button>
+
         </nav>
       </div>
     </header>

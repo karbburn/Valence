@@ -140,7 +140,7 @@ export function MethodologyModal({
         <div className="flex justify-end pt-1">
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-accent hover:bg-accent-hover text-white text-[12px] font-semibold rounded-sm transition-colors cursor-pointer"
+            className="px-4 py-1.5 bg-accent hover:bg-accent-hover text-on-accent text-[12px] font-semibold rounded-sm transition-colors cursor-pointer"
           >
             Close
           </button>

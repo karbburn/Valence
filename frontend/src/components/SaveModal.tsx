@@ -81,7 +81,7 @@ export function SaveModal({
           <button
             type="submit"
             disabled={saving || !name.trim()}
-            className="flex items-center space-x-1.5 px-4 py-1.5 bg-[#0ea5e9] hover:bg-[#38bdf8] text-white rounded-[4px] text-[12px] font-semibold transition-colors disabled:opacity-50"
+            className="flex items-center space-x-1.5 px-4 py-1.5 bg-accent hover:bg-accent-hover text-on-accent rounded-[4px] text-[12px] font-semibold transition-colors disabled:opacity-50"
           >
             <Save className="w-3.5 h-3.5" />
             <span>{saving ? 'Saving...' : 'Save Model'}</span>

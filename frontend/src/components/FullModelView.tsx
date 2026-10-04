@@ -95,7 +95,7 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
             onClick={() => setActiveTab('is')}
             className={`flex items-center space-x-1.5 px-3 py-1 text-[12px] rounded-[4px] transition-colors ${
               activeTab === 'is'
-                ? 'bg-[#0ea5e9] text-white font-semibold shadow-sm'
+                ? 'bg-accent text-on-accent font-semibold shadow-sm'
                 : 'text-text-dim hover:text-[#f8fafc]'
             }`}
           >
@@ -106,7 +106,7 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
             onClick={() => setActiveTab('bs')}
             className={`flex items-center space-x-1.5 px-3 py-1 text-[12px] rounded-[4px] transition-colors ${
               activeTab === 'bs'
-                ? 'bg-[#0ea5e9] text-white font-semibold shadow-sm'
+                ? 'bg-accent text-on-accent font-semibold shadow-sm'
                 : 'text-text-dim hover:text-[#f8fafc]'
             }`}
           >
@@ -117,7 +117,7 @@ export function FullModelView({ spec, scenario }: FullModelViewProps) {
             onClick={() => setActiveTab('cf')}
             className={`flex items-center space-x-1.5 px-3 py-1 text-[12px] rounded-[4px] transition-colors ${
               activeTab === 'cf'
-                ? 'bg-[#0ea5e9] text-white font-semibold shadow-sm'
+                ? 'bg-accent text-on-accent font-semibold shadow-sm'
                 : 'text-text-dim hover:text-[#f8fafc]'
             }`}
           >
