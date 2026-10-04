@@ -47,6 +47,37 @@ from backend.data.pipeline import (
 REAL = sorted(NSE_CACHE_DIR.glob("*.json"))
 
 
+def cached_pairs() -> dict:
+    """The metadata that actually has a PDF beside it, keyed by company.
+
+    Every test that needs a document goes through here, so "no document in this checkout"
+    is one skip rather than a per-test guess. The first version guarded on the presence of
+    the JSON alone, which is present in CI while a PDF may not be, so two tests failed there
+    instead of skipping.
+    """
+    out = {}
+    for meta in REAL:
+        try:
+            payload = __import__("json").loads(meta.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        symbol = str(payload.get("symbol") or "").strip().lower()
+        if not symbol:
+            continue
+        pdfs = sorted(meta.parent.glob(f"{meta.stem}-*.pdf"))
+        if pdfs:
+            out[symbol] = (pdfs[0], payload)
+    return out
+
+
+def require(cid: str):
+    pairs = cached_pairs()
+    key = cid.split("_")[0].lower()
+    if key not in pairs:
+        pytest.skip(f"no cached NSE document for {cid} in this checkout")
+    return pairs[key]
+
+
 def test_the_cache_directory_is_where_the_documents_actually_are():
     """A constant that drifts from the fetcher's default is how this stays broken.
 
@@ -63,21 +94,34 @@ def test_the_cache_directory_is_where_the_documents_actually_are():
 
 
 def test_a_cached_document_is_discoverable_from_its_company_id():
-    """The link between a company and its statement is the metadata, not the filename."""
-    if not REAL:
-        pytest.skip("no cached NSE document in the repository")
-    for cid, expected in (("tcs_tcs", 1), ("hcltech_hcltech", 1)):
+    """The link between a company and its statement is the metadata, not the filename.
+
+    And the lookup cannot depend on case. The first version built the path from the
+    uppercased ticker, which resolves on Windows and finds nothing on Linux, because the
+    fetcher writes the symbol as it was invoked. CI failed both of these tests with "found 0
+    cached attachments", which is the original defect reappearing for a new reason and would
+    have read as "the fix does not work" rather than "the fix only worked on one OS".
+    """
+    checked = 0
+    for cid in ("tcs_tcs", "hcltech_hcltech", "TCS_TCS", "Tcs_Tcs"):
+        try:
+            require(cid)
+        except pytest.skip.Exception:
+            continue
         found = _cached_nse_pdfs(cid)
-        assert len(found) == expected, (
-            f"{cid}: found {len(found)} cached attachments, expected {expected}. The "
-            f"fetcher's output is invisible to ingestion, which is the defect this file "
-            f"exists to close."
+        assert len(found) == 1, (
+            f"{cid}: found {len(found)} cached attachments, expected 1. The fetcher's "
+            f"output is invisible to ingestion, which is the defect this file exists to "
+            f"close."
         )
         pdf_path, meta = found[0]
         assert pdf_path.exists()
         assert meta.get("balance_sheet_pages"), (
             f"{cid}: the metadata records no balance-sheet page, so there is nothing to parse"
         )
+        checked += 1
+    if not checked:
+        pytest.skip("no cached NSE document in this checkout")
 
 
 def test_the_printed_page_number_becomes_the_right_index():
@@ -87,15 +131,14 @@ def test_the_printed_page_number_becomes_the_right_index():
     directly. Passing the printed number through unchanged reads the page BEFORE the
     balance sheet, which for these documents is a note or the income statement.
     """
-    if not REAL:
-        pytest.skip("no cached NSE document in the repository")
     import pdfplumber
 
     from backend.data.ingestion.nse_filings import looks_like_balance_sheet
 
-    for meta_path in REAL:
-        meta = __import__("json").loads(meta_path.read_text(encoding="utf-8"))
-        pdf_path = sorted(meta_path.parent.glob(f"{meta_path.stem}-*.pdf"))[0]
+    pairs = cached_pairs()
+    if not pairs:
+        pytest.skip("no cached NSE document in this checkout")
+    for pdf_path, meta in pairs.values():
         with pdfplumber.open(pdf_path) as doc:
             for printed in meta["balance_sheet_pages"]:
                 text_on_index = doc.pages[printed - 1].extract_text() or ""
@@ -117,9 +160,10 @@ def test_the_section_comes_from_the_document_not_the_caller():
     comprehensive income statement, and asserted `BALANCE SHEET` for every page of every PDF
     in a per-company directory that no company has.
     """
-    if not REAL:
-        pytest.skip("no cached NSE document in the repository")
+    checked = 0
     for cid in ("tcs_tcs", "hcltech_hcltech"):
+        if cid.split("_")[0].lower() not in cached_pairs():
+            continue
         for _pdf, meta in _cached_nse_pdfs(cid):
             dps = _filing_datapoints_from_cached_pdf(_pdf, meta, cid)
             assert dps, f"{cid}: the located balance sheet produced no rows"
@@ -129,13 +173,17 @@ def test_the_section_comes_from_the_document_not_the_caller():
                 f"matching the balance sheet's own subtotal caption, so any other section "
                 f"is the caller speaking rather than the document."
             )
+            checked += 1
+    if not checked:
+        pytest.skip("no cached NSE document in this checkout")
 
 
 def test_rows_carry_their_own_provenance():
     """A filing row that does not say which document and page it came from cannot be checked."""
-    if not REAL:
-        pytest.skip("no cached NSE document in the repository")
+    checked = 0
     for cid in ("tcs_tcs", "hcltech_hcltech"):
+        if cid.split("_")[0].lower() not in cached_pairs():
+            continue
         for _pdf, meta in _cached_nse_pdfs(cid):
             dps = _filing_datapoints_from_cached_pdf(_pdf, meta, cid)
             for d in dps[:20]:
@@ -152,14 +200,22 @@ def test_rows_carry_their_own_provenance():
                 # stable one is what lets a rebuild supersede rather than accumulate.
                 assert d.id
                 assert d.period_end_date is not None
+            checked += 1
+    if not checked:
+        pytest.skip("no cached NSE document in this checkout")
 
 
 def test_the_figures_are_the_filers_own_and_not_a_fixture():
-    """The whole point: real rows, from the real document, for these two companies."""
-    if not REAL:
-        pytest.skip("no cached NSE document in the repository")
-    counts = {cid: len(_get_secondary_filing_datapoints(cid))
-              for cid in ("tcs_tcs", "hcltech_hcltech")}
+    """The whole point: real rows, from the real document, for these companies."""
+    pairs = cached_pairs()
+    if not pairs:
+        pytest.skip("no cached NSE document in this checkout")
+    counts = {}
+    for cid in ("tcs_tcs", "hcltech_hcltech"):
+        if cid.split("_")[0].lower() not in pairs:
+            continue
+        counts[cid] = len(_get_secondary_filing_datapoints(cid))
+    assert counts, "no company in this checkout has a cached document"
     for cid, n in counts.items():
         assert n > 0, (
             f"{cid} produced no filing datapoints. Before this path existed both companies "

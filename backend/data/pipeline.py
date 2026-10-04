@@ -49,20 +49,38 @@ def _cached_nse_pdfs(company_id: str) -> list[tuple[Path, dict]]:
     The fetcher writes `<symbol>.json` beside each PDF and records the balance-sheet pages
     it found by CONTENT. That record is the only thing connecting a company to a document,
     and it is what this function reads rather than a filename or a hardcoded page number.
+
+    The metadata is MATCHED BY ITS OWN `symbol` FIELD, and the directory is searched rather
+    than indexed by a guessed filename. The first version built the path as
+    `NSE_CACHE_DIR / f"{ticker.upper()}.json"`, which works on Windows and returns nothing on
+    Linux, because the fetcher writes the symbol in whatever case it was invoked with
+    (`tcs.json`) and only Windows resolves `TCS.json` to it. The whole path was invisible
+    until CI ran it on a case-sensitive filesystem and both companies came back with zero
+    filing rows -- the exact symptom this function exists to fix, reappearing for a new
+    reason.
+
+    Matching the recorded symbol also means a cache holding `TCS.json` and one holding
+    `tcs.json` both work, and a metadata file whose name disagrees with its contents is
+    still found by what it says rather than by what it is called.
     """
     from backend.data.ingestion.nse_filings import NSE_CACHE_DIR
 
-    ticker = company_id.split("_")[0].upper()
-    meta_path = NSE_CACHE_DIR / f"{ticker}.json"
-    if not meta_path.exists():
+    ticker = company_id.split("_")[0].strip().upper()
+    if not ticker or not NSE_CACHE_DIR.is_dir():
         return []
-    try:
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return []
-    stem = meta_path.with_suffix("")  # <symbol>.json -> <symbol>
-    pdfs = sorted(stem.parent.glob(f"{stem.name}-*.pdf"))
-    return [(p, meta) for p in pdfs]
+
+    found: list[tuple[Path, dict]] = []
+    for meta_path in sorted(NSE_CACHE_DIR.glob("*.json")):
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        symbol = str(meta.get("symbol") or "").strip().upper()
+        if symbol != ticker:
+            continue
+        pdfs = sorted(meta_path.parent.glob(f"{meta_path.stem}-*.pdf"))
+        found.extend((p, meta) for p in pdfs)
+    return found
 
 
 def _filing_datapoints_from_cached_pdf(
