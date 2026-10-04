@@ -32,8 +32,14 @@ DB_PATH = WORKSPACE_ROOT / "backend" / "data" / "valence.db"
 def run(
     historical_model: HistoricalModel | None = None,
     metadata: ModelMetadata | None = None,
+    db_path: str | Path | None = None,
 ) -> ModelSpecification:
-    """Build a fully populated ModelSpecification including forecast for all scenarios."""
+    """Build a fully populated ModelSpecification including forecast for all scenarios.
+
+    `db_path` is threaded to both the historical reader and the provenance read, because
+    each of them otherwise consults a module global and the caller has already named the
+    store it means. See `run_historical` and `_read_provenance`.
+    """
     if historical_model is None:
         # Never silently default to the Infosys historicals when metadata names a
         # different company — that would build a model labeled with the requested
@@ -42,12 +48,15 @@ def run(
             historical_model = run_historical(
                 target_periods=["FY24", "FY25", "FY26"],
                 company_id=metadata.company_id,
+                db_path=db_path,
             )
         else:
-            historical_model = run_historical(target_periods=["FY24", "FY25", "FY26"])
+            historical_model = run_historical(
+                target_periods=["FY24", "FY25", "FY26"], db_path=db_path
+            )
 
     if metadata is None:
-        metadata = get_metadata_for_company(historical_model.company_id)
+        metadata = get_metadata_for_company(historical_model.company_id, db_path=db_path)
     elif metadata.company_id != historical_model.company_id:
         raise ValueError(
             f"metadata.company_id ({metadata.company_id}) does not match "

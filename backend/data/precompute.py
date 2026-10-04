@@ -26,20 +26,30 @@ CACHE_DIR = PROJECT_ROOT / "backend" / "data" / "cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def run_precompute(company_id: str | None = None) -> Path:
-    """Compile model specification and write to JSON cache file."""
+def run_precompute(company_id: str | None = None, db_path: str | Path | None = None) -> Path:
+    """Compile model specification and write to JSON cache file.
+
+    `db_path` is threaded all the way down. It used to be dropped here, which undid the
+    store its own caller had been threading: `run_batch_company_onboarding(db_path=X)` passes
+    it to `get_universe_company`, to `ensure_company_ingested` and to
+    `update_onboarding_status`, and then called this, which ingested into the default store
+    and assembled the model from the default store. A caller testing a migration against a
+    copy was writing to the copy and building from live.
+    """
     target_id = company_id or os.getenv("PRECOMPANY_ID", "infy_infy")
-    print(f"Precompiling ModelSpecification for '{target_id}'...")
+    print(f"Precompulating ModelSpecification for '{target_id}'...")
 
     try:
         from backend.data.batch import ensure_company_ingested
-        ensure_company_ingested(target_id)
+        ensure_company_ingested(target_id, db_path=db_path)
 
         # 1. Run Historical 3-Statement Model
-        hist_model = run_historical(target_periods=["FY24", "FY25", "FY26"], company_id=target_id)
+        hist_model = run_historical(
+            target_periods=["FY24", "FY25", "FY26"], company_id=target_id, db_path=db_path
+        )
 
         # 2. Run Forecast Engine
-        forecast_spec = run_forecast_pipeline(hist_model)
+        forecast_spec = run_forecast_pipeline(hist_model, db_path=db_path)
 
         # 3. Run Valuation Engine
         valuation_spec = run_valuation(forecast_spec)

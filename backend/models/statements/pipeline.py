@@ -63,17 +63,28 @@ def _period_sort_key(label: str) -> tuple[int, str]:
     return (int(digits) if digits else 0, label)
 
 
-def run(target_periods: list[str] | None = None, company_id: str = "infy_infy") -> HistoricalModel:
+def run(
+    target_periods: list[str] | None = None,
+    company_id: str = "infy_infy",
+    db_path: str | Path | None = None,
+) -> HistoricalModel:
     """Run Historical Model Assembly for a target company.
 
     `target_periods` is read for its LENGTH only: the caller is asking for that
     many historical years, and the assembler decides which years those are from
     what the filings actually report.
-    """
-    if not DB_PATH.exists():
-        raise FileNotFoundError(f"Database not found at {DB_PATH}. Run taxonomy normalization pipeline first.")
 
-    canonical_dps = query_canonical_datapoints(DB_PATH, company_id)
+    `db_path` names the store to read, because the caller has one. `ensure_company_ingested
+    (db_path=X)` ingests into the store the caller named, and this read the module global
+    regardless, so a caller building against a copy was assembling a model from the live
+    store's rows. Same defect as `normalization.pipeline.run` (fixed in 18b4220) and
+    `_read_provenance`, one and two layers further along the same call chain.
+    """
+    target = Path(db_path) if db_path is not None else DB_PATH
+    if not target.exists():
+        raise FileNotFoundError(f"Database not found at {target}. Run taxonomy normalization pipeline first.")
+
+    canonical_dps = query_canonical_datapoints(target, company_id)
     if not canonical_dps:
         # The same user-facing situation as no revenue line below: nothing behind
         # this company. Twelve lines further down this raised a plain ValueError
@@ -84,7 +95,7 @@ def run(target_periods: list[str] | None = None, company_id: str = "infy_infy") 
             f"(ingestion produced no canonical datapoints)"
         )
 
-    raw_dps = query_datapoints(DB_PATH, company_id)
+    raw_dps = query_datapoints(target, company_id)
 
     wanted = len(target_periods) if target_periods else DEFAULT_HIST_PERIOD_COUNT
     resolved = select_complete_periods(wanted, canonical_dps)

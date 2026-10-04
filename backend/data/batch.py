@@ -363,7 +363,12 @@ def run_batch_company_onboarding(
             ensure_company_ingested(company_id=company_id, db_path=db_path)
 
             # Precompute runs historical -> forecast -> valuation -> QA and saves static cache
-            cache_path = run_precompute(company_id=company_id)
+            #
+            # db_path is passed because this function used to drop it: the caller threaded
+            # a store into every other call here and then this one ingested from and read
+            # the default, so a batch run against a copy wrote to the copy and built from
+            # live.
+            cache_path = run_precompute(company_id=company_id, db_path=db_path)
 
             if not cache_path.exists() or cache_path.stat().st_size == 0:
                 raise ValueError(f"Cache file empty or missing for {company_id}")
