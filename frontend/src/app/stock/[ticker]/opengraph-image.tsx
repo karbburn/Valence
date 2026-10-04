@@ -1,6 +1,8 @@
 import { ImageResponse } from 'next/og'
 import { notFound } from 'next/navigation'
 import { getModelSpecServer, resolveSlugServer } from '@/lib/serverApi'
+import { mayPublishPrice, withheldReason } from '@/lib/publication'
+import { ogCardReason } from '@/lib/ogCard'
 import { isValidSlug, normalizeSlug } from '@/lib/tickers'
 
 // Segment config must be a literal: Next reads it statically, so an imported
@@ -40,12 +42,25 @@ export default async function Image({ params }: Params) {
   const fmt = (n: number | null | undefined) =>
     n == null ? null : `${symbol}${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-  const implied = fmt(valuation?.dcf_bridge?.implied_share_price)
+  // The verdict governs the card exactly as it governs the page.
+  //
+  // This is the surface a chat client unfurls and a social card renders as an
+  // IMAGE, so a withheld figure here is worse than a withheld figure in the meta
+  // description: it is copied out of context, with no sentence beside it saying the
+  // model is withheld, and it is the version that ends up pasted into a thread.
+  // `getModelSpecServer` already nulls the price, so the guard is on the verdict
+  // rather than on the value being null, which would also fire on a genuine absence.
+  const publishable = mayPublishPrice(spec)
+  const reason = withheldReason(spec)
+
+  const implied = publishable ? fmt(valuation?.dcf_bridge?.implied_share_price) : null
   const market = fmt(valuation?.reverse_dcf?.market_price)
   const wacc = valuation?.wacc?.wacc
 
   const delta =
-    valuation?.dcf_bridge?.implied_share_price != null && valuation?.reverse_dcf?.market_price
+    publishable &&
+    valuation?.dcf_bridge?.implied_share_price != null &&
+    valuation?.reverse_dcf?.market_price
       ? valuation.dcf_bridge.implied_share_price - valuation.reverse_dcf.market_price
       : null
   const deltaPct =
@@ -97,20 +112,47 @@ export default async function Image({ params }: Params) {
             {company.name}
           </div>
           <div style={{ fontSize: 26, color: '#94a3b8' }}>
-            DCF implied value against market price
+            {publishable
+              ? 'DCF implied value against market price'
+              : 'Valuation withheld, and the model says why'}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 56, marginTop: 28 }}>
-            <Stat label="Implied" value={implied} color="#f8fafc" />
-            <Stat label="Market" value={market} color="#94a3b8" />
-            {deltaPct != null && (
-              <Stat
-                label="Difference"
-                value={`${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(1)}%`}
-                color={deltaPct >= 0 ? '#10b981' : '#ef4444'}
-              />
-            )}
-          </div>
+          {publishable ? (
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 56, marginTop: 28 }}>
+              <Stat label="Implied" value={implied} color="#f8fafc" />
+              <Stat label="Market" value={market} color="#94a3b8" />
+              {deltaPct != null && (
+                <Stat
+                  label="Difference"
+                  value={`${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(1)}%`}
+                  color={deltaPct >= 0 ? '#10b981' : '#ef4444'}
+                />
+              )}
+            </div>
+          ) : (
+            /* Withheld. The card used to print the figure for twelve India models, which
+               is the worst surface in the product for it: a chat client unfurls this as
+               an IMAGE, so the number arrives with no sentence attached and is copied out
+               of context. It names the check that stopped publication, because a card
+               that says only "withheld" invites the reader to assume a loading failure
+               rather than a decision the engine made and can defend. */
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+                marginTop: 28,
+                maxWidth: 940,
+              }}
+            >
+              <div style={{ fontSize: 34, fontWeight: 700, color: '#f59e0b' }}>
+                No valuation published
+              </div>
+              <div style={{ fontSize: 21, color: '#94a3b8', lineHeight: 1.4 }}>
+                {ogCardReason(reason)}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Bottom: model basis and domain */}

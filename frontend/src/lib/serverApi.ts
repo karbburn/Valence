@@ -1,6 +1,7 @@
 import type { ModelSpecWithVerdict, ModelSpecification } from './types'
 import type { ResolvedSlug } from './tickers'
 import { REVALIDATE_SECONDS } from './site'
+import { withholdUnpublishedPrice } from './publication'
 
 /**
  * Server-side API access.
@@ -70,7 +71,12 @@ export async function getModelSpecServer(
     // on the page for models the API was refusing to serve, and the code that
     // replaced it claimed to read the verdict while still recomputing it from a
     // single check name. One answer, from the one place that decides it.
-    return (await res.json()) as ModelSpecWithVerdict
+    //
+    // And the figure itself is withheld here rather than by each surface that shows
+    // it. This is the single boundary every server-rendered page reads a model
+    // through, so a component added later cannot leak a price by forgetting the
+    // check.
+    return withholdUnpublishedPrice((await res.json()) as ModelSpecWithVerdict)
   } catch {
     return null
   }

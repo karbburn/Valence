@@ -747,9 +747,7 @@ def get_model_spec(company_id: str = "infy_infy") -> Dict[str, Any]:
             detail="Failed to build model. See server logs for details.",
         )
 
-    payload = spec.model_dump(mode="json")
-    payload["publication"] = _publication_verdict(spec)
-    return payload
+    return _spec_payload(spec)
 
 
 # A failing check that makes the INPUTS implausible, rather than one that makes
@@ -778,6 +776,27 @@ _INPUT_DEFECT_CHECKS = frozenset(
             "inputs_trace_to_a_filing",
     }
 )
+
+
+def _spec_payload(spec) -> Dict[str, Any]:
+    """A specification as served, stamped with its publish decision.
+
+    Every route that returns a specification goes through here. `GET /model` did and
+    the two write routes did not, so `POST /model/recompute` and `POST /model/revert`
+    answered with a payload carrying no verdict at all. That is the same figure with the
+    decision removed, and it is the shape the frontend reads: `mayPublishPrice` falls
+    back to refusing when no verdict is present, so moving any driver slider on a
+    WITHHELD model was fine by accident, and the reason it was fine was a missing field
+    rather than a check. On a PUBLISHABLE model the omission was the reverse. The
+    verdict vanished, the fallback refused, and the price disappeared from the page the
+    moment the reader touched a slider, on nine of twenty-three models.
+
+    Both directions were wrong and neither raised, because a payload without a verdict
+    is indistinguishable from a payload whose verdict says no.
+    """
+    payload = spec.model_dump(mode="json")
+    payload["publication"] = _publication_verdict(spec)
+    return payload
 
 
 def _publication_verdict(spec) -> Dict[str, Any]:
@@ -876,7 +895,7 @@ def recompute_model(req: OverrideRequest, company_id: str = "infy_infy") -> Dict
         spec = run_qa(spec)
 
         _lru_put(_MODEL_CACHE, company_id, spec)
-        return spec.model_dump(mode="json")
+        return _spec_payload(spec)
 
 
 @router.post("/model/revert")
@@ -914,7 +933,7 @@ def revert_driver_override(req: RevertRequest, company_id: str = "infy_infy") ->
         spec = run_qa(spec)
 
         _lru_put(_MODEL_CACHE, company_id, spec)
-        return spec.model_dump(mode="json")
+        return _spec_payload(spec)
 
 
 @router.get("/export/excel")

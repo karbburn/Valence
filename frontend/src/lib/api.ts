@@ -1,4 +1,5 @@
 import { CompanySummary, ModelSpecification, RecomputeRequest, SavedModelHeader } from './types'
+import { withholdUnpublishedPrice } from './publication'
 
 export type { CompanySummary, SavedModelHeader, RecomputeRequest } from './types'
 
@@ -85,7 +86,7 @@ export async function fetchModelSpec(companyId: string): Promise<ModelSpecificat
     }
     throw new Error(message)
   }
-  return res.json()
+  return withholdUnpublishedPrice((await res.json()) as ModelSpecification)
 }
 
 export async function recomputeModel(

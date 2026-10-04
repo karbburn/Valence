@@ -70,6 +70,43 @@ export function mayPublishPrice(
 }
 
 /**
+ * The specification as a page is allowed to present it.
+ *
+ * `implied_share_price` is computed for every model and the verdict decides whether it may
+ * be SHOWN. Nothing else in the payload is a claim about a valuation: the free cash flows,
+ * the WACC build, the bridge and the QA report are the evidence, and the product shows them
+ * for a withheld model on purpose, because "here is what we ran, and here is why we will
+ * not call it a valuation" is the argument. The per-share figure is the one number that
+ * reads as a conclusion.
+ *
+ * This is applied where a specification enters the presentation layer, so a surface cannot
+ * leak by forgetting to ask. That was not theoretical. Six surfaces formatted the price
+ * from the same payload and only two of them consulted the verdict: the meta description,
+ * the OpenGraph card, the scenario deltas in the header, the quick view's table, the
+ * methodology modal's own summary, and the clipboard memo. Each had its own reason for
+ * being missed, and a guard added to one of them left the other five printing the number.
+ *
+ * `/api/model/{id}` is untouched. The Excel and JSON exports are served by the backend from
+ * the compiled snapshot, so a reader who exports a model they can already see on the page
+ * gets the same figures, and the API keeps the contract the export paths and any other
+ * consumer depend on.
+ *
+ * Fails closed: a specification carrying no verdict has its price withheld, which is the
+ * same answer `mayPublishPrice` gives and for the same reason.
+ */
+export function withholdUnpublishedPrice<T extends ModelSpecification | null | undefined>(spec: T): T {
+  if (!spec || mayPublishPrice(spec)) return spec
+  return {
+    ...spec,
+    valuation: (spec.valuation ?? []).map((valuation) =>
+      valuation.dcf_bridge
+        ? { ...valuation, dcf_bridge: { ...valuation.dcf_bridge, implied_share_price: null } }
+        : valuation
+    ),
+  } as T
+}
+
+/**
  * The tooltip explaining why a price is withheld, built from whatever failed.
  *
  * Returns undefined when the model is publishable, so callers can omit the title

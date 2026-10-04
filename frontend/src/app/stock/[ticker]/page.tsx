@@ -97,8 +97,15 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       ? ` vs ${v.market} market${v.priceDate ? ` (${v.priceDate})` : ''}`
       : ''
 
+  // Gated on the verdict, not only on the value being present.
+  //
+  // `getModelSpecServer` already withholds `implied_share_price` on a withheld model,
+  // so `v.implied` is null and this branch is unreachable for one. The gate is kept
+  // anyway, in the same form as the other five surfaces that print the figure, because
+  // the day someone serves a specification from somewhere other than that boundary the
+  // description is the outermost surface in the product and must not depend on it.
   const description =
-    v?.implied
+    mayPublish && v?.implied
       ? `DCF implied value ${v.implied}${delta}${v.wacc ? ` at a ${v.wacc} WACC` : ''}. Full unlevered FCFF model, three scenarios, trading comps and a 31-tab Excel export, free in the browser.`
       : reason
         ? `No valuation is published for ${company.name} (${company.ticker}). ${reason} Three-scenario unlevered FCFF model and a 31-tab Excel export, free in the browser.`

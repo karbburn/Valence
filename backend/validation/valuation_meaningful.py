@@ -81,9 +81,17 @@ def check_valuation_is_meaningful(spec: ModelSpecification) -> ModelCheckResult:
                 f"the implied share price is not a value."
             )
         if price is not None and price <= 0:
+            # The figure is named, because a reader cannot check a refusal that does not
+            # say what was refused. What it must NOT say is that this is the figure the
+            # page publishes: the page does not publish it. This model is `opinion_only`,
+            # the frontend withholds `implied_share_price`, and the string below is served
+            # verbatim in the meta description and in the QA panel, so a sentence claiming
+            # publication there is a false statement on a page whose whole argument is
+            # that it does not publish the number.
             broken.append(
                 f"{scenario.scenario}: implied share price {price:,.2f} is not "
-                f"positive. This is the figure the page publishes."
+                f"positive. This model is withheld rather than published, so this "
+                f"figure is named here as the reason and shown nowhere else."
             )
         if worst is None or (price is not None and price < worst[1]):
             worst = (getattr(scenario, "scenario", "?"), price)

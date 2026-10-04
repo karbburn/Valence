@@ -7,6 +7,7 @@ import { SITE_URL, SITE_NAME, SITE_TITLE, SITE_DESCRIPTION, CONTACT_EMAIL, OG_IM
 import { fmtPrice, fmtPct } from '@/lib/formatters'
 import type { ModelSpecification } from '@/lib/types'
 import type { ResolvedSlug } from '@/lib/tickers'
+import { mayPublishPrice, withheldReason as withheldReasonFor } from '@/lib/publication'
 import { SiteFooter } from '@/components/SiteFooter'
 import { LaunchVideo } from '@/components/landing/LaunchVideo'
 import { TickerSearch } from '@/components/landing/TickerSearch'
@@ -45,16 +46,37 @@ interface RailItem {
   market: number | null
   currency: string
   deltaPct: number | null
+  /**
+   * Why this card carries no figure.
+   *
+   * The rail showed the implied-versus-market comparison for all eight cards, including
+   * the withheld ones: INFY at +4.3% and HCLTECH at -8.1% against prices the product
+   * says it will not publish, with no reason anywhere on the page. A reader could not
+   * tell a withheld card from a published one, which is the specific thing the verdict
+   * exists to communicate.
+   */
+  withheldReason: string | null
 }
 
-function summarise(spec: ModelSpecification | null) {
+function summarise(spec: ModelSpecification | null): Omit<RailItem, 'company'> {
   const valuation =
     spec?.valuation?.find((v) => v.scenario === 'base') ?? spec?.valuation?.[0]
-  const implied = valuation?.dcf_bridge?.implied_share_price ?? null
+  // `getModelSpecServer` withholds the price for a model the server refused, so
+  // `implied` is already null in that case. The verdict is read as well so the card can
+  // say WHY rather than falling through to the "On demand" branch, which is a different
+  // claim: it says the model has not been built yet, and it has.
+  const withheld = !mayPublishPrice(spec)
+  const implied = withheld ? null : valuation?.dcf_bridge?.implied_share_price ?? null
   const market = valuation?.reverse_dcf?.market_price ?? null
   const deltaPct =
     implied != null && market ? ((implied - market) / market) * 100 : null
-  return { implied, market, deltaPct, currency: spec?.metadata?.currency || 'USD' }
+  return {
+    implied,
+    market,
+    deltaPct,
+    currency: spec?.metadata?.currency || 'USD',
+    withheldReason: withheld ? withheldReasonFor(spec) ?? null : null,
+  }
 }
 
 async function loadRail(): Promise<RailItem[]> {
@@ -185,7 +207,9 @@ export default async function LandingPage() {
                 <p className="mt-3 text-[13.5px] text-text-muted leading-relaxed">
                   These are pre-built, so they open with the model already in the page. Any other
                   ticker builds on first visit, usually in a few seconds. Every figure below is
-                  the model&apos;s own output against the last closing price.
+                  the model&apos;s own output against the last closing price. Where a model says
+                  Not published, the engine built it and then declined to present the result as
+                  a valuation; the page it opens names the check that stopped it.
                 </p>
               </div>
 
@@ -211,7 +235,20 @@ export default async function LandingPage() {
                       </div>
                       <p className="mt-2 text-[12.5px] text-text-main truncate">{item.company.name}</p>
 
-                      {item.deltaPct != null ? (
+                      {item.withheldReason ? (
+                        /* Withheld. Not "On demand", which is the branch below and
+                           means something else entirely: it says the model has not
+                           been built. These HAVE been built, and the engine has
+                           decided it will not present the result as a valuation.
+                           Saying so is the product's argument rather than an
+                           apology for it, so the card names the reason. */
+                        <p
+                          className="mt-3 font-mono text-[11px] text-[#f59e0b] leading-snug"
+                          title={item.withheldReason}
+                        >
+                          Not published
+                        </p>
+                      ) : item.deltaPct != null ? (
                         <>
                           <p className="mt-3 font-mono text-[11px] text-text-dim">
                             implied{' '}
