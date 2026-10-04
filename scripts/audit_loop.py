@@ -409,10 +409,10 @@ def gate_tests() -> GateResult:
 # --------------------------------------------------------------------------- #
 
 
-def _alive(url: str) -> bool:
+def _alive(url: str, timeout: int = 30) -> bool:
     try:
         req = urllib.request.Request(url, headers={"x-valence-build": "1"})
-        urllib.request.urlopen(req, timeout=8)
+        urllib.request.urlopen(req, timeout=timeout)
         return True
     except Exception:
         return False
@@ -437,7 +437,18 @@ def gate_site() -> GateResult:
             f"Start it, or pass --no-server to leave the live gates out on purpose"
         )
         return g
-    if not _alive(WEB):
+    if not _alive(f"{WEB}/robots.txt"):
+        # robots.txt, not the root, and the reason is the failure this replaces.
+        #
+        # The probe was `GET /` with an 8 second timeout. The dev server compiles the
+        # homepage on demand and took 8.0s to render it on 2026-10-04, so a healthy
+        # frontend read as "not answering" and the gate blocked on it -- reporting an
+        # outage that did not exist, against a server that had just served four pages.
+        #
+        # A liveness probe should measure whether the process answers, not how long the
+        # heaviest route takes to compile. robots.txt is served without rendering a
+        # page, and this gate already requires it to return 200 further down, so it is
+        # both the cheap witness and one this gate already depends on.
         g.fail(
             f"frontend is not answering on {WEB}, so no page could be checked. A "
             f"missing production build is the usual cause: `npm run build` in "
@@ -546,6 +557,9 @@ def gate_site() -> GateResult:
     # loss-making one whose price is negative and must still be displayed as one.
     checked = 0
     probed = 0
+    published_probed = 0
+    withheld_probed = 0
+    withheld_checked = 0
     # Pages deliberately served up to REVALIDATE_SECONDS stale. Reported, not failed:
     # staleness is the product working as designed, and calling it a defect is what got
     # this gate muted.
@@ -609,23 +623,82 @@ def gate_site() -> GateResult:
         if implied is None:
             g.fail(f"{cid}: API serves no implied price, so the page has none to show")
             continue
+        publishable = bool((payload.get("publication") or {}).get("publishable"))
         probed += 1
+        if publishable:
+            published_probed += 1
+        else:
+            withheld_probed += 1
         try:
             _, body = get(f"{WEB}/stock/{ticker}", timeout=300)
         except Exception as exc:
             g.fail(f"{cid}: page /stock/{ticker} did not load ({type(exc).__name__})")
             continue
         html = body.decode("utf-8", "replace")
+        # The serialized RSC payload is not reader-visible text. It legitimately carries
+        # `implied_share_price` beside `publication.publishable: false`, because that is
+        # the contract the client workbench and the export paths read, and a number
+        # sitting there beside its own "not published" verdict is data rather than a
+        # claim. Searching it would report every page as leaking and train us to ignore
+        # this gate, which is what a too-broad check always does.
+        visible = _rsc_removed(html)
+
         # Two decimals, no thousands separator, as a currency amount appears in a
         # value: 160.65, and 3.95 for a negative one once the sign is carried.
         want = f"{abs(implied):,.2f}"
         alt = f"{abs(implied):.2f}"
-        if want not in html and alt not in html:
-            g.fail(
-                f"{cid}: page /stock/{ticker} does not contain its implied price "
-                f"{want} — the route answers 200 but the figure is not on it"
-            )
-            continue
+        figures = [f for f in (want, alt) if f in visible]
+        shown = bool(figures)
+
+        # The check now follows the server's verdict in BOTH directions, because the
+        # product's rule is directional and a gate that only knows one direction cannot
+        # see half the class of defect it exists for.
+        #
+        # It used to demand the figure on every probed page. Fourteen of the twenty-three
+        # shipped models are `opinion_only`, and the pages now correctly withhold, so the
+        # gate was demanding the leak be reintroduced. That is the section 5 pattern
+        # exactly: a gate asserting a property the product has deliberately stopped having,
+        # which gets muted, and a muted gate protects nothing.
+        #
+        # A withheld model must present the figure NOWHERE in the reader-visible markup,
+        # and must say why. Naming it inside the sentence that refuses it is allowed, and
+        # is required for the refusal to be checkable; `withheld_figure_is_presented` is
+        # the one place that distinction is made.
+        if publishable:
+            if not shown:
+                g.fail(
+                    f"{cid}: the model endpoint says publishable, but page "
+                    f"/stock/{ticker} does not contain its implied price {want}. The "
+                    f"verdict and the page disagree, so a figure the engine will present "
+                    f"is not reaching the reader."
+                )
+                continue
+        else:
+            offending = withheld_figure_is_presented(visible, figures)
+            if offending:
+                g.fail(
+                    f"{cid}: the model endpoint withholds this valuation, and page "
+                    f"/stock/{ticker} presents {want} as an answer rather than as the "
+                    f"reason it was refused: {offending[0]!r}"
+                )
+                continue
+            reasons = (payload.get("publication") or {}).get("input_defect_checks_failed") or []
+            if not reasons:
+                g.fail(
+                    f"{cid}: the model is withheld but names no input check as the reason, "
+                    f"so there is nothing for the page to state. The verdict and the "
+                    f"evidence disagree."
+                )
+                continue
+            if not any(r in visible for r in reasons):
+                g.fail(
+                    f"{cid}: the valuation is withheld and the figure is not presented, "
+                    f"but the page never names why ({', '.join(reasons)}). A page that "
+                    f"shows no number and gives no reason is indistinguishable from a "
+                    f"failed build."
+                )
+                continue
+            withheld_checked += 1
 
         # The market price must match too, and exactly. Checking only the implied
         # price passed while the page served a different company's numbers: the
@@ -635,6 +708,10 @@ def gate_site() -> GateResult:
         # Larsen & Toubro showed 3,766.40 as of 2026-09-28 where the local model
         # held 3,756.10 as of 2026-09-29. A page that renders a number is not a
         # page that renders THIS model's number.
+        #
+        # This applies to a withheld model too, and it is the one figure such a page is
+        # still expected to show: a market quote is not the engine's opinion, and the
+        # staleness check needs a date to compare against.
         quote = _api_quote(cid)
         if quote is None:
             g.fail(f"{cid}: the served model carries no market price to compare against")
@@ -650,8 +727,22 @@ def gate_site() -> GateResult:
         checked += 1
     if probed == 0:
         g.fail("no company page could be probed, so the content check verified nothing")
+    elif published_probed == 0:
+        g.fail(
+            f"{probed} pages probed, none of them publishable. This run cannot see a "
+            f"published model losing its figure, which is the other half of the rule."
+        )
+    elif withheld_probed == 0:
+        g.fail(
+            f"{probed} pages probed, none of them withheld. This run cannot see a "
+            f"withheld valuation leaking, which is the half that has actually happened."
+        )
     elif checked:
-        g.ok(f"{checked} of {probed} probed company pages show the price the API serves")
+        g.ok(
+            f"{checked} of {probed} probed company pages agree with the API: "
+            f"{published_probed} published and showing their figure, "
+            f"{withheld_checked} withheld and naming the check that stopped it"
+        )
     if stale:
         g.ok(f"{len(stale)} of those pages are within the declared revalidation window"
              f" and state their own quote date -- staleness, not a defect: "
@@ -660,6 +751,116 @@ def gate_site() -> GateResult:
 
 
 API_MODEL_TIMEOUT = 600
+
+
+def _rsc_removed(html: str) -> str:
+    """Reader-visible markup, with Next's serialized payload taken out.
+
+    The payload legitimately carries `implied_share_price` beside
+    `publication.publishable: false`. Searching it reports every withheld page as leaking,
+    and a gate that cries wolf on all 23 is a gate that gets muted.
+    """
+    return re.sub(r'self\.__next_f\.push\(\[1,".*?"\]\)</script>', "", html, flags=re.S)
+
+
+# A sentence that REFUSES a figure rather than asserting one. The number beside one of
+# these is the evidence for the refusal, and stripping it makes the refusal unfalsifiable,
+# which is the same error as hiding the QA report.
+_REFUSAL = re.compile(
+    r"is not positive|is not a value|not a usable valuation|is not a valuation|"
+    r"cannot exist|not published|no valuation is published|withheld|could not verify|"
+    r"must not",
+    re.IGNORECASE,
+)
+
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+|;\s*")
+
+# Surfaces whose text lives in an ATTRIBUTE, so stripping tags deletes it.
+#
+# This was found by running this rule against the exact description /stock/INFY served
+# before the fix, and it returned nothing: the string is inside
+# `<meta name="description" content="DCF implied value 1,079.32 ...">`, and a tag-stripping
+# reader sees an empty document. So the gate's leak test was structurally incapable of
+# seeing a leak in the meta description, which is the outermost surface in the product and
+# the one the leak actually happened in.
+#
+# Two implementations of one rule, and the second one had a blind spot the first did not.
+_HEAD_SURFACES = re.compile(
+    r'<meta[^>]+(?:name|property)="(?:description|og:description|twitter:description)"'
+    r'[^>]*content="([^"]*)"'
+    r'|<title[^>]*>(.*?)</title>',
+    re.IGNORECASE | re.DOTALL,
+)
+_CONTENT_ATTR = re.compile(r'content="([^"]*)"')
+
+
+def _unescape(text: str) -> str:
+    return (text.replace("&amp;", "&").replace("&quot;", '"')
+                .replace("&#x27;", "'").replace("&nbsp;", " ")
+                .replace("&lt;", "<").replace("&gt;", ">")
+                .replace("&#39;", "'"))
+
+
+def _prose_sentences(html: str):
+    """Reader-visible text, cut into sentences.
+
+    Two sources, in this order.
+
+    Attribute-borne surfaces first: the meta description, the OG and Twitter descriptions
+    and the title. Their text is inside a tag, so it has to be read before the tags go.
+
+    Then the element text, with tags stripped and the result split on punctuation. Tags
+    are stripped before the split rather than used as the boundary, because a refusal
+    sentence is routinely broken across inline elements -- `base: implied share price
+    <span>-62.50</span> is not positive` -- and splitting on tags would isolate the figure
+    from its own refutation and report it as a leak.
+
+    The cost of that coarser boundary is that two adjacent elements with no punctuation
+    between them merge. That merges in the safe direction: a merged blob of a headline price
+    and a QA line carries no refusal marker and so is reported. The check errs toward
+    failing rather than toward passing.
+    """
+    for match in _HEAD_SURFACES.finditer(html):
+        value = match.group(1) if match.group(1) is not None else match.group(2)
+        if value:
+            yield _unescape(value).strip()
+
+    text = _unescape(re.sub(r"<[^>]+>", " ", html))
+    for part in _SENTENCE_END.split(text):
+        if part and part.strip():
+            yield part.strip()
+
+
+def withheld_figure_is_presented(html: str, figures: List[str]) -> List[str]:
+    """Sentences that present a withheld figure as an answer rather than as the reason.
+
+    THE ONE RULE, and it is deliberately uniform in the sign.
+
+    An earlier version of this distinguished positive from non-positive figures, on the
+    reasoning that a negative price cannot be read as a valuation while a positive one can.
+    That is a proxy, and it produced two defects: the leak sweep in `assets/gsd/meta_leak.py`
+    and this gate disagreed about `amba_us` and `idea_idea`, and each was a copy of a rule
+    that had already drifted once in this project. Two answers to one question is one too
+    many.
+
+    The real test is grammatical rather than arithmetic: a withheld figure may appear in
+    the sentence that refuses it, and nowhere else. `implied share price -62.50 is not
+    positive` is the evidence for the refusal. `DCF implied value 1,079.32 vs 1,035.00
+    market` is a claim. Neither the sign nor the magnitude decides it; the sentence does.
+
+    Reads the head surfaces as well as the body, because the leak happened in the
+    description and a tag-stripping reader cannot see an attribute.
+
+    Returns the offending sentences, empty when the figure is only ever named as the reason.
+    """
+    offending: List[str] = []
+    for sentence in _prose_sentences(html):
+        if not any(f in sentence for f in figures):
+            continue
+        if _REFUSAL.search(sentence):
+            continue
+        offending.append(sentence[:160])
+    return offending
 
 
 def _api_model(cid: str) -> bytes:
@@ -832,13 +1033,51 @@ def _page_probe_ids() -> List[str]:
     is the case a formatting or sign convention is most likely to swallow. A page
     that quietly renders an empty cell for it passes every status check and tells
     the reader nothing.
+
+    It also has to probe BOTH verdicts, and that is not decoration. The list is built from
+    a hardcoded preference order plus whatever else is shipped, so whether any withheld
+    model lands in it depends on which companies happen to be in the catalogue. A probe set
+    of four published models would satisfy every assertion below while the withheld branch
+    never ran -- the same unfalsifiability that made a check pass on a system withholding
+    from all twenty-three models.
+
+    So the split is resolved here, against the same endpoint the check reads, and the gate
+    fails when it cannot get both. Asking for one of each and taking the rest from the
+    preference order keeps the spread that was here before while making the coverage
+    explicit rather than accidental.
     """
     ids = _shipped_ids()
-    picks: List[str] = []
-    for want in ("nvda_us", "aapl_us", "amba_us", "tatasteel_tatasteel", "idea_idea"):
-        if want in ids:
-            picks.append(want)
+    published: List[str] = []
+    withheld: List[str] = []
+    unreadable: List[str] = []
     for cid in ids:
+        try:
+            payload = json.loads(_api_model(cid).decode("utf-8"))
+            payload = payload.get("model", payload)
+            verdict = payload.get("publication")
+        except Exception:
+            unreadable.append(cid)
+            continue
+        if verdict is None:
+            # No verdict on the payload is itself a finding, and the gate reports it when
+            # it probes the company. Do not guess a side for it here.
+            unreadable.append(cid)
+            continue
+        (published if verdict.get("publishable") else withheld).append(cid)
+
+    # The loss-maker is preferred on both sides: a negative price is the case a sign or
+    # formatting convention is most likely to swallow, in either direction.
+    def preferred(pool: List[str]) -> List[str]:
+        out = [c for c in ("amba_us", "idea_idea", "nvda_us", "aapl_us") if c in pool]
+        out += [c for c in pool if c not in out]
+        return out
+
+    picks = preferred(published)[:2] + preferred(withheld)[:2]
+    if not published or not withheld:
+        # Return what exists; the gate fails on the missing side and says why, which is
+        # more use than silently probing one direction.
+        picks = (preferred(published)[:2] + preferred(withheld)[:2])[:4]
+    for cid in unreadable:
         if len(picks) >= 4:
             break
         if cid not in picks:
