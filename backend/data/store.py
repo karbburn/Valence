@@ -190,26 +190,69 @@ def delete_company_datapoints(db_path: str | Path, company_id: str) -> None:
 
 
 def save_datapoints(db_path: str | Path, datapoints: list[RawDatapoint], clear_existing: bool = True) -> None:
+    """Persist raw datapoints, idempotently.
+
+    The row's `id` is a uuid4 by default, so two runs of the same ingestion never collide
+    and `INSERT OR REPLACE` never replaces anything. On the two call paths that pass
+    `clear_existing=False` -- the India pipeline's screener+filing merge and the supplement
+    pass -- every re-run therefore ADDED rows rather than replacing them.
+
+    That matters because `filing_derived` is a ratio of row COUNTS, so a model's publication
+    verdict depended on how many times the build tool had been run. Measured on the live
+    store before this change: `infy_infy` held 567 raw rows across 488 distinct natural keys,
+    72 of them duplicated and 14 of those disagreeing on VALUE.
+
+    A row's identity is therefore its own content rather than its uuid: the company, the
+    source, the LINE it was read from and the period. A row already stored under that
+    identity is replaced, so re-ingesting the same document is a no-op, and a re-read that
+    produces a different figure updates that row instead of adding a rival to it.
+
+    The line is part of the identity, and not incidentally. Infosys prints
+    "- Mutual fund units" twice on printed page 104, once with the figures in parentheses
+    and once plain, and BOTH readings are correct:
+
+        y=573.75  - Mutual fund units (72,878) (73,048)
+        y=640.02  - Mutual fund units 72,682 73,987
+
+    A location of "p.104 - Mutual fund units" names both of them. Deduping on it would
+    delete a correct figure out of an audited filing, which is the one error this project
+    treats as worse than publishing a wrong one -- so the reader records the coordinate and
+    this keys on it.
+
+    Nothing is deleted beyond rows this call is replacing. Rows already in the store from
+    earlier runs are left exactly as they are; cleaning those up is a separate migration and
+    is recorded as one, because collapsing them requires this same line identity to have
+    been in place when they were written.
+    """
     conn = _connect(db_path)
-    if clear_existing:
-        company_ids = set(d.company_id for d in datapoints)
-        for cid in company_ids:
-            conn.execute("DELETE FROM raw_datapoints WHERE company_id = ?", (cid,))
-    rows = [
-        (
-            d.id, d.company_id, d.metric_raw, d.period_label,
-            d.period_end_date.isoformat(), d.value, d.currency, d.units,
-            d.source, d.source_location, d.status,
-            d.update_date.isoformat(), d.superseded_by_id, d.section, d.bs_half,
+    try:
+        if clear_existing:
+            company_ids = set(d.company_id for d in datapoints)
+            for cid in company_ids:
+                conn.execute("DELETE FROM raw_datapoints WHERE company_id = ?", (cid,))
+        else:
+            for d in datapoints:
+                conn.execute(
+                    "DELETE FROM raw_datapoints WHERE company_id = ? AND source = ?"
+                    " AND source_location = ? AND period_label = ?",
+                    (d.company_id, d.source, d.source_location, d.period_label),
+                )
+        rows = [
+            (
+                d.id, d.company_id, d.metric_raw, d.period_label,
+                d.period_end_date.isoformat(), d.value, d.currency, d.units,
+                d.source, d.source_location, d.status,
+                d.update_date.isoformat(), d.superseded_by_id, d.section, d.bs_half,
+            )
+            for d in datapoints
+        ]
+        conn.executemany(
+            "INSERT OR REPLACE INTO raw_datapoints VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            rows,
         )
-        for d in datapoints
-    ]
-    conn.executemany(
-        "INSERT OR REPLACE INTO raw_datapoints VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        rows,
-    )
-    conn.commit()
-    conn.close()
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def query_datapoints(

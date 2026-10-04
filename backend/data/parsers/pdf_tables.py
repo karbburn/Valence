@@ -100,8 +100,20 @@ def _clean_label(label: str) -> str:
     return label.strip()
 
 
-def _rows(page) -> list[tuple[str, list[tuple[float, str]]]]:
-    """Group words into caption-and-figures rows.
+def _rows(page) -> list[tuple[str, list[tuple[float, str]], float]]:
+    """Group words into caption-and-figures rows, with each row's own `top`.
+
+    The coordinate is returned because it is the only thing that distinguishes two
+    printed lines carrying the same caption. Infosys prints "- Mutual fund units"
+    twice on printed page 104, once inside a note with the figures in parentheses
+    and once inside another with them plain, and both readings are correct:
+
+        y=573.75  - Mutual fund units (72,878) (73,048)
+        y=640.02  - Mutual fund units 72,682 73,987
+
+    A row identified as "p.104 - Mutual fund units" names both of them, so a re-ingest
+    cannot collapse one into the other and cannot tell a duplicate from a second
+    real line. The coordinate is what makes a row's identity recoverable.
 
     Grouping is by `top`, rounded to 0.1pt, because a table row's words share a
     baseline closely enough for that to separate one line from the next.
@@ -162,9 +174,9 @@ def _rows(page) -> list[tuple[str, list[tuple[float, str]]]]:
             # every caption came back with no half: the disambiguator was being
             # thrown away by the filter that keeps actual data rows.
             if _balance_sheet_half(label) is not None:
-                out.append((label, []))
+                out.append((label, [], key))
             continue
-        out.append((label, vals))
+        out.append((label, vals, key))
     return out
 
 
@@ -209,7 +221,7 @@ def parse_predicted_statement_page(
         # Tracked across the rows rather than per-row, because the boundary is a
         # header that appears once and governs everything printed after it.
         half: str | None = None
-        for raw_label, vals in _rows(page):
+        for raw_label, vals, _row_top in _rows(page):
             label = _clean_label(raw_label)
             low = label.lower()
             if not label or low in _SKIP_LABELS or re.fullmatch(r"\d+\.\d+", label):
@@ -245,8 +257,14 @@ def parse_predicted_statement_page(
                         currency="INR",
                         units="crores",
                         source=source,  # type: ignore[arg-type]
-                        source_location=f"{Path(pdf_path).name} p.{page_index + 1} {label}"
-                                     + (f" [{half}]" if half else ""),
+                        # The LINE, not the page and the caption. Two printed lines
+                        # can carry one caption, so the page and the caption do not
+                        # identify a row; see `_rows`. Never remove a correct figure
+                        # is easier to honour once a row can be told from its twin.
+                        source_location=(
+                            f"{Path(pdf_path).name} p.{page_index + 1} y={_row_top:.1f} "
+                            f"{label}" + (f" [{half}]" if half else "")
+                        ),
                         section=section,
                         # Which half of the balance sheet this caption was printed
                         # in, from the filer's own "Current assets" / "Non-current
