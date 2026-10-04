@@ -11,6 +11,16 @@ interface Props {
   name: string
   exchange: string
   hasModel: boolean
+  /**
+   * Whether this model's valuation may be presented, or only its evidence.
+   *
+   * Null when there is no compiled model at all. The chip used to read "Ready" for
+   * every compiled model, and 14 of the 23 compiled models open on a page that
+   * publishes no valuation. On a list of 161 rows that read as "25 published
+   * valuations" when the truth was 9, which is the product's central claim
+   * overstated by the surface meant to support it.
+   */
+  publishable?: boolean | null
   /** When every covered company is already modelled, a column of identical "Ready"
    *  chips carries no information and reads as a status light on a list where
    *  status is not the variable, so the chip is dropped entirely. */
@@ -37,6 +47,7 @@ export default function CompanyCard({
   name,
   exchange,
   hasModel,
+  publishable,
   showStatusChip,
 }: Props) {
   const { navigate, pendingTo } = usePendingNavigation()
@@ -83,12 +94,23 @@ export default function CompanyCard({
         showStatusChip && (
           <span
             className={`shrink-0 font-mono text-[10px] px-1.5 py-0.5 rounded-sm border ${
-              hasModel
-                ? 'bg-positive-subtle text-positive border-positive/30'
-                : 'bg-surface-2 text-text-dim border-border'
+              !hasModel
+                ? 'bg-surface-2 text-text-dim border-border'
+                : publishable
+                  ? 'bg-positive-subtle text-positive border-positive/30'
+                  : 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/30'
             }`}
+            title={
+              hasModel && !publishable
+                ? 'The model is built and opens with its figures. Its valuation is not ' +
+                  'published, and the page names the check that stopped it.'
+                : undefined
+            }
           >
-            {hasModel ? 'Ready' : 'Builds on open'}
+            {/* Three states, because "Ready" answered a question nobody asked and hid
+                the one they did. Ready to open, and ready to publish a valuation, are
+                different claims, and 14 of 23 rows could only make the first. */}
+            {!hasModel ? 'Builds on open' : publishable ? 'Published' : 'Withheld'}
           </span>
         )
       )}

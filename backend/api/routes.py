@@ -10,6 +10,7 @@ Provides API endpoints for:
 - GET /api/export/excel: Trigger openpyxl exporter and download 31-tab .xlsx workbook
 """
 
+import json
 import logging
 import re
 import threading
@@ -1159,7 +1160,73 @@ def _manifest_record(c) -> Dict[str, Any]:
         # than any model changes, and a value that moves on every revalidation
         # says nothing.
         "model_built_at": _model_built_at(c.company_id),
+        # Whether this model's valuation may be presented, or only its evidence.
+        #
+        # The index used to label every compiled model "Ready", and 14 of the 23
+        # compiled models open on a page that publishes no valuation. A green chip is a
+        # claim, and on a list of 161 rows it was read as "25 published valuations" when
+        # the truth was 9. The index cannot work this out for itself without fetching
+        # 161 specifications, so it is answered here from the snapshot's own QA result,
+        # which is where `_publication_verdict` already reads it from.
+        #
+        # Null, not False, when there is no compiled model: there is nothing to withhold
+        # yet, and "withheld" would be a claim about a model that does not exist.
+        "publishable": _manifest_publishable(c.company_id),
     }
+
+
+# Memoised because the manifest is called by the /stock index, the homepage rail and the
+# sitemap, and the answer is a property of the snapshot on disk. The key is the mtime of
+# every compiled snapshot, so a rebuild invalidates it and nothing else does, and a
+# manifest request that changes nothing parses nothing.
+#
+# Parsing 23 specifications per manifest call would be the alternative, and that endpoint
+# is public and on the hot path for a single-instance free tier.
+_PUBLICATION_MEMO: Dict[str, Any] = {"signature": None, "flags": {}}
+
+
+def _manifest_publishable(company_id: str) -> Optional[bool]:
+    if not _has_compiled_model(company_id):
+        return None
+    flags = _publication_flags()
+    return flags.get(company_id)
+
+
+def _publication_flags() -> Dict[str, bool]:
+    """publishable per compiled company, from each snapshot's own QA result."""
+    stamps = {}
+    for cid in _SHIPPED_AT_STARTUP:
+        try:
+            stamps[cid] = (MODEL_CACHE_DIR / f"{cid}.json").stat().st_mtime_ns
+        except OSError:
+            stamps[cid] = None
+    signature = tuple(sorted(stamps.items()))
+    if _PUBLICATION_MEMO["signature"] == signature:
+        return _PUBLICATION_MEMO["flags"]
+
+    flags: Dict[str, bool] = {}
+    for cid in _SHIPPED_AT_STARTUP:
+        path = MODEL_CACHE_DIR / f"{cid}.json"
+        try:
+            with path.open(encoding="utf-8") as fh:
+                payload = json.load(fh)
+        except (OSError, ValueError):
+            # Unreadable is not publishable. A model whose snapshot cannot be read will
+            # not be served either, and reporting it as withheld is the answer that does
+            # not require knowing why.
+            continue
+        checks = ((payload.get("model") or payload).get("qa") or {}).get("checks") or []
+        failed = {
+            c.get("check_name")
+            for c in checks
+            if isinstance(c, dict) and not c.get("passed", True)
+        }
+        flags[cid] = not (failed & _INPUT_DEFECT_CHECKS)
+
+    # Assigned once, whole, so a concurrent request never reads a half-built map.
+    _PUBLICATION_MEMO["signature"] = signature
+    _PUBLICATION_MEMO["flags"] = flags
+    return flags
 
 
 @router.get("/companies/manifest")

@@ -41,6 +41,14 @@ export interface ResolvedSlug extends CompanySummary {
   slug: string
   cik: string | null
   has_model: boolean
+  /**
+   * Whether this model's valuation may be presented, from the manifest.
+   *
+   * Null when there is no compiled model, which is different from false: nothing has been
+   * withheld because nothing was built. The /stock index uses it to tell "opens instantly"
+   * apart from "opens with a published valuation", which 14 of 23 compiled models do not.
+   */
+  publishable?: boolean | null
 }
 
 /** Reject before anything can reach a network call, a query, or a file path. */

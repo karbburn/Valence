@@ -17,13 +17,18 @@ const PAGE_SIZE = 500
 
 export const metadata: Metadata = {
   title: `All tickers`,
+  // Counts are not interpolated here. The page knows them and states them in the copy
+  // below, and a number that changes on every rebuild is not something to freeze into a
+  // crawler's cache. What the description must not do is promise figures for every row,
+  // which is what "the pre-built set opens with its figures already in place" did for the
+  // fourteen whose valuation is withheld.
   description:
-    'Every listed US and Indian ticker. Search any of them and the engine builds the model on first open; the pre-built set below opens with its figures already in place. Unlevered FCFF DCF, three scenarios and a 31-tab Excel export.',
+    'Every listed US and Indian ticker. Search any of them and the engine builds the model on first open. Each row states whether its valuation is published or withheld, and a withheld model opens with its full statements, its audit, and the check that stopped it. Unlevered FCFF DCF, three scenarios and a 31-tab Excel export.',
   alternates: { canonical: `${SITE_URL}/stock` },
   openGraph: {
     title: `All tickers | ${SITE_NAME}`,
     description:
-      'Every listed US and Indian ticker, searchable. The names listed are pre-built; anything else builds on first open.',
+      'Every listed US and Indian ticker, searchable. Each row states whether its valuation is published or withheld; anything not pre-built is calculated on first open.',
     url: `${SITE_URL}/stock`,
     images: [OG_IMAGE],
   },
@@ -53,6 +58,8 @@ export default async function StockIndexPage() {
 
   const withModel = companies.filter((c) => c.has_model)
   const allModelled = withModel.length === companies.length
+  const published = withModel.filter((c) => c.publishable === true)
+  const withheld = withModel.filter((c) => c.publishable === false)
   const india = companies.filter((c) => c.market === 'india')
   const us = companies.filter((c) => c.market === 'us')
 
@@ -73,18 +80,25 @@ export default async function StockIndexPage() {
               Every listed US and Indian ticker
             </h1>
             <p className="mt-4 text-[14.5px] text-text-muted max-w-[58ch] leading-relaxed">
-              Search any of them, or any other listed ticker, and the engine reads its filings and
-              builds the model on first open. The {companies.length} below are pre-built already
-              and open with their figures in place
-              {withModel.length < companies.length ? (
+              Search any of them, or any other listed ticker, and the engine reads its filings
+              and builds the model on first open. Of the {companies.length} below,{' '}
+              {withModel.length} are pre-built already
+              {withheld.length > 0 ? (
                 <>
-                  {' '}
-                  {withModel.length} marked{' '}
-                  <span className="font-mono text-[13px] text-positive">Ready</span>, the rest
-                  calculated on first open
+                  , of which{' '}
+                  <span className="font-mono text-[13px] text-positive">{published.length}</span>{' '}
+                  carry a published valuation and{' '}
+                  <span className="font-mono text-[13px] text-[#f59e0b]">{withheld.length}</span>{' '}
+                  are marked Withheld. A withheld model opens with its full statements and
+                  audit, and names the check that stopped the engine presenting its result as
+                  a valuation
                 </>
               ) : null}
-              .
+              {withModel.length < companies.length ? (
+                <>. The rest are calculated on first open</>
+              ) : (
+                <>.</>
+              )}
             </p>
             <p className="mt-3 text-[13px] leading-relaxed">
               Looking for something that is not resolving?{' '}
@@ -155,6 +169,7 @@ function TickerGrid({
             name={c.name}
             exchange={c.exchange}
             hasModel={c.has_model}
+            publishable={c.publishable}
             showStatusChip={!allModelled}
           />
         </li>
