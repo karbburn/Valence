@@ -29,6 +29,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+from typing import Optional
 import time
 from contextlib import contextmanager
 from typing import Dict, Iterator, Set
@@ -52,7 +53,13 @@ _build_locks_guard = threading.Lock()
 _inflight: Set[str] = set()
 _inflight_guard = threading.Lock()
 
-_negative: Dict[str, float] = {}
+# What kind of failure was remembered. See `mark_failure`.
+ABSENT = "absent"
+UPSTREAM = "upstream"
+DEFECT = "defect"
+_KINDS = frozenset({ABSENT, UPSTREAM, DEFECT})
+
+_negative: Dict[str, tuple] = {}
 _negative_guard = threading.Lock()
 
 
@@ -69,18 +76,63 @@ def is_negative(company_id: str) -> bool:
     """True when this company recently failed to ingest and must not be retried."""
     now = time.monotonic()
     with _negative_guard:
-        expiry = _negative.get(company_id)
-        if expiry is None:
+        entry = _negative.get(company_id)
+        if entry is None:
             return False
+        expiry = entry[0]
         if expiry <= now:
             _negative.pop(company_id, None)
             return False
         return True
 
 
-def mark_failure(company_id: str) -> None:
-    with _negative_guard:
+def mark_failure(company_id: str, kind: str = ABSENT) -> None:
+    """Remember that this company failed, and WHY, for `NEGATIVE_CACHE_TTL`.
+
+    The kind is not diagnostic decoration. It decides what the reader is told, and the
+    previous signature could not express the difference:
+
         _negative[company_id] = time.monotonic() + NEGATIVE_CACHE_TTL
+
+    was reached from a bare `except Exception` around the whole ingest-and-compile, so a
+    parser crash, a bug in the forecast engine and a genuine absence of filings all
+    produced the same cached state. Every later request for that ticker was then answered
+    with the ABSENCE message, and the frontend renders a 503 as
+
+        INFY: the filings behind this company could not be reached. The company does
+        file, so this is most likely a temporary failure to reach them.
+
+    So a defect in this codebase told a visitor a confident, repeated, false statement
+    about a real company's filings, for five minutes, and made it worse rather than better
+    on each retry. Two failures with different causes now produce two different answers, and
+    only a real absence is reported as one.
+
+    KINDS:
+      absent    the filings could not be sourced. The company may well file; we did not
+                reach them. Worth caching, so a crawler cannot hammer the providers.
+      upstream  the providers were reached and refused or failed: a rate limit, a 5xx, a
+                timeout. Also worth caching, and must NOT be reported as an absence.
+      defect    this build failed. Never cached: the next request should retry rather than
+                repeat a cached lie, and the error should surface as itself.
+    """
+    if kind not in _KINDS:
+        raise ValueError(f"unknown ingestion failure kind {kind!r}")
+    with _negative_guard:
+        _negative[company_id] = (time.monotonic() + NEGATIVE_CACHE_TTL, kind)
+
+
+def failure_kind(company_id: str) -> Optional[str]:
+    """Why this company is negatively cached, or None when it is not."""
+    now = time.monotonic()
+    with _negative_guard:
+        entry = _negative.get(company_id)
+        if entry is None:
+            return None
+        expiry, kind = entry
+        if expiry <= now:
+            _negative.pop(company_id, None)
+            return None
+        return kind
 
 
 def clear_failure(company_id: str) -> None:

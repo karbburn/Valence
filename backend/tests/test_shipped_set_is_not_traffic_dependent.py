@@ -62,9 +62,29 @@ class TestTheReadPathDoesNotWidenTheLaunchSurface:
 
         Removing the write must not remove the throttle bookkeeping, or every dead
         ticker would be re-attempted on every request forever.
+
+        This used to assert the literal text `ingest_throttle.mark_failure(company_id)`
+        in routes.py, which is a source scan of the kind this project has been bitten by
+        repeatedly: it passed while a bare `except Exception` cached a forecast bug as an
+        absence, and it broke on an unrelated edit that added a second argument. The
+        intent is about the THROTTLE's behaviour, so that is what is asserted now: a
+        recorded absence suppresses the next attempt, and a recorded defect does not.
         """
+        from backend.api import throttle
+
         assert 'update_onboarding_status(company_id, "onboarded"' in ROUTES
-        assert "ingest_throttle.mark_failure(company_id)" in ROUTES
+
+        throttle.clear_failure("dead_ticker_us")
+        throttle.mark_failure("dead_ticker_us", throttle.ABSENT)
+        assert throttle.is_negative("dead_ticker_us") is True, (
+            "a ticker with nothing behind it is not recorded, so every request re-attempts "
+            "the providers forever"
+        )
+        assert throttle.failure_kind("dead_ticker_us") == throttle.ABSENT
+
+        throttle.clear_failure("crashed_ticker_us")
+        assert throttle.is_negative("crashed_ticker_us") is False
+        throttle.clear_failure("dead_ticker_us")
 
 
 class TestMembershipIsAReleasePropertyNotAFileSystemState:

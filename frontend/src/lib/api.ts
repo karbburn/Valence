@@ -1,5 +1,12 @@
-import { CompanySummary, ModelSpecification, RecomputeRequest, SavedModelHeader } from './types'
+// Type-only, and that is load-bearing rather than stylistic. These four are all types, but
+// written as a value import the specifier survives into the emitted module, so the module
+// cannot be loaded by the test runner: node's ESM resolver has no extensionless lookup and
+// fails on './types' before a single assertion runs. The error copy below is the copy a
+// visitor reads when the engine could not model their company, and it had no test at all
+// because of this line.
+import type { CompanySummary, ModelSpecification, RecomputeRequest, SavedModelHeader } from './types'
 import { withholdUnpublishedPrice } from './publication'
+import { tickerLabelFrom, unavailableMessage } from './modelFetchError'
 
 export type { CompanySummary, SavedModelHeader, RecomputeRequest } from './types'
 
@@ -36,53 +43,13 @@ function writeSavedModels(entries: SavedModelEntry[]): void {
   }
 }
 
-/**
- * Why a ticker has no model, in the visitor's terms.
- *
- * 503 means the engine could not compile this company right now. It is NOT a verdict
- * on the company. The two causes are "the filings do not exist" and "we could not
- * reach the filings", and from the outside they look identical, which is exactly why
- * the copy must not pick one.
- *
- * The previous wording picked one, and picked the wrong one. It said "no annual
- * filings could be reached for it, so there is nothing to model" -- a factual claim
- * about a company we know nothing about. Adani Green files annually with its
- * exchange, and the page failed because a fetch did not come back. The sentence told
- * a reader the company has no financials when the truth was that we had not asked
- * successfully. A number platform whose error state overstates its own knowledge is
- * the one place a reader is most entitled to be misled, because that is the state
- * they read in order to decide whether to trust anything else on the page.
- *
- * It also printed the internal storage key, uppercased: ADANIGREEN_ADANIGREEN. That
- * is plumbing, not a name, and putting it in front of a visitor tells them the
- * system is showing them its internals. The ticker is what a person recognises.
- *
- * So: name what happened, name the company the way the exchange does, say plainly
- * that the filings most likely exist, and hand over the one action that can still
- * change the outcome.
- */
-function unavailableMessage(ticker: string, detail: string): string {
-  const label = ticker.trim().toUpperCase()
-  // The API leads with "No financial statements could be sourced for this ticker
-  // yet", which only repeats what follows. Dropped so one sentence carries it all.
-  const tail = detail.replace(
-    /^\s*No financial statements could be sourced[^.]*\.\s*/i,
-    ''
-  )
-  return (
-    `${label}: ${tail || 'the filings behind this company could not be reached'}. ` +
-    'The company does file, so this is most likely a temporary failure to reach ' +
-    'them rather than a gap in its reporting. Try again in a few minutes.'
-  )
-}
-
 export async function fetchModelSpec(companyId: string): Promise<ModelSpecification> {
   const res = await fetch(`${BASE}/api/model/${companyId}`)
   if (!res.ok) {
     const detail = await res.json().catch(() => ({ detail: res.status }))
     const message = String(detail.detail || `Failed to load ${companyId}`)
     if (res.status === 503) {
-      throw new Error(unavailableMessage(companyId.split('_')[0], message))
+      throw new Error(unavailableMessage(tickerLabelFrom(companyId), message))
     }
     throw new Error(message)
   }

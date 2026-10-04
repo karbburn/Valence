@@ -546,10 +546,17 @@ def _get_or_build_spec(
         ingest_throttle.clear_failure(company_id)
 
     if not has_snapshot and ingest_throttle.is_negative(company_id):
-        raise HTTPException(
-            status_code=503,
-            detail="No financial statements could be sourced for this ticker yet. Try again shortly.",
+        # Say which failure is being remembered. A cached absence and a cached upstream
+        # refusal are different facts about a different company, and the visitor is told
+        # "the company does file, so this is most likely a temporary failure to reach
+        # them" -- a claim about the filer that only one of the two kinds supports.
+        kind = ingest_throttle.failure_kind(company_id)
+        detail = (
+            "No financial statements could be sourced for this ticker yet. Try again shortly."
+            if kind == ingest_throttle.ABSENT
+            else "The filing providers could not be reached for this ticker. Try again shortly."
         )
+        raise HTTPException(status_code=503, detail=detail)
 
     # Single-flight: concurrent requests for one uncached ticker produce one
     # build. The loser does not start a duplicate -- it WAITS and reads the winner's
@@ -650,17 +657,31 @@ def _build_spec_locked(
             hist_m = _get_hist_model(company_id)
             q_spec = run_qa(run_valuation(run_forecast_pipeline(hist_m)))
         except NoFinancialsAvailable as e:
-            # A listed ticker with nothing behind it yet. Recorded as a failure so
-            # it is not re-attempted on every request, and answered 503 because
-            # that is a temporary condition rather than a broken build.
-            ingest_throttle.mark_failure(company_id)
+            # A listed ticker with nothing behind it yet. Recorded as an ABSENCE so it
+            # is not re-attempted on every request, and answered 503 because that is a
+            # temporary condition rather than a broken build.
+            ingest_throttle.mark_failure(company_id, ingest_throttle.ABSENT)
             logger.info("No financials available for %s: %s", company_id, e)
             raise HTTPException(
                 status_code=503,
                 detail="No financial statements could be sourced for this ticker yet. Try again shortly.",
             )
-        except Exception:
-            ingest_throttle.mark_failure(company_id)
+        except Exception as e:
+            # NOT cached, and that is the whole change.
+            #
+            # This used to be `except Exception: mark_failure(company_id); raise`, so a
+            # parser crash, a forecast bug and a rate-limited provider all left the same
+            # cached state behind them. For the next NEGATIVE_CACHE_TTL seconds every
+            # request for this ticker was answered with the absence message, which the
+            # frontend renders to a visitor as "the filings behind this company could
+            # not be reached. The company does file, so this is most likely a temporary
+            # failure to reach them."
+            #
+            # So a defect in this codebase produced a confident, repeated, false
+            # statement about a real listed company's filings, and every retry made it
+            # more certain rather than less. Two things with different causes now get
+            # two different answers, and a defect gets to surface as a defect.
+            logger.exception("Ingestion failed for %s; not caching it as an absence", company_id)
             raise
 
     _lru_put(_MODEL_CACHE, company_id, q_spec)
