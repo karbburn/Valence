@@ -9,7 +9,7 @@ import type { ModelSpecification } from '@/lib/types'
 import type { ResolvedSlug } from '@/lib/tickers'
 import { mayPublishPrice, withheldReason as withheldReasonFor } from '@/lib/publication'
 import { SiteFooter } from '@/components/SiteFooter'
-import { LaunchVideo } from '@/components/landing/LaunchVideo'
+
 import { TickerSearch } from '@/components/landing/TickerSearch'
 import { LiveModelPreview } from '@/components/landing/LiveModelPreview'
 import { Reveal, RevealGroup, RevealItem } from '@/components/landing/Reveal'
@@ -186,9 +186,29 @@ export default async function LandingPage() {
               </div>
             </div>
 
-            <div className="lg:col-span-6">
-              <LaunchVideo />
-            </div>
+            {/* The launch film is PAUSED here, deliberately, and this is where it comes back.
+
+                Its poster is a bitmap carrying the product's headline claim as pixels: a
+                ticker, a market price, a model price, a percentage gap and a date. Read off
+                the rendered card on 2026-10-04 against the live model:
+
+                    poster   $228.86 market  $107.52 model  -53.0%   as of 28 Sep 2026
+                    API      $233.95 market  $156.48 model  -33.1%   at 2026-10-02
+
+                Twenty percentage points out on the one number the card exists to show, and a
+                first visitor would read -53% in the hero and -33% in the rail further down
+                the same page. The same class of defect as the meta description that was
+                leaking twelve withheld valuations, except that this one is in an image, so
+                nothing in the markup, the metadata or the API says what it claims and no
+                check could see it.
+
+                A bitmap cannot be fixed by editing a file. It needs the artwork re-cut, and
+                replacing a designed card with a generated one would be a worse trade than
+                pausing it. `scripts/check_launch_artwork.py` keeps the claim in
+                `valence-launch-poster.json` and compares it with the live model, and it
+                passes while the artwork is absent -- so re-cutting the film and updating
+                that file in the same change is all it takes to bring this back. */}
+            <div className="lg:col-span-6" />
           </div>
         </section>
 

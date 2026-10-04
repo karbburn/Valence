@@ -1,0 +1,26 @@
+{
+  "_comment": [
+    "What the launch film's poster JPEG and the film itself DISPLAY, written down so a",
+    "gate can check it. The artwork is a bitmap: nothing on the page, in the markup or in",
+    "the API says what its figures are, so it rots silently and no check can see it.",
+    "",
+    "Read off the rendered poster on 2026-10-04. The card reads 'THE GAP', 'NASDAQ . NVDA',",
+    "'$228.86 MARKET PRICE', '$107.52 THIS MODEL, UNLEVERED FREE CASH FLOW', '-53.0% MODEL",
+    "VS MARKET', and 'Prices as of 28 Sep 2026'.",
+    "",
+    "scripts/check_launch_artwork.py compares every figure here against the live model and",
+    "fails when they disagree. It cannot check the BITMAP, so this file is the claim, and the",
+    "bitmap has to be regenerated to match it.",
+    "",
+    "TO REFRESH: rebuild the artwork with the figures below, update this file to match, and",
+    "the gate goes green. Do not update this file alone -- that makes the gate agree with a",
+    "poster that still says something else, which is the failure this exists to catch."
+  ],
+  "ticker": "NVDA",
+  "company_id": "nvda_us",
+  "market_price": 228.86,
+  "model_price": 107.52,
+  "delta_pct": -53.0,
+  "prices_as_of": "2026-09-28",
+  "rendered_on": "2026-09-28"
+}
