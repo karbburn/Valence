@@ -190,10 +190,26 @@ export default function MethodologyPage() {
                 the API.
               </p>
               <p>
-                The results are in the QA panel in the header. A model with failing checks is
-                served anyway, with the failures listed. The panel reports what the model got wrong
-                rather than hiding it, and a check that cannot run is marked skipped rather than
-                quietly counted as a pass.
+                The results are in the QA panel in the header. A model that fails a check on its
+                inputs is not presented as a valuation at all: no headline price, no
+                implied-versus-market comparison, and nothing in the share card or the meta
+                description. Nine of the twenty-three shipped models publish. The other
+                fourteen open with their full statements, their bridge, their WACC build and the
+                failing checks named, and with no price.
+              </p>
+              <p>
+                That is the opposite of listing the failures under a headline and asking the
+                reader to discount one number, which is what this page used to say the product
+                did. A reader cannot see which figure to discount, and the headline is the only
+                thing most of them read. Withholding the evidence as well would be worse,
+                because then the refusal could not be checked, so the audit stays and the
+                conclusion does not.
+              </p>
+              <p>
+                Two rules about the checks themselves. A check that cannot run is marked skipped
+                rather than quietly counted as a pass, and a check that examined nothing fails
+                rather than passes, because an unverified check that reports success is
+                believed, and that is the one outcome worse than a check that did not run.
               </p>
             </Section>
 

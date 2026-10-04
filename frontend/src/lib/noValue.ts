@@ -1,15 +1,13 @@
 /**
  * The mark a figure's cell carries when the engine produced none.
  *
- * A bare dash is the old convention and it was wrong here for a specific reason
- * rather than a stylistic one. These are financial tables, so a horizontal
- * stroke already means a negative number: -5.0% and "no figure at all" were
- * both a dash, in the same column, at the same size. A reader scanning for
- * downside could not tell a loss from a gap, and a screen reader announced the
- * same word for both.
+ * Re-exported from `formatters.ts`, where it now lives. It was defined here and imported by
+ * thirty call sites, which is the right dependency for them and the wrong one for the
+ * formatters: the four formatters could not import it without creating a specifier that
+ * node's ESM resolver rejects, so they carried their own mark instead and the product
+ * rendered a missing figure two different ways depending on which component asked.
  *
- * "n/a" is unambiguous in both channels and says what is true, which is that
- * the engine declined to produce a figure rather than that the figure is zero.
- * Every cell using it is a cell where a reader needs exactly that distinction.
+ * The argument for the value itself is unchanged and is kept where the definition now is.
  */
-export const NO_VALUE = 'n/a'
+
+export { NO_VALUE } from './formatters.ts'
