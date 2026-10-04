@@ -31,11 +31,27 @@ _ALWAYS_ALLOWED = ("/api/health", "/api/docs", "/api/redoc", "/api/openapi.json"
 # is for; recompiling a model is a deliberate act.
 _MUTATING = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
-# Off unless a proxy is known to be in front. This is the reverse of the obvious
-# default and the reason is in `_client_key`: the header is only worth reading
-# when something upstream rewrites it, and trusting it when nothing does means
-# trusting the client. Deployment sets it in render.yaml alongside the service
-# definition, so the setting lives with the deployment rather than in code.
+# Off unless a proxy is known to be in front, and the DEPLOYMENT DOES NOT SET IT.
+#
+# This comment used to say "Deployment sets it in render.yaml alongside the service
+# definition", which was false: `render.yaml` declares no such variable, so the flag has
+# always been off in production. A comment that describes a setting nobody made is worse
+# than no comment, because it is evidence a reviewer will not re-derive.
+#
+# So: what the deployed service actually does is a site-wide budget, deliberately. The
+# Dockerfile runs uvicorn with `--no-proxy-headers`, so `request.client.host` is the real
+# TCP peer and is the one address a caller cannot write. Behind Render's router that peer
+# is the router, so every caller shares one key. The limiter says "site-wide" in its tests
+# and its copy for that reason, and this comment now matches the deployment rather than an
+# intention.
+#
+# Set `VALENCE_TRUST_PROXY=1` only where something this deployment controls terminates the
+# connection and is known to APPEND to X-Forwarded-For, so the rightmost entry is the real
+# client rather than the caller's own. If a proxy passes that header through unmodified,
+# switching this on turns a bounded site-wide bucket into an unlimited one that a caller
+# defeats by rotating a header -- which is the bug the `--no-proxy-headers` line exists to
+# prevent. That is not verifiable from here, and the working deployment is the safe one, so
+# the flag stays off and the mismatch is recorded rather than closed by flipping it.
 _TRUSTS_PROXY = os.getenv("VALENCE_TRUST_PROXY", "0") not in ("0", "false", "False")
 
 # A build is not a client.

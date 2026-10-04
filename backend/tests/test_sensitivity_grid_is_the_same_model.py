@@ -88,18 +88,24 @@ class TestTheBridgeIsTheSameBridge:
         assert omitted.implied_share_price != pytest.approx(bare.implied_share_price)
 
 
-def _bridge_calls_in(module_path):
-    """Every `compute_dcf_bridge(...)` call in a module, as parsed call nodes.
+def _bridge_calls_in(module_path, *callee_names):
+    """Every call to one of `callee_names` in a module, as parsed call nodes.
 
     AST rather than grep, and that distinction is the whole point. A text search for
     `mezzanine_equity_cr` finds the string somewhere in the file, which is exactly
     what the shipped bug looked like: the parameter was declared, mentioned in the
     signature, and absent from the call. Only a parsed call node knows whether the
     argument was actually passed at that call site.
+
+    `callee_names` defaults to the bridge alone, which is what the grid tests want. The
+    pipeline's own calls matter for the same reason and were missed because the guard only
+    ever looked inside `sensitivity.py`: `run_valuation` makes three claims-aware calls,
+    passed the claim to exactly one of them, and nothing was watching that file.
     """
     import ast
     import pathlib
 
+    wanted = callee_names or ("compute_dcf_bridge",)
     tree = ast.parse(pathlib.Path(module_path).read_text(encoding="utf-8"))
     out = []
     for node in ast.walk(tree):
@@ -107,7 +113,7 @@ def _bridge_calls_in(module_path):
             continue
         fn = node.func
         name = fn.attr if isinstance(fn, ast.Attribute) else getattr(fn, "id", None)
-        if name == "compute_dcf_bridge":
+        if name in wanted:
             out.append(node)
     return out
 
@@ -194,6 +200,61 @@ class TestReverseDcfCarriesEveryClaim:
     MORE equity value than exists -- a number that looks entirely reasonable and is
     wrong in the direction that matters for an implied-rate output.
     """
+
+    PIPELINE = "backend/valuation/pipeline.py"
+
+    def test_the_pipeline_passes_every_claim_to_the_reverse_solver(self):
+        """`run_valuation` resolved the claim and then did not pass it.
+
+        `_claims` walks `CLAIMS_AHEAD_OF_COMMON_EQUITY` at line 126 and binds
+        `mezzanine_equity` at line 134. It was used at exactly one of the three
+        claims-aware calls in that function, so the reverse solve and both sensitivity grids
+        varied a model that omitted a claim the site bridge deducts.
+
+        The site grid is the worst of the three: it is the table a reader moves to see what
+        happens to the price, and every cell would be overstated by the mezzanine amount.
+        Latent rather than live -- `mezzanine_equity` is 0.0 in all 23 shipped models -- and
+        latent is exactly how the previous four copies of this enumeration went unnoticed.
+        """
+        from backend.valuation.claims import CLAIMS_AHEAD_OF_COMMON_EQUITY
+
+        calls = _bridge_calls_in(
+            self.PIPELINE, "compute_reverse_dcf", "compute_sensitivity_tables"
+        )
+        assert len(calls) == 2, (
+            f"expected the pipeline to make two claims-aware calls (the reverse solver and "
+            f"the sensitivity grids), found {len(calls)}. A third one added without its "
+            f"claims would not arrive here as a count change."
+        )
+        for call in calls:
+            passed = {kw.arg for kw in call.keywords if kw.arg}
+            missing = [
+                f"{c.bridge_field}_cr"
+                for c in CLAIMS_AHEAD_OF_COMMON_EQUITY
+                if f"{c.bridge_field}_cr" not in passed
+            ]
+            assert not missing, (
+                f"the call to {call.func.attr} at line {call.lineno} omits {missing}. The "
+                f"claim is resolved a few lines above and used by the bridge, so this is "
+                f"an omission from two of three sites rather than from the enumeration."
+            )
+
+    def test_the_amounts_are_the_callers_variables_not_constants(self):
+        """A hardcoded zero would pass the test above and still be wrong."""
+        import ast
+
+        for call in _bridge_calls_in(
+            self.PIPELINE, "compute_reverse_dcf", "compute_sensitivity_tables"
+        ):
+            for kw in call.keywords:
+                if not kw.arg or not kw.arg.endswith("_cr"):
+                    continue
+                if kw.arg in ("debt_cr", "cash_cr"):
+                    continue
+                assert not isinstance(kw.value, ast.Constant), (
+                    f"the call at line {call.lineno} passes a literal for {kw.arg}; a claim "
+                    f"amount must come from the caller"
+                )
 
     @staticmethod
     def _solve(**extra):
