@@ -51,6 +51,16 @@ BROWSER_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
+
+# Where acquired documents and their metadata live.
+#
+# A named constant rather than a default argument, because the INGESTION side needs to find
+# what this module downloaded. `<symbol>.json` beside `<symbol>-<label>.pdf` is the only
+# thing connecting an acquired statement to the company it belongs to, and until the
+# ingestion side read it the fetcher's whole output went nowhere: the balance-sheet pages
+# were located by content, recorded, and never parsed. Twelve India models were
+# `opinion_only` because their audited statements were on disk and unread.
+NSE_CACHE_DIR = Path(__file__).resolve().parents[1] / "filings" / "nse"
 NSE_HOME = "https://www.nseindia.com/"
 ANNOUNCEMENTS = ("https://www.nseindia.com/api/corporate-announcements"
                  "?index=equities&symbol=%s")
@@ -449,7 +459,7 @@ def main(argv=None) -> int:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("symbols", nargs="+")
-    parser.add_argument("--cache", default="backend/data/filings/nse")
+    parser.add_argument("--cache", default=str(NSE_CACHE_DIR))
     parser.add_argument("--refresh", action="store_true")
     parser.add_argument("--max", type=int, default=MAX_CANDIDATES)
     parser.add_argument("--delay", type=float, default=POLITE_DELAY_SECONDS)

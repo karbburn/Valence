@@ -26,6 +26,7 @@ Source coverage audit (as of current DB):
 """
 
 import json
+import logging
 from pathlib import Path
 
 from backend.data.ingestion.screener import parse_screener_export
@@ -39,23 +40,141 @@ SOURCES = HERE / "sources"
 FILINGS = HERE / "filings"
 LOG_PATH = HERE / "discrepancy_log.json"
 
+logger = logging.getLogger(__name__)
+
+
+def _cached_nse_pdfs(company_id: str) -> list[tuple[Path, dict]]:
+    """Cached NSE attachments for this company, with the fetcher's own metadata.
+
+    The fetcher writes `<symbol>.json` beside each PDF and records the balance-sheet pages
+    it found by CONTENT. That record is the only thing connecting a company to a document,
+    and it is what this function reads rather than a filename or a hardcoded page number.
+    """
+    from backend.data.ingestion.nse_filings import NSE_CACHE_DIR
+
+    ticker = company_id.split("_")[0].upper()
+    meta_path = NSE_CACHE_DIR / f"{ticker}.json"
+    if not meta_path.exists():
+        return []
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    stem = meta_path.with_suffix("")  # <symbol>.json -> <symbol>
+    pdfs = sorted(stem.parent.glob(f"{stem.name}-*.pdf"))
+    return [(p, meta) for p in pdfs]
+
+
+def _filing_datapoints_from_cached_pdf(
+    pdf_path: Path, meta: dict, company_id: str
+) -> list[RawDatapoint]:
+    """Parse the balance-sheet pages the fetcher located, and only those.
+
+    THIS FUNCTION IS THE MISSING LAST MILE, and its absence is why all twelve India models
+    are `opinion_only`.
+
+    `nse_filings.py` acquires the audited PDF, opens it, and finds the balance sheet by
+    content -- HCLTech's at printed page 5, TCS's at printed pages 11 and 20, both measured
+    against the cached documents. It records the page numbers in its metadata and returns.
+    Nothing read that record: `balance_sheet_pages` had no consumer outside the fetcher and
+    its own test, so the database held ZERO `nse_filing` rows for TCS, HCLTech and Tata
+    Steel while their audited statements sat in `backend/data/filings/nse/` already
+    downloaded and already located.
+
+    That is a different defect from the one on record. The recorded blocker is the
+    `inputs_trace_to_a_filing` threshold of 0.9, which needs more than 2,736 filing rows per
+    company and is therefore unreachable by parser work. But that arithmetic only describes
+    the LAST step. There was no parser at all between the located page and the datastore, so
+    the threshold was never the thing standing in the way.
+
+    Two details that are easy to get wrong and are asserted by the tests rather than by
+    reading:
+
+    The fetcher records PRINTED page numbers (`i + 1`) because that is what a reader sees in
+    the document. `parse_predicted_statement_page` takes a 0-BASED INDEX into `pdf.pages`.
+    Off by one here lands on the facing page, which for a balance sheet is the note before
+    it or the statement after, and the rows read cleanly off the wrong page.
+
+    The section is not asserted by the caller. `looks_like_balance_sheet` matched the
+    balance sheet's own subtotal caption on that page, so "BALANCE SHEET" is what the
+    document says about itself, not what the caller would like it to be. The previous
+    hardcoded table asserted `section="PROFIT & LOSS"` for a page that prints a
+    comprehensive income statement.
+    """
+    pages = meta.get("balance_sheet_pages") or []
+    dps: list[RawDatapoint] = []
+    for printed in pages:
+        page_index = int(printed) - 1
+        try:
+            dps.extend(
+                parse_predicted_statement_page(
+                    pdf_path,
+                    page_index,
+                    "BALANCE SHEET",
+                    "nse_filing",
+                    annual_only=False,
+                    company_id=company_id,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            # One unreadable page must not cost the others, and the reason must be
+            # recorded rather than discarded. A silent `pass` here is indistinguishable
+            # from a document with nothing on it, which is how a whole filer's
+            # statements go missing without anything saying so.
+            logger.warning(
+                "Could not read %s printed page %s of %s: %s: %s",
+                printed, company_id, pdf_path.name, type(exc).__name__, exc,
+            )
+    return dps
+
 
 def _get_secondary_filing_datapoints(company_id: str) -> list[RawDatapoint]:
-    """Dynamically scan and parse secondary PDF filings for company_id if present."""
+    """Audited filing datapoints for this company, from whatever document we hold.
+
+    The cached-NSE path runs first and covers every India company the fetcher has acquired
+    a statement for. The Infosys hardcoded table is kept because its document predates the
+    fetcher and lives outside its cache directory, not because it is a better way.
+    """
     filing_dps: list[RawDatapoint] = []
 
-    # Check company-specific filings directory or legacy Infosys files
+    for pdf_path, meta in _cached_nse_pdfs(company_id):
+        filing_dps.extend(_filing_datapoints_from_cached_pdf(pdf_path, meta, company_id))
+
+    if filing_dps:
+        logger.info(
+            "%s: %d filing datapoints from %d cached NSE attachment(s)",
+            company_id, len(filing_dps), len(_cached_nse_pdfs(company_id)),
+        )
+        return filing_dps
+
     company_filings_dir = FILINGS / company_id
     if company_filings_dir.exists() and company_filings_dir.is_dir():
-        pdf_files = sorted(company_filings_dir.glob("*.pdf"))
-        for pdf in pdf_files:
+        for pdf in sorted(company_filings_dir.glob("*.pdf")):
+            from backend.data.ingestion.nse_filings import balance_sheet_pages
+            import pdfplumber
+
             try:
-                page_dps = parse_predicted_statement_page(
-                    pdf, 99, "BALANCE SHEET", "nse_filing", annual_only=False, company_id=company_id
+                with pdfplumber.open(pdf) as doc:
+                    found = balance_sheet_pages(doc)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "Could not scan %s for a balance sheet: %s: %s",
+                    pdf.name, type(exc).__name__, exc,
                 )
-                filing_dps.extend(page_dps)
-            except Exception:
-                pass
+                continue
+            for printed in found:
+                try:
+                    filing_dps.extend(
+                        parse_predicted_statement_page(
+                            pdf, printed - 1, "BALANCE SHEET", "nse_filing",
+                            annual_only=False, company_id=company_id,
+                        )
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "Could not read %s printed page %s of %s: %s: %s",
+                        printed, company_id, pdf.name, type(exc).__name__, exc,
+                    )
 
     elif company_id == "infy_infy":
         fy26_pdf = FILINGS / "infosys-fy26-q4-outcome.pdf"
@@ -72,6 +191,14 @@ def _get_secondary_filing_datapoints(company_id: str) -> list[RawDatapoint]:
                 parse_predicted_statement_page(fy25_pdf, 109, "CASH FLOW", "nse_filing", annual_only=False, company_id=company_id),
             ]
             filing_dps = [d for page in (fy26 + fy25) for d in page]
+
+    if not filing_dps:
+        logger.info(
+            "%s: no audited filing datapoints. No cached NSE attachment for this ticker "
+            "(expected %s/<TICKER>.json beside a downloaded PDF), no per-company "
+            "filings directory, and no legacy document.",
+            company_id, FILINGS / "nse",
+        )
 
     return filing_dps
 

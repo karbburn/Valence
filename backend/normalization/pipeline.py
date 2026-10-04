@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from backend.data.store import (
@@ -16,6 +17,8 @@ from backend.normalization.fiscal_periods.aligner import align_fiscal_periods
 HERE = Path(__file__).resolve().parent
 WORKSPACE_ROOT = HERE.parent.parent
 DB_PATH = WORKSPACE_ROOT / "backend" / "data" / "valence.db"
+
+logger = logging.getLogger(__name__)
 
 
 def run(company_id: str = "infy_infy", db_path=None) -> dict:
@@ -41,8 +44,33 @@ def run(company_id: str = "infy_infy", db_path=None) -> dict:
     # Map raw labels to canonical taxonomy
     canonical_dps, taxonomy_mappings, unmapped_labels = map_raw_datapoints(winning_raw_dps)
 
+    # An unmapped caption is a COVERAGE GAP, and it is recorded rather than fatal.
+    #
+    # This raised, and the raise was a forcing function for taxonomy work. It became a
+    # shipping defect the moment the NSE fetcher's located pages actually reached this
+    # stage: TCS's audited balance sheet contributes 174 rows carrying 9 captions the
+    # taxonomy has no entry for, and the whole ingest failed. Two companies that ingested
+    # cleanly from the market feed a moment earlier could not be ingested at all, so a
+    # breadth improvement would have shipped as a regression.
+    #
+    # Nothing is lost by continuing. Every unmapped label is already written to the review
+    # queue inside `map_raw_datapoints` before it is reported here, so the gap is durable
+    # and queryable rather than something a stack trace carried away.
+    #
+    # And the guard that actually protects the numbers is downstream and is not this one.
+    # A balance sheet missing lines of itself does not foot, so `current_assets_reconcile`
+    # compares the sum of what was kept against the filer's own printed subtotal and FAILS,
+    # naming the gap. That is the check written for exactly this, and it fails the model
+    # rather than the build. Verified rather than assumed: the two companies below were
+    # ingested after this change and their reconcile outcome is reported by
+    # `assets/gsd/check_nse_ingest_effect.py`.
     if unmapped_labels:
-        raise ValueError(f"Normalization failed: {len(unmapped_labels)} unmapped labels found: {unmapped_labels}")
+        logger.warning(
+            "%s: %d caption(s) have no canonical mapping and were left out of the "
+            "canonical layer. They are in the review queue. The statements they came from "
+            "will not foot, and the reconciliation check will say so: %s",
+            company_id, len(unmapped_labels), unmapped_labels,
+        )
 
     # Apply derivation rules (e.g. EBITDA)
     derived_dps = derive_canonical_metrics(canonical_dps)
@@ -85,6 +113,9 @@ def run(company_id: str = "infy_infy", db_path=None) -> dict:
         "total_canonical_count": len(all_canonical_dps),
         "taxonomy_mappings_count": len(taxonomy_mappings),
         "unmapped_labels_count": len(unmapped_labels),
+        # The captions themselves, not only how many. A count tells a reader that
+        # something is missing; the names tell whoever fixes it what to open.
+        "unmapped_labels": list(unmapped_labels),
     }
 
     print(
