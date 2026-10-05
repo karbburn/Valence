@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 from datetime import date, datetime
 from pathlib import Path
@@ -8,6 +9,8 @@ from pathlib import Path
 import pdfplumber
 
 from backend.data.store import RawDatapoint
+
+logger = logging.getLogger(__name__)
 
 LABEL_X_MAX = 330.0  # left of this = label text; right = value columns
 
@@ -564,6 +567,24 @@ def parse_predicted_statement_page(
 
         dps: list[RawDatapoint] = []
         seen: set[tuple[str, str, float]] = set()
+        # Which (caption, period) has already been claimed, and by WHICH printed column.
+        #
+        # The column is the whole point, and getting it wrong is what an earlier attempt at this
+        # did. A page can print one caption twice for two entirely different reasons:
+        #
+        #   * two COLUMNS -- two dates. HCLTech printed 5 compares "30 June 2026" with
+        #     "31 March 2026"; `_year_anchors` matches only the year, so both label FY26. One of
+        #     them is a period the engine cannot represent, and emitting both puts 11,806 and
+        #     12,261 in the store as two FY26 total-assets rows.
+        #
+        #   * two ROWS in the SAME column -- a caption appearing in both the current and the
+        #     non-current half of one page. `bs_half` exists to disambiguate those, both are real,
+        #     and dropping either loses a figure.
+        #
+        # The earlier version treated both as the same thing and silently discarded eleven
+        # legitimate TCS captions. So the drop is keyed on the column, and only across columns.
+        _claimed: dict[tuple[str, str], float] = {}
+        _collisions: list[tuple[str, str, float, float]] = []
         # Tracked across the rows rather than per-row, because the boundary is a
         # header that appears once and governs everything printed after it.
         half: str | None = None
@@ -607,6 +628,16 @@ def parse_predicted_statement_page(
                 period_label = _period_label(period_end)
                 if (label, period_label, v) in seen:
                     continue  # identical line printed twice on the page
+                key = (label, period_label)
+                claimed_by = _claimed.get(key)
+                if claimed_by is not None and abs(claimed_by - nearest_x) > 0.5:
+                    # A DIFFERENT printed column has already claimed this period for this caption.
+                    # The first column wins -- leftmost, which is the reporting date on both the
+                    # Indian interim layout and the comparative layout -- and the drop is counted so
+                    # it is reported rather than happening silently.
+                    _collisions.append((label, period_label, v, nearest_x))
+                    continue
+                _claimed.setdefault(key, nearest_x)
                 seen.add((label, period_label, v))
                 dps.append(
                     RawDatapoint(
@@ -642,4 +673,24 @@ def parse_predicted_statement_page(
                         update_date=datetime.now(),
                     )
                 )
+        if _collisions:
+            # Loud, because silence here is what the defect looked like.
+            #
+            # A dropped comparative is a real loss -- a period the filing prints and the model does
+            # not have -- and it must not read as "the filing only showed one period". So it is
+            # reported with the caption count, the page, and an example of what was discarded.
+            #
+            # The engine-wide consequence is unchanged and is the larger one: the period model has
+            # no quarter, so a page comparing June 2026 with a March 2026 year-end cannot be
+            # represented at all. Recording the drop is what preferring a recorded unknown to a
+            # silent collision looks like; extending the period model to quarters is the other
+            # answer and is not built.
+            logger.warning(
+                "%s printed page %s: %d figure(s) came from a second printed column that this "
+                "engine cannot represent, and were dropped rather than relabelled onto the first. "
+                "Example: %r at x=%.1f. The filing compares two period-ends and the period model "
+                "holds one, so one date is genuinely absent from the model.",
+                company_id, page_index + 1, len(_collisions),
+                _collisions[0][0], _collisions[0][3],
+            )
         return dps
