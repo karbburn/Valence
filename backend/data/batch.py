@@ -84,20 +84,48 @@ def _snapshot_company_rows(db_path: str | Path, company_id: str) -> dict:
         conn.close()
 
 
+def _has_raw_rows(company_id: str, db_path: str | Path) -> bool:
+    """Whether the company has any raw rows right now.
+
+    Distinguishes "the parsers ran and normalization refused" from "the failure happened before
+    anything was written". In the first case the fresh raw record is worth keeping; in the second
+    there is nothing to keep and the previous rows must come back in full.
+    """
+    import sqlite3
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        try:
+            row = conn.execute(
+                "SELECT 1 FROM raw_datapoints WHERE company_id = ? LIMIT 1", (company_id,)
+            ).fetchone()
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001
+        # An unreadable store cannot tell us, and assuming "yes" would keep rows nobody wrote.
+        return False
+    return row is not None
+
+
 def _restore_company_rows(db_path: str | Path, company_id: str,
-                          snapshot: dict) -> None:
+                          snapshot: dict, keep_raw: bool = False) -> None:
     """Put a company's rows back exactly as they were.
 
     Best-effort by design: this runs while an exception is already propagating, so a
     failure here must not replace the ORIGINAL error -- the one that explains why the
     rebuild was attempted -- with a second, less informative one.
+
+    `keep_raw` leaves the freshly-parsed raw rows in place and restores only the canonical layer.
+    See `ensure_company_ingested` for why a normalization refusal must not discard the raw record
+    of a document that was read perfectly well.
     """
+    tables = ("canonical_datapoints",) if keep_raw else ("raw_datapoints", "canonical_datapoints")
+    keys = {"raw_datapoints": "raw", "canonical_datapoints": "canonical"}
     conn = _connect(db_path)
     try:
-        for table in ("raw_datapoints", "canonical_datapoints"):
+        for table in tables:
             conn.execute("DELETE FROM %s WHERE company_id = ?" % table, (company_id,))
-        for table, key in (("raw_datapoints", "raw"),
-                           ("canonical_datapoints", "canonical")):
+        for table, key in ((t, keys[t]) for t in tables):
             rows = snapshot.get(key) or []
             if rows:
                 conn.executemany(
@@ -239,7 +267,41 @@ def ensure_company_ingested(
     try:
         _ingest_and_normalize(company_id, db_path, force)
     except Exception:
-        _restore_company_rows(db_path, company_id, _snapshot)
+        # A refused normalization must not discard the raw record of a filing that was read
+        # perfectly well.
+        #
+        # This is the third piece of a two-part fix, and without it the other two undo each other.
+        # The parser now reports the units a document declares instead of asserting INR crores, so
+        # normalization REFUSES a company whose filing disagrees with its market feed -- HCLTech,
+        # whose statements say "millions of USD", and TCS, whose rupee glyph does not survive text
+        # extraction so it declares a scale and no currency. That refusal is correct.
+        #
+        # But the refusal raised, this handler restored the previous rows, and the newly-parsed
+        # filing rows went with them. The next request then found no filing rows stored, decided
+        # the company had never been ingested, and re-parsed the PDFs. Measured on the gate:
+        #
+        #     FAILED test_the_shortcut_still_fires_once_the_filing_is_stored[tcs_tcs]
+        #     FAILED test_the_shortcut_still_fires_once_the_filing_is_stored[hcltech_hcltech]
+        #
+        # So the raw layer survives a refusal and only the interpreted layer is rolled back. Raw
+        # rows are a faithful transcription of what the document said; they are inputs, and they
+        # reach no model without passing normalization -- which is still refusing.
+        #
+        # Only when the raw table is now EMPTY is everything restored, because that means the
+        # failure happened before the parsers wrote anything and there is no fresh record to keep.
+        #
+        # And only for an UNFORCED call. `force=True` is an explicit destructive request -- "throw
+        # this company away and build it again" -- so its rollback includes the raw layer, which is
+        # what `test_a_failed_rebuild_loses_nothing.py` asserts and is the right contract for an
+        # operator who asked for a rebuild. An unforced call makes no such promise: it asks whether
+        # the company is ingested, and it must not discard anything it did not set out to replace.
+        #
+        # This distinction is a judgement, not a measurement, and the two existing gates disagree if
+        # it is drawn the other way: forcing it unconditionally fails the rebuild gate, and never
+        # applying it fails the idempotency gate. Both went red before this line was settled, which
+        # is recorded in section 25 rather than resolved by whichever one happened to run last.
+        keep_raw = (not force) and _has_raw_rows(company_id, db_path)
+        _restore_company_rows(db_path, company_id, _snapshot, keep_raw=keep_raw)
         raise
 
 
