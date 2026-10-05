@@ -91,10 +91,26 @@ def universe(market: str) -> tuple[list[str], int]:
 
 
 def measure_one(company_id: str) -> dict:
-    """Build the model the on-demand request would build, and read the verdict it would serve."""
+    """Build the model the on-demand request would build, and read the verdict it would serve.
+
+    **`historical_model` is deliberately NOT passed**, and that is load-bearing rather than an
+    omission. `run_precompute` calls `run_valuation(forecast_spec)` with no historical model, so
+    the reverse DCF's bisection solve never runs in production and `implied_revenue_cagr` is null
+    on every shipped model. Passing it here would build a model the site never builds, and the
+    coverage figure would then describe a configuration nobody is served.
+
+    `backend/tests/test_the_second_solve_is_wired.py` asserts exactly this, by scanning tracked
+    files for any caller that supplies it, and it caught this script on its first run in CI. The
+    tripwire was right: a coverage number is only worth quoting if it was measured on the shipped
+    path.
+
+    The solve's output is also not yet trustworthy. Substituting a solved rate back into the base
+    scenario and re-running returns exactly the model's own price, so the figure cannot be shown
+    to reproduce the market price it claims to explain. See OPEN_DEFECTS.md section 14c.
+    """
     ensure_company_ingested(company_id)
     hist = run_historical(target_periods=["FY24", "FY25", "FY26"], company_id=company_id)
-    spec = run_qa(run_valuation(run_forecast_pipeline(hist), historical_model=hist))
+    spec = run_qa(run_valuation(run_forecast_pipeline(hist)))
     payload = _spec_payload(spec)
     pub = payload.get("publication") or {}
     sources = (payload.get("metadata") or {}).get("data_sources") or {}
