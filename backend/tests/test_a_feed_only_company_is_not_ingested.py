@@ -40,6 +40,34 @@ from backend.data.universe.store import DB_PATH
 HAS_COMMITTED_FILING = ["tcs_tcs", "hcltech_hcltech"]
 
 
+def _has_the_tables(db: Path) -> bool:
+    """Whether `db` is a real store and not an empty file.
+
+    Checking `DB_PATH.exists()` is not enough, and that mistake is the same shape as the defect this
+    file guards: an absent store and an empty one are different states, and treating them as one is
+    how a company with no rows came to be treated as a company already ingested.
+
+    On a clean CI runner the file is created without any tables -- `sqlite3.connect` makes one on
+    demand, and other tests in the suite touch the path first -- so `.exists()` is True and the
+    copy silently succeeds. The first CI run of this gate failed at setup with
+    `no such table: raw_datapoints`, which is the honest failure but not a useful one.
+    """
+    if not db.exists():
+        return False
+    conn = sqlite3.connect(str(db))
+    try:
+        row = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'raw_datapoints'"
+        ).fetchone()
+        if row is None:
+            return False
+        return conn.execute("SELECT 1 FROM canonical_datapoints LIMIT 1").fetchone() is not None
+    except sqlite3.Error:
+        return False
+    finally:
+        conn.close()
+
+
 def filing_rows(db: Path, company_id: str) -> int:
     conn = sqlite3.connect(str(db))
     try:
@@ -74,6 +102,12 @@ def store_with_feed_rows_only(tmp_path):
         pytest.skip("no ingested store to copy; run the engine once locally")
     db = tmp_path / "feed_only.sqlite"
     shutil.copy(DB_PATH, db)
+    if not _has_the_tables(db):
+        db.unlink(missing_ok=True)
+        pytest.skip(
+            "the store at DB_PATH is an empty file with no tables, which is what a clean CI "
+            "runner has. Run the engine once locally to populate it."
+        )
     conn = sqlite3.connect(str(db))
     try:
         conn.execute("DELETE FROM raw_datapoints WHERE source = 'nse_filing'")
@@ -166,6 +200,8 @@ def test_an_unreadable_store_is_not_read_as_proof_the_filing_is_stored(tmp_path)
 
     Returning zero on failure is the safe direction precisely because the consequence of being
     wrong is a re-parse rather than a gap.
+
+    Needs no store, so it runs on a clean CI runner -- which is why the rest of this file does not.
     """
     missing = tmp_path / "no_such_directory" / "store.sqlite"
 
@@ -175,6 +211,23 @@ def test_an_unreadable_store_is_not_read_as_proof_the_filing_is_stored(tmp_path)
     assert batch._an_available_filing_is_unstored("tcs_tcs", missing) is True, (
         "with the store unreadable and a filing on disk, the company must be treated as not yet "
         "ingested"
+    )
+
+
+def test_an_empty_store_file_is_not_read_as_a_populated_one(tmp_path):
+    """An empty file is not an ingested store.
+
+    `sqlite3.connect` creates the file on demand, so a CI runner that merely TOUCHED the path leaves
+    a zero-byte database where `.exists()` is True. Checking existence is how the first CI run of
+    this gate failed at setup with `no such table: raw_datapoints`. The store helper must survive
+    that, and it does so by counting zero rows -- which then sends the caller on to try the ingest
+    rather than declaring the work already done.
+    """
+    empty = tmp_path / "empty.sqlite"
+    sqlite3.connect(str(empty)).close()
+    assert empty.exists(), "precondition: sqlite3 must have created the file"
+    assert batch._stored_filing_row_count("tcs_tcs", empty) == 0, (
+        "an empty store must count as zero stored rows, not as an error or as 'already ingested'"
     )
 
 
@@ -199,6 +252,8 @@ def test_a_stored_filing_is_not_re_ingested_even_when_the_locator_still_finds_it
     """
     if not DB_PATH.exists():
         pytest.skip("no ingested store to read")
+    if not _has_the_tables(DB_PATH):
+        pytest.skip("the store at DB_PATH is an empty file with no tables")
     for company_id in HAS_COMMITTED_FILING:
         if filing_rows(DB_PATH, company_id) == 0:
             pytest.skip(f"{company_id} has no filing rows in the live store yet")
