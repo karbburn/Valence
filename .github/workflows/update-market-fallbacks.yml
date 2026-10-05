@@ -41,7 +41,26 @@ jobs:
 
       - name: Smoke-test backend
         run: |
-          python -m pip install fastapi openpyxl pandas numpy httpx
+          # The dependency list is derived from pyproject.toml, exactly as tests.yml does it,
+          # rather than hand-listed here.
+          #
+          # This step used to run `pip install fastapi openpyxl pandas numpy httpx` and then
+          # `python -m pytest`. Two lists of the same thing, and they drifted. The run failed on
+          # 2026-10-05 with:
+          #
+          #     /opt/hostedtoolcache/Python/3.12.14/x64/bin/python: No module named pytest
+          #
+          # which is not a failing test and not a broken refresh -- it is a step that could never
+          # have run. Adding `pytest` alone would have left the second half of the same problem:
+          # pdfplumber, which every filing test imports, was absent too. So the list is derived
+          # from the one place it is declared, and there is no longer a second place to forget.
+          python -m pip install --upgrade pip
+          python - <<'PY' > /tmp/deps.txt
+          import tomllib, pathlib
+          deps = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["dependencies"]
+          print("\n".join(deps))
+          PY
+          pip install pytest -r /tmp/deps.txt
           python -m pytest backend/tests -q
 
       - name: Open update PR
