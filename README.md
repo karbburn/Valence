@@ -278,6 +278,9 @@ SEC_CONTACT_EMAIL=you@example.com     # SEC requires a monitored contact in the 
 TWELVEDATA_API_KEY=                   # optional market-data provider
 VALENCE_INGEST_CONCURRENCY=2          # in-flight live builds
 VALENCE_INGEST_NEGATIVE_TTL=900       # seconds to remember an unsourceable slug
+
+# Off by default, and deliberately so. See "Indian filing acquisition" below before enabling.
+VALENCE_ENABLE_NSE_ACQUISITION=
 ```
 
 ```env
@@ -289,6 +292,34 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 `NEXT_PUBLIC_API_URL` is read at **build** time, not only at runtime. The pages
 are prerendered, so a build without it will find no companies to prerender and
 the index will render empty.
+
+### Indian filing acquisition
+
+Indian models are built from a market feed unless an audited statement has been
+fetched for them. With `VALENCE_ENABLE_NSE_ACQUISITION` set, a company with no
+cached statement is fetched from the exchange on demand, and the audited balance
+sheet is read from it.
+
+**It is off by default**, which is a decision rather than an omission:
+
+- It runs on the read path, so enabling it means site traffic reaches an exchange.
+- Request volume is governed by that exchange's terms, which have not been
+  settled. Check them before turning this on.
+- Without it the product degrades to a market feed, and says so on the page.
+  That is a visible, labelled fallback, which is why it is acceptable.
+
+When enabled, fetches are bounded three ways: a statement already on disk is never
+re-fetched, a failed attempt is remembered for five minutes per symbol, and a
+single process makes at most 25 attempts per hour. Note that one attempt may open
+several documents while looking for one that carries a balance sheet, so the real
+ceiling on requests is higher than 25.
+
+Filings can also be fetched directly, which is how the committed sample documents
+were obtained:
+
+```bash
+python -m backend.data.ingestion.nse_filings TCS HCLTECH --refresh
+```
 
 ### Running
 
