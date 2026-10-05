@@ -22,8 +22,6 @@ against EDGAR so a wrong one cannot sit in the table unnoticed between runs.
 
 from __future__ import annotations
 
-import json
-
 import pytest
 
 from backend.data.errors import NoFinancialsAvailable
@@ -177,20 +175,16 @@ class TestShippedIdentifiersMatchTheirFilers:
     """Checked against EDGAR, because this is the check that would have caught it."""
 
     def test_every_registry_entry_is_the_filer_it_claims(self):
-        import gzip
-        import urllib.request
+        from backend.tests.conftest import fetch_sec_json
 
         for company_id, expected_name in EXPECTED_FILER.items():
             cik = CIK_REGISTRY[company_id]
-            req = urllib.request.Request(
+            submissions = fetch_sec_json(
                 f"https://data.sec.gov/submissions/CIK{cik}.json",
-                headers={"User-Agent": "Valence valuation research team@valence.com",
-                         "Accept-Encoding": "gzip"},
+                what=f"CIK_REGISTRY['{company_id}'] = {cik} against {expected_name!r}",
+                timeout=60,
             )
-            raw = urllib.request.urlopen(req, timeout=60).read()
-            if raw[:2] == b"\x1f\x8b":
-                raw = gzip.decompress(raw)
-            name = json.loads(raw).get("name")
+            name = submissions.get("name")
             assert _same_filer(name or "", expected_name), (
                 f"CIK_REGISTRY['{company_id}'] is {cik}, which is {name!r}, not "
                 f"{expected_name!r}. Every figure this engine publishes for that "

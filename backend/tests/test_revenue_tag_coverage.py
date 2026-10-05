@@ -19,16 +19,16 @@ the moment the index or the SEC changes and would quietly stop testing anything.
 
 from __future__ import annotations
 
-import gzip
-import json
-import urllib.request
 from typing import List
 
 import pytest
 
 from backend.data.ingestion.sec_edgar import _revenue_tags as engine_revenue_tags
+from backend.tests.conftest import fetch_company_facts
 
-UA = {"User-Agent": "Valence valuation research team@valence.com", "Accept-Encoding": "gzip"}
+# The User-Agent and gzip handling used to live here and are now in
+# `fetch_company_facts`, so that a network failure is handled in one place for
+# both live-EDGAR tests rather than being re-implemented per file.
 
 
 # Read the engine's own accessor rather than re-walking US_GAAP_TAG_MAP here.
@@ -108,13 +108,7 @@ class TestAgainstRealFilers:
 
     @staticmethod
     def _facts(cik: int):
-        req = urllib.request.Request(
-            f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json", headers=UA
-        )
-        raw = urllib.request.urlopen(req, timeout=180).read()
-        if raw[:2] == b"\x1f\x8b":
-            raw = gzip.decompress(raw)
-        return json.loads(raw)
+        return fetch_company_facts(cik)
 
     @pytest.mark.network
     def test_a_company_tagging_only_the_including_variant_is_readable(self) -> None:

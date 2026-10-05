@@ -104,3 +104,92 @@ def unlimited_budget(monkeypatch):
     ratelimit.reset()
     yield
     ratelimit.reset()
+
+
+def fetch_sec_json(url: str, *, what: str, timeout: int = 180) -> dict:
+    """Download and parse a JSON document from EDGAR, or skip naming why.
+
+    Two tests check a claim against a filer that is LIVE rather than against a
+    fixture, which is the only way to know the claim still holds. Calling
+    ``data.sec.gov`` directly made that claim untestable in practice: the request
+    raised, and an HTTP timeout, a 429, or a reset connection surfaced as a
+    failed test. The failure said nothing about the tag or the CIK it was checking
+    and everything about the network at that moment.
+
+    Observed, not hypothetical. ``test_a_company_tagging_only_the_including_variant_is_readable``
+    passed alone, passed as its own file, and failed inside a 324-test run, then
+    passed on an identical rerun of the same 324 tests. An intermittent gate
+    cannot be trusted to catch anything, so a red build from it teaches the team
+    to ignore red builds.
+
+    The marker was registered in ``pyproject.toml`` with the description "fails
+    when the network is unavailable", but nothing honoured it: CI runs
+    ``pytest backend/tests -q`` with no ``-m`` filter, so the marker's promise was
+    never kept. Two ways to keep it, and this takes the first.
+
+      1. Skip with the actual exception named. The assertion still runs whenever
+         EDGAR answers, so the check keeps its full value in CI, and an outage is
+         reported as an outage instead of as a defect in the engine.
+      2. Deselect network tests in CI. Simpler, and it gives up the check
+         entirely -- which is how a tag silently stops matching a filer that
+         changed its taxonomy, or a CIK registry entry drifts onto another filer
+         without anyone noticing until a published figure names the wrong company.
+
+    A malformed response is handled the same way as a failed request, because a
+    truncated body is equally uninformative. The body is only trusted once it
+    parses.
+
+    ``what`` names the thing being checked, so a skip message says which claim went
+    unverified rather than only that a URL failed.
+    """
+    import gzip
+    import json
+    import urllib.error
+    import urllib.request
+
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Valence valuation research team@valence.com",
+            "Accept-Encoding": "gzip",
+        },
+    )
+    try:
+        raw = urllib.request.urlopen(request, timeout=timeout).read()
+    except urllib.error.HTTPError as exc:
+        # 403 and 429 are EDGAR refusing a shared client identity rather than
+        # anything about this filer, which is exactly the case that must never be
+        # reported as a product failure.
+        pytest.skip(
+            f"EDGAR answered {exc.code} {exc.reason} while checking {what}. That is "
+            "the network or the rate limit, not the assertion under test."
+        )
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        pytest.skip(
+            f"could not reach data.sec.gov while checking {what}: "
+            f"{type(exc).__name__}: {exc}. That is the network, not the assertion."
+        )
+
+    try:
+        if raw[:2] == b"\x1f\x8b":
+            raw = gzip.decompress(raw)
+        parsed = json.loads(raw)
+    except (OSError, ValueError) as exc:
+        pytest.skip(
+            f"EDGAR's response for {what} did not parse: {type(exc).__name__}: {exc}. "
+            "Truncated or malformed, and equally uninformative about the claim."
+        )
+    if not isinstance(parsed, dict):
+        pytest.skip(
+            f"EDGAR returned {type(parsed).__name__} rather than an object for {what}, "
+            "so the shape this test expects is not what arrived."
+        )
+    return parsed
+
+
+def fetch_company_facts(cik: int) -> dict:
+    """A filer's XBRL company facts, or skip. See :func:`fetch_sec_json`."""
+    return fetch_sec_json(
+        f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json",
+        what=f"CIK {cik:010d} company facts",
+    )
