@@ -92,8 +92,8 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
     # Revenue tags, in priority order. Each entry here is a filer that exists and
     # publishes perfectly good statements and was silently absent from the model
     # because its tag was missing from this list -- no error, no warning, just a
-    # company that never appears. A uniform probe of the US index
-    # (assets/gsd/coverage_probe.py) is what found the gap.
+    # company that never appears. A uniform sweep of every filer in the US index is
+    # what found the gap.
     #
     # `IncludingAssessedTax` is the one that was missing, and it is not rare:
     # filers tag it instead of `ExcludingAssessedTax` for a perfectly defensible
@@ -604,8 +604,7 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
      # 6,042), while dividends are stored negative. One statement, two sign
      # conventions. Reconciling that means deciding which way capex should go and
      # re-deriving anything that consumes it, which is a separate change with its own
-     # verification -- recorded in assets/gsd/OPEN_DEFECTS.md rather than slipped in
-     # beside an unrelated fix.
+     # verification, and is deliberately not slipped in beside an unrelated fix.
      ),
     ("Basic (in shares)", [
         "CommonStockSharesOutstanding",
@@ -833,7 +832,7 @@ def _as_stored_outflow(
 
     One cash-flow statement, two conventions. Reconciling that means choosing which way
     capex goes and re-deriving everything that reads it, which is a separate change with
-    its own verification. Recorded in assets/gsd/OPEN_DEFECTS.md.
+    its own verification, and is deliberately not slipped in beside this change.
     """
     if _is_outflow_element(metric_label, tags) and val > 0:
         return -val
@@ -1412,8 +1411,7 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
             # with us-gaap), so one cash-flow statement carries capex as a magnitude and
             # dividends as a movement. Reconciling that means choosing which way capex
             # goes and re-deriving everything that reads it -- a separate change with its
-            # own verification. Recorded in assets/gsd/OPEN_DEFECTS.md rather than
-            # slipped in beside an unrelated fix.
+            # own verification, and is deliberately not slipped in beside this change.
             val = _as_stored_outflow(val, metric_label, tag_list)
 
             end_d = period_end

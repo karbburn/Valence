@@ -6,7 +6,7 @@ Measured across all 11 shipped US filers, per companyfacts:
     MinorityNoncontrollingInterestsInSubsidiary        absent from all 11
 
 So the SEC reader cannot supply this line for any of them, and there is no mapping to
-add. An earlier note in `OPEN_DEFECTS.md` recorded "minority interest: SEC can supply 1"
+add. An earlier note recorded "minority interest: SEC can supply 1"
 -- that "1" was `StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest`,
 which is TOTAL equity including the minority slice.
 
@@ -135,8 +135,8 @@ class TestNoTotalIsMappedOntoTheMinoritySlice:
             and (get_canonical_mapping(label) or (None,))[0] == MINORITY_KEY
         ]
         assert not labels, (
-            "%r now reaches %s from a filing. OPEN_DEFECTS section 1e records that no "
-            "US filer files a standalone NCI balance -- if that has changed, check "
+            "%r now reaches %s from a filing. No US filer files a standalone NCI "
+            "balance -- if that has changed, check "
             "WHICH element is being used before accepting it."
             % (labels, MINORITY_KEY)
         )

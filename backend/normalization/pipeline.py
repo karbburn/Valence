@@ -61,9 +61,8 @@ def run(company_id: str = "infy_infy", db_path=None) -> dict:
     # A balance sheet missing lines of itself does not foot, so `current_assets_reconcile`
     # compares the sum of what was kept against the filer's own printed subtotal and FAILS,
     # naming the gap. That is the check written for exactly this, and it fails the model
-    # rather than the build. Verified rather than assumed: the two companies below were
-    # ingested after this change and their reconcile outcome is reported by
-    # `assets/gsd/check_nse_ingest_effect.py`.
+    # rather than the build. Verified rather than assumed: the two companies named below
+    # were ingested after this change and their reconcile outcome was read directly.
     if unmapped_labels:
         logger.warning(
             "%s: %d caption(s) have no canonical mapping and were left out of the "

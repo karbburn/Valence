@@ -1,6 +1,6 @@
 """The tie-out gate must read the taxonomy a filer actually uses.
 
-`assets/gsd/tieout.py` asks "does a filed caption carry this figure?". When IFRS
+The tie-out probe asks "does a filed caption carry this figure?". When IFRS
 ingestion landed it read only the `us-gaap` namespace, so for a 20-F filer the answer
 was always no, and it reported TSMC's cash as carrying no filed caption at all:
 

@@ -79,7 +79,7 @@ async def _flag_explicit_rebuild(request, call_next):
     """Let an operator rebuild retry what a crawler must not.
 
     The ingestion throttle negatively caches a ticker whose statements could not be
-    sourced, so a public slug is not hammered. `assets/gsd/rebuild.py` deletes the
+    sourced, so a public slug is not hammered. The rebuild tooling deletes the
     snapshot and the database rows and asks for the model back, which is an explicit
     operator action: its first attempt can fail for reasons that have nothing to do
     with the company, and the resulting negative entry then refused every later

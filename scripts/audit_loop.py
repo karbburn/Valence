@@ -838,8 +838,8 @@ def withheld_figure_is_presented(html: str, figures: List[str]) -> List[str]:
 
     An earlier version of this distinguished positive from non-positive figures, on the
     reasoning that a negative price cannot be read as a valuation while a positive one can.
-    That is a proxy, and it produced two defects: the leak sweep in `assets/gsd/meta_leak.py`
-    and this gate disagreed about `amba_us` and `idea_idea`, and each was a copy of a rule
+    That is a proxy, and it produced two defects: an earlier leak sweep and this gate
+    disagreed about `amba_us` and `idea_idea`, and each was a copy of a rule
     that had already drifted once in this project. Two answers to one question is one too
     many.
 

@@ -106,7 +106,7 @@ def measure_one(company_id: str) -> dict:
 
     The solve's output is also not yet trustworthy. Substituting a solved rate back into the base
     scenario and re-running returns exactly the model's own price, so the figure cannot be shown
-    to reproduce the market price it claims to explain. See OPEN_DEFECTS.md section 14c.
+    to reproduce the market price it claims to explain, which is why it stays off.
     """
     ensure_company_ingested(company_id)
     hist = run_historical(target_periods=["FY24", "FY25", "FY26"], company_id=company_id)

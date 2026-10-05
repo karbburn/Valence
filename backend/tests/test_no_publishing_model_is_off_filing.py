@@ -67,8 +67,8 @@ def _payload(cid):
     The model is at the TOP LEVEL of the response -- there is no "model" key. Reading it
     under one, as a wrapped response would be, returns None and every assertion below then
     fails on `None.get(...)`. That is the same mistake the audit loop's page probe made and
-    corrected (OPEN_DEFECTS section 7b): it raised KeyError on every probe and skipped them
-    all, reporting success over an empty set.
+    later corrected: it raised KeyError on every probe and skipped them all, reporting
+    success over an empty set.
     """
     req = urllib.request.Request(f"{API}/api/model/{cid}",
                                  headers={"x-valence-build": "1"})

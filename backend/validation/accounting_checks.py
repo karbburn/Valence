@@ -225,7 +225,7 @@ def check_current_assets_reconcile(spec: ModelSpecification) -> ModelCheckResult
         derivative_financial_assets_current             83
 
     Three captions the filer prints on p.100, all dropped by the row-grouping defect in
-    the PDF reader (assets/gsd/OPEN_DEFECTS.md section 6). Naming them is the difference
+    the PDF reader. Naming them is the difference
     between "this company is short 17,621" and "these three lines are missing and here is
     what each is worth" -- and the second one is a fix with an owner.
     """

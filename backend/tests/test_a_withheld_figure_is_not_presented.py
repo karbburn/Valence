@@ -1,8 +1,8 @@
 """The site gate's leak test, on real served markup.
 
 `withheld_figure_is_presented` is the one place that decides whether a withheld figure has
-leaked. It was wrong twice before it was written: the sweep in `assets/gsd/meta_leak.py`
-and the gate each carried their own copy of the rule, and they disagreed about `amba_us` and
+leaked. It was wrong twice before it was written: an earlier leak sweep and the gate each
+carried their own copy of the rule, and they disagreed about `amba_us` and
 `idea_idea`, whose refusal sentences legitimately name the figure they refuse.
 
 Testing it here rather than only through a live mutation is a consequence of measurement.

@@ -90,7 +90,7 @@ class TestTheReadPathDoesNotWidenTheLaunchSurface:
 class TestMembershipIsAReleasePropertyNotAFileSystemState:
     """A per-request existence test is wrong, and the rebuild tooling proved it.
 
-    `assets/gsd/rebuild.py` deletes a snapshot and then asks the API to rebuild it.
+    The rebuild tooling deletes a snapshot and then asks the API to rebuild it.
     With `is_shipped = cache_path.exists()`, the company looked unshipped at exactly
     the moment it needed to be treated as shipped, so the API declined to write and
     all 23 rebuilds failed. The same test would also mis-classify a shipped model

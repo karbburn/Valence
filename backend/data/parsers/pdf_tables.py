@@ -303,8 +303,7 @@ def _year_anchors(page, boundary: float = LABEL_X_MAX) -> list[tuple[float, int]
 # threshold separates 0.12 from 0.72 in a way that holds across layouts. See `_rows`,
 # which now takes the printed line exactly and records the consequence.
 #
-# MEASURED on backend/data/filings/infosys-fy26-q4-outcome.pdf p.100, by
-# assets/gsd/spread.py.
+# MEASURED on backend/data/filings/infosys-fy26-q4-outcome.pdf p.100.
 
 
 # Headers a balance sheet prints to open its current and non-current halves.

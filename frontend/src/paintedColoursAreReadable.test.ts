@@ -392,8 +392,8 @@ const ACCEPTED: {
     why:
       'hover-only, on 10-11px labels whose steady states pass. The label shares its hue with ' +
       'the background wash, so lightening the background on hover moves the two toward each ' +
-      'other. Recorded in assets/gsd/OPEN_DEFECTS.md as a decision for the design rather than ' +
-      'for whoever finds the nearest colour.',
+      'other. A decision for the design to make deliberately, rather than for whoever ' +
+      'happens to find the nearest colour.',
     pairs: [
       { text: '[#f59e0b]', background: '[#f59e0b]/10 +[#f59e0b]/20', ratio: 4.37 },
       { text: '[#0ea5e9]', background: '[#0ea5e9]/10 +[#0ea5e9]/20', ratio: 3.65 },

@@ -480,7 +480,7 @@ def _get_or_build_spec(
         if _spec_is_current_for_session(cached_spec, market):
             # Self-heal a snapshot that has gone missing underneath us.
             #
-            # `assets/gsd/rebuild.py` deletes the snapshot AND the database rows, then
+            # The rebuild tooling deletes the snapshot AND the database rows, then
             # asks the API to rebuild. If this process still holds the model in memory
             # the request is served from the LRU, returns 200, and nothing is written
             # -- so the rebuild reports that the company did not come back, for a
@@ -529,7 +529,7 @@ def _get_or_build_spec(
     # An explicit operator request must be allowed to retry, whatever the negative
     # cache says.
     #
-    # `assets/gsd/rebuild.py` deletes the snapshot and the database rows and then
+    # The rebuild tooling deletes the snapshot and the database rows and then
     # asks the API to rebuild. The first attempt can fail for reasons that have
     # nothing to do with the company being unsourceable -- a network blip, an upstream
     # 429, a process restart mid-build. That marks the company negative, and because
@@ -1107,7 +1107,7 @@ MODEL_CACHE_DIR = PROJECT_ROOT / "backend" / "data" / "cache"
 # The shipped set, read ONCE at import, before anything can create or remove a file.
 #
 # Reading membership per-request was wrong, and wrong in a way the rebuild tooling
-# found immediately: `assets/gsd/rebuild.py` deletes a snapshot and then asks the API
+# found immediately: the rebuild tooling deletes a snapshot and then asks the API
 # to rebuild it, so a per-request existence test saw the company as unshipped and
 # declined to write it. All 23 rebuilds failed. The same test would also have
 # mis-classified a shipped model whose snapshot was corrupt and being repaired.
