@@ -83,6 +83,154 @@ def _cached_nse_pdfs(company_id: str) -> list[tuple[Path, dict]]:
     return found
 
 
+# Whether the product may reach the exchange at all.
+#
+# **OFF unless a deployment explicitly enables it**, and that default is a decision rather than an
+# oversight. Three reasons, in order of weight.
+#
+# 1. It is a read-path side effect. `ensure_company_ingested` runs on the request path, so enabling
+#    this by default would mean browsing the site generates exchange traffic. It was observed doing
+#    exactly that: one full test-suite run ingested a company with no cached filing and pulled a
+#    193-page, 23MB results PDF from the exchange. A unit test that performs network I/O against a
+#    third party is the same defect as the network marker that promised otherwise and never did it.
+# 2. The exchange's terms govern how often a client may ask, and that has not been answered. Until
+#    it is, the honest default is that this codebase does not ask on its own.
+# 3. The product degrades perfectly well without it: a labelled market feed, which is what every
+#    Indian company read before acquisition existed. Turning this on changes what the site fetches
+#    from a third party, so it belongs in the environment where it is visible, not buried in a
+#    conditional that an ingest call happens to pass through.
+ACQUISITION_ENABLED_ENV = "VALENCE_ENABLE_NSE_ACQUISITION"
+
+# How long a failed fetch is remembered, and how many one process may attempt per window.
+#
+# Both mirror the ticker index's own fetch policy, deliberately. The negative memory stops a filer
+# with no available statement from being retried on every request forever; the budget stops a burst
+# of cold reads from becoming a burst of requests. Neither is persisted: a restart is the right time
+# to try again, and a negative cache that outlived the process would mean a filing could never be
+# picked up without a redeploy.
+ACQUISITION_FAILED_TTL_SECONDS = 5 * 60
+ACQUISITION_BUDGET = 25
+ACQUISITION_BUDGET_WINDOW_SECONDS = 60 * 60
+
+_acquisition_failed: dict[str, float] = {}
+_acquisition_spends: list[float] = []
+
+
+def _spends_in_window(now: float) -> int:
+    """How many fetches this process has made inside the current window.
+
+    A ROLLING WINDOW, not a lifetime cap. The first version counted 25 fetches for the life of the
+    process, which meant a long-running server acquired 25 filings ever and then silently stopped --
+    a degradation with no symptom and indistinguishable from "acquisition is broken". A window bounds
+    the RATE, which is the property that protects the exchange, and still lets a busy server pick
+    filings up over time.
+
+    Not thread-safe, and that is a decision rather than an oversight. This is a ceiling on traffic to
+    a third party; the worst case is that N concurrent reads each pass the check before any of them
+    records a spend, so the true rate is a small multiple of the ceiling rather than exactly it.
+    Locking would make a read-path function contend on every cold company, which is the worse trade.
+    The overshoot is bounded by the number of concurrent readers, not by time.
+    """
+    cutoff = now - ACQUISITION_BUDGET_WINDOW_SECONDS
+    return sum(1 for stamp in _acquisition_spends if stamp > cutoff)
+
+
+def acquisition_enabled() -> bool:
+    """Whether this process may contact the exchange. Off unless a deployment asks for it."""
+    import os
+
+    return os.environ.get(ACQUISITION_ENABLED_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def reset_acquisition_state() -> None:
+    """Clear the failure memory and the budget. For tests, and for an operator forcing a retry."""
+    _acquisition_failed.clear()
+    _acquisition_spends.clear()
+
+
+def acquisition_state(company_id: str) -> tuple[bool, str]:
+    """Whether this company may be fetched right now, and why not if it may not.
+
+    Returns ``(allowed, reason)``, the reason being one of ``disabled``, ``cached``,
+    ``recent-failure``, ``budget-exhausted``, or ``allowed``.
+
+    Split from the fetch so the decision can be asserted directly, with no network and no sleeping,
+    and so the caller acts on a returned answer rather than on a side effect.
+    """
+    ticker = company_id.split("_")[0].strip().upper()
+    if not ticker:
+        return False, "empty-company-id"
+    if not acquisition_enabled():
+        return False, "disabled"
+    if _cached_nse_pdfs(company_id):
+        return False, "cached"
+
+    import time
+
+    now = time.monotonic()
+    failed_at = _acquisition_failed.get(ticker)
+    if failed_at is not None and now - failed_at < ACQUISITION_FAILED_TTL_SECONDS:
+        return False, "recent-failure"
+    if _spends_in_window(now) >= ACQUISITION_BUDGET:
+        return False, "budget-exhausted"
+    return True, "allowed"
+
+
+def acquire_filing(company_id: str) -> bool:
+    """Try once to fetch this company's audited statement from the exchange.
+
+    **Best-effort by contract, and that is the whole design.** This is called from the read path, so
+    every failure route returns False, writes nothing, and raises nothing. The company then reads its
+    market feed with that labelled, exactly as every Indian company read before this existed. It must
+    never become an error page, and never a half-written model.
+
+    The fallback is acceptable precisely because it is visible. A fallback that silently produced a
+    plausible *filed* answer would be worse than a failure; this one produces a market figure that
+    says it is a market figure.
+
+    The acquirer itself, `NSEFilings`, is untouched and already tested. This decides whether to call
+    it and remembers the answer. A success writes the PDF and its metadata, which is exactly what
+    `_cached_nse_pdfs` reads, so the next caller sees it immediately and does not fetch again.
+    """
+    import time
+
+    ticker = company_id.split("_")[0].strip().upper()
+    allowed, _reason = acquisition_state(company_id)
+    if not allowed:
+        return False
+
+    global _acquisition_spends
+    _acquisition_spends.append(time.monotonic())
+
+    try:
+        from backend.data.ingestion.nse_filings import NSE_CACHE_DIR, NSEFilings
+
+        result = NSEFilings(NSE_CACHE_DIR).acquire(ticker)
+    except Exception as exc:  # noqa: BLE001
+        # Transport error, rate limit, changed endpoint, parse failure -- all mean the same thing
+        # here, which is "not now". Debug level keeps a cold read quiet.
+        _acquisition_failed[ticker] = time.monotonic()
+        logger.debug("acquisition for %s failed: %s: %s", ticker, type(exc).__name__, exc)
+        return False
+
+    if not getattr(result, "ok", False):
+        _acquisition_failed[ticker] = time.monotonic()
+        logger.info(
+            "%s: no audited statement available from the exchange (%s). Reading the market feed "
+            "instead, which is labelled as the feed.",
+            ticker, getattr(result, "note", "no reason recorded"),
+        )
+        return False
+
+    _acquisition_failed.pop(ticker, None)
+    logger.info(
+        "%s: fetched %s, %s pages, balance sheet at %s.",
+        ticker, getattr(result, "url", "?"), getattr(result, "pages", "?"),
+        getattr(result, "balance_sheet_pages", "?"),
+    )
+    return True
+
+
 def _filing_datapoints_from_cached_pdf(
     pdf_path: Path, meta: dict, company_id: str
 ) -> list[RawDatapoint]:

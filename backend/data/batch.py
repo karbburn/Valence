@@ -241,7 +241,32 @@ def ensure_company_ingested(
     existing = query_canonical_datapoints(db_path, company_id=company_id)
     if len(existing) > 0 and not force:
         if not _an_available_filing_is_unstored(company_id, db_path):
-            return
+            # Nothing cached and nothing unstored. Before concluding there is nothing to do, ASK the
+            # exchange -- because the alternative is a company built entirely from a market feed when
+            # an audited statement exists and nobody looked.
+            #
+            # This is why India published 0 of 2,593. `nse_filings.py` is a 489-line acquirer that
+            # locates the balance sheet by content, and nothing in the product called it. The three
+            # companies that had filings had them because someone ran the CLI by hand. The gap was
+            # one call, not a missing subsystem.
+            #
+            # Off by default, rate-limited and negative-cached inside `acquire_filing`, because this
+            # sits on the read path. Without those, browsing companies becomes a load on the exchange
+            # and a filer with no available statement is retried forever.
+            #
+            # Best-effort by contract: a failure writes nothing, raises nothing, and leaves the
+            # company on its market feed with that labelled. Which is the behaviour that made this
+            # reachable in the first place, and is the reason nothing here needs to be loud.
+            try:
+                from backend.data.pipeline import acquire_filing
+
+                acquire_filing(company_id)
+            except Exception:  # noqa: BLE001
+                # Even the guard is guarded. Acquisition is an enhancement to a read and must never be
+                # able to break one.
+                logger.debug("acquisition could not be attempted for %s", company_id)
+            if not _an_available_filing_is_unstored(company_id, db_path):
+                return
 
     # A rebuild that FAILS must leave the company as it was.
     #
