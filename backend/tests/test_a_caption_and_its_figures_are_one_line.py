@@ -311,3 +311,53 @@ def test_two_columns_cannot_be_mistaken_for_quarterly_and_annual_pairs():
     assert _has_column_pairs([(300.0, 2025), (360.0, 2025), (460.0, 2026), (530.0, 2026)]), (
         "four headers can be two pairs, so the rightmost half is the annual columns"
     )
+
+
+@needs_infosys
+def test_a_share_count_never_becomes_a_rupee_line_item():
+    """The earnings-per-share block prints share counts in the rupee columns.
+
+        Basic (in shares)     2.13   4,046,019,309   4,142,429,577
+        Basic (Rs.)           2.13        21.01          16.98
+
+    Both sit in the value columns, so the count was read as rupees and 4,046,019,309 reached a
+    profit-and-loss line. Separated on what the CAPTION says, never on the magnitude of the
+    number: the count is four thousand times the rupee figure here, and a small-cap
+    earnings-per-share figure is the other way round, so scale decides nothing.
+    """
+    dps = parse_predicted_statement_page(
+        str(INFOSYS), 100, "PROFIT & LOSS", "nse_filing", annual_only=True,
+        company_id="infy_infy",
+    )
+    counts = [d for d in dps if "in shares" in d.metric_raw.lower()]
+    assert not counts, (
+        "a count of shares became a rupee line item: "
+        f"{[(d.metric_raw, d.period_label, d.value) for d in counts]}"
+    )
+    # And the per-share RUPE figure beside it must survive, because it is a real statement line.
+    per_share = [d for d in dps if "per share" in d.metric_raw.lower() or "(₹)" in d.metric_raw]
+    assert per_share, (
+        "the per-share rupee figure was dropped along with the share counts. They sit in the "
+        "same block and only the caption distinguishes them."
+    )
+
+
+@needs_infosys
+def test_share_capital_and_premium_are_not_mistaken_for_share_counts():
+    """The other direction: real rupee lines whose captions happen to say "share"."""
+    dps = parse_predicted_statement_page(
+        str(INFOSYS), 99, "BALANCE SHEET", "nse_filing", annual_only=False,
+        company_id="infy_infy",
+    )
+    premium = {d.period_label: d.value for d in dps if d.metric_raw == "Share premium"}
+    assert premium, (
+        "'Share premium' is a rupee balance-sheet line and was dropped. The rule separates a "
+        "count of shares from an amount, and this is an amount."
+    )
+    # Measured against the filing: printed 101 shows 1,839 and 2,180.
+    assert premium.get("FY26") == pytest.approx(1839.0), (
+        f"Share premium FY26 is {premium.get('FY26')}, and the filing prints 1,839"
+    )
+    assert premium.get("FY25") == pytest.approx(2180.0), (
+        f"Share premium FY25 is {premium.get('FY25')}, and the filing prints 2,180"
+    )

@@ -70,6 +70,27 @@ _MONTH = re.compile(
 # run: the note reference belongs in its own column, which the per-page boundary guarantees.
 _IDENTIFIER_CAPTION = re.compile(r"\d{3,}$")
 
+# A caption that names a COUNT of shares rather than an amount.
+#
+# The consolidated profit-and-loss page prints its earnings-per-share block in the same rupee
+# columns as the rest of the statement:
+#
+#     Basic (in shares)     2.13   4,046,019,309   4,142,429,577
+#     Basic (₹)             2.13        21.01          16.98
+#
+# Both rows sit in the value columns, so the share count is read as rupees and
+# 4,046,019,309 reaches a line item. It is separated on what the CAPTION says, never on the
+# magnitude of the number -- a share count is four thousand times a rupee figure here, and a
+# small-cap earnings-per-share figure is the other way round, so scale decides nothing.
+#
+# Measured across all nine committed statement pages and 336 captions: 12 mention "share", and
+# this drops 5 while keeping 7. Every kept one is an amount -- "Share premium", "Share capital",
+# "Equity share capital", "Equity attributable to shareholders of the Company", "Class B
+# compulsorily convertible preference shares", and the "(₹)" earnings-per-share rows, which never
+# match because they do not say "share". Every dropped one is a count.
+_SHARE_COUNT_CAPTION = re.compile(r"in shares|number of|outstanding|weighted", re.I)
+_MENTIONS_SHARE = re.compile(r"share", re.I)
+
 _SKIP_LABELS = {
     "three", "two", "year", "as", "the", "particulars",
     "mar", "note", "notes", "total",
@@ -466,6 +487,11 @@ def parse_predicted_statement_page(
                 # caption cannot end in one: its note reference lives in a separate column, which
                 # the per-page boundary now guarantees. Measured across the seven statement pages
                 # and 267 captions, this matches exactly one caption and it is the auditor's.
+                continue
+            if _MENTIONS_SHARE.search(label) and _SHARE_COUNT_CAPTION.search(label):
+                # A count of shares, not an amount. Printed in the same value columns as the
+                # rupee figures on the earnings-per-share block and beside the share-capital
+                # line, so without this a share count reaches a line item as rupees.
                 continue
 
             header_half = _balance_sheet_half(label)
