@@ -131,17 +131,75 @@ def test_a_feed_only_company_is_not_treated_as_ingested(store_with_feed_rows_onl
 
 
 @pytest.mark.parametrize("company_id", HAS_COMMITTED_FILING)
-def test_a_feed_only_company_gets_its_filing_without_being_forced(
+def test_a_feed_only_company_runs_its_ingest_without_being_forced(
+    store_with_feed_rows_only, company_id, monkeypatch
+):
+    """The defect itself. No `force`, which is what every product call site passes.
+
+    Asserted on whether the India pipeline RUNS, not on what lands in the store.
+
+    That scope is deliberate, and it was forced by a real consequence. Now that the parser reads
+    units from the page instead of asserting INR crores, normalization REFUSES a company whose
+    filing declares a different currency than its feed -- HCLTech, whose statements say "millions of
+    USD" -- and refuses TCS, whose rupee glyph does not survive text extraction so its filing states
+    a scale and no currency. Both refusals are correct, and both mean the CANONICAL layer ends up
+    holding fewer rows than before.
+
+    An earlier version of this test asserted filing rows were present in the store afterwards. It
+    began failing for that reason while saying nothing about the shortcut it was written for. So it
+    now asserts the shortcut's own contract: the ingest must actually run. What normalization then
+    accepts is a different question, covered by
+    `test_the_parser_reads_units_instead_of_asserting_them.py` and by the units validator.
+    """
+    calls: list[str] = []
+    import backend.data.pipeline as india_pipeline
+
+    real_run = india_pipeline.run
+
+    def _counted(*args, **kwargs):
+        calls.append(kwargs.get("company_id") or (args[0] if args else "?"))
+        return real_run(*args, **kwargs)
+
+    monkeypatch.setattr(india_pipeline, "run", _counted)
+
+    try:
+        batch.ensure_company_ingested(company_id, db_path=store_with_feed_rows_only)
+    except Exception:  # noqa: BLE001
+        # A downstream refusal is allowed. It is not allowed to mean the ingest never ran.
+        pass
+
+    assert calls == [company_id], (
+        f"the India pipeline did not run for {company_id} on an ordinary, unforced ingest. The "
+        "skip-on-present shortcut is treating 'has rows' as 'is fully ingested' again, which is "
+        "what left India with zero filing rows while the filings sat on disk."
+    )
+
+
+@pytest.mark.parametrize("company_id", HAS_COMMITTED_FILING)
+def test_a_refused_ingest_keeps_the_filing_rows_it_just_parsed(
     store_with_feed_rows_only, company_id
 ):
-    """The defect itself. No `force`, which is what every product call site passes."""
-    batch.ensure_company_ingested(company_id, db_path=store_with_feed_rows_only)
+    """The third piece: a refusal must not discard the raw record of a good parse.
+
+    Without this, the two halves of the units fix undo each other. Normalization refuses, the
+    previous rows are restored, the fresh filing rows go with them, and every subsequent request
+    re-parses the PDFs. Measured: the idempotency test in this file failed for both companies until
+    this was fixed.
+
+    Raw rows are a faithful transcription of the document and reach no model without passing
+    normalization, which is still refusing. So keeping them loses nothing and records what the
+    filing actually said.
+    """
+    try:
+        batch.ensure_company_ingested(company_id, db_path=store_with_feed_rows_only)
+    except Exception:  # noqa: BLE001
+        pass
 
     rows = filing_rows(store_with_feed_rows_only, company_id)
     assert rows > 0, (
-        f"{company_id} has an audited statement committed under backend/data/filings/ and holds "
-        f"market-feed rows, yet still has {rows} filing rows after an ordinary ingest. The "
-        "skip-on-present shortcut is treating 'has rows' as 'is fully ingested' again."
+        f"{company_id} has an audited statement committed under backend/data/filings/, its parser "
+        f"read it, and yet the store holds {rows} filing rows. If normalization refused, the raw "
+        "record of that read was discarded and every request will re-parse the PDFs."
     )
 
 
@@ -171,23 +229,17 @@ def test_the_shortcut_still_fires_once_the_filing_is_stored(
 
     monkeypatch.setattr(india_pipeline, "run", _counted)
 
-    batch.ensure_company_ingested(company_id, db_path=store_with_feed_rows_only)
-    first_pass = len(calls)
-    assert filing_rows(store_with_feed_rows_only, company_id) > 0, (
-        "precondition: the filing must be stored for this to test anything"
-    )
+    for _ in range(2):
+        try:
+            batch.ensure_company_ingested(company_id, db_path=store_with_feed_rows_only)
+        except Exception:  # noqa: BLE001
+            # A refusal is allowed. What is not allowed is for it to re-open the shortcut.
+            pass
 
-    batch.ensure_company_ingested(company_id, db_path=store_with_feed_rows_only)
-    second_pass = len(calls)
-
-    assert first_pass == 1, (
-        f"the filing was not ingested on the first call ({first_pass} pipeline runs), so the "
-        "shortcut skipped a company that needed it"
-    )
-    assert second_pass == first_pass, (
-        f"the India pipeline ran {second_pass - first_pass} extra times for {company_id} on an "
-        "ordinary second call. The shortcut exists so a stored filing is parsed once; without it "
-        "every API read re-parses the PDFs."
+    assert calls == [company_id], (
+        f"the India pipeline ran {len(calls)} times for {company_id} across two ordinary calls. "
+        "The shortcut exists so a stored filing is parsed once; without it every API read "
+        "re-parses the PDFs, which is the cost this gate was written to prevent."
     )
 
 

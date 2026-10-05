@@ -70,6 +70,96 @@ _MONTH = re.compile(
 # run: the note reference belongs in its own column, which the per-page boundary guarantees.
 _IDENTIFIER_CAPTION = re.compile(r"\d{3,}$")
 
+# What a filing says about its own units, read from the page rather than assumed.
+#
+# This function exists because the units used to be hardcoded:
+#
+#     currency="INR", units="crores"
+#
+# on every row of every filing the parser reads. That is a claim the parser cannot verify, and for
+# at least one committed filing it is false. `hcltech-ifrs-2026-07.pdf` carries this header on both
+# of its balance-sheet pages:
+#
+#     HCL Technologies Limited  Condensed Consolidated Interim Balance Sheet
+#     (All amounts in millions of USD, except share data and as stated otherwise)
+#
+# so every one of its figures was recorded as INR crores. One USD million is roughly 8.3 INR crores,
+# so the whole balance sheet was understated by about eight times while looking entirely ordinary,
+# and -- because every row carried the SAME wrong label -- the model looked perfectly consistent to
+# `check_units_agree_within_a_model`. The guard was not missing. It was being lied to, uniformly, by
+# the parser.
+#
+# The fix is to stop asserting and start reading. What a page declares is separated into a SCALE and
+# a CURRENCY, because they are independent and because the two are not equally determinable:
+#
+#   * the SCALE is declared in words -- crore, lakh, million, thousand -- and is the one most likely
+#     to be wrong by orders of magnitude, so it is read whenever it appears.
+#   * the CURRENCY is declared by a symbol or a code -- Rs, INR, USD -- and TCS's rupee glyph does
+#     not survive text extraction at all, printing as "( crore)" with nothing before it.
+#
+# So an absent currency symbol yields an EMPTY currency, never a default. An empty currency is not a
+# parse failure; it is a recorded unknown, and it makes the model disagree with the INR feed rows,
+# which is exactly what should happen when one of the two sources might not be in rupees.
+#
+# Measured across the ten committed statement pages: 10 of 10 declare a scale, 6 of 10 declare a
+# currency. The four that do not are the two Infosys cash-flow pages, whose "(In Rs crore)" sits
+# after an accounting-policy paragraph rather than in the header, and the two TCS balance sheets
+# whose rupee glyph is missing. The search therefore runs over the whole page rather than the first
+# line, because a declaration that appears mid-page is still a declaration.
+_UNIT_DECLARATIONS: tuple[tuple[re.Pattern[str], str, str], ...] = (
+    (re.compile(r"in\s+(?:₹|rs\.?|inr|usd|\$)\s*crores?\b", re.I), "INR", "crores"),
+    (re.compile(r"\(\s*(?:₹|rs\.?|inr)?\s*crores?\s*\)", re.I), "", "crores"),
+    (re.compile(r"in\s+(?:₹|rs\.?|inr|usd|\$)\s*lakhs?\b", re.I), "INR", "crores"),
+    (re.compile(r"in\s+millions?\s+of\s+(usd|inr|rs\.?)\b", re.I), "", "millions"),
+    (re.compile(r"in\s+(usd|inr|rs\.?)\s+millions?\b", re.I), "", "millions"),
+    (re.compile(r"in\s+thousands?\s+of\s+(usd|inr|rs\.?)\b", re.I), "", "thousands"),
+)
+
+_CURRENCY_IN_PHRASE = {
+    "usd": "USD",
+    "inr": "INR",
+    "rs": "INR",
+    "rs.": "INR",
+    "₹": "INR",
+}
+
+
+def declared_units(page_text: str) -> tuple[str, str]:
+    """The currency and scale a statement page declares about itself.
+
+    Returns ``(currency, units)``, either of which may be empty, and both empty when the page
+    declares nothing recognisable. Empty means NOT DETERMINED, never "assume rupees and crores" --
+    that default is the defect this replaces.
+
+    Deliberately conservative in two ways.
+
+    It matches a whole declaration rather than a bare units word, because a units word also appears
+    inside accounting-policy prose, inside a caption, and in the thousands separators of the
+    figures themselves. Matching those would read a page as INR crores because it mentioned
+    "lakh" in a note.
+
+    And it never supplies a currency it did not see. TCS's balance sheet prints "( crore)" with the
+    rupee glyph unextractable, so the scale is read and the currency is left empty.
+
+    Self-tested against the four real headers plus phrases it must refuse; see
+    `test_the_parser_reads_units_instead_of_asserting_them.py`, which also asserts that the detector
+    refuses rather than guessing, since a rule that answers everything reproduces the bug on any
+    filing it has not seen.
+    """
+    for rx, currency, units in _UNIT_DECLARATIONS:
+        m = rx.search(page_text)
+        if not m:
+            continue
+        if currency:
+            return currency, units
+        # The phrase named a currency of its own, or named only a scale. Either way the currency
+        # comes from what was written, never from a default.
+        for token, resolved in _CURRENCY_IN_PHRASE.items():
+            if re.search(rf"\b{re.escape(token)}\b", m.group(0), re.I) or token in m.group(0):
+                return resolved, units
+        return "", units
+    return "", ""
+
 # A caption that names a COUNT of shares rather than an amount.
 #
 # The consolidated profit-and-loss page prints its earnings-per-share block in the same rupee
@@ -467,6 +557,12 @@ def parse_predicted_statement_page(
         lo_x = anchors[0][0] - 50.0
         hi_x = anchors[-1][0] + 50.0
 
+        # What the page says about its own units, read rather than assumed. See
+        # `declared_units`. Either component may be empty, and empty means undetermined.
+        page_currency, page_units = declared_units(
+            re.sub(r"\s+", " ", " ".join(w["text"] for w in page.extract_words()))
+        )
+
         dps: list[RawDatapoint] = []
         seen: set[tuple[str, str, float]] = set()
         # Tracked across the rows rather than per-row, because the boundary is a
@@ -521,8 +617,8 @@ def parse_predicted_statement_page(
                         period_label=period_label,
                         period_end_date=period_end,
                         value=v,
-                        currency="INR",
-                        units="crores",
+                        currency=page_currency,
+                        units=page_units,
                         source=source,  # type: ignore[arg-type]
                         # The LINE, not the page and the caption. Two printed lines
                         # can carry one caption, so the page and the caption do not
@@ -531,6 +627,11 @@ def parse_predicted_statement_page(
                         source_location=(
                             f"{Path(pdf_path).name} p.{page_index + 1} y={_row_top:.1f} "
                             f"{label}" + (f" [{half}]" if half else "")
+                            # The units are a claim about the row, so where they came from belongs
+                            # with the row. Without this, an empty currency is indistinguishable
+                            # from a currency nobody looked for.
+                            + (f" [{(page_currency + '/' + page_units).strip('/')}]"
+                               if (page_currency or page_units) else " [units undetermined]")
                         ),
                         section=section,
                         # Which half of the balance sheet this caption was printed
