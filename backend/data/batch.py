@@ -113,6 +113,52 @@ def _restore_company_rows(db_path: str | Path, company_id: str,
         conn.close()
 
 
+def _stored_filing_row_count(company_id: str, db_path: str | Path) -> int:
+    """How many `nse_filing` rows the store already holds for this company."""
+    import sqlite3
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM raw_datapoints "
+                "WHERE company_id = ? AND source = 'nse_filing'",
+                (company_id,),
+            ).fetchone()
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001
+        # An unreadable store is not evidence that the filing is already stored. Treating it as
+        # "already done" here would reintroduce exactly the silent skip this check exists to stop.
+        return 0
+    return int(row[0]) if row else 0
+
+
+def _an_available_filing_is_unstored(company_id: str, db_path: str | Path) -> bool:
+    """True when a located filing exists on disk but none of its rows are in the store.
+
+    Asked only to decide whether the skip-on-present shortcut may fire. It answers from the
+    LOCATOR's output, not from a re-parse, so the common case -- a company already holding its
+    filing rows -- costs one directory listing and nothing else.
+
+    Narrow on purpose. Only the India path is checked, because only it has a locator that records
+    which pages carry the statements, which makes "available" a fact rather than a guess. A company
+    with no cached filing, or one whose filing rows are already stored, returns False and the
+    shortcut behaves exactly as it did before.
+    """
+    try:
+        from backend.data.pipeline import _cached_nse_pdfs
+    except Exception:  # noqa: BLE001
+        return False
+    try:
+        if not _cached_nse_pdfs(company_id):
+            return False
+    except Exception:  # noqa: BLE001
+        # A locator that cannot answer is not evidence that nothing is available.
+        return False
+    return _stored_filing_row_count(company_id, db_path) == 0
+
+
 def ensure_company_ingested(
     company_id: str,
     db_path: str | Path = DB_PATH,
@@ -125,6 +171,39 @@ def ensure_company_ingested(
     taxonomy registry: the skip-on-present shortcut meant a corrected mapping
     never reached the database, so the stored rows kept whatever provenance
     the ORIGINAL parse assigned them.
+
+    "Already ingested" is narrower than "has rows", and the difference was the
+    whole of India's filing coverage.
+
+    The shortcut was `if existing: return`. But a company can hold rows from a
+    market feed and have NO filing rows at all, and that company is not fully
+    ingested -- it is partially ingested, and the missing half is the half that
+    matters, because `inputs_trace_to_a_filing` refuses a model built from a feed.
+    The India pipeline runs only further down this function, so the shortcut
+    returned before it and the statements were never read.
+
+    Measured, on a copy of the store, same filings, one flag apart:
+
+        company              force    nse_filing rows
+        tcs_tcs              False            0
+        tcs_tcs              True           185
+        hcltech_hcltech      False            0
+        hcltech_hcltech      True            46
+        infy_infy            False          260
+        infy_infy            True           426
+
+    Three companies whose audited statements are committed under
+    `backend/data/filings/`, producing ZERO filing rows, and every one of them
+    with a complete model built entirely from `screener` and `yfinance_live`.
+    India measured 0 of 20 obtaining any filing history, and every parser fix
+    before this one changed nothing on that path -- because the parser was never
+    called.
+
+    So the shortcut now asks a second question: is a source AVAILABLE that is not
+    STORED? Cheap and exact, because it consults the same cached PDFs the pipeline
+    would parse rather than re-parsing them. It is deliberately narrow -- only the
+    India filing path is checked, because only it has a locator whose result can
+    be compared against what is already in the database.
     """
     from backend.data.ingestion.screener import parse_screener_export
     from backend.data.ingestion.sec_edgar import parse_sec_edgar_export
@@ -133,7 +212,8 @@ def ensure_company_ingested(
 
     existing = query_canonical_datapoints(db_path, company_id=company_id)
     if len(existing) > 0 and not force:
-        return
+        if not _an_available_filing_is_unstored(company_id, db_path):
+            return
 
     # A rebuild that FAILS must leave the company as it was.
     #
