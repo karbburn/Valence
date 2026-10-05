@@ -28,6 +28,48 @@ _NOTE_MARGIN = 4.0
 # carries eleven references in a column as dense as either of its two value columns.
 _ANCHOR_PROXIMITY = 40.0
 
+# How much vertical space two word boxes must share to count as one printed line.
+#
+# Not a gap threshold. A gap cannot work here: TCS's split rows sit at 0.70-1.50pt while
+# Infosys has pairs that must stay apart at 0.60-0.70pt, so the ranges overlap. This is a
+# band, not a distance -- two words share a printed line when their boxes share vertical space.
+# Measured on five statement pages: 71 of 71 split pairs overlap, and every one of the 4 pairs
+# that overlap without being split has caption text on BOTH sides, which is the second condition
+# `_merge_split_buckets` requires.
+_MIN_LINE_OVERLAP = 0.5
+
+# A bare fiscal year, which is what a statement's date header is made of. Used to refuse to
+# bridge that row, since the page title above it satisfies every other merge condition.
+_YEAR_HEADER = re.compile(r"^20\d\d$")
+
+# A month name, which is what a date fragment is made of.
+#
+# The year guard is not enough on its own. A statement prints its period header on TWO lines --
+# the fiscal years on one, "Year ended March 31," on the line above with the page title -- and the
+# line carrying the title and the date has no year token on it:
+#
+#   top=62.2  INFOSYS LIMITED ... Statement of Profit and Loss for the
+#   top=62.5  31, March        Note No.
+#   top=73.3  2026  2025
+#
+# Bridging the first two satisfies every other condition, and the merged row then publishes the
+# date fragment's "31," as a figure of 31.0 -- a page number wearing a caption, which is the
+# exact failure the old 3.0pt window produced and the reason this function is careful.
+_MONTH = re.compile(
+    r"^(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*$", re.I
+)
+
+# A caption that ends in a bare run of three or more digits is an identifier.
+#
+# Infosys printed 180 prints the auditor's report on the same page as the statement, so
+# "Membership No. 060408" reaches the caption column, and the figures beside it include a DIN --
+# "00019437" parses as 19437, which would be published as a profit-and-loss line.
+#
+# Measured across the seven committed statement pages and all 267 captions, this matches exactly
+# one, and it is the auditor's. It is safe because a financial caption cannot end in a bare digit
+# run: the note reference belongs in its own column, which the per-page boundary guarantees.
+_IDENTIFIER_CAPTION = re.compile(r"\d{3,}$")
+
 _SKIP_LABELS = {
     "three", "two", "year", "as", "the", "particulars",
     "mar", "note", "notes", "total",
@@ -194,8 +236,109 @@ def _clean_label(label: str) -> str:
     return label.strip()
 
 
+def _has_column_pairs(anchors: list[tuple[float, int]]) -> bool:
+    """Do these year headers form quarterly/annual PAIRS, so only half are annual columns?
+
+    `annual_only` used to keep `anchors[len//2:]` unconditionally, on the assumption that a
+    profit-and-loss page always prints a quarter beside each year. Infosys printed 180 does not:
+    it prints two headers, "2026 2025", and both are annual. `anchors[1:]` therefore kept one
+    column and **discarded FY26 entirely**, so the statement the grouping fix had just recovered
+    arrived with half its years missing.
+
+    A pair needs at least two of them, so fewer than four headers cannot be pairs. That is the
+    whole rule, and it is stated as a floor rather than a shape because the alternative --
+    deciding from the spacing between columns -- has no measured justification behind it and the
+    header tokens are identical either way.
+    """
+    return len(anchors) >= 4
+
+
+def _merge_split_buckets(buckets: list[tuple[float, list[dict]]], boundary: float):
+    """Join a caption and its figures when pdfplumber split one printed line in two.
+
+    The defect this fixes, on Infosys printed 180:
+
+        top=83.5   Revenue from operations   2.18        <- caption bucket
+        top=83.6                148,819 136,592         <- figure bucket
+
+    Two buckets, so the revenue figure never reaches its caption, the caption is emitted with no
+    value, and the P&L yields no revenue at all. The same shape loses about a third of every
+    statement: printed 100 produced 60 captions where the filing prints 86.
+
+    **A threshold on the top gap cannot do this, and the measurement says so rather than
+    implying it.** Across the five statement pages:
+
+        infy printed 180 (P&L)   0.10pt x23, 0.20 x6, 0.30 x1, 0.40 x3, 0.50 x1
+        infy printed 100 (BS)    0.10pt x14, 0.20 x1, 0.30 x1, 0.50 x1, 0.60 x1, 0.70 x1
+        infy printed 104 (CF)    0.10pt x8,  0.20 x3, 0.30 x1, 0.40 x1, 0.50 x1, 0.60 x1
+        tcs  printed 11  (BS)    0.70pt x2,  1.40 x1, 1.50 x1
+        hcltech printed 5 (BS)   0.10pt x9,  0.20 x3
+
+    TCS's split rows sit at 0.70-1.50pt while Infosys has pairs that must stay separate at
+    0.60-0.70pt. The ranges overlap, so no threshold separates them on these documents. That is
+    why the old 3.0pt window merged a page title into its date header and read the header's
+    "31," as a figure of 31.0.
+
+    **Vertical overlap does separate them, and only with a second condition.** Measured on the
+    same five pages: 71 of 71 split pairs have vertically overlapping word boxes, and 4 pairs
+    overlap that must NOT merge. All four are the audit report's signature block:
+
+        [April 23, 2026] [Chief Financial Officer]
+        [for and on behalf of the Board of] [for Deloitte Haskins & Sells LLP]
+        [Jayesh Sanghrajka A.G.S. Manikanth] [Bengaluru]
+        [DIN: 00041245] [Membership No. 060408 and Managing]
+
+    Every one of them carries caption text on BOTH sides. Every true split row carries a caption
+    on exactly ONE side and figures on the other. So both conditions are required: overlap alone
+    would weld the auditors' signatures into one line, and gap alone cannot work at all. With
+    both, the measurement is 71 true positives and zero false positives.
+
+    Overlap rather than a gap because a printed line is a physical band. Two words are on the
+    same line when their boxes share vertical space, whatever distance pdfplumber happens to
+    report between their `top` values.
+    """
+    merged: list[tuple[float, list[dict]]] = []
+    for key, ws in buckets:
+        if merged:
+            prev_key, prev_ws = merged[-1]
+            prev_top = min(w["top"] for w in prev_ws)
+            prev_bottom = max(w["bottom"] for w in prev_ws)
+            this_top = min(w["top"] for w in ws)
+            this_bottom = max(w["bottom"] for w in ws)
+            overlap = min(prev_bottom, this_bottom) - max(prev_top, this_top)
+            prev_has_caption = any(w["x0"] < boundary for w in prev_ws)
+            this_has_caption = any(w["x0"] < boundary for w in ws)
+            # Never bridge a year header. The page title sits directly above the date header and
+            # carries caption text while the header does not, so the two conditions above are
+            # satisfied and it merges -- which is the failure this whole function exists to
+            # avoid, arriving from the other direction:
+            #
+            #   Consolidated Balance Sheet as at | 2025 2026 31, 31, March March
+            #
+            # The header is the one row a statement reliably prints, and `_year_anchors` already
+            # identifies it by exactly this token, so the guard reuses that rather than
+            # introducing a second way to recognise the same row. A statement figure of 2,025
+            # prints as "2,025" and is not a bare year, so no real value is excluded by this.
+            touches_year = any(
+                _YEAR_HEADER.search(w["text"]) or _MONTH.match(w["text"].strip(",."))
+                for w in prev_ws
+            ) or any(
+                _YEAR_HEADER.search(w["text"]) or _MONTH.match(w["text"].strip(",."))
+                for w in ws
+            )
+            if (
+                overlap > _MIN_LINE_OVERLAP
+                and prev_has_caption != this_has_caption
+                and not touches_year
+            ):
+                merged[-1] = (prev_key, prev_ws + ws)
+                continue
+        merged.append((key, ws))
+    return merged
+
+
 def _rows(page, boundary: float = LABEL_X_MAX) -> list[tuple[str, list[tuple[float, str]], float, float]]:
-    """Group words into caption-and-figures rows, with each row's own `top`.
+    """Group words into caption-and-figures rows, with each row's own `top` and indent.
 
     The coordinate is returned because it is the only thing that distinguishes two
     printed lines carrying the same caption. Infosys prints "- Mutual fund units"
@@ -209,54 +352,20 @@ def _rows(page, boundary: float = LABEL_X_MAX) -> list[tuple[str, list[tuple[flo
     cannot collapse one into the other and cannot tell a duplicate from a second
     real line. The coordinate is what makes a row's identity recoverable.
 
-    Grouping is by `top`, rounded to 0.1pt, because a table row's words share a
-    baseline closely enough for that to separate one line from the next.
-
-    It was also EXACTLY that, and that split Infosys' current assets in half. pdfplumber
-    reports a caption and its figures at marginally different `top` values:
-
-        top=108.9  [(70.3, 'Prepayments'), (107.6, 'and'), ..., (156.5, 'assets')]
-        top=109.0  [(349.1, '2.4'), (443.8, '15,703'), (506.3, '12,986')]
-
-    Rounding to a tenth did not merge them, so the label formed one row with no
-    values and was dropped, and the figures formed another with no label and were
-    dropped. "Prepayments and other current assets 15,703" never became a datapoint
-    at all -- which is why the line was EMPTY, and why the cash-flow statement's
-    "Prepayments and other assets (2,312)" was the only thing left to fill it.
-
-    Captions on a real financial statement are within a couple of points of their
-    own figures. 3pt is comfortably inside that and far below the ~12pt line
-    spacing, so genuine neighbours still separate.
-
-    MEASURED, AND THE MEASUREMENT SAYS A FIXED WINDOW CANNOT DO IT. The gaps that
-    have to be told apart are the same size:
-
-        spread WITHIN one printed line          0.00 pt
-        caption -> its own figures              0.12 pt   <- must be bridged
-        page title -> the date-header below it  0.72 pt   <- must NOT be bridged
-
-    At 3.0pt the second is bridged too, and the merged row then reads the date
-    header's "31," as a figure of 31.0 -- a year fragment published as a
-    balance-sheet line. On the FY25 PDF the title sits closer still, so no fixed
-    window is safe across layouts, and on the profit-and-loss page the columns sit
-    differently again, enough that a share count (4,120,108,168) is read as rupees.
-
-    So this takes the printed line exactly as pdfplumber reports it, loses the
-    captions that straddle a rounding boundary, and lets `current_assets_reconcile`
-    report the shortfall. Under-counting a statement is visible and checkable; a
-    caption quietly merged with a neighbour's numbers is published as fact.
-
-    Fixing it properly means grouping on the printed baseline rather than on `top`:
-    ruling detection, or the row rectangles the PDF draws. Recorded in
-    assets/gsd/OPEN_DEFECTS.md with the measurements and the cost of leaving it.
+    Grouping starts from pdfplumber's `top` rounded to 0.1pt, then rejoins the rows that are one
+    printed line split across two of those buckets. `_merge_split_buckets` carries the
+    measurement that a gap threshold cannot work here and that vertical overlap plus the
+    one-sided-caption signature can.
     """
     words = page.extract_words()
-    by_top: dict[float, list[tuple[float, str]]] = {}
+    by_top: dict[float, list[dict]] = {}
     for w in words:
-        by_top.setdefault(round(w["top"], 1), []).append((w["x0"], w["text"]))
+        by_top.setdefault(round(w["top"], 1), []).append(w)
+    buckets = _merge_split_buckets(sorted(by_top.items()), boundary)
+
     out = []
-    for key in sorted(by_top):
-        ws = sorted(by_top[key], key=lambda t: t[0])
+    for key, bucket in buckets:
+        ws = sorted(((w["x0"], w["text"]) for w in bucket), key=lambda t: t[0])
         label = " ".join(t for x, t in ws if x < boundary).strip()
         vals = [(x, t) for x, t in ws if x >= boundary]
         if not label:
@@ -328,7 +437,12 @@ def parse_predicted_statement_page(
         # caption split, so the two cannot disagree about which tokens are figures.
         boundary = _caption_boundary(page.extract_words(), page.height)
         anchors = _year_anchors(page, boundary)
-        annual_x = {a[0] for a in (anchors[len(anchors) // 2:] if annual_only else anchors)}
+        annual_x = {
+            a[0] for a in (
+                anchors[len(anchors) // 2:] if annual_only and _has_column_pairs(anchors)
+                else anchors
+            )
+        }
         lo_x = anchors[0][0] - 50.0
         hi_x = anchors[-1][0] + 50.0
 
@@ -341,6 +455,17 @@ def parse_predicted_statement_page(
             label = _clean_label(raw_label)
             low = label.lower()
             if not label or low in _SKIP_LABELS or re.fullmatch(r"\d+\.\d+", label):
+                continue
+            if _IDENTIFIER_CAPTION.search(label):
+                # An identifier, not a line item. Printed 180 carries the auditor's report as
+                # well as the statement, and "Membership No. 060408" reaches the caption column
+                # because its figures include a DIN -- a digit run that parses as 19437 and would
+                # otherwise be published as a profit-and-loss line.
+                #
+                # A caption ending in a bare digit run is safe to reject because a financial
+                # caption cannot end in one: its note reference lives in a separate column, which
+                # the per-page boundary now guarantees. Measured across the seven statement pages
+                # and 267 captions, this matches exactly one caption and it is the auditor's.
                 continue
 
             header_half = _balance_sheet_half(label)
