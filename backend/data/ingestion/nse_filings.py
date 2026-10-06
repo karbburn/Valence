@@ -112,6 +112,30 @@ _BS_CAPTION_PATTERNS = (
     re.compile(r"trade receiv", re.I),
 )
 
+# The equity-and-liabilities face of a split balance sheet.
+#
+# HCLTech prints assets (printed p.5) and equity/liabilities (printed p.6) on separate
+# faces, so a rule demanding "total current assets" can never see p.6 -- and without
+# p.6, total_assets vs total_L+E cannot foot. The mirror rule demands the same three
+# things the assets rule demands: the face's subtotal, the footing line, and a caption
+# from that face.
+#
+# The footing line is required IN FULL ("total equity and liabilities", either order)
+# rather than as bare "total liabilities", deliberately. A Regulation 52(4) ratio
+# disclosure can print current liabilities and total liabilities as ratio inputs, but
+# it never prints the balance sheet's own footing line -- that line is what makes the
+# page a statement rather than arithmetic about one. The caption requirement is the
+# same defense in the same position as the assets rule's.
+_BS_LIAB_SUBTOTAL = re.compile(r"total current liabilities", re.I)
+_BS_FOOTING = re.compile(r"total (?:equity and liabilities|liabilities and equity)", re.I)
+_BS_LIAB_CAPTION_PATTERNS = (
+    re.compile(r"share capital", re.I),
+    re.compile(r"retained earnings", re.I),
+    re.compile(r"borrowings", re.I),
+    re.compile(r"trade payables", re.I),
+    re.compile(r"other equity", re.I),
+)
+
 _MONTHS = {m: i + 1 for i, m in enumerate(
     ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"])}
@@ -276,15 +300,30 @@ def looks_like_balance_sheet(text: str) -> bool:
     a caption as well as both subtotals. A ratio table is not a balance sheet, and a
     normalisation loose enough to find `Sub-total - Current assets` could easily have let
     them in.
+
+    A page is also a balance sheet when it carries the OTHER face: the subtotal "total
+    current liabilities", the full footing line, and a caption from the equity/liabilities
+    side. Measured on the committed fixtures this accepts HCLTech printed p.6 and nothing
+    else new -- TCS 11/20 and HCLTech 5 still match by the assets face. The footing line is
+    required IN FULL precisely so a ratio disclosure cannot match by printing its inputs:
+    subtotals and captions can appear in ratio arithmetic, but the statement's own footing
+    line is what makes the page a statement. Whether the Tata Steel ratio pages would also
+    fail this branch is not re-verified here -- that fixture is not committed -- so the
+    rejection is additionally pinned by synthetic-text tests in the detector test class,
+    built to the documented shape of those disclosures.
     """
     if not text:
         return False
     letters = _letters(text)
-    if not _present(_BS_CURRENT_SUBTOTAL, text, letters):
-        return False
-    if not _present(_BS_TOTAL, text, letters):
-        return False
-    return any(_present(p, text, letters) for p in _BS_CAPTION_PATTERNS)
+    if _present(_BS_CURRENT_SUBTOTAL, text, letters):
+        if _present(_BS_TOTAL, text, letters):
+            if any(_present(p, text, letters) for p in _BS_CAPTION_PATTERNS):
+                return True
+    if _present(_BS_LIAB_SUBTOTAL, text, letters):
+        if _present(_BS_FOOTING, text, letters):
+            if any(_present(p, text, letters) for p in _BS_LIAB_CAPTION_PATTERNS):
+                return True
+    return False
 
 
 def balance_sheet_pages(pdf, limit: int = 6) -> list:

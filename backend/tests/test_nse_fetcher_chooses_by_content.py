@@ -385,6 +385,63 @@ class TestTheBalanceSheetDetector:
             "got %r. If the fixture changed, update this." % pages
         )
 
+    def test_a_split_liabilities_face_is_recognised(self):
+        """HCLTech prints assets and equity/liabilities on separate faces.
+
+        The assets face carries "total current assets"; the liabilities face cannot, so
+        a rule demanding that phrase on one page reports the filer as half-unreadable.
+        Tested on text directly, because that is the level the rule lives at.
+        """
+        assert looks_like_balance_sheet(
+            "HCL Technologies Limited Condensed Consolidated Interim Balance Sheet\n"
+            "Equity share capital 72 72\n"
+            "Retained earnings 7,904 7,983\n"
+            "Total current liabilities 3,099 3,356\n"
+            "TOTAL EQUITY AND LIABILITIES 11,806 12,261\n"
+        )
+
+    def test_a_liabilities_ratio_table_is_not_a_balance_sheet(self):
+        """The mirror of the assets-face ratio test.
+
+        A current-ratio disclosure prints "total current liabilities" as an input and
+        can mention borrowings in the next line. What it never prints is the statement's
+        own footing line, and that absence is the whole guard -- so this text carries
+        the subtotal and the caption and must still be refused.
+        """
+        assert not looks_like_balance_sheet(
+            "Additional information pursuant to Regulation 52(4)\n"
+            "Current ratio\n"
+            "(Total current assets Total current liabilities)\n"
+            "1.20 1.18\n"
+            "Debt equity ratio\n"
+            "(Total borrowings Total equity)\n"
+            "0.04 0.05\n"
+        ), (
+            "a ratio table carrying the liabilities subtotal and a caption was accepted. "
+            "Neither subtotal nor caption identifies a statement; only the footing line does."
+        )
+
+    def test_prose_about_liabilities_is_not_a_balance_sheet(self):
+        assert not looks_like_balance_sheet(
+            "The total current liabilities and the borrowings have been restated.\n"
+        ), (
+            "prose naming the subtotal and a caption was accepted as the liabilities face"
+        )
+
+    def test_it_finds_the_split_faces_of_the_committed_hcltech_filing(self):
+        """The rule against the document it will actually meet."""
+        import pdfplumber
+
+        hcl = TCS_PDF.parent / "hcltech-ifrs-2026-07.pdf"
+        assert hcl.exists()
+        with pdfplumber.open(str(hcl)) as doc:
+            pages = balance_sheet_pages(doc)
+        assert pages == [5, 6], (
+            "the committed HCLTech filing's balance sheet was not found at pages 5 and 6; "
+            "got %r. Page 6 is the equity/liabilities face; missing it leaves total_assets "
+            "without a total_L+E to foot against." % pages
+        )
+
 
 class TestTheDownloadLoop:
     def test_it_keeps_the_first_attachment_whose_text_has_a_balance_sheet(self, tmp_path):
