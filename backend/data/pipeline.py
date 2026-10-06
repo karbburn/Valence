@@ -231,6 +231,57 @@ def acquire_filing(company_id: str) -> bool:
     return True
 
 
+# A single background worker is enough. The fetch is I/O-bound against the exchange and the politeness
+# budget is the real limiter; more workers would only make us ruder faster. The set of tickers with a
+# fetch already running, guarded by the lock so two cold reads of the same company do not double-fetch.
+_acquisition_inflight: set[str] = set()
+_acquisition_inflight_lock = __import__("threading").Lock()
+_acquisition_executor = __import__("concurrent.futures", fromlist=["ThreadPoolExecutor"]).ThreadPoolExecutor(
+    max_workers=2, thread_name_prefix="nse-acquire"
+)
+
+
+def acquire_filing_async(company_id: str) -> bool:
+    """Schedule a fetch without blocking the caller. Returns True if it scheduled one.
+
+    The read path must not pay for a multi-second exchange round trip on the first cold build. So the
+    actual work goes to a background thread and this returns immediately; the company reads its market
+    feed with that labelled until the PDF lands, at which point the next request sees it.
+
+    Never raises and never runs twice for the same ticker at once: an in-flight set guards the
+    boundary, and the usual enabled/cached/recent-failure/budget gates are applied before scheduling.
+    Those gates are also re-checked inside the worker so a stale decision cannot spend a fetch.
+
+    The synchronous `acquire_filing` stays for the CLI, the operator, and tests that need determinism.
+    """
+    ticker = company_id.split("_")[0].strip().upper()
+    allowed, _reason = acquisition_state(company_id)
+    if not allowed:
+        return False
+
+    import threading
+
+    with _acquisition_inflight_lock:
+        if ticker in _acquisition_inflight:
+            return False
+        _acquisition_inflight.add(ticker)
+
+    def _run() -> None:
+        try:
+            acquire_filing(company_id)
+        except Exception:  # noqa: BLE001
+            # The worker must be unkillable. acquire_filing is already best-effort by contract; this
+            # is the belt to its suspenders, because a swallowed exception in a future would surface
+            # only as "never finished" and that is exactly the failure mode that is hardest to see.
+            logger.debug("background acquisition for %s failed", ticker)
+        finally:
+            with _acquisition_inflight_lock:
+                _acquisition_inflight.discard(ticker)
+
+    _acquisition_executor.submit(_run)
+    return True
+
+
 def _filing_datapoints_from_cached_pdf(
     pdf_path: Path, meta: dict, company_id: str
 ) -> list[RawDatapoint]:

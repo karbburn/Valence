@@ -327,9 +327,83 @@ class TestFailureIsQuietAndWritesNothing:
         from backend.data.batch import ensure_company_ingested
 
         source = inspect.getsource(ensure_company_ingested)
-        assert "acquire_filing" in source, (
+        assert "acquire_filing_async" in source, (
             "the acquisition hook is missing, so a feed-only company is never asked for its filing"
         )
         assert "except Exception" in source, (
             "the acquisition call is unwrapped, so a broken acquirer breaks every read"
         )
+
+
+class TestAcquisitionDoesNotBlockTheRead:
+    """The reason `acquire_filing_async` exists at all.
+
+    The read path must not pay for a multi-second exchange round trip on a cold build. The synchronous
+    variant stays for the CLI and for tests that need determinism; the request path uses this one, and
+    this is how that is proven rather than assumed.
+    """
+
+    def test_it_returns_immediately_even_when_the_fetch_is_slow(self, monkeypatch, enabled):
+        import time as _time
+
+        def _slow(symbol, refresh=False):
+            _time.sleep(5)
+            return _Result(True)
+
+        from backend.data.ingestion import nse_filings
+
+        monkeypatch.setattr(nse_filings, "NSEFilings", lambda *a, **k: type("F", (), {"acquire": staticmethod(_slow)})())
+
+        start = _time.monotonic()
+        did = pipeline.acquire_filing_async("slowco_slowco")
+        elapsed = _time.monotonic() - start
+
+        assert did is True, "expected it to schedule a fetch for a cold, allowed company"
+        assert elapsed < 1.0, (
+            f"scheduled fetch took {elapsed:.1f}s to RETURN, so it is not async"
+        )
+        # Let the worker land so it does not leak into other tests; not asserting on the result
+        # because the result is about the store, which this test does not set up.
+        _time.sleep(6)
+
+    def test_it_never_schedules_twice_for_the_same_ticker(self, monkeypatch, enabled):
+        started = {"n": 0}
+
+        def _counting(symbol, refresh=False):
+            started["n"] += 1
+            import time as _time
+
+            _time.sleep(0.2)
+            return _Result(True)
+
+        from backend.data.ingestion import nse_filings
+
+        monkeypatch.setattr(nse_filings, "NSEFilings", lambda *a, **k: type("F", (), {"acquire": staticmethod(_counting)})())
+
+        first = pipeline.acquire_filing_async("twin_twin")
+        second = pipeline.acquire_filing_async("twin_twin")
+        assert first is True
+        assert second is False, (
+            "a second call while one is in flight scheduled another, so cold reads of the same "
+            "company issue duplicate exchange requests"
+        )
+        import time as _time
+
+        _time.sleep(0.4)
+        assert started["n"] == 1, (
+            f"expected one fetch for two calls, ran {started['n']}"
+        )
+
+    def test_it_returns_false_when_disabled(self, monkeypatch, disabled):
+        from backend.data.ingestion import nse_filings
+
+        calls = []
+        monkeypatch.setattr(
+            nse_filings, "NSEFilings",
+            lambda *a, **k: type("F", (), {"acquire": staticmethod(lambda *a2, **k2: calls.append(1))})(),
+        )
+        assert pipeline.acquire_filing_async("reliance_reliance") is False
+        assert calls == [], f"disabled acquisition still scheduled: {calls}"
+
+    def test_it_returns_false_for_a_cached_company(self, monkeypatch, enabled):
+        assert pipeline.acquire_filing_async("tcs_tcs") is False

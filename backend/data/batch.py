@@ -254,17 +254,21 @@ def ensure_company_ingested(
             # sits on the read path. Without those, browsing companies becomes a load on the exchange
             # and a filer with no available statement is retried forever.
             #
+            # The read path uses the ASYNC variant: a cold company does not pay a multi-second
+            # exchange round trip inside its request. The next request sees the cached filing; until
+            # then the market feed is served with that labelled. See `acquire_filing_async`.
+            #
             # Best-effort by contract: a failure writes nothing, raises nothing, and leaves the
             # company on its market feed with that labelled. Which is the behaviour that made this
             # reachable in the first place, and is the reason nothing here needs to be loud.
             try:
-                from backend.data.pipeline import acquire_filing
+                from backend.data.pipeline import acquire_filing_async
 
-                acquire_filing(company_id)
+                acquire_filing_async(company_id)
             except Exception:  # noqa: BLE001
                 # Even the guard is guarded. Acquisition is an enhancement to a read and must never be
                 # able to break one.
-                logger.debug("acquisition could not be attempted for %s", company_id)
+                logger.debug("acquisition could not be scheduled for %s", company_id)
             if not _an_available_filing_is_unstored(company_id, db_path):
                 return
 
