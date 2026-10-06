@@ -176,14 +176,23 @@ class TestWithdrawnFiledCaptionsStayOutOfTheWrongKeys:
     - "Equity attributable to shareholders of the Company" -> share_count at
       0.47 MEDIUM. A rupee subtotal mapped into a share-count key.
 
-    Neither has an unambiguous home in the current key set, so both are
-    withdrawn until one exists -- a proper `other_equity` component key, and a
-    key for the attributable subtotal that is not the NCI-inclusive total.
+    HCLTech's liabilities face adds three of the same family: "Equity attributable
+    to owners of the Company" (7,761) suggested to net_profit at 0.57, and "Deferred
+    tax liabilities (net)" (152) and "Current tax liabilities (net)" (363) suggested
+    to the corresponding asset keys at 0.58 -- liabilities mapped across the balance
+    sheet. The registry comment records the full reasoning; these tests pin the
+    behaviour for all five.
+
+    Neither group has an unambiguous home in the current key set, so all five are
+    withdrawn until one exists.
     """
 
     WITHDRAWN_CAPTIONS = {
         "Other equity": [106878.0, 94394.0],
         "Equity attributable to shareholders of the Company": [107240.0, 94756.0],
+        "Equity attributable to owners of the Company": [7761.0, 7928.0],
+        "Deferred tax liabilities (net)": [152.0, 146.0],
+        "Current tax liabilities (net)": [363.0, 407.0],
     }
 
     @pytest.mark.parametrize("label,values", sorted(WITHDRAWN_CAPTIONS.items()))

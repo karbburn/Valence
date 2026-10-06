@@ -34,11 +34,26 @@ from typing import Tuple, Dict, FrozenSet
 # key set -- "Other equity" is a component with no component key, and the
 # attributable subtotal differs from the total by the minority interest -- so both
 # stay withdrawn until those keys exist.
+#
+# HCLTech's liabilities face adds three more of the same family, found by parsing
+# printed page 6 caption by caption. "Equity attributable to owners of the Company"
+# (7,761) is suggested to net_profit at 0.57 -- an equity subtotal mapped into the
+# profit-and-loss statement, worse than the share_count case because the key is at
+# least a rupee key. "Deferred tax liabilities (net)" (152) and "Current tax
+# liabilities (net)" (363) are suggested to the corresponding ASSET keys at 0.58 --
+# liabilities mapped across the balance sheet into assets. No liability key exists
+# for either, and a liability parked in an asset key inverts the statement, so all
+# three stay withdrawn. The current-liabilities face foots exactly (3,099) WITH these
+# rows present, which is what makes their absence from the model a recorded shortfall
+# rather than a rounding difference.
 WITHDRAWN_LABELS: FrozenSet[str] = frozenset({
     "Investments",
     "Other Assets",
     "Other equity",
     "Equity attributable to shareholders of the Company",
+    "Equity attributable to owners of the Company",
+    "Deferred tax liabilities (net)",
+    "Current tax liabilities (net)",
 })
 
 # Mapping entry type: (canonical_key, statement)
@@ -200,6 +215,7 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Redeemable noncontrolling interest": ("canonical.bs.mezzanine_equity", "bs"),
     "Minority interest": ("canonical.bs.minority_interest", "bs"),
     "Non-controlling interests": ("canonical.bs.minority_interest", "bs"),
+    "Non-controlling interest": ("canonical.bs.minority_interest", "bs"),
     "Preference share capital": ("canonical.bs.preferred_stock", "bs"),
     "Preferred stock": ("canonical.bs.preferred_stock", "bs"),
     "Trade payables": ("canonical.bs.trade_payables", "bs"),
