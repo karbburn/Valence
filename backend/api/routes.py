@@ -1153,6 +1153,29 @@ def _model_built_at(company_id: str) -> str | None:
     return datetime.fromtimestamp(stamp, tz=timezone.utc).date().isoformat()
 
 
+def _filing_source_of_truth(c) -> str:
+    """Which filing class is authoritative for this company's primary market.
+
+    A company's "true" financials are the ones it is required to file with the primary listing
+    exchange -- for a US listing that is the SEC 10-K/20-F, for an NSE/BSE listing the SEBI
+    annual report. A secondary filing (an ADR's 20-F for an NSE-primary issuer, or an Ind AS PDF
+    for a US issuer) is corroborating evidence, not the source of truth, and must never be used
+    as the primary oracle for a model priced off the other market.
+
+    Stated as a function of the listing exchange rather than guessed per company, so it cannot
+    silently contradict the market the model is priced against. A company whose exchange is
+    unknown is "unverified" -- it must not be asserted to have a source of truth it has not been
+    shown to have.
+    """
+    market = (getattr(c, "market", "") or "").lower()
+    exchange = (getattr(c, "exchange", "") or "").lower()
+    if market == "us" or "sec" in exchange or exchange in {"nasdaq", "nyse", "nyse_arca", "amex"}:
+        return "sec_10k_20f"
+    if market == "india" or exchange in {"nse", "bse"}:
+        return "sebi_annual_report"
+    return "unverified"
+
+
 def _manifest_record(c) -> Dict[str, Any]:
     return {
         "slug": c.slug,
@@ -1163,6 +1186,7 @@ def _manifest_record(c) -> Dict[str, Any]:
         "exchange": c.exchange,
         "sector": c.sector,
         "cik": c.cik,
+        "filing_source_of_truth": _filing_source_of_truth(c),
         "has_model": _has_compiled_model(c.company_id),
         # Whether this company is in scope for the model engine at all.
         #
