@@ -44,6 +44,16 @@ function resolveApiOrigin(): string {
 }
 
 const nextConfig: NextConfig = {
+  // Next 16 treats `localhost` as its own origin and blocks its dev resources for
+  // any other host. Browse the dev server at `127.0.0.1:3111` and the block lands
+  // on `/_next/hmr`, and the failure is silent: every chunk loads with a 200, the
+  // flight queue is consumed, zero errors reach the console, and hydration never
+  // attaches - so the page is inert server HTML with dead controls. Measured
+  // 2026-10-06 against one running dev server: `localhost:3111` hydrates,
+  // `127.0.0.1:3111` does not, and this line is the only origin-dependent
+  // difference the server reports. Development-only: a production build serves no
+  // dev resources, so this cannot change what a deployed build does.
+  allowedDevOrigins: ['127.0.0.1'],
   async rewrites() {
     return [
       {
