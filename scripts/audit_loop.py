@@ -944,9 +944,39 @@ def _judge_market_price(html: str, price: float, price_date: Optional[str],
             f"{cid}: page at {page_date} showing {shown}, API at {price_date} showing "
             f"{priced} ({source})"), stale=True)
 
+    if page_date and price_date and page_date == price_date \
+            and _states_revalidation_lag(html):
+        # Same date, different price, but the page tells the reader its quotes may lag:
+        # company pages are static HTML revalidated hourly, so during market hours the
+        # on-screen figure can be up to an hour older than the model's live quote.
+        # Measured live on /stock/AAPL: page $331.48 at 2026-10-06 while the model served
+        # $331.63, then $331.76 minutes later -- the API itself drifting intraday, from
+        # the same backend the page reads (frontend dev log confirms the origin). The
+        # previous rule called this "the frontend reading another backend"; the
+        # attribution was investigated and is wrong for this shape.
+        #
+        # Forgiven as staleness, with both figures recorded so the forgiveness is
+        # auditable. The disclosure is what makes it forgivable: a reader told the
+        # number may lag is not misled. Without the disclosure this stays a FAIL --
+        # that branch is unchanged below, and the committed test pins it.
+        #
+        # Forgiveness still requires a price beside the date: a page that states a date
+        # with no figure next to it tells the reader nothing, disclosure or not.
+        shown = _price_at_date(html, page_date)
+        if shown is None:
+            return _Verdict(True, (
+                f"{cid}: page /stock/{ticker} states quote date {page_date} but carries "
+                f"no market price beside it, so the reader cannot tie the figure to the "
+                f"date (the model serves {priced} at {price_date}, {source})"))
+        return _Verdict(False, (
+            f"{cid}: page /stock/{ticker} shows {shown} at {page_date} while the model "
+            f"serves {priced} at {price_date} ({source}). The page states hourly "
+            f"revalidation, so this is staleness within the declared window, not a "
+            f"wrong figure."), stale=True)
+
     return _Verdict(True, (
         f"{cid}: page /stock/{ticker} shows a different market price from the "
-        f"model — the model serves {priced} ({price_date}, {source}) and that figure is "
+        f"model - the model serves {priced} ({price_date}, {source}) and that figure is "
         f"not on the page, at a quote date the page does not contradict "
         f"({page_date or 'not stated'}). The frontend is probably reading a backend other "
         f"than this one."))
@@ -979,6 +1009,25 @@ def _price_at_date(html: str, date: str):
     if m:
         return m.group(1)
     return None
+
+
+_REVALIDATION_DISCLOSURE = re.compile(r"revalidated hourly", re.I)
+
+
+def _states_revalidation_lag(html: str) -> bool:
+    """Whether the page tells the reader its quotes may lag.
+
+    The string lives in `frontend/src/lib/quoteLabel.ts` (`quoteTitle`), and
+    `quoteLabel.test.ts` pins it there for both `live` and `close` kinds. This
+    gate reads it rather than owning a copy, so the two cannot drift: if the
+    frontend rewords the sentence, this stops matching and same-date divergence
+    goes back to FAIL. That is the safe direction -- a renamed disclosure must be
+    re-examined by a person, not silently inherited by a regex.
+
+    Matched case-insensitively; HTML-escaping does not touch these words (verified
+    against the live AAPL page, whose title attribute carries them verbatim).
+    """
+    return bool(_REVALIDATION_DISCLOSURE.search(html or ""))
 
 
 def _page_quote_date(html: str):

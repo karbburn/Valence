@@ -30,6 +30,15 @@ Three properties are guarded here, and the second is the one a naive fix breaks:
 
 Point 3 is what stops this fix from being bought with a weakened check. A tolerance-based
 fix would pass property 1 and fail property 3, which is why it was not taken.
+
+Amendment, 2026-10-06: "a same-date mismatch" in point 3 now means a same-date mismatch
+on a page that does NOT tell the reader its quotes may lag. A page carrying the hourly
+revalidation disclosure (`quoteTitle`, pinned in `quoteLabel.test.ts`) with a same-date
+divergence is reported stale, not failed -- measured live on /stock/AAPL during market
+hours, where the API itself moved 331.63 -> 331.76 while the cached page held 331.48,
+all at 2026-10-06 from the one backend the frontend reads. The committed
+test_a_same_date_mismatch_still_fails fixture carries no disclosure string, so it still
+fails exactly as before; the forgiveness cannot extend to it.
 """
 
 from __future__ import annotations
@@ -121,6 +130,56 @@ class TestTheGenuineDefectsStillFail:
         failed, stale = _verdict(_page("2026-09-28", "3766.40"), 3756.10, "2026-09-28")
         assert failed, "a same-date mismatch passed. That is a wrong figure on the page."
         assert stale == 0
+
+    def test_a_disclosed_same_date_mismatch_is_stale_not_failed(self):
+        """The AAPL shape, and the only forgiveness added.
+
+        Same date, different price, but the page carries the hourly revalidation
+        disclosure -- so the reader was told the figure may lag. Measured live:
+        /stock/AAPL held $331.48 at 2026-10-06 while the model served $331.63 then
+        $331.76 minutes later, all from the one backend the frontend reads. Failing
+        that page means failing every market-hours run on correct behaviour, which
+        teaches the team to ignore the gate -- and an ignored gate protects nothing.
+
+        The fixture is _page plus the exact disclosure string, so if the frontend
+        rewords it this test fails loudly rather than silently widening.
+        """
+        html = (
+            _page("2026-10-06", "331.48")
+            + '<div title="Pages are served as static HTML and revalidated hourly, '
+            'so this figure can be up to an hour old.">As of 2026-10-06</div>'
+        )
+        failed, stale = _verdict(html, 331.63, "2026-10-06")
+        assert not failed, (
+            "a disclosed within-window cached page was failed. The reader was told "
+            "the number may lag; failing it cries wolf during every market-hours run."
+        )
+        assert stale == 1, "and it must be reported as stale rather than silently passed"
+
+    def test_the_forgiveness_requires_the_disclosure(self):
+        """Without the string, the AAPL numbers still fail.
+
+        Same figures as above, disclosure removed: this must stay a FAIL, or the
+        forgiveness has become unconditional and the L&T defect walks through it.
+        """
+        failed, stale = _verdict(_page("2026-10-06", "331.48"), 331.63, "2026-10-06")
+        assert failed, (
+            "an undisclosed same-date mismatch passed. The disclosure is the only "
+            "thing separating this from the L&T case."
+        )
+        assert stale == 0
+
+    def test_the_forgiveness_requires_a_price_beside_the_date(self):
+        """Disclosure plus a dateless figure is still a fail."""
+        html = (
+            _page("2026-10-06", None)
+            + '<div title="revalidated hourly">As of 2026-10-06</div>'
+        )
+        failed, _ = _verdict(html, 331.63, "2026-10-06")
+        assert failed, (
+            "a disclosed page carrying no price beside its date was forgiven. "
+            "Staleness without a figure is indistinguishable from wrongness."
+        )
 
     def test_a_stale_page_with_no_figure_beside_its_date_still_fails(self):
         """Knowing a page is behind is not enough to call it healthy.

@@ -87,6 +87,16 @@ test('a live caption still says the page can lag, because it is static', () => {
   assert.ok(/revalidated hourly/.test(title), title)
 })
 
+test('a close caption says the page can lag too, because it is equally static', () => {
+  // The hourly lag applies to every quote on a statically served page, not only to
+  // live ones: a close shown during market hours is a mid-session bar that keeps
+  // moving until the bell. Without this sentence the audit gate cannot tell a
+  // within-window cached page from a page reading another backend, so it must fail
+  // both. The sentence is what lets the gate forgive exactly the disclosed case.
+  const title = quoteTitle('close', '2026-09-30', 'yfinance_history')
+  assert.ok(/revalidated hourly/.test(title), title)
+})
+
 test('a successor quote is flagged and explained, never compared', () => {
   assert.equal(classifyQuote('yfinance_history:successor_ticker', '2026-09-28'), 'successor')
   assert.equal(quoteIsFlagged('successor'), true)

@@ -121,7 +121,7 @@ export function quoteTitle(
     case 'live':
       return `Current price from ${baseSource} as of ${d}. Company pages are served as static HTML and revalidated hourly, so the figure on screen can lag the market by up to that interval.`
     case 'close':
-      return `Last exchange close from ${baseSource} on ${d}. This is a daily close, not an intraday print, and it is the basis the valuation is measured against.`
+      return `Last exchange close from ${baseSource} on ${d}. This is a daily close, not an intraday print, and it is the basis the valuation is measured against. Pages are served as static HTML and revalidated hourly, so this figure can be up to an hour old.`
     case 'stale':
       return `The live fetch failed, so this is the last cached close from ${d}. Refresh to try again.`
     case 'benchmark':
