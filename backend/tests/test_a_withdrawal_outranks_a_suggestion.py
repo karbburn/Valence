@@ -161,3 +161,58 @@ class TestTheDecisionIsRecorded:
             "these are in RAW_METRIC_MAP, so the registry lookup succeeds and the "
             "withdrawal branch is never reached: %r" % both
         )
+
+
+class TestWithdrawnFiledCaptionsStayOutOfTheWrongKeys:
+    """TCS prints an equity stack the engine maps into the wrong keys.
+
+    Share capital 362 + Other equity 106,878 = Equity attributable 107,240,
+    + Non-controlling 1,238 = Total equity 108,478 (FY26 consolidated; FY25 is
+    362 + 94,394 = 94,756, + 1,015 = 95,771). The arithmetic ties to the rupee,
+    which is what makes these two suggestions wrong rather than merely uncertain:
+
+    - "Other equity" -> total_equity at 0.58 MEDIUM. A component mapped to the
+      total it is part of, so the key holds both and any sum double-counts.
+    - "Equity attributable to shareholders of the Company" -> share_count at
+      0.47 MEDIUM. A rupee subtotal mapped into a share-count key.
+
+    Neither has an unambiguous home in the current key set, so both are
+    withdrawn until one exists -- a proper `other_equity` component key, and a
+    key for the attributable subtotal that is not the NCI-inclusive total.
+    """
+
+    WITHDRAWN_CAPTIONS = {
+        "Other equity": [106878.0, 94394.0],
+        "Equity attributable to shareholders of the Company": [107240.0, 94756.0],
+    }
+
+    @pytest.mark.parametrize("label,values", sorted(WITHDRAWN_CAPTIONS.items()))
+    def test_the_caption_reaches_no_canonical_datapoint(self, label, values):
+        canonical, _mappings, _unmapped = mapper.map_raw_datapoints(_raw(label, values))
+        leaked = [c for c in canonical if abs(c.value) in values]
+        assert not leaked, (
+            "%r reached the model as %s = %.1f. That key is wrong for it -- "
+            "a component is not its total, and a rupee subtotal is not a share "
+            "count -- so the withdrawal is not in force."
+            % (label, ", ".join(sorted({c.canonical_key for c in leaked})),
+               leaked[0].value)
+        )
+
+    @pytest.mark.parametrize("label,values", sorted(WITHDRAWN_CAPTIONS.items()))
+    def test_a_withdrawal_does_not_fail_the_build(self, label, values):
+        _canonical, _mappings, unmapped = mapper.map_raw_datapoints(_raw(label, values))
+        assert label not in unmapped, (
+            "%r is reported unmapped, so `pipeline.run` raises and the company "
+            "answers 422 instead of publishing a statement with a reported shortfall"
+            % label
+        )
+
+    @pytest.mark.parametrize("label", sorted(WITHDRAWN_CAPTIONS))
+    def test_the_engine_would_otherwise_map_it(self, label):
+        """Guards the premise: without engine pressure the withdrawal is vacuous."""
+        suggestion = mapper.suggest_canonical_mapping(label)
+        assert suggestion.canonical_key is not None, (
+            "%r is no longer proposed by the confidence engine, so this test's "
+            "premise has changed: either give it its proper key or delete these tests"
+            % label
+        )

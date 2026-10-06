@@ -22,7 +22,24 @@ from typing import Tuple, Dict, FrozenSet
 # the filer did not print as a caption, so mapping it to a narrow key states
 # something the engine does not know. The reasoning for each is at its would-be entry
 # below; `current_assets_reconcile` reports the resulting shortfall.
-WITHDRAWN_LABELS: FrozenSet[str] = frozenset({"Investments", "Other Assets"})
+#
+# "Other equity" and "Equity attributable to shareholders of the Company" are the
+# same class of error from the other direction: genuine filed captions the engine
+# maps to the WRONG key. TCS prints Share capital 362 + Other equity 106,878 =
+# Equity attributable 107,240, + Non-controlling 1,238 = Total equity 108,478
+# (FY26 consolidated), yet the engine suggests "Other equity" -> total_equity at
+# 0.58 and the rupee subtotal "Equity attributable..." -> share_count at 0.47, and
+# the mapper accepts both. The first double-counts the total; the second puts
+# rupees in a share-count key. Neither has an unambiguous home in the current
+# key set -- "Other equity" is a component with no component key, and the
+# attributable subtotal differs from the total by the minority interest -- so both
+# stay withdrawn until those keys exist.
+WITHDRAWN_LABELS: FrozenSet[str] = frozenset({
+    "Investments",
+    "Other Assets",
+    "Other equity",
+    "Equity attributable to shareholders of the Company",
+})
 
 # Mapping entry type: (canonical_key, statement)
 RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
