@@ -17,20 +17,35 @@ A JPEG's text is not something to assert on, and an OCR dependency for one hero 
 a reasonable thing to add to a CI run. So the CLAIM is recorded beside the artwork, in
 `valence-launch-poster.json`, and this compares that claim against the live model.
 
-The artwork itself is NOT fixed by this, and it is not being served. A bitmap cannot be fixed
-by editing a file: the card needs re-cutting, and replacing a designed title card with a
-generated one would be a worse trade than pausing it. The film is therefore off the hero, and
-this gate is what lets it come back.
+The artwork itself is NOT fixed by this. A bitmap cannot be fixed by editing a file: the card
+needs re-cutting. It is on the hero anyway, because a hero that reserves six columns for a
+visual and serves nothing in them is an empty column, and the film will be re-cut at the same
+16:9 dimensions rather than the slot being reshaped around its absence.
 
-The rule is an OR, and both branches are honest:
+So there are three branches, and all three are honest:
 
-  * the artwork's figures match the live model, in which case the film may be served, or
+  * the artwork's figures match the live model, in which case the film may be served;
   * the artwork is served nowhere, in which case nothing stale is being claimed and the
-    figures are free to be wrong.
+    figures are free to be wrong;
+  * the artwork is stale AND served, but a dated acceptance saying so exists beside the
+    claim -- see below.
 
-Neither branch satisfied is a failure, because stale artwork ON the page is a false claim and
-that is the defect. Updating the JSON alone does not reach the first branch, which is the
-point: that would make this gate agree with a poster that still says something else.
+Failure requires that NEITHER of the first two holds, because stale artwork ON the page with
+nothing recording it is a false claim, and that is the defect. Updating the claim JSON alone
+does not reach the first branch, which is the point: that would make this gate agree with a
+poster that still says something else.
+
+THE ACCEPTANCE. The third branch exists because serving the stale card is a decision the
+owner has made, not an oversight, and the two honest answers to a decision are to make it
+visible or to not make it. `valence-launch-acceptance.json` records it: a reason, the date it
+was taken, and a `review_by` date after which it stops applying. It is a separate file from
+the claim deliberately, so editing the figures still cannot reach a passing branch -- the
+claim says what the artwork says, the acceptance says somebody chose to serve it anyway, and
+those are different statements that must not be one edit apart.
+
+The gate prints the full drift on every run whether or not the acceptance holds, so accepted
+stale figures are never quiet, and it fails again the day after `review_by`. An acceptance
+that could not expire would be a permanent hole rather than a decision.
 
 Run against a local backend on :8111 and frontend on :3111. Exits 2 when there is no backend,
 which is a skip and not a pass.
@@ -40,11 +55,13 @@ from __future__ import annotations
 import json
 import sys
 import urllib.request
+from datetime import date
 from pathlib import Path
 
 API = "http://127.0.0.1:8111"
 WEB = "http://127.0.0.1:3111"
 SIDECAR = Path("frontend/public/media/valence-launch-poster.json")
+ACCEPTANCE = Path("frontend/public/media/valence-launch-acceptance.json")
 POSTER_NAME = "valence-launch-poster.jpg"
 VIDEO_NAME = "valence-launch.mp4"
 
@@ -124,6 +141,88 @@ def drift(claim, live) -> list[str]:
     return out
 
 
+def load_acceptance() -> tuple[dict | None, str | None]:
+    """(record, problem) for the acceptance beside the claim.
+
+    A missing record is not a problem by itself -- most of the time there is nothing to
+    accept -- so it returns (None, None) and the caller decides what that means in context.
+    A record that EXISTS but is unusable is a problem: a dated acceptance whose date cannot
+    be read, or which names no reason, is a decision that cannot be checked, and an
+    uncheckable decision must not be able to open a branch that a checkable one would.
+    """
+    if not ACCEPTANCE.exists():
+        return None, None
+    try:
+        record = json.loads(ACCEPTANCE.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return None, f"the acceptance file does not parse ({type(exc).__name__})"
+    if not isinstance(record, dict):
+        return None, "the acceptance file is not an object"
+    reason = record.get("reason")
+    if not isinstance(reason, str) or not reason.strip():
+        return None, "the acceptance states no reason"
+    review_by = record.get("review_by")
+    if not isinstance(review_by, str) or not review_by.strip():
+        return None, "the acceptance carries no review_by date, so it would never expire"
+    return record, None
+
+
+def acceptance_holds(record: dict, today: str) -> tuple[bool, str]:
+    """(holds, message). `today` is passed rather than read so the expiry is testable."""
+    review_by = record.get("review_by", "")
+    if today > review_by:
+        return False, (
+            f"the acceptance expired on {review_by} and today is {today}. The figures "
+            f"below are stale, served, and no longer accepted."
+        )
+    return True, (
+        f"stale figures served under a written acceptance, review by {review_by} "
+        f"(reason: {record['reason'].strip()})"
+    )
+
+
+def stale_and_served(today: str) -> tuple[int, list[str]]:
+    """The verdict for the one branch a decision, not a measurement, can open.
+
+    Split out of `main` so it can be tested without two live servers, for the reason
+    `audit_loop._judge_market_price` was: logic that lives inline gets reimplemented by
+    its own test, and then a mutation that breaks the real branch SURVIVES because the
+    test is exercising the copy. A guard on a copy is not a guard.
+
+    Returns (exit code, the lines to print). The drift itself is printed by the caller
+    before this is called, on every run, because accepted stale figures must never be
+    quiet.
+    """
+    record, bad = load_acceptance()
+    if bad is not None:
+        return 1, [
+            f"NOT ACCEPTED: {bad}.",
+            "A record that cannot be checked does not open this branch.",
+        ]
+    if record is None:
+        return 1, [
+            "NOT ACCEPTED: there is no acceptance record beside the claim, so this is the",
+            "original defect -- a false claim on the hero with nothing recording it.",
+            "",
+            "Either rebuild the artwork with the figures the model serves and update",
+            f"{SIDECAR} in the same change, or stop serving it.",
+        ]
+
+    holds, why = acceptance_holds(record, today)
+    if not holds:
+        return 1, [
+            f"NOT ACCEPTED: {why}",
+            "",
+            "Either rebuild the artwork, or write a new acceptance with a later review",
+            "date and a reason for keeping it up.",
+        ]
+    return 0, [
+        f"ACCEPTED, EXPIRING: {why}",
+        "The drift above is printed on every run whether or not this holds, so accepted",
+        "stale figures are never quiet, and this branch closes on the review date.",
+    ]
+
+
 def main() -> int:
     if not SIDECAR.exists():
         print(f"FAIL: {SIDECAR} is missing, so nothing records what the artwork claims.")
@@ -164,13 +263,18 @@ def main() -> int:
         print(f"{SIDECAR} in the same change.")
         return 0
 
+    # Stale AND served. This is the branch the defect lives in, and it is the only one
+    # that can be opened by a decision rather than by a measurement.
     print("STALE AND SERVED. The hero artwork contradicts the live model on:")
     for p in problems:
         print(f"  - {p}")
     print(f"\nserved on: {', '.join(served)}")
-    print("Either rebuild the artwork with the figures the model serves and update")
-    print(f"{SIDECAR} in the same change, or stop serving it.")
-    return 1
+    print()
+
+    code, lines = stale_and_served(date.today().isoformat())
+    for line in lines:
+        print(line)
+    return code
 
 
 if __name__ == "__main__":

@@ -1,0 +1,23 @@
+{
+  "_comment": [
+    "A written decision to keep serving the launch film while its artwork is stale.",
+    "",
+    "The claim in valence-launch-poster.json says what the poster DISPLAYS. This file",
+    "says that somebody chose to serve it anyway, which is a different statement and",
+    "so lives in a different file: editing the figures must not be able to reach the",
+    "passing branch of scripts/check_launch_artwork.py, and a decision must not be one",
+    "edit away from a measurement.",
+    "",
+    "The gate prints the full drift on every run whether or not this holds, so accepted",
+    "stale figures are never quiet. On the day after `review_by` this stops applying and",
+    "the gate fails again: an acceptance that could not expire would be a permanent hole",
+    "in the check rather than a decision with an end.",
+    "",
+    "TO CLEAR: re-cut the film at the same 16:9 dimensions (the slot does not change),",
+    "update valence-launch-poster.json to the figures the model serves, and delete this",
+    "file. The gate then passes on the first branch, with nothing to accept."
+  ],
+  "reason": "The hero reserves six columns for a visual and the film is the only one. The poster card will be re-cut at the same 16:9 dimensions, which changes neither the component nor the layout, so the slot stays as it is until the new cut lands rather than shipping an empty column beside the headline.",
+  "accepted_on": "2026-10-06",
+  "review_by": "2026-11-06"
+}
