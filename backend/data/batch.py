@@ -232,7 +232,23 @@ def ensure_company_ingested(
     would parse rather than re-parsing them. It is deliberately narrow -- only the
     India filing path is checked, because only it has a locator whose result can
     be compared against what is already in the database.
+
+    `db_path=None` means this same default store. Precomputation threads an
+    unresolved db_path down to here -- `run_precompute(company_id=...)` has no
+    store of its own to give -- and an explicit None does NOT fall back to the
+    default bound on this signature. It reaches sqlite as the string "None",
+    where the first query creates a store with that name, finds no canonical
+    rows, decides the company was never ingested and re-ingests it there.
+    Measured on a five-company refresh: a second full fetch of every source per
+    company, 551 raw rows in a store beside the repo root that no reader opens,
+    and a second normalization pass against the live store. Nothing failed,
+    because the intended store still received the right data -- which is the
+    worst shape for this bug: the cost is invisible except as a stray file.
     """
+    if db_path is None:
+        # The unresolved thread, not a path: `str(None)` is "None", and the store
+        # this signature names as its default is what the caller means.
+        db_path = DB_PATH
     from backend.data.ingestion.screener import parse_screener_export
     from backend.data.ingestion.sec_edgar import parse_sec_edgar_export
     from backend.data.store import query_canonical_datapoints, save_datapoints
