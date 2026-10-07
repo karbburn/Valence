@@ -94,7 +94,19 @@ def _load_baseline(path: Path) -> Dict[str, List[str]]:
 
 def _failures_from_spec(spec) -> List[str]:
     checks = getattr(getattr(spec, "qa", None), "checks", None) or []
-    return sorted(c.check_name for c in checks if not c.passed)
+    failed = {c.check_name for c in checks if not c.passed}
+    # A check the engine SKIPPED reports passed=true with the discrepancy in
+    # the detail, so reading only `not passed` made it invisible to the gate:
+    # the cash-flow identity could miss by four figures and every surface that
+    # counts failures stayed green. A skip is a known-and-held condition like
+    # any other failure here: it enters the same list, is baselined the same
+    # way, and a skip that appears where there was none is a regression.
+    failed.update(
+        c.check_name
+        for c in checks
+        if c.passed and (c.detail or "").startswith("SKIPPED")
+    )
+    return sorted(failed)
 
 
 def collect_failures_snapshot(company_ids: List[str]) -> Dict[str, List[str]]:

@@ -444,6 +444,7 @@ def check_cash_flow_reconciles(spec: ModelSpecification) -> ModelCheckResult:
         ]
 
         if any(v is None for v in [beginning_cash, ending_cash, *cfo_vals, *cfi_vals, *cff_vals]):
+            failing_periods.extend(hist_periods)
             skipped.append(
                 f"Missing balance-sheet cash or cash-flow inputs for historical "
                 f"periods {first_p}..{last_p}"
@@ -464,6 +465,13 @@ def check_cash_flow_reconciles(spec: ModelSpecification) -> ModelCheckResult:
                     # The source statements do not tie out (e.g. screener/EDGAR
                     # exports with inconsistent CF vs BS figures). Surface the
                     # discrepancy without failing the whole model on source data.
+                    #
+                    # The implicated periods go with it: they are diagnostic,
+                    # not a verdict, and a consumer highlighting what to
+                    # investigate should see the periods the skip names rather
+                    # than an empty list on the one check that has something
+                    # to say.
+                    failing_periods.extend(hist_periods)
                     skipped.append(
                         f"Cash flow statement does not reconcile with balance sheet cash "
                         f"for historical periods {first_p}..{last_p}: ending cash "
@@ -484,7 +492,10 @@ def check_cash_flow_reconciles(spec: ModelSpecification) -> ModelCheckResult:
                     errors.append(f"{scenario} {p}: cash={cash}, cfo={cfo}")
 
     passed = len(errors) == 0
-    if not passed:
+    # The implicated keys are populated for a skip as well as for a failure:
+    # they name the same four lines the detail describes, and a skip that ships
+    # with empty implicated lists points a consumer at nothing.
+    if not passed or skipped:
         failing_keys = [
             "canonical.bs.cash_and_bank",
             "canonical.cf.operating_activities",

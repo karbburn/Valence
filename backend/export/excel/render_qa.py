@@ -27,6 +27,7 @@ from backend.export.excel.styles import (
     ALIGN_RIGHT,
     BORDER_BOX,
     BORDER_TOTAL,
+    FILL_CARD,
     FILL_FAIL,
     FILL_HEADER,
     FILL_PASS,
@@ -287,19 +288,25 @@ def render_model_checks_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet
         # afterwards, which is the worst of both: the workbook appears to
         # contradict itself depending on when it was opened.
         #
-        # Where the engine's own detail contradicts the verdict — it explains
-        # that an input does not reconcile while the row claims it does — the
-        # cached value follows the detail, because a row that says PASS while
-        # its own explanation says otherwise is the defect.
-        detail_text = (c.detail or "").lower()
-        contradicts = any(
-            phrase in detail_text
-            for phrase in ("does not reconcile", "does not balance", "not reconciled")
-        )
-        if contradicts and c.passed:
-            cached_res = "FAIL"
+        # A check the engine SKIPPED (passed, detail opening with "SKIPPED") is
+        # its own state, neither the pass the passed flag claims nor the failure
+        # this block used to force on it: the row renders "SKIPPED" as a literal,
+        # detail intact, so the header, the row and the gate tell one story. The
+        # literal replaces the live formula for this row because recalculating
+        # it would produce PASS or FAIL beside a verdict that says neither.
+        skipped = c.passed and (c.detail or "").startswith("SKIPPED")
+        if skipped:
+            cached_res = "SKIPPED"
+        else:
+            detail_text = (c.detail or "").lower()
+            contradicts = any(
+                phrase in detail_text
+                for phrase in ("does not reconcile", "does not balance", "not reconciled")
+            )
+            if contradicts and c.passed:
+                cached_res = "FAIL"
 
-        if formula_expr:
+        if formula_expr and not skipped:
             write_formula_cell(
                 ws, r, 4,
                 formula=formula_expr,
@@ -313,8 +320,15 @@ def render_model_checks_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet
         else:
             res_cell = ws.cell(row=r, column=4, value=cached_res)
             res_cell.alignment = ALIGN_CENTER
-            res_cell.font = FONT_PASS if cached_res == "PASS" else FONT_ALERT
-            res_cell.fill = FILL_PASS if cached_res == "PASS" else FILL_FAIL
+            if skipped:
+                # A skip is its own state: neither the green of a pass nor the
+                # orange of a failure, and no live formula beside it that would
+                # recompute one of the two on recalculation.
+                res_cell.font = FONT_FORMULA
+                res_cell.fill = FILL_CARD
+            else:
+                res_cell.font = FONT_PASS if cached_res == "PASS" else FONT_ALERT
+                res_cell.fill = FILL_PASS if cached_res == "PASS" else FILL_FAIL
             res_cell.border = BORDER_BOX
 
         # Always show the engine's own explanation. Replacing a passing check's
