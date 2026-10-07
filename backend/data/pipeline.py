@@ -401,11 +401,18 @@ def _get_secondary_filing_datapoints(company_id: str) -> list[RawDatapoint]:
                 parse_predicted_statement_page(fy26_pdf, 99, "BALANCE SHEET", "nse_filing", annual_only=False, company_id=company_id),
                 parse_predicted_statement_page(fy26_pdf, 100, "PROFIT & LOSS", "nse_filing", annual_only=True, company_id=company_id),
                 parse_predicted_statement_page(fy26_pdf, 103, "CASH FLOW", "nse_filing", annual_only=False, company_id=company_id),
+                # Printed 105 continues that cash flow without repeating the header, so it
+                # raised and the financing half (lease payments, dividends, buybacks) was
+                # never read. Its figures sit in printed 104's columns, verified on the
+                # document rather than assumed.
+                parse_predicted_statement_page(fy26_pdf, 104, "CASH FLOW", "nse_filing", annual_only=False, company_id=company_id, header_page_index=103),
             ]
             fy25 = [
                 parse_predicted_statement_page(fy25_pdf, 105, "BALANCE SHEET", "nse_filing", annual_only=False, company_id=company_id),
                 parse_predicted_statement_page(fy25_pdf, 106, "PROFIT & LOSS", "nse_filing", annual_only=True, company_id=company_id),
                 parse_predicted_statement_page(fy25_pdf, 109, "CASH FLOW", "nse_filing", annual_only=False, company_id=company_id),
+                # Printed 111 continues it the same way, in printed 110's columns.
+                parse_predicted_statement_page(fy25_pdf, 110, "CASH FLOW", "nse_filing", annual_only=False, company_id=company_id, header_page_index=109),
             ]
             filing_dps = [d for page in (fy26 + fy25) for d in page]
 

@@ -536,6 +536,7 @@ def parse_predicted_statement_page(
     company_id: str = "infy_infy",
     period_end_month: int = 3,
     period_end_day: int = 31,
+    header_page_index: int | None = None,
 ) -> list[RawDatapoint]:
     """Parse one filing statement page into RawDatapoints for the given company.
 
@@ -543,13 +544,38 @@ def parse_predicted_statement_page(
     rightmost (year-ended) columns and drop quarterly ones. Values map to the
     nearest year anchor. ``period_end_month``/``period_end_day`` follow the
     company's fiscal calendar.
+
+    ``header_page_index`` names the page whose fiscal-year header this page
+    continues. A statement that runs past one printed page does not repeat its
+    header on the continuation, so a continuation with no anchors of its own
+    raises and its figures are never read -- which is how the financing half of
+    Infosys' FY26 cash flow (lease payments, dividends, buybacks) was missing
+    from the store while the operating half read cleanly. Naming the header page
+    borrows that page's anchors instead. The borrow is tested against this page
+    rather than trusted: it is accepted only when the page prints its own figures
+    in the borrowed columns, so the note pages that follow a statement still
+    raise instead of having prose parsed into periods.
     """
     with pdfplumber.open(pdf_path) as pdf:
         page = pdf.pages[page_index]
         # One boundary for the page, decided once and used by both the anchor search and the
         # caption split, so the two cannot disagree about which tokens are figures.
         boundary = _caption_boundary(page.extract_words(), page.height)
-        anchors = _year_anchors(page, boundary)
+        carried = False
+        try:
+            anchors = _year_anchors(page, boundary)
+        except ValueError:
+            if header_page_index is None:
+                raise
+            # The continuation of a statement whose header printed on an earlier page. The
+            # header page is read the same way this page would have been, so the borrowed
+            # columns are established by the filer's own header row and not by this page's
+            # layout. A header page with no header of its own raises here, honestly.
+            header = pdf.pages[header_page_index]
+            anchors = _year_anchors(
+                header, _caption_boundary(header.extract_words(), header.height)
+            )
+            carried = True
         annual_x = {
             a[0] for a in (
                 anchors[len(anchors) // 2:] if annual_only and _has_column_pairs(anchors)
@@ -558,12 +584,47 @@ def parse_predicted_statement_page(
         }
         lo_x = anchors[0][0] - 50.0
         hi_x = anchors[-1][0] + 50.0
+        if carried:
+            # The borrow, tested against this page rather than trusted. Without this any
+            # page the caller names would parse in the borrowed window, and the page after
+            # a statement is a note: measured on the committed Infosys documents, the real
+            # continuations print 13 figure rows and 24 figures inside the carried
+            # columns, while the note pages that follow print 0, 0, 0 and 1 -- the one being
+            # half a sentence of prose at 2.10, which is exactly the confident junk this
+            # refuses. A continuation with fewer than two figure rows does not exist in
+            # either committed document; refusing it keeps an honest failure over a
+            # plausible answer.
+            figure_rows = sum(
+                1
+                for _lab, vals, _t, _ind in _rows(page, boundary)
+                if any(lo_x <= x <= hi_x and _num(t) is not None for x, t in vals)
+            )
+            if figure_rows < 2:
+                raise ValueError(
+                    f"no fiscal-year header row on this page, and the columns carried "
+                    f"from printed page {header_page_index + 1} hold {figure_rows} "
+                    f"figure row(s): this page does not continue that statement"
+                ) from None
 
         # What the page says about its own units, read rather than assumed. See
         # `declared_units`. Either component may be empty, and empty means undetermined.
         page_currency, page_units = declared_units(
             re.sub(r"\s+", " ", " ".join(w["text"] for w in page.extract_words()))
         )
+        if not (page_currency or page_units) and header_page_index is not None:
+            # The units banner prints once, on the statement's first page, and the
+            # continuation belongs to that statement -- so its figures are in the units
+            # that page declared. Measured on the committed Infosys documents: printed
+            # 104 reads INR/crores and printed 105 prints no banner at all, and rows
+            # arriving with no units are refused downstream by the company's own
+            # currency/units check -- a correct guard aimed at the wrong layer, which
+            # would turn a read continuation into a failed normalization for the whole
+            # company. The page's own banner, when it prints one, still wins.
+            header_text = re.sub(
+                r"\s+", " ",
+                " ".join(w["text"] for w in pdf.pages[header_page_index].extract_words()),
+            )
+            page_currency, page_units = declared_units(header_text)
 
         dps: list[RawDatapoint] = []
         seen: set[tuple[str, str, float]] = set()
