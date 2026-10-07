@@ -96,6 +96,27 @@ class TestTheRuleMatchesElementsNotLabels:
         assert _is_outflow_element("Dividend Amount",
                                    ["PaymentsOfDividendsCommonStock"])
 
+    def test_the_ifrs_dividend_element_is_recognised(self):
+        """The ifrs-full spelling carries the same convention as the us-gaap pair.
+
+        Infosys' 20-F files `DividendsPaid` as a positive magnitude -- 1,777 / 2,416
+        at FY24/FY25 -- while its market feed supplied -1,777 / -2,416. An element
+        the rule does not know reads verbatim, so the ADR model would book the
+        payment as a capital INFLOW: the exact defect this file was written for, in
+        the other taxonomy.
+        """
+        from backend.data.ingestion.sec_edgar import (
+            _as_stored_outflow,
+            _is_outflow_element,
+        )
+
+        assert _is_outflow_element("Dividend Amount", ["DividendsPaid"])
+        stored = _as_stored_outflow(1777.0, "Dividend Amount", ["DividendsPaid"])
+        assert stored == -1777.0, (
+            "the ifrs-full dividend magnitude stored as %+.1f; an outflow must be "
+            "negative to sit beside what the forecast writes beside it" % stored
+        )
+
     def test_capex_is_not_an_outflow_element(self):
         """`PaymentsToAcquirePropertyPlantAndEquipment` does not begin "PaymentsOf".
 
@@ -111,15 +132,17 @@ class TestTheRuleMatchesElementsNotLabels:
         )
 
     def test_the_rule_is_membership_not_a_prefix(self):
-        """Pins the distinction, because the two agree on every element in the map.
+        """Pins the distinction, which is now demonstrable rather than luck.
 
-        `any(t in _OUTFLOW_ELEMENTS)` and `any(t.startswith("PaymentsOf"))` return the
-        same answer for all three mapped elements, so the behavioural tests above pass
-        against either. A mutation that swapped membership for the prefix SURVIVED
-        because of it.
+        For a long time `any(t in _OUTFLOW_ELEMENTS)` and
+        `any(t.startswith("PaymentsOf"))` returned the same answer for every mapped
+        element, so the behavioural tests above passed against either and a mutation
+        swapping membership for the prefix SURVIVED. `DividendsPaid` breaks the
+        coincidence -- a recognised outflow that does not begin "PaymentsOf" -- so
+        the prefix rule would store the ADR filer's dividends as an INFLOW.
 
-        The prefix is wrong in a way the current map cannot show: it agrees by luck.
-        `PaymentsForRepurchaseOfCommonStock` is an outflow, does not match the prefix,
+        The prefix stays wrong for whatever comes next:
+        `PaymentsForRepurchaseOfCommonStock` is an outflow, does not match it,
         and is not in the map today -- so the day a buyback line is added, the prefix
         rule would silently store it positive while dividends go negative.
         """
@@ -131,9 +154,9 @@ class TestTheRuleMatchesElementsNotLabels:
         code = re.sub(r'""".*?"""', "", src, flags=re.S)
         code = re.sub(r"#.*$", "", code, flags=re.M)
         assert "startswith" not in code, (
-            "the outflow test is a PREFIX rule again. It happens to agree with "
-            "membership on every element currently mapped, which is why this was only "
-            "caught by mutation -- but it would store a buyback positive."
+            "the outflow test is a PREFIX rule again, and it no longer agrees with "
+            "membership: `DividendsPaid` is a recognised outflow the prefix misses, "
+            "so the ADR filer's dividends would be stored as an inflow"
         )
         assert "_OUTFLOW_ELEMENTS" in code, (
             "the outflow test no longer consults the explicit element set"
@@ -161,15 +184,19 @@ class TestTheRuleMatchesElementsNotLabels:
     def test_every_outflow_element_is_reachable_from_the_tag_map(self):
         """An element nothing maps is a rule that can never fire.
 
-        Worth asserting: `_OUTFLOW_ELEMENTS` names us-gaap tags, and if the map stops
-        listing one, the entry becomes dead weight that reads as coverage.
+        Both vocabularies count: the sign rule is applied in the one fetch loop that
+        runs whichever map the filer's taxonomy selects, so an element listed only in
+        `IFRS_ALTERNATIVES` is exactly as reachable as one in `US_GAAP_TAG_MAP` --
+        and an element in neither is dead weight that reads as coverage.
         """
+        from backend.data.ingestion.ifrs_tags import IFRS_ALTERNATIVES
         from backend.data.ingestion.sec_edgar import (
             _OUTFLOW_ELEMENTS,
             US_GAAP_TAG_MAP,
         )
 
         mapped = {t for _label, tags, _s in US_GAAP_TAG_MAP for t in tags}
+        mapped |= {t for tags in IFRS_ALTERNATIVES.values() for t in tags}
         unreachable = sorted(_OUTFLOW_ELEMENTS - mapped)
         assert not unreachable, (
             "these outflow elements are in the sign rule but in no reader entry, so "

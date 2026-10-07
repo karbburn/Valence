@@ -186,6 +186,14 @@ IFRS_ALTERNATIVES: dict[str, tuple[str, ...]] = {
     "Total current assets": ("CurrentAssets", "CurrentAssetsTotal"),
     "Total assets": ("Assets",),
     "Total non-current assets": ("NoncurrentAssets", "NoncurrentAssetsTotal"),
+    "Trade payables": (
+        # Infosys' 20-F: 470 / 474 / 487 (USD) at FY23-FY25, exactly the figures its
+        # market feed had been supplying for the two years they overlap. TSM files no
+        # such element -- only the parts of one (to trade suppliers, to related
+        # parties, for purchases of non-current assets) -- so the line stays on the
+        # feed for it rather than being assembled from pieces the filer never summed.
+        "TradeAndOtherCurrentPayables",
+    ),
     "Borrowings": ("Borrowings", "LongtermBorrowings"),
     "Total current liabilities": ("CurrentLiabilities", "CurrentLiabilitiesTotal"),
     "Total liabilities": ("Liabilities",),
@@ -211,6 +219,14 @@ IFRS_ALTERNATIVES: dict[str, tuple[str, ...]] = {
     "Cash from Financing Activity": (
         "CashFlowsFromUsedInFinancingActivities",
         "NetCashFlowsFromUsedInFinancingActivities",
+    ),
+    "Dividend Amount": (
+        # Infosys' 20-F: 1,777 / 2,416 (USD) at FY24/FY25 -- positive magnitudes,
+        # the same convention as us-gaap `PaymentsOfDividends`, so the outflow rule
+        # has to know this element too (`_OUTFLOW_ELEMENTS`). TSM's `DividendsPaid`
+        # arrives in TWD only and the reader takes USD, so TSM's dividends stay on
+        # the feed rather than being read in the wrong currency.
+        "DividendsPaid",
     ),
 }
 

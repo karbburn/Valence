@@ -26,6 +26,7 @@ REPO = pathlib.Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
+from backend.data.ingestion.ifrs_tags import IFRS_ALTERNATIVES, build_ifrs_map  # noqa: E402
 from backend.data.ingestion.sec_edgar import US_GAAP_TAG_MAP  # noqa: E402
 from backend.data.store import RawDatapoint  # noqa: E402
 from backend.normalization.financials.mapper import map_raw_datapoints  # noqa: E402
@@ -176,3 +177,70 @@ class TestTheMapStaysHonestAboutWhatFilersFile:
         for label, tags, _stmt in US_GAAP_TAG_MAP:
             dupes = {t for t in tags if tags.count(t) > 1}
             assert not dupes, "%r lists %s more than once" % (label, sorted(dupes))
+
+
+class TestTheElementOrderDecidesWhichMoneyIsRead:
+    """Selection keeps the first candidate with an annual fact for a target year.
+
+    So list order is behaviour, not documentation: the wrong element first reports a
+    different figure under the same caption. Measured per filer against SEC
+    companyfacts and the face of the balance sheet, 2026-10-06:
+
+    AWI files no `AccountsPayableCurrent`. It files the trade slice as
+    `AccountsPayableTradeCurrent` -- 91.0 / 105.8 / 123.6 at FY23-FY25, equal to the
+    feed -- and prints ONE combined line, "Accounts payable and accrued expenses"
+    (237.1 / 215.3), carried by `AccountsPayableAndAccruedLiabilitiesCurrent`. That
+    element first would report trade payables plus accruals under a trade-payables
+    key: bigger money, right caption family, nothing on the page to tell them apart.
+
+    Meta files `AccountsPayableCurrent` only through 10-Q comparatives for these
+    years, and 10-Q facts do not qualify as annual; its 10-Ks tag
+    `AccountsPayableTradeCurrent` -- 4,849 / 7,687 / 8,894 at FY23-FY25, equal to the
+    feed. Without the trade element in the list, no candidate holds an annual fact
+    for any target year and the line stays on the feed rather than converting.
+    """
+
+    def test_the_trade_slice_precedes_the_combined_total(self):
+        tags = next(t for label, t, _s in US_GAAP_TAG_MAP if label == "Trade payables")
+        assert "AccountsPayableTradeCurrent" in tags, (
+            "the trade slice is no longer a candidate, so AWI would read its combined"
+            " trade-and-accruals element and Meta would keep nothing to convert"
+        )
+        assert tags.index("AccountsPayableTradeCurrent") < tags.index(
+            "AccountsPayableAndAccruedLiabilitiesCurrent"
+        ), (
+            "the combined element now comes first, so AWI reads 237.1 of trade and"
+            " accruals where its filed trade slice is 123.6 -- same caption, more"
+            " money, undetectable on the page"
+        )
+
+    def test_both_lines_reach_the_ifrs_vocabulary(self):
+        """The ADR filers file under ifrs-full, and both labels must resolve there.
+
+        Infosys' 20-F supplies both lines exactly: `TradeAndOtherCurrentPayables`
+        470 / 474 / 487 (USD) at FY23-FY25 and `DividendsPaid` 1,777 / 2,416 at
+        FY24/FY25 as positive magnitudes -- equal to the feed in value, and in
+        magnitude once the outflow rule signs it. TSM files neither element in USD:
+        no plain trade-payables element exists in its facts (only parts of one, to
+        trade suppliers and to related parties), and its `DividendsPaid` arrives in
+        TWD while the reader takes USD. Both lines therefore stay on the feed for TSM
+        -- absence, not a wrong figure.
+        """
+        assert IFRS_ALTERNATIVES.get("Trade payables") == (
+            "TradeAndOtherCurrentPayables",
+        ), (
+            "the IFRS trade-payables entry changed to %r; it must stay the single"
+            " element Infosys files, not a partial component"
+            % (IFRS_ALTERNATIVES.get("Trade payables"),)
+        )
+        assert IFRS_ALTERNATIVES.get("Dividend Amount") == ("DividendsPaid",), (
+            "the IFRS dividends entry changed to %r; without `DividendsPaid` the ADR"
+            " filer's dividends never leave the feed"
+            % (IFRS_ALTERNATIVES.get("Dividend Amount"),)
+        )
+        # `build_ifrs_map` re-checks that every IFRS label exists in the us-gaap map,
+        # so carrying both entries out the other side proves the whole path: label
+        # known, alternatives attached, section preserved.
+        built = {label: (tags, stmt) for label, tags, stmt in build_ifrs_map(US_GAAP_TAG_MAP)}
+        assert built.get("Trade payables") == (("TradeAndOtherCurrentPayables",), "BALANCE SHEET")
+        assert built.get("Dividend Amount") == (("DividendsPaid",), "CASH FLOW:")

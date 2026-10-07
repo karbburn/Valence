@@ -300,18 +300,43 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
     # -- right number, wrong provenance, and indistinguishable on the page.
     #
     # Tag presence verified per filer against SEC companyfacts rather than assumed, so
-    # this fires where the filer files it and stays silent where it does not:
+    # this fires where the filer files it and stays silent where it does not.
+    # Re-measured across all 11 shipped US filers 2026-10-06:
     #
-    #     AccountsPayableCurrent     present  nvda aapl msft amzn meta googl amba awi
-    #                               absent   dox infy_us tsm
+    #     AccountsPayableCurrent      present  aapl amba amzn dox googl meta msft nvda
+    #                                  absent  awi infy_us tsm
+    #     AccountsPayableTradeCurrent present  awi meta
+    #     AccountsPayableAndAccruedLiabilitiesCurrent
+    #                                present  awi only
+    #
+    # The trade slice sits ahead of the combined total because order decides which
+    # money the line reports: the reader keeps the first element with an ANNUAL fact
+    # for a target year (10-Q facts do not qualify) and tops up from the rest.
+    #
+    # AWI files no `AccountsPayableCurrent` at all. It files the trade slice as
+    # `AccountsPayableTradeCurrent` -- 91.0 / 105.8 / 123.6 at FY23-FY25, exactly the
+    # figures its market feed had been supplying -- and prints ONE combined line,
+    # "Accounts payable and accrued expenses" (237.1 / 215.3), carried by
+    # `AccountsPayableAndAccruedLiabilitiesCurrent`. Reading the combined element for
+    # AWI would replace a verified trade figure with a trade-plus-accruals total:
+    # right caption family, more money, and nothing on the page to tell them apart.
+    #
+    # Meta files both payables elements, but `AccountsPayableCurrent` reaches these
+    # years only through 10-Q comparatives: its 10-Ks tag
+    # `AccountsPayableTradeCurrent` at 4,849 / 7,687 / 8,894 for FY23-FY25 -- again
+    # exactly the feed's figures. So the trade element tops up the primary where both
+    # exist and stands alone where the primary has no annual fact at all.
     #
     # `AccountsPayableCurrent` is deliberately not repeated in the candidate list -- it
     # appears once, and a duplicate makes the map look like it covers more filers than
     # it does.
     ("Trade payables", [
         "AccountsPayableCurrent",
+        # The filer's own trade slice, separate from accruals. AWI and Meta both file
+        # it, and for both it equals the feed to the figure.
+        "AccountsPayableTradeCurrent",
         # Filers that combine trade payables with accrued liabilities print one line,
-        # so the combined element is the closer match for them and comes second.
+        # so the combined element is the closer match for them and comes third.
         "AccountsPayableAndAccruedLiabilitiesCurrent",
     ], "BALANCE SHEET"),
     # ONE current-asset catch-all, and the filer's own caption for it.
@@ -521,15 +546,20 @@ US_GAAP_TAG_MAP: List[Tuple[str, List[str], str]] = [
     # numbers were right and the provenance was not: a cash-flow caption the filer
     # publishes was being read from a vendor's rendering of it.
     #
-    # Presence verified per filer against SEC companyfacts:
+    # Presence verified per filer against SEC companyfacts, re-measured across all
+    # 11 shipped US filers 2026-10-06:
     #
-    #     PaymentsOfDividends              nvda aapl meta googl
+    #     PaymentsOfDividends              aapl awi dox googl meta nvda
     #     PaymentsOfDividendsCommonStock   aapl msft meta
+    #     neither                          amba amzn infy_us tsm
     #
-    # MSFT pays no dividend, so its own filings carry neither element and this stays
-    # silent for it -- correctly, rather than by omission. The two spellings are both
-    # listed because filers switch between them, and a filer that pays nothing must
-    # produce no figure rather than a zero that looks like a fact.
+    # MSFT pays a dividend and files it under the CommonStock spelling only -- which
+    # is why both spellings are listed: a filer that switches between them is covered
+    # by either. AMBA and AMZN pay no dividend, and a filer that pays nothing must
+    # produce no figure rather than a zero that looks like a fact. infy_us and tsm
+    # file `DividendsPaid` under ifrs-full instead; that element is read through the
+    # IFRS map, and only where it arrives in USD -- TSM's facts are TWD, so TSM's
+    # dividends stay on the feed.
     #
     # `PaymentsOfDividendsMinorityInterest` is deliberately excluded: it is dividends
     # to minority holders, which is not the same money, and admitting it beside the
@@ -705,16 +735,24 @@ _CURRENT_DEBT_TAGS = (
 # sign convention nobody has checked.
 #
 # ONLY elements the reader actually reads from are listed. A test asserts this: an
-# element named here but present in no `US_GAAP_TAG_MAP` entry is a rule that can never
-# fire, and it reads as coverage. `PaymentsForRepurchaseOfCommonStock` was in the first
-# version of this set for that reason -- nothing in the map reads it, so a buyback is
-# not currently sourced from the filing at all, and listing its element implied a
-# financing-section sign convention the model does not yet exercise.
+# element named here but present in no reader entry, in `US_GAAP_TAG_MAP` or in
+# `IFRS_ALTERNATIVES`, is a rule that can never fire, and it reads as coverage.
+# `PaymentsForRepurchaseOfCommonStock` was in the first version of this set for that
+# reason -- nothing in the map reads it, so a buyback is not currently sourced from
+# the filing at all, and listing its element implied a financing-section sign
+# convention the model does not yet exercise.
 #
 # Adding buybacks means adding the line to the map FIRST, then the element here.
 _OUTFLOW_ELEMENTS = frozenset({
     "PaymentsOfDividends",
     "PaymentsOfDividendsCommonStock",
+    # The ifrs-full spelling of the same money, reached through `IFRS_ALTERNATIVES`.
+    # Infosys' 20-F carries `DividendsPaid` as a positive magnitude in USD -- 1,777 /
+    # 2,416 at FY24/FY25 -- while its market feed had supplied -1,777 / -2,416. An
+    # element the rule does not know reads verbatim and books the payment as a
+    # capital INFLOW, which is the defect the two us-gaap spellings above were
+    # fixed for, in the other taxonomy.
+    "DividendsPaid",
 })
 
 
