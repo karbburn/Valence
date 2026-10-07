@@ -450,6 +450,36 @@ def _merge_split_buckets(buckets: list[tuple[float, list[dict]]], boundary: floa
     return merged
 
 
+def _join_split_figures(vals: list[tuple[float, float, str]]) -> list[tuple[float, str]]:
+    """Re-join a figure whose glyphs pdfplumber returned as separate words.
+
+    The FY26 cash flow prints its acquisition payment as `(637)` with every glyph
+    separately positioned (x0 457.4, 460.1, 464.2, 468.3, 472.4), so the extractor hands
+    back five words: `(` `6` `3` `7` `)`. Each digit parses on its own and all five sit
+    in the FY26 column, so one printed amount became three FY26 datapoints -- 6, 3 and 7 --
+    and the store then kept whichever was written last, publishing a single-digit purchase
+    against a filing that prints 637. The comparative `(3,155)` on the same line prints as
+    one string and reads whole, which is how the split survived review: the figure that
+    was checked was the one that read correctly.
+
+    Tokens are rejoined while their EDGES are within 4pt. Measured on the two committed
+    documents: split glyphs sit 0.9-1.8pt apart, and the nearest real neighbour of a
+    figure is the next column's value 55pt away, so 4pt rejoins a number and cannot reach
+    a second one -- a printed row carries one figure per column, which is the property
+    that makes the distance safe. The join runs on the figure side only: a caption keeps
+    its words and its note reference (`2 . 1 0` beside this very line, in the caption
+    column), so a row's recorded identity does not move.
+    """
+    out: list[tuple[float, float, str]] = []
+    for x, x1, t in vals:
+        if out and x - out[-1][1] < 4.0:
+            prev_x0, _prev_x1, prev_t = out[-1]
+            out[-1] = (prev_x0, x1, prev_t + t)
+        else:
+            out.append((x, x1, t))
+    return [(x, t) for x, _x1, t in out]
+
+
 def _rows(page, boundary: float = LABEL_X_MAX) -> list[tuple[str, list[tuple[float, str]], float, float]]:
     """Group words into caption-and-figures rows, with each row's own `top` and indent.
 
@@ -478,9 +508,9 @@ def _rows(page, boundary: float = LABEL_X_MAX) -> list[tuple[str, list[tuple[flo
 
     out = []
     for key, bucket in buckets:
-        ws = sorted(((w["x0"], w["text"]) for w in bucket), key=lambda t: t[0])
-        label = " ".join(t for x, t in ws if x < boundary).strip()
-        vals = [(x, t) for x, t in ws if x >= boundary]
+        ws = sorted(((w["x0"], w["x1"], w["text"]) for w in bucket), key=lambda t: t[0])
+        label = " ".join(t for x, x1, t in ws if x < boundary).strip()
+        vals = _join_split_figures([(x, x1, t) for x, x1, t in ws if x >= boundary])
         if not label:
             continue
         # The caption's own left edge, which is the ONLY nesting signal in the document.
@@ -501,7 +531,7 @@ def _rows(page, boundary: float = LABEL_X_MAX) -> list[tuple[str, list[tuple[flo
         # Recorded rather than used yet. The roll-up that consumes this is a separate change,
         # and keeping them apart means this one is provably output-neutral: Infosys is flat at
         # one indent throughout, so a field nothing reads cannot change a single row.
-        indent = min((x for x, _ in ws if x < boundary), default=0.0)
+        indent = min((x for x, _x1, _t in ws if x < boundary), default=0.0)
         if not any(re.match(r"[-(\d]", t) for _, t in vals):
             # A row of words with no figure is usually a section header -- and the
             # balance sheet's "Current assets" / "Non-current assets" headers are
