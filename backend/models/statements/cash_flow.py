@@ -19,7 +19,6 @@ CF_LINE_ITEM_CONFIG: List[tuple[str, str, CFCategoryType]] = [
     ("canonical.cf.capex", "Capital Expenditure (CapEx)", "investing"),
     ("canonical.cf.business_acquisitions", "Payment for Business Acquisitions", "investing"),
     ("canonical.cf.interest_div_received", "Interest & Dividends Received", "investing"),
-    ("canonical.cf.escrow_buyback_deposit", "Escrow / Buyback Deposits", "investing"),
     ("canonical.cf.financing_activities", "Cash Flow from Financing Activities", "financing"),
     ("canonical.cf.dividends_paid", "Dividends Paid", "financing"),
     ("canonical.cf.other_adjustments", "Other Operating / Non-Cash Adjustments", "adjustments"),
