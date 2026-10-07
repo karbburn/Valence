@@ -156,6 +156,36 @@ WITHDRAWN_LABELS: FrozenSet[str] = frozenset({
     # mapped above), so nothing is lost by refusing the fragment, and the
     # engine parks it on total liabilities and equity.
     "authorized, issued and outstanding 4,143,607,528 (4,139,950,635) equity",
+    # One more label for a different reason: the cash-flow statement keeps the
+    # LAST canonical row it sees for a key and period instead of scoring the
+    # candidates, so when both of these captions map to business_acquisitions
+    # the page order decides which figure publishes. On the FY26 page the
+    # contingent line prints BELOW the acquisition line (y=506.2 under y=495.2)
+    # and its (13) overwrites the filing's own (637), so the model published
+    # (13) under the label "Payment for Business Acquisitions" while the filing
+    # prints (637) on the line that carries that name. The two figures are also
+    # different things: the acquisition line is the year's purchases of
+    # businesses net of cash acquired, while the contingent line settles
+    # consideration for acquisitions already made (the (101) at FY24, the (13)
+    # at FY26). With no ordering that prefers authority, the caption that IS
+    # the line keeps the key and the settlement detail is withdrawn like the
+    # other disclosed detail; the FY24 headline line prints a dash, so that
+    # year's cell goes empty instead of holding a settlement. Printed by
+    # Infosys only.
+    "Payment of contingent consideration pertaining to acquisition of business",
+    # And the escrow pair, where the same one-row-per-key rule publishes one
+    # side of a movement the filing prints twice. FY26 shows deposits placed
+    # (1,815) at y=517.2 and redemptions received 1,815 at y=528.3, netting to
+    # zero for the year; the redemption prints last, so the model published
+    # 1,815 as the year's escrow line while the deposit sat shadowed, a net
+    # cash effect the filing contradicts with its own two lines. No printed
+    # figure represents the net, so both captions go, the same disposition as
+    # the deposit and redemption pair recorded above without a key. The line is
+    # empty for this company rather than showing one side of a pair, and the
+    # figures were published this same one-sided way before the migration, so
+    # this corrects a standing figure. Printed by Infosys only.
+    "Escrow and other deposits pertaining to Buyback",
+    "Redemption of escrow and other deposits pertaining to Buyback",
 })
 
 # Mapping entry type: (canonical_key, statement)
@@ -354,10 +384,7 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Purchase of Property, Plant and Equipment": ("canonical.cf.capex", "cf"),
     "Fixed Assets Purchased": ("canonical.cf.capex", "cf"),
     "Payment for acquisition of business, net of cash acquired": ("canonical.cf.business_acquisitions", "cf"),
-    "Payment of contingent consideration pertaining to acquisition of business": ("canonical.cf.business_acquisitions", "cf"),
     "Interest and dividend received": ("canonical.cf.interest_div_received", "cf"),
-    "Escrow and other deposits pertaining to Buyback": ("canonical.cf.escrow_buyback_deposit", "cf"),
-    "Redemption of escrow and other deposits pertaining to Buyback": ("canonical.cf.escrow_buyback_deposit", "cf"),
     "Cash from Financing Activity": ("canonical.cf.financing_activities", "cf"),
     "Dividend Amount": ("canonical.cf.dividends_paid", "cf"),
     # The filing's own caption, read from the financing section on the continuation

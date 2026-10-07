@@ -21,16 +21,22 @@ names:
   from, so the sections have to be the filing's totals and not whatever else the
   engine would suggest.
 
-- Twenty-seven have none. The engine rates the first twenty-two low confidence
+- Thirty have none. The engine rates the first twenty-two low confidence
   (0.2, no key): their section totals are already mapped, and the balance-sheet
   cases cannot pick a key without replacing an aggregate with a component or
-  putting two figures of one period under one identity. The last five the engine
+  putting two figures of one period under one identity. The next five the engine
   does suggest, at destinations that state something false: a pre-tax subtotal
   competing with the section total, a liability in an asset key, a deduction on
   the receipt line it adjusts, an ex-minority subtotal beside its own total, and
-  a share-count note fragment on the liabilities-and-equity total. Withdrawn is
-  the recorded state for all twenty-seven: no canonical datapoint, not counted as
-  an unmapped gap, and a row in the review queue either way.
+  a share-count note fragment on the liabilities-and-equity total. The last
+  three the registry mapped itself, and each is a case where the cash flow
+  statement's last-row rule lets page order publish a figure the filing does
+  not support: the contingent line, beside the acquisition line it settles,
+  overwrites the filing's (637) with its own (13); and the escrow pair, where
+  deposits (1,815) and redemptions 1,815 net to zero for FY26 but the
+  redemption prints last, so one side of a pair published as the year's line.
+  Withdrawn is the recorded state for all thirty: no canonical datapoint, not
+  counted as an unmapped gap, and a row in the review queue either way.
 """
 from __future__ import annotations
 
@@ -161,6 +167,23 @@ WITHDRAWN_FIGURES = [
         "BALANCE SHEET",
         2071.0,
     ),
+    # And two the registry itself mapped, both where the cash flow statement's
+    # last-row rule would publish a figure the filing does not support.
+    (
+        "Payment of contingent consideration pertaining to acquisition of business",
+        "CASH FLOW",
+        -13.0,
+    ),
+    (
+        "Escrow and other deposits pertaining to Buyback",
+        "CASH FLOW",
+        -1815.0,
+    ),
+    (
+        "Redemption of escrow and other deposits pertaining to Buyback",
+        "CASH FLOW",
+        1815.0,
+    ),
 ]
 
 
@@ -223,7 +246,7 @@ class TestTheCaptionsWithoutAHomeAreRecorded:
             "%r is not in WITHDRAWN_LABELS, so it reads as an unmapped accident "
             "rather than a recorded decision" % missing
         )
-        assert len(WITHDRAWN_FIGURES) == 27, (
+        assert len(WITHDRAWN_FIGURES) == 30, (
             "the family changed size (%d); add or remove the caption itself, not "
             "silently the count" % len(WITHDRAWN_FIGURES)
         )
