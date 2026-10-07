@@ -21,7 +21,7 @@ Every company has its own public URL. `valence.sourabhpradhan.in/NVDA` is a deep
 - **Public Trading Comps & Football Field Synthesis**: benchmarks the company against sector peers (EV/Sales, EV/EBITDA, P/E, FCF Yield %, ROIC %) and synthesizes cross-methodology valuation ranges. *Football field and comps are Excel-export features; the web workbench shows the DCF and the scenario matrix.*
 - **Private Equity Exit Returns & IRR Waterfall**: 3-year and 5-year Exit Equity Value, MoIC, and Equity IRR under each exit scenario with entry-price sensitivity grids.
 - **Multi-Market & Multi-Currency Support**: US equities (NASDAQ/NYSE, USD millions) and Indian equities (NSE/BSE, INR crores), with currency and unit localization across all statements.
-- **23-Check QA Engine**: balance sheet balancing, cash flow reconciliation, debt schedule ties, share count consistency, DCF bridge tie-out, WACC validity, terminal growth below WACC, year-one growth plausibility, missing critical inputs, data provenance quality, historical reporting coverage, unit agreement within a model, and — the checks that decide whether a number may be published at all — `inputs_trace_to_a_filing`, `debt_is_actually_sourced`, and `valuation_is_meaningful`. A model with failing checks is still served, with the failures listed. A check that could not run is marked skipped and is never counted as a pass.
+- **23-Check QA Engine**: balance sheet balancing, cash flow reconciliation, debt schedule ties, share count consistency, DCF bridge tie-out, WACC validity, terminal growth below WACC, year-one growth plausibility, missing critical inputs, data provenance quality, historical reporting coverage, unit agreement within a model, and — the checks that decide whether a number may be published at all — `inputs_trace_to_a_filing`, `debt_is_actually_sourced`, and `valuation_is_meaningful`. A model with failing checks is still served, with the failures listed. A check that cannot run is marked skipped rather than forced to pass; where a skip carries a recorded diagnostic it is also held in the committed QA baseline, and the exported workbook shows the skip state and the numbers, never a blanket pass.
 - **31-Tab Interactive Excel Exporter**: detail schedules drive the operating model through live Excel formulas (CAPM, FCFF sums, cross-sheet references, sensitivity grids, and live `=IF(...)` audit checks).
 - **Live Web Workbench**: scenario switching, driver overrides with revert, methodology breakdown, and a model library kept in the browser.
 
@@ -35,6 +35,7 @@ These look like gaps and are not. They are recorded here so nobody "fixes" them.
 - **Prices self-heal.** A live quote failure falls back to the last cached close *preserving the original date*, and the UI says so rather than presenting a stale number as current.
 - **A valuation is published only where a filing is behind it.** Coverage is a sourcing problem, not an engine problem: a company ships if a filing contributed its historicals, and 9 of the 23 shipped models publish while the rest are built but withheld with the reason stated on the page. A model that no filing is behind returns a verdict rather than a number.
 - **A DCF below market price is a view, not an error.** `implied_price_deviation_is_explainable` holds a deviation inside a band symmetric in both directions. Negative equity value for a filer with negative book equity is arithmetic, so it is reported as such rather than suppressed.
+- **The filing beats the feed.** Where a market feed and an official filing both carry a period, the filing's figures are what the model publishes. That precedence is explicit in the statement builder (reported rows outrank estimates) and pinned by tests, not left to load order. For Infosys the three sections foot to the filing's printed bottom line exactly in every year, and any caption the model does not consume is recorded with its reason rather than silently dropped.
 
 ---
 
@@ -60,7 +61,7 @@ python scripts/audit_loop.py --no-server     # skip the live site gates
 | 1 | `tieout` | SEC XBRL, plus the filing's own rendered balance sheet for concepts us-gaap does not expose |
 | 2 | `excel` | The served API payload, read fresh, against the generated workbook |
 | 3 | `identities` | Arithmetic that must hold regardless of inputs |
-| 4 | `qa` | A committed baseline, so a NEW failure is distinguishable from a known one |
+| 4 | `qa` | A committed baseline, so a NEW failure is distinguishable from a known one; skipped checks that carry a diagnostic are held in the same baseline |
 | 5 | `tests` | pytest and jest |
 | 6 | `self_check` | The Excel sheet contract and formula wiring, end to end |
 | 7 | `site` | A running server, over HTTP |
@@ -76,8 +77,8 @@ one that misses a real disagreement.
 
 On current `main`: **tie-out 0 untied figures, 10 of 11 US filers audited clean**
 (the eleventh is TSMC, disclosed rather than counted), **QA 0 regressions across 23
-models**, **975 backend tests and 93 frontend tests**, and a current-asset
-reconciliation that lands exactly on Infosys' filed subtotal in all three years.
+models**, **1003 backend tests and 93 frontend tests**, and Infosys'
+current-asset reconciliation landing exactly on the filed subtotal.
 
 ---
 
@@ -362,14 +363,14 @@ curl -o model.xlsx "http://127.0.0.1:8111/api/export/excel?company_id=nvda_us"
 python scripts/audit_loop.py
 
 # Or individually
-python -m pytest backend/tests -q                              # 783 tests
+python -m pytest backend/tests -q                              # 1003 tests
 python -m backend.export.excel.self_check                      # 31-sheet contract + formula wiring
 python -m backend.api.self_check                               # Web API and recomputation
 cd frontend && npm test && npx tsc --noEmit && npm run lint && npm run build
 ```
 
 A commit that touches `backend/` is not finished until the suite passes. The backend
-suite takes about ten minutes and, together with the tie-out gate, is the only thing
+suite takes about twelve minutes and, together with the tie-out gate, is the only thing
 guarding the engine.
 
 On every push to `main`, CI runs the backend suite, the frontend typecheck/lint/test/build,
