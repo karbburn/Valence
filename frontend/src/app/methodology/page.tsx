@@ -139,6 +139,13 @@ export default function MethodologyPage() {
                 strip reports.
               </p>
               <p>
+                The base case is generated, not polled. Each driver starts from the company&rsquo;s
+                most recent run rate and tapers across the forecast years, so Base can carry a
+                high-velocity year-one through. It is the central path we would assign the
+                filings, not a consensus of analyst estimates; bull and bear bracket that path
+                rather than extending the method itself.
+              </p>
+              <p>
                 Driver overrides you set in the panel are recorded against the model-generated
                 baseline, so any change can be reverted and the original value is never lost.
               </p>
