@@ -84,9 +84,20 @@ def assemble_cash_flow(
     else:
         periods = all_periods
 
+    # Which row publishes for a (key, period) is decided here, not by the order
+    # the rows arrive in. A row read from a filing (status "reported") is never
+    # replaced by a later row that was not (an aggregator's estimate), so
+    # re-ingesting the screener's rows after the filing's cannot flip the
+    # statement back to the estimate. Rows of equal rank keep last-row-wins,
+    # which is what resolves a period printed in two documents: those figures
+    # agree today, so either row publishes the same number.
     dp_map: Dict[tuple[str, str], CanonicalDatapoint] = {}
     for d in cf_dps:
-        dp_map[(d.canonical_key, d.period_label)] = d
+        key = (d.canonical_key, d.period_label)
+        incumbent = dp_map.get(key)
+        if incumbent is not None and incumbent.status == "reported" and d.status != "reported":
+            continue
+        dp_map[key] = d
 
     items: List[CashFlowLineItem] = []
     dom_curr, dom_un = dominant_units(cf_dps)
