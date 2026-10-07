@@ -206,10 +206,13 @@ def _raw(label: str, section: str, value: float) -> RawDatapoint:
 
 
 class TestTheCaptionsWithHomesReachThem:
-    def test_each_reaches_its_key_with_the_printed_figure(self):
+    # Every map_raw_datapoints call in this file points the review queue at a
+    # database of its own: runs used to write fixture_co rows into the shared
+    # store, one set per test run.
+    def test_each_reaches_its_key_with_the_printed_figure(self, tmp_path):
         for label, section, value, key in MAPPED_FIGURES:
             canonical, _mappings, unmapped = mapper.map_raw_datapoints(
-                [_raw(label, section, value)]
+                [_raw(label, section, value)], db_path=tmp_path / "queue.db"
             )
             keys = [c.canonical_key for c in canonical]
             assert keys == [key], (
@@ -262,10 +265,10 @@ class TestTheCaptionsWithoutAHomeAreRecorded:
             "withdrawal is inert" % both
         )
 
-    def test_none_reaches_a_canonical_datapoint(self):
+    def test_none_reaches_a_canonical_datapoint(self, tmp_path):
         for label, section, value in WITHDRAWN_FIGURES:
             canonical, _mappings, _unmapped = mapper.map_raw_datapoints(
-                [_raw(label, section, value)]
+                [_raw(label, section, value)], db_path=tmp_path / "queue.db"
             )
             leaked = [c for c in canonical if c.metric_raw == label]
             assert not leaked, (
@@ -279,7 +282,7 @@ class TestTheCaptionsWithoutAHomeAreRecorded:
                 )
             )
 
-    def test_none_is_counted_as_an_unmapped_gap(self):
+    def test_none_is_counted_as_an_unmapped_gap(self, tmp_path):
         """A recorded decision is not a coverage gap; the two states differ.
 
         An unmapped caption tells a reader something is missing. These are not
@@ -288,7 +291,7 @@ class TestTheCaptionsWithoutAHomeAreRecorded:
         """
         for label, section, value in WITHDRAWN_FIGURES:
             _canonical, _mappings, unmapped = mapper.map_raw_datapoints(
-                [_raw(label, section, value)]
+                [_raw(label, section, value)], db_path=tmp_path / "queue.db"
             )
             assert label not in unmapped, (
                 "%r is reported unmapped, so the coverage count claims a gap that "

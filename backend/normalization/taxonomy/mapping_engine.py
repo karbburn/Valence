@@ -153,29 +153,55 @@ def route_to_review_queue(
     suggested: MappingConfidenceResult,
     db_path: str | Path = DB_PATH,
 ) -> None:
-    """Route low-confidence mapping to human review queue SQLite table."""
+    """Route low-confidence mapping to human review queue SQLite table.
+
+    An existing PENDING row for the same company and label is refreshed in
+    place. Every call used to mint a fresh uuid4 row, and deduplication existed
+    only within one `map_raw_datapoints` call, so each ingest and each test run
+    added another full set of duplicates: the queue reached five figures with
+    the worst labels copied nearly two hundred times, and a reviewer opening
+    the list met the same old labels before the first genuinely new decision.
+    """
     conn = sqlite3.connect(str(db_path))
     try:
         conn.executescript(_UNIVERSE_SCHEMA)
-        req_id = uuid.uuid4().hex
         now_iso = datetime.now().isoformat()
-        conn.execute(
-            """
-            INSERT OR REPLACE INTO taxonomy_review_queue
-            (id, company_id, metric_raw, suggested_key, confidence_score, status, resolved_by, update_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                req_id,
-                company_id,
-                metric_raw,
-                suggested.canonical_key,
-                suggested.confidence_score,
-                "pending",
-                None,
-                now_iso,
-            ),
-        )
+        existing = conn.execute(
+            "SELECT id FROM taxonomy_review_queue "
+            "WHERE company_id = ? AND metric_raw = ? AND status = 'pending'",
+            (company_id, metric_raw),
+        ).fetchone()
+        if existing is not None:
+            conn.execute(
+                "UPDATE taxonomy_review_queue "
+                "SET suggested_key = ?, confidence_score = ?, update_date = ? "
+                "WHERE id = ?",
+                (
+                    suggested.canonical_key,
+                    suggested.confidence_score,
+                    now_iso,
+                    existing[0],
+                ),
+            )
+        else:
+            req_id = uuid.uuid4().hex
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO taxonomy_review_queue
+                (id, company_id, metric_raw, suggested_key, confidence_score, status, resolved_by, update_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    req_id,
+                    company_id,
+                    metric_raw,
+                    suggested.canonical_key,
+                    suggested.confidence_score,
+                    "pending",
+                    None,
+                    now_iso,
+                ),
+            )
         conn.commit()
     finally:
         conn.close()

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+from backend.data.pipeline import DB_PATH
 from backend.data.store import RawDatapoint
 from backend.normalization.taxonomy.models import CanonicalDatapoint, TaxonomyMapping
 from backend.normalization.taxonomy.registry import (
@@ -106,6 +109,7 @@ def map_raw_datapoints(
     raw_datapoints: list[RawDatapoint],
     include_superseded: bool = False,
     use_confidence_engine: bool = True,
+    db_path: str | Path = DB_PATH,
 ) -> tuple[list[CanonicalDatapoint], list[TaxonomyMapping], list[str]]:
     """Map raw datapoints to canonical datapoints and taxonomy mapping records.
 
@@ -114,6 +118,10 @@ def map_raw_datapoints(
     high-confidence suggestions are auto-accepted, medium-confidence ones are
     accepted but flagged ``human_confirmed=False`` for review, and low-confidence
     labels are routed to the review queue and returned as unmapped.
+
+    ``db_path`` is the store the review queue is written to; it defaults to the
+    shared one so tests can point the queue at a database of their own instead
+    of writing fixture rows into the live store.
 
     Returns:
         (canonical_datapoints, taxonomy_mappings, unmapped_raw_labels)
@@ -147,7 +155,10 @@ def map_raw_datapoints(
             key = (d.company_id, d.metric_raw)
             if key not in queued_for_review:
                 route_to_review_queue(
-                    d.company_id, d.metric_raw, suggest_canonical_mapping(d.metric_raw)
+                    d.company_id,
+                    d.metric_raw,
+                    suggest_canonical_mapping(d.metric_raw),
+                    db_path=db_path,
                 )
                 queued_for_review.add(key)
             continue
@@ -160,7 +171,9 @@ def map_raw_datapoints(
             elif suggestion.level == "low":
                 key = (d.company_id, d.metric_raw)
                 if key not in queued_for_review:
-                    route_to_review_queue(d.company_id, d.metric_raw, suggestion)
+                    route_to_review_queue(
+                        d.company_id, d.metric_raw, suggestion, db_path=db_path
+                    )
                     queued_for_review.add(key)
                 unmapped_labels.add(d.metric_raw)
 
@@ -201,6 +214,7 @@ def map_raw_datapoints(
                         d.company_id,
                         d.metric_raw,
                         suggest_canonical_mapping(d.metric_raw),
+                        db_path=db_path,
                     )
                     queued_for_review.add(key)
             continue
