@@ -10,7 +10,11 @@ from typing import Optional, Tuple
 from backend.data.pipeline import DB_PATH
 from backend.data.universe.models import MappingConfidenceResult
 from backend.data.universe.store import _UNIVERSE_SCHEMA
-from backend.normalization.taxonomy.registry import RAW_METRIC_MAP, get_canonical_mapping
+from backend.normalization.taxonomy.registry import (
+    RAW_METRIC_MAP,
+    WITHDRAWN_LABELS,
+    get_canonical_mapping,
+)
 
 
 # --- Confidence scoring constants ---
@@ -43,7 +47,19 @@ _LEARNED_MAPPINGS_LOADED = False
 
 
 def _record_learned(metric_raw: str, canonical_key: str, statement: str) -> None:
-    """Apply a human-confirmed mapping to the in-memory runtime registry."""
+    """Apply a human-confirmed mapping to the in-memory runtime registry.
+
+    A withdrawn label is refused on both paths that reach this function: a
+    resolution made through `feedback_mapping_resolution`, and the hydrate pass
+    that replays persisted resolutions on every `suggest_canonical_mapping`
+    call. Without the guard, one resolved queue entry puts the label back into
+    RAW_METRIC_MAP, the mapper's withdrawal gate never fires again, and the
+    figure the withdrawal exists to keep out publishes once more, in this
+    process and in every later one. Undoing a withdrawal is a registry edit,
+    not a queue resolution.
+    """
+    if metric_raw.strip() in WITHDRAWN_LABELS:
+        return
     RAW_METRIC_MAP[metric_raw.strip()] = (canonical_key, statement)
     _NORMALIZED_MAP[_normalize_string(metric_raw)] = (canonical_key, statement)
 
@@ -217,6 +233,12 @@ def feedback_mapping_resolution(
 ) -> None:
     """Persist a human-confirmed mapping for future runs and update the runtime registry."""
     if not human_confirmed:
+        return
+    # A withdrawal outranks a resolution for the same reason it outranks a
+    # suggestion. The whole transaction is refused, so nothing is persisted and
+    # the queue entry stays pending until someone removes the label from the
+    # withdrawn set.
+    if metric_raw.strip() in WITHDRAWN_LABELS:
         return
     _record_learned(metric_raw, canonical_key, statement)
 
