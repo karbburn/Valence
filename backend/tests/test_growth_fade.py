@@ -1,16 +1,18 @@
-"""Year one of the revenue forecast carries the measured growth rate.
+"""Year one of the revenue forecast opens one step down the fade curve.
 
-The defect this pins: the growth fade halved the first forecast year for any
-company whose measured growth exceeded 25% and left it at full rate below that,
-so a 32.7% grower was published at 16.4% and an 88.3% grower at 44.1%, while a
-16.4% grower kept its 16.4%. There is no economic reason a company that grows
-slightly faster should have its first forecast year cut in half — the rule had a
-threshold discontinuity, not a rationale. On one large-cap that put the
-published first-year growth at roughly half the street's estimate, and the
-figure appears twice in the product.
+The rule this pins: the first forecast year is the measured CAGR times the
+band decay (88.3 x 0.55 = 48.6 year one), and the same geometric decay
+continues after. Carrying the full supercycle rate one extra year was the
+aggressive choice and nothing defended it, so the path opens decayed rather
+than holding the peak and then stepping off it.
 
-The fade now starts in year two and decays geometrically, so the path has no
-step change either.
+An earlier defect stays removed: the first year used to be halved above 25%
+and left whole below it, a threshold discontinuity with no rationale. The
+bands still set different decay rates, so the published year one steps across
+a band boundary; inside a band the path moves smoothly with the history.
+
+The fade is geometric from year one, and the stable band (decay 1.0) still
+publishes the measured rate flat.
 """
 
 from __future__ import annotations
@@ -106,50 +108,79 @@ def _growths_live(revenues: list[float]) -> list[float]:
     ]
 
 
-# A steady 3-year history, so the measured CAGR is exactly the rate below.
+# A steady 3-year history, so the measured CAGR is exactly the rate below,
+# and the published year one is that rate times the band decay.
 @pytest.mark.parametrize(
-    "annual_growth_pct",
-    [2.0, 6.0, 12.0, 16.0, 24.0, 26.0, 33.0, 60.0, 88.0],
+    "annual_growth_pct,decay",
+    [
+        (2.0, 1.0),
+        (6.0, 1.0),
+        (12.0, 0.82),
+        (16.0, 0.82),
+        (24.0, 0.82),
+        (26.0, 0.55),
+        (33.0, 0.55),
+        (60.0, 0.55),
+        (88.0, 0.55),
+    ],
 )
-def test_first_forecast_year_carries_the_measured_rate(annual_growth_pct):
-    """Year one equals the measured CAGR, in every growth band.
+def test_first_forecast_year_opens_one_step_down_the_curve(annual_growth_pct, decay):
+    """Year one equals the measured CAGR times the band decay.
 
-    The boundary cases matter most: 24% and 26% are either side of the old 25%
-    threshold, and they used to produce 24% and 13%.
+    The stable band still publishes the measured rate in full; every other
+    band fades from the first year. The boundary cases matter most: 24% and
+    26% sit either side of the 25% band edge and publish 19.7% and 14.3%.
     """
     base = 1000.0
     factor = 1.0 + annual_growth_pct / 100.0
     revenues = [base * factor**i for i in range(3)]
 
     growths = _growths(revenues)
+    expected = annual_growth_pct * decay
 
-    assert growths[0] == pytest.approx(annual_growth_pct, abs=0.05), (
+    assert growths[0] == pytest.approx(expected, abs=0.05), (
         f"a company measured at {annual_growth_pct}% was published at "
-        f"{growths[0]}% for its first forecast year"
+        f"{growths[0]}% for its first forecast year, expected {expected:.2f}%"
     )
 
 
-def test_no_threshold_discontinuity():
-    """A company growing marginally faster must not be published much lower.
+def test_no_discontinuity_within_a_band():
+    """Two companies measured a point apart inside one band publish a point apart.
 
-    This is the defect stated as a property: the old rule cut year one in half
-    for crossing 25%, so a 26% grower landed near a 16% grower's number.
+    The bands set different decay rates, so crossing a boundary steps the
+    published year one by design. Inside a band nothing may jump: the gap in
+    the published year tracks the gap in the measured history times the decay.
     """
-    just_below = _growths([1000.0, 1240.0, 1537.6])[0]   # ~24% CAGR
-    just_above = _growths([1000.0, 1260.0, 1587.6])[0]   # ~26% CAGR
+    lower = _growths([1000.0, 1320.0, 1742.4])[0]   # ~32% CAGR, high band
+    upper = _growths([1000.0, 1330.0, 1768.9])[0]   # ~33% CAGR, high band
 
-    assert just_above > just_below, (
-        f"growth published FALLS when measured growth rises: {just_below}% at 24% "
-        f"CAGR but {just_above}% at 26% CAGR. The fade rule has a threshold "
-        "discontinuity in it."
+    assert upper > lower, (
+        f"growth published FALLS when measured growth rises: {lower}% at 32% "
+        f"CAGR but {upper}% at 33% CAGR. The fade rule has a discontinuity "
+        "inside the band."
     )
-    # And the gap tracks the measured gap rather than jumping. Crossing a
-    # threshold is not a reason to change the published number by more than the
-    # change in the history that produced it.
-    measured_gap = 2.0
-    assert (just_above - just_below) == pytest.approx(measured_gap, abs=0.1), (
-        f"measured growth rose {measured_gap}pp across the threshold but the "
-        f"published year moved {just_above - just_below:.1f}pp"
+    measured_gap = 1.0
+    assert (upper - lower) == pytest.approx(measured_gap * 0.55, abs=0.1), (
+        f"measured growth rose {measured_gap}pp inside the band but the "
+        f"published year moved {upper - lower:.2f}pp"
+    )
+
+
+def test_high_growth_path_fades_geometrically_from_year_one():
+    """An 88% grower opens at 48.4 and decays by the same factor each year.
+
+    Year one is already faded rather than carrying 88% one extra year, and
+    every later year multiplies by the same decay, so the path has no step
+    change in it.
+    """
+    base = 1000.0
+    factor = 1.0 + 88.0 / 100.0
+    growths = _growths([base * factor**i for i in range(3)])
+
+    expected = [round(88.0 * 0.55 ** (i + 1), 2) for i in range(5)]
+
+    assert growths == pytest.approx(expected, abs=0.01), (
+        f"an 88% grower published {growths} against an expected {expected}"
     )
 
 
@@ -217,9 +248,9 @@ def test_growth_source_states_the_rule():
     """The published source string must describe the rule that produced it."""
     source = _year_one_source([1000.0, 1880.0, 3534.4])
 
-    assert "year one carries it in" in source, (
-        f"the year-one growth source does not say that year one is the measured "
-        f"rate: {source!r}"
+    assert "fade starts at year one" in source, (
+        f"the year-one growth source does not say the fade starts at year one: "
+        f"{source!r}"
     )
     assert "decays" in source, f"the year-one growth source does not state the fade: {source!r}"
 

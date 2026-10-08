@@ -227,27 +227,25 @@ def suggest_base_assumptions(
 
     # Growth fade.
     #
-    # Year one carries the measured rate in EVERY band, and the fade is a
-    # geometric decay applied from year two. Two defects are removed:
+    # The fade starts at year one: the first forecast year is the measured
+    # rate times the band decay, and the same geometric decay continues after
+    # (88.3 x 0.55 = 48.6 for NVDA year one, then 26.7, 14.7, 8.1, 4.5).
+    # Carrying the full supercycle rate one extra year is the aggressive
+    # choice and nothing defends it, so the path opens one step down the
+    # curve instead of holding the peak and then stepping off it. Stable band
+    # (decay 1.0) unchanged, so a flat history still publishes flat.
     #
-    # 1. The first year used to be halved for any company whose growth exceeded
-    #    25% and left at full rate below it. A 32.7% grower was published at
-    #    16.4% and an 88.3% grower at 44.1%, while a 16.4% grower kept its
-    #    16.4%. There is no economic reason a company that grows slightly
-    #    faster should have its first forecast year cut in half — the rule had a
-    #    threshold discontinuity, not a rationale. For one large-cap that put
-    #    the published first-year growth at roughly half the street's estimate.
-    #
-    # 2. Fading each year as a fraction of the BASE rate produced a cliff after
-    #    year one (88% then 26%). Decaying geometrically gives a path that
-    #    actually looks like a company maturing, with no step change.
+    # Two earlier defects stay removed: the first year used to be halved for
+    # any company whose growth exceeded 25% and left at full rate below it,
+    # which had a threshold discontinuity, not a rationale; and fading each
+    # year as a fraction of the BASE rate produced a cliff after year one.
     #
     # The decay rate rises with the growth band, because the further a company's
     # growth is from a mature rate the faster it is assumed to converge.
     if base_cagr > 25.0:
-        decay = 0.55      # e.g. 88% -> 48% -> 26% -> 15% -> 8%
+        decay = 0.55      # e.g. 88% -> 48% -> 27% -> 15% -> 8% -> 4%
     elif base_cagr > 10.0:
-        decay = 0.82      # e.g. 16% -> 13% -> 11% -> 9% -> 7%
+        decay = 0.82      # e.g. 16% -> 13% -> 11% -> 9% -> 7% -> 6%
     else:
         decay = 1.00      # stable: held flat
 
@@ -277,7 +275,11 @@ def suggest_base_assumptions(
     # It only ever raises the published rate, never lowers it, and it is stated
     # in the source so the reader can see which base the number rests on.
     run_rate, run_rate_basis = _run_rate_floor(historical_model.company_id)
-    year_one = base_cagr
+    # The fade starts at year one, so the opening rate is already decayed.
+    # The run-rate floor below still only raises: when the trailing twelve
+    # months exceed what the faded rate reaches, the published rate is lifted
+    # to meet them, never lowered.
+    year_one = base_cagr * decay
     run_rate_note = ""
 
     # The unit guard is applied on its own terms, not inside the "has the run
@@ -324,14 +326,14 @@ def suggest_base_assumptions(
         # deceleration invented by the model on the second year, immediately
         # after the floor had just argued the business is growing faster than
         # its history. When the floor does not bind, year_one equals the measured
-        # rate and the path is unchanged.
+        # rate times the band decay and the path is the geometric fade from it.
         g_val = round(max(0.0, year_one * (decay ** idx)), 2)
         if decay == 1.0:
             source_rev = f"CAGR held flat ({first_p}-{last_p}: {base_cagr:.1f}%)"
         else:
             source_rev = (
-                f"CAGR ({first_p}-{last_p}: {base_cagr:.1f}%); year one carries it in "
-                f"full, then decays {decay:.2f}x per year"
+                f"CAGR ({first_p}-{last_p}: {base_cagr:.1f}%); fade starts at year one, "
+                f"then decays {decay:.2f}x per year"
             )
         if run_rate_note and idx == 0:
             source_rev += run_rate_note
