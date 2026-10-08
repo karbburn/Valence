@@ -108,10 +108,36 @@ async function loadRail(): Promise<RailItem[]> {
   return items
 }
 
+async function loadCoverage(): Promise<ResolvedSlug[]> {
+  const first = await getManifestServer(0, 500)
+  if (!first) return []
+
+  const all = [...first.companies]
+  let offset = 500
+  // Page through rather than assuming one request covers the universe, the
+  // same pattern the /stock index uses. A single oversized request is exactly
+  // the kind of thing that starts failing quietly once the ticker count grows.
+  while (first.has_more && all.length < 5000) {
+    const next = await getManifestServer(offset, 500)
+    if (!next || next.companies.length === 0) break
+    all.push(...next.companies)
+    offset += 500
+  }
+  return all
+}
+
+/** Published, withheld, or not yet built. Mirrors the /stock index chips. */
+function coverageStatus(c: ResolvedSlug): 'published' | 'withheld' | 'ondemand' {
+  if (c.publishable === true) return 'published'
+  if (c.has_model) return 'withheld'
+  return 'ondemand'
+}
+
 export default async function LandingPage() {
-  const [rail, previewCompany] = await Promise.all([
+  const [rail, previewCompany, coverage] = await Promise.all([
     loadRail(),
     resolveSlugServer(PREVIEW_TICKER),
+    loadCoverage(),
   ])
   const previewSpec = previewCompany
     ? await getModelSpecServer(previewCompany.company_id)
@@ -132,6 +158,12 @@ export default async function LandingPage() {
   const skippedCount = checks.filter(isSkipped).length
   const passedCount = checks.filter((c) => c.passed && !isSkipped(c)).length
   const failedCount = checks.length - passedCount - skippedCount
+
+  // Coverage counts are derived from the same manifest the table below
+  // renders, so the numbers cannot drift from the rows beneath them.
+  const builtCount = coverage.filter((c) => c.has_model).length
+  const publishedCount = coverage.filter((c) => c.publishable === true).length
+  const withheldCount = builtCount - publishedCount
 
   return (
     <div className="min-h-screen bg-canvas text-text-main font-sans flex flex-col">
@@ -297,6 +329,153 @@ export default async function LandingPage() {
                 ))}
               </RevealGroup>
             </div>
+          </section>
+        )}
+
+        {/* Coverage. The densest moment on the page on purpose: a table of
+            real rows from the manifest, not a claim about breadth. A table
+            because nothing else on the page is one: the hero is a split, the
+            rail is a scroll-snap row, the model is a split, capabilities are
+            definition lists, the audit is prose against a report, and the
+            close is centred. Below the rail and above the live model, as the
+            calm passage after the proof. No eyebrow; the headcount is stated
+            in the copy instead. */}
+        {coverage.length > 0 && (
+          <section className="section-band w-full max-w-[1400px] mx-auto px-4 sm:px-5">
+            <div className="max-w-[62ch]">
+              <h2 className="text-[21px] sm:text-[24px] font-bold tracking-tight text-text-main">
+                Coverage, honestly
+              </h2>
+              <p className="mt-3 text-[13.5px] text-text-muted leading-relaxed">
+                <span className="font-mono text-text-main">{coverage.length}</span> listed
+                tickers. <span className="font-mono text-text-main">{builtCount}</span> are
+                pre-built, of which{' '}
+                <span className="font-mono text-text-main">{publishedCount}</span> carry a
+                published valuation
+                {withheldCount > 0 ? (
+                  <>
+                    {' '}and <span className="font-mono text-text-main">{withheldCount}</span>{' '}
+                    open with the model but no price, naming the check that stopped it
+                  </>
+                ) : null}
+                . Anything else builds on first open, usually in a few seconds.
+              </p>
+            </div>
+
+            {/* Dense table on wider screens. One row per ticker, linked, with
+                the same three states the /stock index chips carry. */}
+            <div className="mt-7 hidden sm:block overflow-x-auto border border-border rounded-sm">
+              <table className="w-full text-[12px] border-collapse">
+                <caption className="sr-only">
+                  Every listed ticker and whether its valuation is published
+                </caption>
+                <thead>
+                  <tr className="bg-surface-2/60 border-b border-border text-left">
+                    <th
+                      scope="col"
+                      className="px-3 py-2 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-text-dim"
+                    >
+                      Ticker
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-3 py-2 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-text-dim"
+                    >
+                      Company
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-3 py-2 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-text-dim"
+                    >
+                      Market
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-3 py-2 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-text-dim text-right"
+                    >
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border font-mono">
+                  {coverage.map((c) => {
+                    const status = coverageStatus(c)
+                    return (
+                      <tr key={c.company_id} className="hover:bg-surface-2/40 transition-colors">
+                        <td className="px-3 py-2">
+                          <Link
+                            href={stockPath(c.slug)}
+                            className="font-bold text-accent hover:text-accent-hover transition-colors"
+                          >
+                            {c.ticker}
+                          </Link>
+                        </td>
+                        <td className="px-3 py-2 font-sans text-text-muted">{c.name}</td>
+                        <td className="px-3 py-2 text-text-dim">
+                          {c.market === 'india' ? 'India' : c.market === 'us' ? 'US' : c.exchange}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          {status === 'published' ? (
+                            <span className="text-positive">Published</span>
+                          ) : status === 'withheld' ? (
+                            <span
+                              className="text-warning"
+                              title="The model is built. Its valuation is not published, and the page names the check that stopped it."
+                            >
+                              Withheld
+                            </span>
+                          ) : (
+                            <span className="text-text-dim">Builds on open</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Single column on mobile. Same rows, same order, same states,
+                stacked instead of tabulated. */}
+            <ul className="mt-7 sm:hidden divide-y divide-border border-y border-border">
+              {coverage.map((c) => {
+                const status = coverageStatus(c)
+                return (
+                  <li key={c.company_id}>
+                    <Link href={stockPath(c.slug)} className="block py-3">
+                      <span className="flex items-center justify-between gap-3">
+                        <span className="font-mono text-[12px] font-bold text-accent">
+                          {c.ticker}
+                        </span>
+                        <span
+                          className={`font-mono text-[11px] ${
+                            status === 'published'
+                              ? 'text-positive'
+                              : status === 'withheld'
+                                ? 'text-warning'
+                                : 'text-text-dim'
+                          }`}
+                        >
+                          {status === 'published'
+                            ? 'Published'
+                            : status === 'withheld'
+                              ? 'Withheld'
+                              : 'Builds on open'}
+                        </span>
+                      </span>
+                      <span className="mt-0.5 block text-[12.5px] text-text-muted truncate">
+                        {c.name}
+                      </span>
+                    </Link>
+                  </li>
+                )
+              })}
+            </ul>
+            <p className="mt-4 text-[12.5px] text-text-dim leading-relaxed">
+              <Link href="/stock" className="text-accent hover:text-accent-hover transition-colors">
+                Browse all tickers
+              </Link>
+            </p>
           </section>
         )}
 
