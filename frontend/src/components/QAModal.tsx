@@ -95,7 +95,7 @@ export function QAModal({ open, onClose, qa }: QAModalProps) {
                     !c.passed
                       ? 'bg-negative-subtle text-negative border-negative'
                       : c.detail.startsWith('SKIPPED:')
-                      ? 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/30'
+                      ? 'bg-warning-subtle text-warning border-warning/30'
                       : 'bg-positive-subtle text-positive border-positive'
                   }`}
                 >
@@ -106,7 +106,7 @@ export function QAModal({ open, onClose, qa }: QAModalProps) {
                     </>
                   ) : c.detail.startsWith('SKIPPED:') ? (
                     <>
-                      <AlertTriangle className="w-3 h-3 text-[#f59e0b]" />
+                      <AlertTriangle className="w-3 h-3 text-warning" />
                       <span>SKIPPED</span>
                     </>
                   ) : (

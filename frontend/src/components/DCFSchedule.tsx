@@ -166,7 +166,7 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
               refused. Derived from the same helper rather than a second copy of
               the check names, which is the pattern that produced the divergence.
             */}
-            <span className={priceWithheld ? 'text-[#f59e0b]' : 'text-[#7dd3fc] font-bold'}>
+            <span className={priceWithheld ? 'text-warning' : 'text-[#7dd3fc] font-bold'}>
               {priceWithheld ? 'not verified' : `${currencySym}${fmtNum(bridge.implied_share_price, 2)}`}
             </span>
           </div>
@@ -323,14 +323,14 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
             <tr
               className={
                 priceWithheld
-                  ? 'bg-surface-2 border-t border-[#f59e0b]/40'
+                  ? 'bg-surface-2 border-t border-warning/40'
                   : 'bg-positive-subtle border-t border-positive'
               }
             >
               <td
                 className={
                   priceWithheld
-                    ? 'sticky-col px-3 py-1.5 font-bold text-[#f59e0b]'
+                    ? 'sticky-col px-3 py-1.5 font-bold text-warning'
                     : 'sticky-col px-3 py-1.5 font-bold text-[#6ee7b7]'
                 }
               >
@@ -342,7 +342,7 @@ export function DCFSchedule({ spec, scenario, onOpenMethodology }: DCFSchedulePr
                 colSpan={fcffs.length}
                 className={
                   priceWithheld
-                    ? 'px-3 py-1.5 text-left font-bold text-[#f59e0b]'
+                    ? 'px-3 py-1.5 text-left font-bold text-warning'
                     : 'px-3 py-1.5 text-right font-bold text-[#6ee7b7]'
                 }
               >

@@ -298,7 +298,7 @@ export default async function LandingPage() {
                            Saying so is the product's argument rather than an
                            apology for it, so the card names the reason. */
                         <p
-                          className="mt-3 font-mono text-[11px] text-[#f59e0b] leading-snug"
+                          className="mt-3 font-mono text-[11px] text-warning leading-snug"
                           title={item.withheldReason}
                         >
                           Not published

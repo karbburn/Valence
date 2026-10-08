@@ -98,7 +98,7 @@ export default function CompanyCard({
                 ? 'bg-surface-2 text-text-dim border-border'
                 : publishable
                   ? 'bg-positive-subtle text-positive border-positive/30'
-                  : 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/30'
+                  : 'bg-warning-subtle text-warning border-warning/30'
             }`}
             title={
               hasModel && !publishable

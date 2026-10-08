@@ -131,7 +131,7 @@ export function QuickDCFView({
             {marketPrice != null ? fmtPrice(marketPrice, currency, 2) : NO_VALUE}
           </div>
           <div
-            className={`text-[11px] mt-1 ${quoteIsFlagged(quoteKind) ? 'text-[#f59e0b] font-semibold' : 'text-text-dim'}`}
+            className={`text-[11px] mt-1 ${quoteIsFlagged(quoteKind) ? 'text-warning font-semibold' : 'text-text-dim'}`}
             title={quoteTitle(quoteKind, priceDate, baseSource)}
           >
             {quoteLabel}

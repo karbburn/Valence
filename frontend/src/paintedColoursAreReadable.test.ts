@@ -395,7 +395,7 @@ const ACCEPTED: {
       'other. A decision for the design to make deliberately, rather than for whoever ' +
       'happens to find the nearest colour.',
     pairs: [
-      { text: '[#f59e0b]', background: '[#f59e0b]/10 +[#f59e0b]/20', ratio: 4.37 },
+      { text: 'warning', background: 'warning-subtle +warning/20', ratio: 4.37 },
       { text: '[#0ea5e9]', background: '[#0ea5e9]/10 +[#0ea5e9]/20', ratio: 3.65 },
       { text: 'negative', background: 'negative-subtle +negative/20', ratio: 3.74 },
       { text: 'positive', background: 'positive-subtle +positive/20', ratio: 3.89 },

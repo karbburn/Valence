@@ -481,7 +481,7 @@ export function Header({
             qaStatus === 'passed'
               ? 'bg-positive-subtle text-positive border-positive/30 hover:bg-positive/20'
               : qaStatus === 'warning'
-              ? 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/30 hover:bg-[#f59e0b]/20'
+              ? 'bg-warning-subtle text-warning border-warning/30 hover:bg-warning/20'
               : qaStatus === 'failed'
               ? 'bg-negative-subtle text-negative border-negative/40 hover:bg-negative/20'
               : 'bg-surface-2 text-text-dim border-border hover:text-text-muted'

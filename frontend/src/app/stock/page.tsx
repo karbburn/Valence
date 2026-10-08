@@ -88,7 +88,7 @@ export default async function StockIndexPage() {
                   , of which{' '}
                   <span className="font-mono text-[13px] text-positive">{published.length}</span>{' '}
                   carry a published valuation and{' '}
-                  <span className="font-mono text-[13px] text-[#f59e0b]">{withheld.length}</span>{' '}
+                  <span className="font-mono text-[13px] text-warning">{withheld.length}</span>{' '}
                   are marked Withheld. A withheld model opens with its full statements and
                   audit, and names the check that stopped the engine presenting its result as
                   a valuation

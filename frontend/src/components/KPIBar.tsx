@@ -138,7 +138,7 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
   const quoteKind = classifyQuote(priceSource, reverseDcf?.market_price_date)
   const isSuccessorQuote = quoteKind === 'successor'
   const priceSublabel = quoteCaption(quoteKind, reverseDcf?.market_price_date)
-  const priceSublabelClass = quoteIsFlagged(quoteKind) ? 'text-[#f59e0b]' : 'text-text-dim'
+  const priceSublabelClass = quoteIsFlagged(quoteKind) ? 'text-warning' : 'text-text-dim'
   const priceTitle = quoteTitle(quoteKind, reverseDcf?.market_price_date, baseQuoteSource(priceSource))
 
   const statementsStale =
@@ -175,7 +175,7 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
   const provenanceClass =
     provenanceTone(meta?.filing_derived, meta?.filing_source) === 'filing'
       ? 'text-text-dim'
-      : 'text-[#f59e0b]'
+      : 'text-warning'
 
   return (
     <div className="w-full bg-[#111622]/40 border-b border-[#1e283d] px-[14px] py-[8px]">
@@ -194,11 +194,11 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
           </div>
           <div className="text-[10px] font-semibold mt-0.5 whitespace-nowrap">
             {!publishable ? (
-              <span className="text-[#f59e0b]" title={publicationTitle}>
+              <span className="text-warning" title={publicationTitle}>
                 Inputs not verified
               </span>
             ) : isSuccessorQuote ? (
-              <span className="text-[#f59e0b]" title={priceTitle}>
+              <span className="text-warning" title={priceTitle}>
                 Not comparable
               </span>
             ) : upsidePct != null ? (
@@ -209,7 +209,7 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
                 {upsidePct >= 0 ? '+' : ''}
                 {fmtPct(upsidePct, 1)} vs mkt
                 {deviationFlagged && (
-                  <span className="text-[#f59e0b]"> · check inputs</span>
+                  <span className="text-warning"> · check inputs</span>
                 )}
               </span>
             ) : (
@@ -248,7 +248,7 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
           </div>
           <div
             className={`text-[10px] font-semibold mt-0.5 whitespace-nowrap ${
-              statementsStale ? 'text-[#f59e0b]' : 'text-text-dim'
+              statementsStale ? 'text-warning' : 'text-text-dim'
             }`}
             title={statementsTitle}
           >
