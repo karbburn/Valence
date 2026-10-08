@@ -1,7 +1,9 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { SITE_URL, SITE_NAME, CONTACT_EMAIL, OG_IMAGE } from '@/lib/site'
+import { SITE_URL, SITE_NAME, SOCIAL, CONTACT_EMAIL, OG_IMAGE } from '@/lib/site'
 import { SiteFooter } from '@/components/SiteFooter'
+import { GitHubMark } from '@/components/GitHubMark'
+import { getManifestServer } from '@/lib/serverApi'
 
 export const metadata: Metadata = {
   title: 'Methodology',
@@ -29,21 +31,39 @@ const SECTIONS = [
   { id: 'disclaimer', label: 'Disclaimer' },
 ]
 
-export default function MethodologyPage() {
+export default async function MethodologyPage() {
+  // Counts are derived from the manifest at render time, never frozen into
+  // the copy. A rebuild that ships more models updates the sentence on its
+  // own. Null when the backend cannot be reached, and the audit paragraph
+  // below falls back to numberless phrasing rather than a stale figure.
+  const counts = await loadPublishCounts()
+
   return (
     <div className="min-h-screen bg-canvas text-text-main font-sans flex flex-col">
       <header className="border-b border-border bg-surface/95 backdrop-blur-md sticky top-0 z-40">
-        <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 h-[56px] flex items-center justify-between">
-          <Link href="/" className="font-bold text-[16px] tracking-[0.05em] text-text-main">
+        <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 h-16 flex items-center justify-between">
+          <Link
+            href="/"
+            className="text-[17px] font-bold tracking-[-0.01em] text-text-main leading-none"
+          >
             Valence
           </Link>
-          <nav className="flex items-center gap-4 text-[12px] text-text-muted">
+          <nav className="flex items-center gap-5 text-[12.5px] text-text-muted">
             <Link href="/stock" className="hover:text-text-main transition-colors">
               All tickers
             </Link>
-            <Link href="/" className="hover:text-text-main transition-colors">
-              Home
+            <Link href="/methodology" className="hover:text-text-main transition-colors">
+              Methodology
             </Link>
+            <a
+              href={SOCIAL.github}
+              target="_blank"
+              rel="me noopener noreferrer"
+              aria-label="Valence on GitHub"
+              className="hover:text-text-main transition-colors"
+            >
+              <GitHubMark className="w-4 h-4" />
+            </a>
           </nav>
         </div>
       </header>
@@ -200,9 +220,25 @@ export default function MethodologyPage() {
                 The results are in the QA panel in the header. A model that fails a check on its
                 inputs is not presented as a valuation at all: no headline price, no
                 implied-versus-market comparison, and nothing in the share card or the meta
-                description. Nine of the twenty-three shipped models publish. The other
-                fourteen open with their full statements, their bridge, their WACC build and the
-                failing checks named, and with no price.
+                description.{' '}
+                {counts ? (
+                  <>
+                    <span className="font-mono text-text-main">{counts.published}</span> of the{' '}
+                    <span className="font-mono text-text-main">{counts.built}</span> pre-built
+                    models publish. The other{' '}
+                    <span className="font-mono text-text-main">
+                      {counts.built - counts.published}
+                    </span>{' '}
+                    open with their full statements, their bridge, their WACC build and the
+                    failing checks named, and with no price.
+                  </>
+                ) : (
+                  <>
+                    A model that clears every input check publishes a valuation. The rest open
+                    with their full statements, their bridge, their WACC build and the
+                    failing checks named, and with no price.
+                  </>
+                )}
               </p>
               <p>
                 That is the opposite of listing the failures under a headline and asking the
@@ -277,6 +313,30 @@ export default function MethodologyPage() {
       <SiteFooter />
     </div>
   )
+}
+
+/**
+ * How many pre-built models publish a valuation, from the manifest.
+ *
+ * Null when the backend cannot be reached, so the caller can fall back to
+ * numberless phrasing rather than printing a stale figure.
+ */
+async function loadPublishCounts(): Promise<{ built: number; published: number } | null> {
+  const first = await getManifestServer(0, 500)
+  if (!first) return null
+
+  const all = [...first.companies]
+  let offset = 500
+  while (first.has_more && all.length < 5000) {
+    const next = await getManifestServer(offset, 500)
+    if (!next || next.companies.length === 0) break
+    all.push(...next.companies)
+    offset += 500
+  }
+  return {
+    built: all.filter((c) => c.has_model).length,
+    published: all.filter((c) => c.publishable === true).length,
+  }
 }
 
 function Section({

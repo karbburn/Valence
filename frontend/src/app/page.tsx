@@ -3,12 +3,13 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getManifestServer, getModelSpecServer, resolveSlugServer } from '@/lib/serverApi'
 import { stockPath } from '@/lib/tickers'
-import { SITE_URL, SITE_NAME, SITE_TITLE, SITE_DESCRIPTION, CONTACT_EMAIL, OG_IMAGE } from '@/lib/site'
+import { SITE_URL, SITE_NAME, SITE_TITLE, SITE_DESCRIPTION, SOCIAL, OG_IMAGE } from '@/lib/site'
 import { fmtPrice, fmtPct } from '@/lib/formatters'
 import type { ModelSpecification } from '@/lib/types'
 import type { ResolvedSlug } from '@/lib/tickers'
 import { mayPublishPrice, withheldReason as withheldReasonFor } from '@/lib/publication'
 import { SiteFooter } from '@/components/SiteFooter'
+import { GitHubMark } from '@/components/GitHubMark'
 import { LaunchVideo } from '@/components/landing/LaunchVideo'
 import { TickerSearch } from '@/components/landing/TickerSearch'
 import { LiveModelPreview } from '@/components/landing/LiveModelPreview'
@@ -718,18 +719,10 @@ export default async function LandingPage() {
               </Suspense>
             </div>
             <p className="mt-5 text-[13px] text-text-dim leading-relaxed max-w-[52ch] mx-auto text-balance">
-              Prefer to read first, or want a name covered that is not there?{' '}
+              Unlevered FCFF at WACC, three scenarios, full audit.{' '}
               <Link href="/methodology" className="text-accent hover:text-accent-hover">
                 How the valuation is built
-              </Link>{' '}
-              covers the model, the data sources and what it cannot do.{' '}
-              <a
-                href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Valence ticker request')}`}
-                className="text-accent hover:text-accent-hover"
-              >
-                Ask for a ticker
-              </a>{' '}
-              if one is missing.
+              </Link>
             </p>
           </div>
         </section>
@@ -743,7 +736,7 @@ export default async function LandingPage() {
 function SiteNav() {
   return (
     <header className="border-b border-border bg-surface/95 backdrop-blur-md sticky top-0 z-40">
-      <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 h-[56px] flex items-center justify-between">
+      <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 h-16 flex items-center justify-between">
         {/* No logo asset exists yet, so the wordmark is set as type rather than
             left as plain body text: tighter tracking and a slightly heavier
             weight so it reads as a deliberate mark, not as missing artwork. */}
@@ -760,6 +753,15 @@ function SiteNav() {
           <Link href="/methodology" className="hover:text-text-main transition-colors">
             Methodology
           </Link>
+          <a
+            href={SOCIAL.github}
+            target="_blank"
+            rel="me noopener noreferrer"
+            aria-label="Valence on GitHub"
+            className="hover:text-text-main transition-colors"
+          >
+            <GitHubMark className="w-4 h-4" />
+          </a>
         </nav>
       </div>
     </header>
