@@ -127,6 +127,13 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
 
   const ev = bridge?.enterprise_value ?? null
   const equityVal = bridge?.equity_value ?? null
+  // The share of enterprise value the terminal value accounts for, read off the
+  // same bridge the DCF schedule prints it from. Shown even when the price is
+  // withheld: the gate nulls only the implied share price, so EV and PV TV
+  // survive and this ratio stays evidence rather than conclusion.
+  const tvPv = bridge?.pv_terminal_value ?? null
+  const tvPct =
+    ev != null && ev !== 0 && tvPv != null ? (tvPv / ev) * 100 : null
   const waccVal = waccObj?.wacc ?? null
   const terminalGrowthVal = tvObj?.terminal_growth_rate ?? null
 
@@ -194,9 +201,14 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
           </div>
           <div className="text-[10px] font-semibold mt-0.5 whitespace-nowrap">
             {!publishable ? (
-              <span className="text-warning" title={publicationTitle}>
-                Inputs not verified
-              </span>
+              <>
+                <span className="text-warning" title={publicationTitle}>
+                  Inputs not verified
+                </span>
+                <div className="text-[10px] font-normal text-text-dim mt-0.5 whitespace-normal">
+                  Models publish once a filing is in the store; where both exist the filing wins.
+                </div>
+              </>
             ) : isSuccessorQuote ? (
               <span className="text-warning" title={priceTitle}>
                 Not comparable
@@ -273,6 +285,11 @@ export function KPIBar({ spec, scenario }: KPIBarProps) {
           <div className="text-[10px] font-semibold text-text-dim mt-0.5 whitespace-nowrap">
             PV FCFF + PV TV
           </div>
+          {tvPct != null && (
+            <div className="text-[10px] font-mono text-text-dim mt-0.5 whitespace-nowrap">
+              Terminal value {fmtPct(tvPct, 1)} of EV
+            </div>
+          )}
         </div>
 
         {/* KPI 5: Equity Value */}

@@ -142,7 +142,9 @@ export default async function MethodologyPage() {
               <p>
                 The discounted cash flows give an enterprise value. Equity value is that figure
                 adjusted for net debt or net cash, minority interest, and any preferred stock,
-                then divided by the share count resolved from the listing structure.
+                then divided by the share count resolved from the listing structure. Net cash
+                treats marketable securities as cash, and the per-share figure divides by
+                diluted shares outstanding.
               </p>
               <p>
                 The bridge is shown in full in the DCF schedule, so a difference between the

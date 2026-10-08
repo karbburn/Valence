@@ -179,6 +179,41 @@ test('withholdUnpublishedPrice leaves the evidence a reader needs to disagree', 
   )
 })
 
+test('the terminal share survives withholding while the price does not', () => {
+  // The KPI bar shows "Terminal value 72.0% of EV" beside EV and equity from
+  // pv_terminal_value over enterprise_value, and it shows it on withheld pages
+  // too. That is only safe because the gate nulls the implied price alone. If a
+  // later change widens the gate to the bridge, the ratio silently becomes n/a;
+  // if it narrows the gate, a positive withheld price renders beside it.
+  const spec = withheldSpec()
+  spec.valuation[0].dcf_bridge.pv_terminal_value = 888_888
+  spec.valuation[0].dcf_bridge.sum_pv_fcff = 345_679
+
+  const shown = withholdUnpublishedPrice(spec)
+  const bridge = shown.valuation[0].dcf_bridge
+
+  assert.equal(
+    bridge.implied_share_price,
+    null,
+    'a positive withheld price must not render anywhere, including beside TV%',
+  )
+  assert.equal(
+    bridge.enterprise_value,
+    1_234_567,
+    'EV must survive withholding or the terminal share cannot be computed',
+  )
+  assert.equal(
+    bridge.pv_terminal_value,
+    888_888,
+    'PV TV must survive withholding or the terminal share cannot be computed',
+  )
+  const tvPct = (bridge.pv_terminal_value / bridge.enterprise_value) * 100
+  assert.ok(
+    tvPct > 0 && tvPct <= 100,
+    `the terminal share must be a positive share of EV, got ${tvPct}`,
+  )
+})
+
 test('withholdUnpublishedPrice does not touch a model the server published', () => {
   const spec = publishableSpec()
   const shown = withholdUnpublishedPrice(spec)
