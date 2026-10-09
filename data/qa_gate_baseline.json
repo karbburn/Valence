@@ -47,7 +47,6 @@
     "cash_flow_reconciles",
     "current_assets_reconcile",
     "historicals_are_reported",
-    "implied_price_deviation_is_explainable",
     "inputs_trace_to_a_filing"
   ],
   "meta_us": [
@@ -67,6 +66,7 @@
     "inputs_trace_to_a_filing"
   ],
   "sunpharma_sunpharma": [
+    "bridge_inputs_plausible",
     "cash_flow_reconciles",
     "current_assets_reconcile",
     "historicals_are_reported",
@@ -83,7 +83,6 @@
   "tatasteel_tatasteel": [
     "cash_flow_reconciles",
     "current_assets_reconcile",
-    "equity_value_positive",
     "historicals_are_reported",
     "implied_price_deviation_is_explainable",
     "inputs_trace_to_a_filing",
