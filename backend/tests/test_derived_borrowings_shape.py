@@ -176,3 +176,47 @@ class TestTheDerivedPathIsNotDividedByAMillionAgain:
             "the conversion is unconditional and the derived path is divided twice"
         )
         del m
+
+
+class TestTheDerivedPathProvenanceDoesNotSubscriptEither:
+    """The crash the value guard moved one statement down.
+
+    The read at the top of the loop distinguishes dict from float, but the
+    provenance string below it called ``item.get("form")`` unconditionally.
+    Fulton Financial -- a filer needing derived borrowings -- raised
+    AttributeError there during a 100-company sweep, which is the same
+    crash wearing the next line number: the isinstance branch ends, the
+    unguarded attribute access begins.
+    """
+
+    def test_a_float_item_labels_its_provenance_derived(self):
+        """The behaviour, exercised on the shape that crashed."""
+        item = 4_250_000_000.0  # a float, as the derived path produces
+        form = item.get("form") if isinstance(item, dict) else "derived"
+        filed = item.get("filed") if isinstance(item, dict) else "derived"
+        assert (form, filed) == ("derived", "derived")
+
+    def test_a_fact_dict_keeps_its_filed_provenance(self):
+        """The common path must keep reporting form and filed dates."""
+        item = {"val": 4_250_000_000, "form": "10-K", "filed": "2026-02-01"}
+        form = item.get("form") if isinstance(item, dict) else "derived"
+        filed = item.get("filed") if isinstance(item, dict) else "derived"
+        assert (form, filed) == ("10-K", "2026-02-01")
+
+    def test_no_unconditional_item_get_survives_in_the_loop(self):
+        """Every ``item.get(`` in the function reads through the shape test.
+
+        The value read was fixed this way for RYZ and the provenance read
+        crashed for Fulton Financial the same week, so the assertion covers
+        the whole function rather than the one line that has already bitten.
+        """
+        body = _body_of(sec_edgar.fetch_and_parse_sec_edgar)
+        lines = [
+            ln for ln in body.splitlines()
+            if "item.get(" in ln and "isinstance(item, dict)" not in ln
+        ]
+        assert not lines, (
+            "an unguarded item.get( survives: %r -- a derived float raises "
+            "AttributeError there instead of labelling itself derived"
+            % (lines[0].strip(),)
+        )

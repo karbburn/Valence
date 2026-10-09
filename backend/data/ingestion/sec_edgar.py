@@ -1456,6 +1456,14 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
             fy = period_end.year
 
             dp_id = _datapoint_id(company_id, metric_label, period_lbl, "sec_edgar", section, fy)
+            # Provenance follows the same two shapes as the read above: a filed
+            # fact dict carries form/filed metadata and a derived float carries
+            # neither. Guarding the value but not the location string moved the
+            # crash one statement down -- Fulton Financial reached item.get on
+            # a derived float during a 100-company sweep -- so both read from
+            # the shape test, and the derived path is labelled as derived.
+            form = item.get("form") if isinstance(item, dict) else "derived"
+            filed = item.get("filed") if isinstance(item, dict) else "derived"
             datapoints.append(
                 RawDatapoint(
                     id=dp_id,
@@ -1470,8 +1478,8 @@ def fetch_and_parse_sec_edgar(company_id: str = "aapl_us") -> list[RawDatapoint]
                     source_location=(
                         f"SEC_EDGAR_CompanyFacts!{tag_namespace_used}:"
                         f"{tag_of_period.get(period_end) or selected_tag or 'derived'}"
-                        f"[period_end={end_d.isoformat()};form={item.get('form')}"
-                        f";filed={item.get('filed')}]"
+                        f"[period_end={end_d.isoformat()};form={form}"
+                        f";filed={filed}]"
                     ),
                     status="reported",
                     update_date=now,
