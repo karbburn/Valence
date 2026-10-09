@@ -20,6 +20,7 @@ _CURRENT_ASSET_KEYS = frozenset(
     for line in CURRENT_ASSET_LINES
 )
 from backend.normalization.taxonomy.mapping_engine import (
+    confirmed_mapping,
     suggest_canonical_mapping,
     route_to_review_queue,
 )
@@ -137,6 +138,24 @@ def map_raw_datapoints(
 
         mapping = get_canonical_mapping(d.metric_raw)
         human_confirmed = True
+
+        # A stored human confirmation for this company's caption outranks the
+        # static withdrawal below. The registry withdraws ambiguous labels
+        # because no label-level rule can resolve them -- bare "Investments"
+        # cannot pick current against non-current -- but a human_confirmed=1
+        # row says somebody resolved it for THIS company by reading its sheet.
+        # Refusing that decision over a static rule deleted published balance
+        # sheet lines the moment a full re-normalization reprocessed their raw
+        # rows (lt_lt and tatasteel_tatasteel lost current_investments for all
+        # three periods, swinging the DCF bridge by the full amounts), while
+        # companies rebuilt without re-normalization kept publishing the same
+        # lines from stale canonicals. Only human_confirmed=1 counts:
+        # medium auto-accepts and engine-learned rows stay refused, and a
+        # label the registry maps never reaches here.
+        if mapping is None:
+            confirmed = confirmed_mapping(d.company_id, d.metric_raw, db_path=db_path)
+            if confirmed is not None:
+                mapping = confirmed
 
         # A withdrawal outranks a suggestion.
         #

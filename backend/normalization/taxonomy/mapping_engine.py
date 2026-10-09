@@ -84,6 +84,54 @@ def _load_learned_mappings(db_path: str | Path = DB_PATH) -> None:
         _record_learned(metric_raw, canonical_key, statement)
 
 
+def confirmed_mapping(
+    company_id: str,
+    metric_raw: str,
+    db_path: str | Path = DB_PATH,
+) -> Tuple[str, str] | None:
+    """A stored human-confirmed mapping for one company's caption, if any.
+
+    The `taxonomy_mappings` table is written on every normalization run, but a
+    human_confirmed=1 row for an ambiguous caption is a decision, not a log
+    line: it says somebody looked at THIS company's sheet and resolved what
+    the static registry cannot. The caller consults it where the registry has
+    no entry, before the withdrawal gate, so a reviewed decision outranks a
+    static refusal.
+
+    The scope is deliberately narrower than it looks. Only human_confirmed=1
+    rows count: medium-confidence auto-accepts (human_confirmed=0) and
+    engine-learned rows stay refused exactly as before, which is what keeps
+    this from undoing the learned-mapping guard two functions up. And a label
+    the registry does map never reaches here, so curated entries are
+    unaffected.
+
+    Returns (canonical_key, statement) from the most recent confirmation, or
+    None when there is none. A store without the table (a fresh test database)
+    answers None rather than raising, for the same reason callers pass
+    ``db_path`` at all.
+    """
+    if not Path(str(db_path)).exists():
+        return None
+    try:
+        conn = sqlite3.connect(str(db_path))
+    except sqlite3.Error:
+        return None
+    try:
+        row = conn.execute(
+            "SELECT canonical_key, statement FROM taxonomy_mappings "
+            "WHERE company_id = ? AND metric_raw = ? AND human_confirmed = 1 "
+            "ORDER BY update_date DESC LIMIT 1",
+            (company_id, metric_raw.strip()),
+        ).fetchone()
+    except sqlite3.Error:
+        return None
+    finally:
+        conn.close()
+    if row is None:
+        return None
+    return (row[0], row[1])
+
+
 def suggest_canonical_mapping(metric_raw: str) -> MappingConfidenceResult:
     """Confidence-scored mapping suggestion engine.
 
