@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   // which is what "the pre-built set opens with its figures already in place" did for the
   // fourteen whose valuation is withheld.
   description:
-    'Every listed US and Indian ticker. Search any of them and the engine builds the model on first open. Each row states whether its valuation is published or withheld, and a withheld model opens with its full statements, its audit, and the check that stopped it. Unlevered FCFF DCF, three scenarios and a 31-tab Excel export.',
+    'Search every listed US and Indian ticker. Search any of them and the engine builds the model on first open. Each row states whether its valuation is published or withheld, and a withheld model opens with its full statements, its audit, and the check that stopped it. Unlevered FCFF DCF, three scenarios and a 31-tab Excel export.',
   alternates: { canonical: `${SITE_URL}/stock` },
   openGraph: {
     title: `All tickers | ${SITE_NAME}`,
@@ -77,7 +77,7 @@ export default async function StockIndexPage() {
                 narrowing it to "a curated list, not the whole market" described
                 a current limitation as if it were the product. */}
             <h1 className="text-[30px] sm:text-[38px] font-bold tracking-tight leading-[1.08] text-text-main">
-              Every listed US and Indian ticker
+              Search every listed US and Indian ticker
             </h1>
             <p className="mt-4 text-[14.5px] text-text-muted max-w-[58ch] leading-relaxed">
               Search any of them, or any other listed ticker, and the engine reads its filings
