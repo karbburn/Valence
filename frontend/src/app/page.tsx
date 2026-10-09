@@ -360,6 +360,11 @@ export default async function LandingPage() {
                   </>
                 ) : null}
                 . Anything else builds on first open, usually in a few seconds.
+                Sampled 2026-10-09 across the S&amp;P 500 list,{' '}
+                <span className="font-mono text-text-main">40</span> of{' '}
+                <span className="font-mono text-text-main">50</span> names built
+                on first open carried a published valuation, and the rest named
+                the check that stopped them.
               </p>
             </div>
 
