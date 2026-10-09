@@ -202,9 +202,15 @@ def render_model_checks_tab(wb: Workbook, spec: ModelSpecification) -> Worksheet
             f'-N(\'11_Balance_Sheet\'!{hist_col}{bs_le}))'
             f'<=0.01*MAX(ABS(N(\'11_Balance_Sheet\'!{hist_col}{bs_assets})),1),"PASS","FAIL"))'
         ),
+        # The tie-out absorbs the filing's own exchange line on row 13 beside the
+        # net change on row 12 (both pinned by the layout contract): the balance
+        # movement equals the three-section sum plus the fx memo. A company with
+        # no fx row renders "-" there and N() of text is 0, so the term vanishes
+        # and the formula reads exactly as before.
         "cash_flow_reconciles": (
             f'=IF(N(\'12_Cash_Flow\'!{hist_col}12)=0,"N/A",'
-            f'IF(ABS(N(\'12_Cash_Flow\'!{hist_col}12)-(N(\'11_Balance_Sheet\'!{hist_col}{bs_cash})'
+            f'IF(ABS((N(\'12_Cash_Flow\'!{hist_col}12)+N(\'12_Cash_Flow\'!{hist_col}13))'
+            f'-(N(\'11_Balance_Sheet\'!{hist_col}{bs_cash})'
             f'-N(\'11_Balance_Sheet\'!{prev_col}{bs_cash})))'
             f'<=0.01*MAX(ABS(N(\'11_Balance_Sheet\'!{hist_col}{bs_cash})),1),"PASS","FAIL"))'
         ),

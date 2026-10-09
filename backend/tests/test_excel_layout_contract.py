@@ -291,7 +291,10 @@ def _all_formula_text(ws) -> str:
 def test_cash_flow_layout_keeps_net_change_on_row_12():
     ws = render_historical_cash_flow(Workbook(), _spec_with_historicals([], CF_KEYS))
     assert _row_of(ws, "NET CHANGE IN CASH & CASH EQUIVALENTS") == 12
-    assert _row_of(ws, "Memo: Stock-Based Compensation") == 13
+    # The exchange memo sits directly under the net change so no row above it
+    # shifts, and the stock-comp memo moves one row down behind it.
+    assert _row_of(ws, "Effect of Exchange Rate Changes on Cash") == 13
+    assert _row_of(ws, "Memo: Stock-Based Compensation") == 14
 
 
 def test_debt_schedule_rows_support_internal_reconciliation_formula():
@@ -351,6 +354,9 @@ def test_model_check_formulas_point_at_rendered_cells():
 
     cf_formula = formulas["cash_flow_reconciles"]
     assert "'12_Cash_Flow'!E12" in cf_formula
+    # The tie-out absorbs the exchange memo beside the net change: the balance
+    # movement is compared against the net-change row plus the fx row.
+    assert "'12_Cash_Flow'!E13" in cf_formula
     assert f"'11_Balance_Sheet'!E{cash_row}" in cf_formula
 
     # The tie-out is only meaningful with a prior period to subtract, and a single

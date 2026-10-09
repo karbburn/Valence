@@ -206,6 +206,7 @@ def render_historical_cash_flow(wb: Workbook, spec: ModelSpecification) -> Works
         ("canonical.cf.financing_activities", "Net Cash used in Financing Activities", True),
         ("canonical.cf.dividends_paid", "Dividends Paid", False),
         ("canonical.cf.net_change_in_cash", "NET CHANGE IN CASH & CASH EQUIVALENTS", True),
+        ("canonical.cf.fx_effect", "Effect of Exchange Rate Changes on Cash", False),
         ("canonical.cf.stock_compensation", "Memo: Stock-Based Compensation", False),
     ]
 

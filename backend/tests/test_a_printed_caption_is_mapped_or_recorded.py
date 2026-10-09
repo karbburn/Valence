@@ -10,7 +10,7 @@ name that looks right.
 Two families of decisions, made against the printed statements rather than the
 names:
 
-- Six captions have homes. "Payment of dividends" is the filing's own caption
+- Six captions have homes, and one memo beside them. "Payment of dividends" is the filing's own caption
   for the dividends line, read from the continuation page of both documents
   (printed 105 under 104, printed 111 under 110), and `canonical.cf.dividends_paid`
   was empty for this company because the aggregator's rows are refused by the
@@ -19,7 +19,10 @@ names:
   in all three years (26,066 - 5,865 - 17,504 = 2,697 at FY24, and likewise at
   FY25 and FY26), which is the relationship the model derives the bottom line
   from, so the sections have to be the filing's totals and not whatever else the
-  engine would suggest.
+  engine would suggest. The seventh is the filing's own exchange line, printed
+  on the continuation page under the three sections ((84) / 82 / 1,600): the
+  sections already sum to the bottom line without it, so it publishes as a
+  memo outside them and the reconciliation check absorbs it.
 
 - Thirty have none. The engine rates the first twenty-two low confidence
   (0.2, no key): their section totals are already mapped, and the balance-sheet
@@ -88,6 +91,12 @@ MAPPED_FIGURES = [
         "CASH FLOW",
         -3854.0,
         "canonical.cf.net_change_in_cash",
+    ),
+    (
+        "Effect of exchange rate changes on cash and cash equivalents",
+        "CASH FLOW",
+        1600.0,
+        "canonical.cf.fx_effect",
     ),
 ]
 

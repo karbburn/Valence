@@ -426,6 +426,18 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     # the filing's caption keeps the reported figure identical to that sum
     # instead of logging a disagreement on every rebuild.
     "Net increase/(decrease) in cash and cash equivalents": ("canonical.cf.net_change_in_cash", "cf"),
+    # The filing's own exchange line, on the continuation page under the three
+    # sections (printed 105 under 104, printed 111 under 110): (84) FY24,
+    # 82 FY25, 1,600 FY26. The three sections sum to the printed bottom line
+    # exactly, so this row sits OUTSIDE them as a memo, and the reconciliation
+    # check absorbs it: 2,697 + (84) = 2,613 at FY24, 9,587 + 82 = 9,669 at
+    # FY25, (3,854) + 1,600 = (2,254) at FY26, each closing to the rupee.
+    # Distinct by value and page from the two withdrawn fx captions --
+    # "Exchange differences on translation of assets and liabilities, net"
+    # (76 / 79 / 954, an operating-section line) and "Exchange differences on
+    # translation of foreign operations" (226 / 357 / 3,256, OCI) -- so neither
+    # withdrawal is touched. Printed by Infosys only.
+    "Effect of exchange rate changes on cash and cash equivalents": ("canonical.cf.fx_effect", "cf"),
 
     "No. of Equity Shares": ("canonical.meta.share_count", "meta"),
     "Basic (in shares)": ("canonical.meta.share_count", "meta"),

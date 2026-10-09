@@ -399,11 +399,12 @@ def check_cash_flow_reconciles(spec: ModelSpecification) -> ModelCheckResult:
     """Verify Cash Flow ending cash ties to Balance Sheet cash line.
 
     Historical periods: verifies the statement identity
-        ending_cash = beginning_cash + CFO + CFI + CFF
+        ending_cash = beginning_cash + CFO + CFI + CFF + FX
     where beginning/ending cash come from ``canonical.bs.cash_and_bank`` at the
     first and last historical periods, and CFO/CFI/CFF come from the cash flow
     statement for the periods spanned (which reduces to the last period's flows
-    when exactly two historical periods exist). Tolerance is relative to ending
+    when exactly two historical periods exist). FX is the filing's own exchange
+    line (``canonical.cf.fx_effect``), 0.0 when the model carries no such row. Tolerance is relative to ending
     cash (company sizes vary widely), with a small absolute floor.
 
     If the required inputs are missing, or the source cash flow statement cannot
@@ -419,6 +420,7 @@ def check_cash_flow_reconciles(spec: ModelSpecification) -> ModelCheckResult:
     failing_scenarios: List[str] = []
     errors: List[str] = []
     skipped: List[str] = []
+    has_fx = False
 
     # Historical statement identity — first vs last balance sheet cash tied
     # together by the cash flow statement.
@@ -442,6 +444,15 @@ def check_cash_flow_reconciles(spec: ModelSpecification) -> ModelCheckResult:
             spec.historicals.get_value("canonical.cf.financing_activities", p)
             for p in span_periods
         ]
+        # The filing's own exchange line, printed outside the three sections.
+        # Absent for every company but the one that prints it, where it defaults
+        # to nothing absorbed: a missing row contributes 0.0 and the skip text
+        # below reads exactly as it did before the key existed.
+        fx_vals = [
+            spec.historicals.get_value("canonical.cf.fx_effect", p)
+            for p in span_periods
+        ]
+        has_fx = any(v is not None for v in fx_vals)
 
         if any(v is None for v in [beginning_cash, ending_cash, *cfo_vals, *cfi_vals, *cff_vals]):
             failing_periods.extend(hist_periods)
@@ -459,7 +470,8 @@ def check_cash_flow_reconciles(spec: ModelSpecification) -> ModelCheckResult:
                 cfo = sum(cfo_vals)
                 cfi = sum(cfi_vals)
                 cff = sum(cff_vals)
-                implied_ending = beginning_cash + cfo + cfi + cff
+                fx = sum(v for v in fx_vals if v is not None)
+                implied_ending = beginning_cash + cfo + cfi + cff + fx
                 tolerance = max(CF_TOLERANCE_REL * abs(ending_cash), CF_TOLERANCE_ABS)
                 if abs(ending_cash - implied_ending) > tolerance:
                     # The source statements do not tie out (e.g. screener/EDGAR
@@ -472,11 +484,15 @@ def check_cash_flow_reconciles(spec: ModelSpecification) -> ModelCheckResult:
                     # than an empty list on the one check that has something
                     # to say.
                     failing_periods.extend(hist_periods)
+                    # The fx term is named only when the model carries it. For
+                    # every company without fx rows this keeps the skip text
+                    # byte-identical to before the key existed.
+                    fx_suffix = f" + fx {fx}" if has_fx else ""
                     skipped.append(
                         f"Cash flow statement does not reconcile with balance sheet cash "
                         f"for historical periods {first_p}..{last_p}: ending cash "
                         f"{ending_cash} vs implied {beginning_cash} + cfo {cfo} + "
-                        f"cfi {cfi} + cff {cff} = {implied_ending} "
+                        f"cfi {cfi} + cff {cff}{fx_suffix} = {implied_ending} "
                         f"(diff {abs(ending_cash - implied_ending):.2f}, tol {tolerance:.2f})"
                     )
 
@@ -502,6 +518,11 @@ def check_cash_flow_reconciles(spec: ModelSpecification) -> ModelCheckResult:
             "canonical.cf.investing_activities",
             "canonical.cf.financing_activities",
         ]
+        # Named only when the model carries the row, for the same reason the
+        # skip text names it only then: companies without fx rows keep the
+        # verdict they had before the key existed.
+        if has_fx:
+            failing_keys.append("canonical.cf.fx_effect")
 
     detail_parts = errors[:3] + [f"SKIPPED: {s}" for s in skipped]
     detail = "" if passed and not skipped else "; ".join(detail_parts)
