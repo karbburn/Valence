@@ -73,6 +73,45 @@ def _key_for_half(canonical_key: str, bs_half: str | None) -> str:
     return canonical_key
 
 
+def _prints_aggregate_twin(raw_datapoints, d) -> bool:
+    """True when the company prints an aggregate twin of the caption being confirmed.
+
+    "Cash flow hedge reserves" is a component of the reserves roll; the screener
+    prints the roll itself as "Reserves" and the component's own sheet carries
+    the roll beside it. Confirming the component onto the roll's key publishes
+    its figure under `other_reserves` while the roll itself stays refused, so
+    the equity block sums short by the whole roll (85,070 against filed 93,297
+    at FY26). The confirmation was real but it was made against a component, and
+    the key choice is what the withdrawal refused.
+
+    Exact, not heuristic: the twin must be a caption this same company prints,
+    in the same half of the same sheet, whose label is one of the aggregate's own
+    words. "Investments" has no such twin -- the current and non-current figures
+    it prints are both investments, and the aggregate is a screener row with no
+    half tag -- so the confirmed mapping still publishes where it was made.
+    """
+    twin_labels = (
+        "Reserves",
+        "Total reserves",
+        "Other reserves",
+        "Reserves and surplus",
+        "Retained earnings",
+        "Other equity",
+        "Other Assets",
+        "Other Liabilities",
+    )
+    for other in raw_datapoints:
+        if other is d or other.company_id != d.company_id:
+            continue
+        if (
+            other.metric_raw in twin_labels
+            and other.bs_half == d.bs_half
+            and other.period_label == d.period_label
+        ):
+            return True
+    return False
+
+
 def _statement_agrees(section: str | None, statement: str | None) -> bool:
     """True when a caption's printed statement is the one it is being mapped into.
 
@@ -147,14 +186,35 @@ def map_raw_datapoints(
         # Refusing that decision over a static rule deleted published balance
         # sheet lines the moment a full re-normalization reprocessed their raw
         # rows (lt_lt and tatasteel_tatasteel lost current_investments for all
-        # three periods, swinging the DCF bridge by the full amounts), while
-        # companies rebuilt without re-normalization kept publishing the same
-        # lines from stale canonicals. Only human_confirmed=1 counts:
-        # medium auto-accepts and engine-learned rows stay refused, and a
-        # label the registry maps never reaches here.
-        if mapping is None:
+        # three periods, swinging the DCF bridge by the full 51,000 and 14,000),
+        # while companies rebuilt without re-normalization kept publishing the
+        # same lines from stale canonicals.
+        #
+        # Scoped twice, because each scope is a thing measured:
+        #
+        # 1. HALF-MARKED ROWS ONLY. The reader tagged the caption as printed in
+        #    one half of the balance sheet, and `_key_for_half` routes it to
+        #    that half's key, so a filed "Investments" 33,770 current publishes
+        #    as current investments and its 218 non-current sibling as
+        #    non-current, while the screener's aggregate (no half tag) cannot
+        #    publish at all. Cash-flow captions (escrow deposits, contingent
+        #    settlement) carry no half, and their old confirmations would
+        #    resurrect withdrawals the registry made since -- measured on infy,
+        #    whose snapshot regained (13) at acquisitions from a ten-run
+        #    confirmation the moment full normalization ran again.
+        #
+        # 2. THE COMPANY MUST NOT PRINT AN AGGREGATE TWIN OF THAT CAPTION.
+        #    "Cash flow hedge reserves" is a component of the reserves roll;
+        #    the screener prints the roll as "Reserves", and publishing the
+        #    component under the roll's key left the equity block summing
+        #    85,070 against filed 93,297 at FY26 -- the confirmation was real
+        #    but the key choice is what the withdrawal refused, so the review
+        #    must be against the roll, not against a component on its name.
+        if mapping is None and d.bs_half:
             confirmed = confirmed_mapping(d.company_id, d.metric_raw, db_path=db_path)
-            if confirmed is not None:
+            if confirmed is not None and not _prints_aggregate_twin(
+                raw_datapoints, d
+            ):
                 mapping = confirmed
 
         # A withdrawal outranks a suggestion.

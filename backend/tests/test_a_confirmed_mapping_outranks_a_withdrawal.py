@@ -38,7 +38,7 @@ def _db(path, confirmations=()):
     return path
 
 
-def _raw(label: str, value: float) -> RawDatapoint:
+def _raw(label: str, value: float, bs_half: str | None = None) -> RawDatapoint:
     return RawDatapoint(
         id="figure-%s" % label[:6].replace(" ", ""),
         company_id="fixture_co",
@@ -53,17 +53,18 @@ def _raw(label: str, value: float) -> RawDatapoint:
         section="BALANCE SHEET",
         status="estimated",
         update_date=datetime.now(),
+        bs_half=bs_half,
     )
 
 
 class TestAReviewedConfirmationOutranksAWithdrawal:
-    def test_confirmed_caption_maps_to_its_confirmed_key(self, tmp_path):
+    def test_a_half_marked_confirmation_maps_to_that_half(self, tmp_path):
         assert "Investments" in WITHDRAWN_LABELS
         db = _db(tmp_path / "store.db", [
             ("fixture_co", "Investments", "canonical.bs.current_investments", 1),
         ])
         canonical, _mappings, unmapped = mapper.map_raw_datapoints(
-            [_raw("Investments", 51000.0)], db_path=db
+            [_raw("Investments", 51000.0, "current")], db_path=db
         )
         assert [c.canonical_key for c in canonical] == [
             "canonical.bs.current_investments"
@@ -71,21 +72,39 @@ class TestAReviewedConfirmationOutranksAWithdrawal:
         assert canonical[0].value == 51000.0
         assert "Investments" not in unmapped
 
-    def test_medium_auto_accept_does_not_outrank(self, tmp_path):
+    def test_an_unmarked_row_stays_refused(self, tmp_path):
+        """The half tag is what makes a confirmation checkable.
+
+        Cash-flow captions (escrow deposits, contingent settlement) and
+        aggregate feed rows carry no half, and their old confirmations would
+        resurrect withdrawals made since: infy's snapshot regained (13) at
+        acquisitions from a ten-run confirmation the moment full normalization
+        ran again.
+        """
         db = _db(tmp_path / "store.db", [
-            ("fixture_co", "Investments", "canonical.bs.current_investments", 0),
+            ("fixture_co", "Investments", "canonical.bs.current_investments", 1),
         ])
         canonical, _mappings, _unmapped = mapper.map_raw_datapoints(
             [_raw("Investments", 51000.0)], db_path=db
         )
         assert canonical == [], (
-            "an unreviewed auto-accept resurrected a withdrawn caption"
+            "a confirmation published a row with no half tag, which is how "
+            "cash-flow captions resurrect their withdrawn status"
         )
+
+    def test_medium_auto_accept_does_not_outrank(self, tmp_path):
+        db = _db(tmp_path / "store.db", [
+            ("fixture_co", "Investments", "canonical.bs.current_investments", 0),
+        ])
+        canonical, _mappings, _unmapped = mapper.map_raw_datapoints(
+            [_raw("Investments", 51000.0, "current")], db_path=db
+        )
+        assert canonical == [], "an unreviewed auto-accept resurrected a withdrawn caption"
 
     def test_no_confirmation_still_refused(self, tmp_path):
         db = _db(tmp_path / "store.db", [])
         canonical, _mappings, _unmapped = mapper.map_raw_datapoints(
-            [_raw("Investments", 51000.0)], db_path=db
+            [_raw("Investments", 51000.0, "current")], db_path=db
         )
         assert canonical == [], "a withdrawn caption mapped with nothing behind it"
 
@@ -94,8 +113,49 @@ class TestAReviewedConfirmationOutranksAWithdrawal:
             ("other_co", "Investments", "canonical.bs.current_investments", 1),
         ])
         canonical, _mappings, _unmapped = mapper.map_raw_datapoints(
-            [_raw("Investments", 51000.0)], db_path=db
+            [_raw("Investments", 51000.0, "current")], db_path=db
         )
-        assert canonical == [], (
-            "one company's review leaked onto another company's caption"
+        assert canonical == [], "one company's review leaked onto another company's caption"
+
+
+class TestTheAggregateTwinRefusesAComponent:
+    """A confirmation made against a component must not publish on the roll.
+
+    "Cash flow hedge reserves" is confirmed to other_reserves, but infy also
+    prints the roll itself (screener "Reserves", and the filing's own "Other
+    reserves"), so publishing the component left the equity block summing
+    85,070 against filed 93,297 at FY26. "Investments" has no twin: the current
+    and non-current figures are both investments and the aggregate is a tagless
+    screener row, so the confirmation still publishes.
+    """
+
+    def _rows(self, caption, twin):
+        rows = [_raw(caption, 4824.0, "noncurrent")]
+        if twin:
+            rows.append(_raw(twin, 90828.0, "noncurrent"))
+        return rows
+
+    def test_a_component_with_a_printed_twin_is_refused(self, tmp_path):
+        db = _db(tmp_path / "store.db", [
+            ("fixture_co", "Cash flow hedge reserves",
+             "canonical.bs.other_reserves", 1),
+        ])
+        canonical, _m, _u = mapper.map_raw_datapoints(
+            self._rows("Cash flow hedge reserves", "Reserves"), db_path=db
+        )
+        assert 4824.0 not in [c.value for c in canonical], (
+            f"the hedge component published under the roll's key: "
+            f"{[(c.canonical_key, c.value) for c in canonical]}"
+        )
+
+    def test_a_caption_without_a_twin_still_publishes(self, tmp_path):
+        db = _db(tmp_path / "store.db", [
+            ("fixture_co", "Investments",
+             "canonical.bs.other_reserves", 1),
+        ])
+        canonical, _m, _u = mapper.map_raw_datapoints(
+            self._rows("Investments", None), db_path=db
+        )
+        assert [c.value for c in canonical] == [4824.0], (
+            "a caption with no printed aggregate twin lost its confirmation"
         )
