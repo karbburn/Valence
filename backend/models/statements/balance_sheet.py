@@ -512,6 +512,16 @@ def assemble_balance_sheet(
             })
 
     # Reconcile Total Assets from sum of Non-Current Assets and Current Assets
+    #
+    # Only the periods the two components actually describe. A period where
+    # neither is present has nothing to reconcile FROM, and the loop below used
+    # to sum two absent-component zeros straight over the published total: TCS
+    # FY24 carries a filed total assets of 150,137 while the current and
+    # non-current subtotals are printed only for FY25 and FY26, and the sheet
+    # was rebuilt with a zero where the filing's own number stood. One absent
+    # component is the same trap by halves -- a partial sum is an undercount,
+    # not a correction -- so the published total keeps the key unless both
+    # faces of the assets side are present for the period.
     nca_item = _item_for("canonical.bs.total_non_current_assets")
     ca_item = _item_for("canonical.bs.total_current_assets")
     assets_item = _item_for("canonical.bs.total_assets")
@@ -521,12 +531,14 @@ def assemble_balance_sheet(
     if nca_item and ca_item:
         reconciled_assets_vals = {}
         for p in periods:
-            nca_val = nca_item.values_by_period.get(p, 0.0)
-            ca_val = ca_item.values_by_period.get(p, 0.0)
+            nca_val = nca_item.values_by_period.get(p)
+            ca_val = ca_item.values_by_period.get(p)
+            if nca_val is None or ca_val is None:
+                continue
             reconciled_assets_vals[p] = nca_val + ca_val
         
         if assets_item:
-            assets_item.values_by_period = reconciled_assets_vals
+            assets_item.values_by_period.update(reconciled_assets_vals)
         else:
             assets_item = BalanceSheetLineItem(
                 canonical_key="canonical.bs.total_assets",
