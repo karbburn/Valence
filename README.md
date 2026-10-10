@@ -77,7 +77,7 @@ one that misses a real disagreement.
 
 On current `main`: **tie-out 0 untied figures, 10 of 11 US filers audited clean**
 (the eleventh is TSMC, disclosed rather than counted), **QA 0 regressions across 23
-models**, **1003 backend tests and 93 frontend tests**, and Infosys'
+models**, **1072 backend tests and 94 frontend tests**, and Infosys'
 current-asset reconciliation landing exactly on the filed subtotal.
 
 ---
@@ -234,7 +234,6 @@ Valence/
 ├── data/
 │   └── qa_gate_baseline.json          # Recorded failures, so a new one is distinguishable
 ├── .github/workflows/                 # tests.yml, qa-gate.yml, and two market-data jobs
-├── assets/                            # Gitignored: plans, reviews, screenshots, media sources
 └── README.md
 ```
 
@@ -363,7 +362,7 @@ curl -o model.xlsx "http://127.0.0.1:8111/api/export/excel?company_id=nvda_us"
 python scripts/audit_loop.py
 
 # Or individually
-python -m pytest backend/tests -q                              # 1003 tests
+python -m pytest backend/tests -q                              # 1072 tests
 python -m backend.export.excel.self_check                      # 31-sheet contract + formula wiring
 python -m backend.api.self_check                               # Web API and recomputation
 cd frontend && npm test && npx tsc --noEmit && npm run lint && npm run build
