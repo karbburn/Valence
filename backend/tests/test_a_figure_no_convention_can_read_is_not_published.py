@@ -60,6 +60,26 @@ class TestAGroupingNoConventionCanRead:
     def test_an_ordinary_grouped_figure_still_reads(self):
         assert _num("11,032") == 11032.0
 
+    def test_a_figure_opening_with_a_bare_decimal_point_is_refused(self):
+        """Reliance's audited face prints FY26 trade payables "1,58,842" with the
+        leading digit extracted as ".", and the old path read float(".158842")
+        as 0.158842 -- a wrong number wearing a parsed one, off by a factor of
+        a million against the true 158,842."""
+        assert _num(".158,842") is None
+
+    def test_a_damaged_negative_opening_with_a_bare_point_is_refused(self):
+        """The parens come off before the check, so a damaged parenthesised
+        figure refuses exactly like its positive twin."""
+        assert _num("(.158,842)") is None
+
+    def test_legitimate_decimals_keep_parsing(self):
+        """The refusal is the leading point, not decimals: per-share figures and
+        ratios print "13.78" and "0.16" with their integer part, and a
+        parenthesised decimal stays a negative one."""
+        assert _num("13.78") == 13.78
+        assert _num("0.16") == 0.16
+        assert _num("(0.16)") == -0.16
+
     def test_a_trailing_comma_is_untouched_by_the_refusal(self):
         """The surgical scope: only tokens matching a grouped figure can refuse.
 

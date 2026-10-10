@@ -132,6 +132,13 @@ _UNIT_DECLARATIONS: tuple[tuple[re.Pattern[str], str, str], ...] = (
     # a bare "in crores" outside them is prose about units, not a statement of
     # this page's units, and stays refused.
     (re.compile(r"\([^)]{0,30}\bin\s+crores?\b[^)]{0,30}\)", re.I), "", "crores"),
+    # Reliance's audited consolidated balance sheet declares "(Rs. in crore)"
+    # but the "(Rs." run extracts as nothing, leaving a bare "in crore)" in the
+    # banner slot under the title. The closing paren is the declaration's
+    # residue: prose about units never carries one, so a bare "in crores" with
+    # no paren at all stays refused exactly as before. Singular reads as the
+    # canonical scale name because the validator admits only "crores".
+    (re.compile(r"\bin\s+crores?\)", re.I), "", "crores"),
     (re.compile(r"in\s+(?:₹|rs\.?|inr|usd|\$)\s*lakhs?\b", re.I), "INR", "crores"),
     (re.compile(r"in\s+millions?\s+of\s+(usd|inr|rs\.?)\b", re.I), "", "millions"),
     (re.compile(r"in\s+(usd|inr|rs\.?)\s+millions?\b", re.I), "", "millions"),
@@ -631,6 +638,16 @@ def _grouping_is_readable(bare: str) -> bool:
 
 def _num(token: str) -> float | None:
     bare = token.strip().strip("()")
+    if bare.startswith("."):
+        # A figure token opening with a bare decimal point is a damaged glyph run,
+        # not a number. Reliance's audited balance sheet prints FY26 trade payables
+        # as "1,58,842" whose leading digit extracts as ".", and float(".158842")
+        # would publish 0.158842 against a true 158,842 -- a wrong number wearing a
+        # parsed one. No parsed statement page prints a fractional figure without
+        # its leading zero (measured across the twelve of them: the only
+        # leading-dot tokens in the corpus are this document's damaged FY26 cell
+        # and its already-refused sibling), so the refusal takes nothing legitimate.
+        return None
     if "," in bare and _GROUPED_FIGURE.match(bare) and not _grouping_is_readable(bare):
         # A figure whose grouping no convention can read is a recorded unknown,
         # not a number to guess at. The row keeps its other column, so the

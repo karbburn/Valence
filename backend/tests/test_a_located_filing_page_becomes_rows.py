@@ -285,6 +285,43 @@ def test_a_document_with_no_recorded_pages_yields_nothing_rather_than_guessing()
     ) == []
 
 
+def test_a_recorded_readable_period_refuses_the_other_column():
+    """A page whose record names the readable periods yields only those.
+
+    Reliance's audited face prints an FY26 column whose header extracts as nothing and
+    whose cells come out missing, garbled, or wrong-but-parseable, so its metadata
+    records FY25 only for that page. The filter is asserted here on the committed
+    HCLTech face instead: both of its columns read clean, so restricting the record to
+    one period must drop exactly the other's rows and keep every one of its own. A page
+    with no record parses every period exactly as before, which the tests above already
+    cover.
+    """
+    pdf, _meta = require("hcltech_hcltech")
+    all_dps = _filing_datapoints_from_cached_pdf(
+        pdf, {"balance_sheet_pages": [4]}, "hcltech_hcltech"
+    )
+    periods = {d.period_label for d in all_dps}
+    assert len(periods) >= 2, (
+        f"the unfiltered face yields {sorted(periods)}; with one period the filter test "
+        f"proves nothing about dropping the other column"
+    )
+    keep = "FY26"
+    assert keep in periods
+    filtered = _filing_datapoints_from_cached_pdf(
+        pdf,
+        {"balance_sheet_pages": [4], "readable_periods": {"4": [keep]}},
+        "hcltech_hcltech",
+    )
+    assert filtered, "the record kept nothing; the filter ate the readable column too"
+    assert {d.period_label for d in filtered} == {keep}, (
+        f"rows outside the recorded readable periods reached the store: "
+        f"{sorted({d.period_label for d in filtered})}"
+    )
+    assert len(filtered) == sum(1 for d in all_dps if d.period_label == keep), (
+        "the filter dropped rows inside the recorded periods along with those outside"
+    )
+
+
 def test_a_company_with_no_cached_document_says_so():
     """A recorded unknown beats a silent zero."""
     assert _cached_nse_pdfs("definitely_not_a_company_zz") == []

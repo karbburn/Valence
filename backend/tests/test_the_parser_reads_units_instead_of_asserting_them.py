@@ -319,6 +319,42 @@ class TestTheParenthesisedScaleDeclaration:
         )
 
 
+class TestTheClosingParenIsTheDeclarationsResidue:
+    """Reliance's audited consolidated face declares "(Rs. in crore)" with the "(Rs."
+    run missing from extraction, leaving a bare "in crore)" in the banner slot under
+    the title.
+
+    The closing paren is what separates this from the prose the refusals above
+    protect: no sentence about units carries one. The document corroborates the
+    reading itself -- its segment page prints the same banner with the open paren
+    surviving as "(~ in crorel" -- and the figures match crore reality, so the
+    scale is read and the currency stays empty for the NSE fill, exactly as the
+    half-read HCLTech declaration above it.
+    """
+
+    def test_a_scale_before_a_closing_paren_with_no_open_paren_reads(self):
+        currency, units = declared_units(
+            "AUDITED CONSOLIDATED BALANCE SHEET AS AT 31st MARCH, 2026 in crore) "
+            "Particulars As at 31st March, 2025 ASSETS"
+        )
+        assert (currency, units) == ("", "crores"), (
+            "the banner's residue states the scale and no readable currency; "
+            f"got {(currency, units)!r}"
+        )
+
+    def test_the_singular_scale_reads_as_the_canonical_scale_name(self):
+        """The validator admits only "crores", so a singular reading that kept
+        "crore" would refuse every company it touched."""
+        _currency, units = declared_units("Particulars As at 2025 in crore)")
+        assert units == "crores", f"singular scale must read as the canonical name: {units!r}"
+
+    def test_an_open_paren_without_its_close_is_not_a_declaration(self):
+        """The segment page's "(~ in crorel" has the open paren and noise where the
+        close belongs. The close paren is the signal, so its absence refuses --
+        and that page is notes, never a parsed statement, so nothing is lost."""
+        assert declared_units("Notes (~ in crorel Particulars") == ("", "")
+
+
 @needs_indas
 class TestTheAuditedIndasFaceReadsAsTheRupeesItDeclares:
     """The end-to-end claim on the document that replaced the IFRS attachment.

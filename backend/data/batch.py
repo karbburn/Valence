@@ -436,6 +436,17 @@ def _ingest_and_normalize(company_id: str, db_path: str | Path, force: bool) -> 
             # the user to retry, and then negatively cached the ticker so the
             # failure could not be found from the outside.
             dps = fetch_and_parse_india_live(company_id=company_id)
+            # A cached audited filing joins the feed rather than replacing it. A
+            # company with a located statement on disk but no screener export --
+            # Reliance, Bharti -- ingested from the feed alone, because this branch
+            # never consulted the filing cache, so the selector never saw a filing
+            # row and inputs_trace_to_a_filing could never pass for it. The filing's
+            # rows append here so the selector can prefer the filing per cell, the
+            # same shape the screener path has always produced. An empty cache
+            # contributes nothing and the branch behaves exactly as before, which
+            # is what the feed-only narrowness test pins.
+            from backend.data.pipeline import _get_secondary_filing_datapoints
+            dps = list(dps) + _get_secondary_filing_datapoints(company_id)
             save_datapoints(db_path, dps, clear_existing=True)
             run_norm(company_id=company_id, db_path=db_path)
 

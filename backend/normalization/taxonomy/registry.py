@@ -292,6 +292,54 @@ WITHDRAWN_LABELS: FrozenSet[str] = frozenset({
     # (3,862 / 2,815).
     "(d) Deferred tax liabilities (net)",
     "(e) Current tax liabilities (net)",
+    # Reliance's audited consolidated face (printed page 16), each refused on
+    # what that page prints. Title case throughout, so none of these matches
+    # the lower-case withdrawals above by exact spelling -- and the engine's
+    # fuzzy suggestions for them are recorded per caption, because two already
+    # published catastrophically in the dry run: an 83,453 liability as a
+    # deferred-tax asset, and an 829,668 equity component as the equity total
+    # (dooming the true 1,009,626 beside it).
+    #
+    # "Other Equity" (829,668): the TCS "(b) Other equity" decision in this
+    # spelling -- a component with no component key, and `other_reserves`
+    # holds the narrower "Reserves" where the screener prints it. The face's
+    # own "Total Equity" (1,009,626) is mapped, so the block still foots.
+    "Other Equity",
+    # "Other Financial Assets" (23,546 current) and "Other Financial
+    # Liabilities" (10,909 non-current): the TCS "Other financial assets /
+    # liabilities" decision in this spelling -- no key exists for either, and
+    # one key would hold whichever half parsed last. The liabilities caption
+    # is worse: the engine sends it to `other_current_liabilities`, whose true
+    # figure (90,124) the gate then dooms beside it, so withdrawing it frees
+    # the true current line.
+    "Other Financial Assets",
+    "Other Financial Liabilities",
+    # The artifact twins "Olher Financial Assets" (6,088 non-current) and
+    # "Olher Financial Liabilities" (57,143 current): the same no-key decision
+    # under the extracted spelling, where the face's font drops the "t". A
+    # mapped twin beside each clean sibling would put two figures on one key,
+    # so both stay out like HCLTech's "(iv) Others" that prints in both blocks.
+    "Olher Financial Assets",
+    "Olher Financial Liabilities",
+    # "Deferred Tax liabilities (Net)" (83,453): the HCL "(d) Deferred tax
+    # liabilities (net)" decision in this spelling -- no liability key exists,
+    # and the engine sends it to the deferred-tax ASSET key, which inverts the
+    # statement by the full 83,453 and dooms the true 408 asset beside it.
+    "Deferred Tax liabilities (Net)",
+    # "Deferred Payment liabilities" (104,410 spectrum dues), "Spectrum"
+    # (147,122) and "Spectrum Under Development" (54,176): telecom lines with
+    # no key. Spectrum beside "Olher Intangible Assets" on the intangibles key
+    # would publish one of two separately-printed lines as the whole, so all
+    # three stay out and the shortfall is visible in the reconciliation.
+    "Deferred Payment liabilities",
+    "Spectrum",
+    "Spectrum Under Development",
+    # "Other lnlangible Assels Under Development" (38,472): the HCL "(f)
+    # Intangible assets under development" decision under the extracted
+    # spelling, where "t" extracts as "l" and "t" as "s" in the same line. The
+    # face prints completed intangibles onto the intangibles key beside it,
+    # and a second caption on one key leaves whichever parsed last.
+    "Other lnlangible Assels Under Development",
 })
 
 # Mapping entry type: (canonical_key, statement)
@@ -564,6 +612,50 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     # "(c) Provisions" is withdrawn above because the only provisions key is
     # this block's line.
     "(d ) Provisions": ("canonical.bs.provisions", "bs"),
+
+    # --- Balance Sheet, Reliance audited consolidated face (printed page 16) ---
+    #
+    # Title case throughout, so these spellings are pinned statically rather than
+    # left to the engine's fuzzy suggestions: the dry run published an 83,453
+    # liability as a deferred-tax asset and an 829,668 equity component as the
+    # equity total on medium suggestions, and static entries make those outcomes
+    # impossible. Every caption this page prints that is refused is in
+    # WITHDRAWN_LABELS above with its reason. Only the FY25 column reads cleanly
+    # (the FY26 column's header extracts as nothing and its cells come out
+    # missing, garbled, or wrong); the metadata records FY25 only.
+    #
+    # Non-current assets. The "Olher ..." captions keep the extracted spelling:
+    # the face's font drops the "t" the way HCLTech's breaks "non-current", and
+    # a prettier caption would never match what the reader receives.
+    "Property, Plant and Equipment": ("canonical.bs.ppe", "bs"),
+    "Capital Work-in-Progress": ("canonical.bs.cwip", "bs"),
+    "Olher Intangible Assets": ("canonical.bs.intangible_assets", "bs"),
+    "Deferred Tax Assets (Net)": ("canonical.bs.deferred_tax_assets", "bs"),
+    "Olher Non-Current Assets": ("canonical.bs.other_non_current_assets", "bs"),
+    "Total Non-Current Assets": ("canonical.bs.total_non_current_assets", "bs"),
+    # Current assets.
+    "Cash and Cash Equivalents": ("canonical.bs.cash_and_bank", "bs"),
+    "Other Current Assets": ("canonical.bs.prepayments_other_current_assets", "bs"),
+    "Total Current Assets": ("canonical.bs.total_current_assets", "bs"),
+    # Equity and liabilities. "Total Equi and Liabilities" is the printed typo
+    # for the total every other face spells out; it foots the page (1,950,121),
+    # so the extracted string is what the registry keeps.
+    "Non-Controlling Interest": ("canonical.bs.minority_interest", "bs"),
+    "Total Equity": ("canonical.bs.total_equity", "bs"),
+    "Total Liabilities": ("canonical.bs.total_liabilities", "bs"),
+    "Total Non-Current Liabilities": ("canonical.bs.total_non_current_liabilities", "bs"),
+    "Total Current Liabilities": ("canonical.bs.total_current_liabilities", "bs"),
+    "Total Equi and Liabilities": ("canonical.bs.total_liabilities_and_equity", "bs"),
+    "Other Current Liabilities": ("canonical.bs.other_current_liabilities", "bs"),
+    "Other Non-Current Liabilities": ("canonical.bs.other_non_current_liabilities", "bs"),
+    # "Lease Liabilities" prints in both blocks (17,142 non-current, 4,903
+    # current) under one caption with no half-specific keys to split it to.
+    # The twin gate refuses both printings and queues them; the static entry
+    # records the caption's key all the same, so a future split has a decision
+    # to attach to rather than an unmapped gap.
+    "Lease Liabilities": ("canonical.bs.lease_liabilities", "bs"),
+    "Trade Payables": ("canonical.bs.trade_payables", "bs"),
+    "Trade Receivables": ("canonical.bs.trade_receivables", "bs"),
 
     # --- Cash Flow Statement ---
     "Cash from Operating Activity": ("canonical.cf.operating_activities", "cf"),

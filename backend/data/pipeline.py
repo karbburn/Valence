@@ -319,19 +319,25 @@ def _filing_datapoints_from_cached_pdf(
     comprehensive income statement.
     """
     pages = meta.get("balance_sheet_pages") or []
+    # Periods that read cleanly, per printed page, witnessed at install time. Reliance's
+    # audited face prints an FY26 column whose header extracts as nothing and whose cells
+    # come out missing, garbled, or wrong-but-parseable (0.158842 for a true 158,842), so
+    # the column's few clean-looking survivors are unverified output of a proven-corrupt
+    # column and stay out. The record lives in the committed metadata beside
+    # `balance_sheet_pages` -- the same class of witnessed fact -- and a page without a
+    # record parses every period exactly as before.
+    readable = {str(k): v for k, v in (meta.get("readable_periods") or {}).items()}
     dps: list[RawDatapoint] = []
     for printed in pages:
         page_index = int(printed) - 1
         try:
-            dps.extend(
-                parse_predicted_statement_page(
-                    pdf_path,
-                    page_index,
-                    "BALANCE SHEET",
-                    "nse_filing",
-                    annual_only=False,
-                    company_id=company_id,
-                )
+            page_dps = parse_predicted_statement_page(
+                pdf_path,
+                page_index,
+                "BALANCE SHEET",
+                "nse_filing",
+                annual_only=False,
+                company_id=company_id,
             )
         except Exception as exc:  # noqa: BLE001
             # One unreadable page must not cost the others, and the reason must be
@@ -342,6 +348,19 @@ def _filing_datapoints_from_cached_pdf(
                 "Could not read %s printed page %s of %s: %s: %s",
                 printed, company_id, pdf_path.name, type(exc).__name__, exc,
             )
+            continue
+        allowed = readable.get(str(int(printed)))
+        if allowed is not None:
+            refused = [d for d in page_dps if d.period_label not in allowed]
+            if refused:
+                logger.warning(
+                    "%s printed page %s: %d %s row(s) outside the recorded readable "
+                    "periods %s were refused",
+                    company_id, printed, len(refused),
+                    ",".join(sorted({d.period_label for d in refused})), allowed,
+                )
+            page_dps = [d for d in page_dps if d.period_label in allowed]
+        dps.extend(page_dps)
     return dps
 
 

@@ -41,6 +41,103 @@ from backend.data.universe.store import DB_PATH
 # locator finds them without touching the network and the test is offline.
 HAS_COMMITTED_FILING = ["tcs_tcs", "hcltech_hcltech"]
 
+# Reliance is the first screener-less company with a located statement on disk, so the
+# feed branch's filing join is asserted on it. Guarded on the install rather than the
+# network: the live fetch is stubbed and the filing parse is local.
+RELIANCE_PDF = Path("backend/data/filings/nse/reliance-annual-2026-04.pdf")
+RELIANCE_JSON = Path("backend/data/filings/nse/reliance.json")
+
+needs_reliance_filing = pytest.mark.skipif(
+    not (RELIANCE_PDF.exists() and RELIANCE_JSON.exists()),
+    reason="no Reliance filing installed",
+)
+
+
+@needs_reliance_filing
+def test_a_feed_company_with_a_cached_filing_stores_the_filings_rows(
+    store_with_feed_rows_only, monkeypatch
+):
+    """The feed branch joins the filing cache rather than ignoring it.
+
+    A company with a located statement on disk but no screener export ingested from the
+    feed alone, because the live-equity branch never consulted the filing cache. The
+    filing's rows now append to the live rows so the selector can prefer the filing per
+    cell -- the same shape the screener path has always produced for TCS and HCLTech.
+
+    Asserted on the raw rows the branch delivers, not on what normalization keeps: the
+    live fetch is stubbed empty so the test is offline, and mapping the new captions is
+    the registry's separate job, pinned by its own caption test.
+    """
+    import backend.data.ingestion.india_live as india_live
+
+    monkeypatch.setattr(india_live, "fetch_and_parse_india_live", lambda company_id: [])
+
+    try:
+        batch.ensure_company_ingested("reliance_reliance", db_path=store_with_feed_rows_only)
+    except Exception:  # noqa: BLE001
+        # A downstream refusal is allowed. It is not allowed to mean no filing row arrived.
+        pass
+
+    rows = filing_rows(store_with_feed_rows_only, "reliance_reliance")
+    assert rows > 0, (
+        "reliance_reliance has a located audited statement installed and the feed branch "
+        f"ran, yet the store holds {rows} filing rows. The filing cache went unread again."
+    )
+
+
+def test_a_feed_company_with_no_cached_filing_stores_no_filing_rows(tmp_path, monkeypatch):
+    """The join is narrow: an empty cache contributes nothing and the branch behaves
+    exactly as before.
+
+    Without this, the fix would invent filing rows -- or re-ingest every feed company
+    on every call -- which is a far worse defect than the one it removes.
+    """
+    import datetime
+
+    from backend.data.store import RawDatapoint
+    import backend.data.ingestion.india_live as india_live
+
+    live_row = RawDatapoint(
+        company_id="definitely_not_a_company_zz",
+        metric_raw="Revenue",
+        period_label="FY26",
+        period_end_date=datetime.date(2026, 3, 31),
+        value=100.0,
+        currency="INR",
+        units="crores",
+        source="yfinance_live",
+        source_location="yfinance!1",
+        section="PROFIT & LOSS",
+        status="reported",
+    )
+    monkeypatch.setattr(india_live, "fetch_and_parse_india_live", lambda company_id: [live_row])
+
+    db = tmp_path / "feednarrow.sqlite"
+    try:
+        batch.ensure_company_ingested("definitely_not_a_company_zz", db_path=db)
+    except Exception:  # noqa: BLE001
+        # Normalization may refuse the synthetic company; the rows were saved before it ran.
+        pass
+
+    conn = sqlite3.connect(str(db))
+    try:
+        live = conn.execute(
+            "SELECT COUNT(*) FROM raw_datapoints "
+            "WHERE company_id = ? AND source = 'yfinance_live'",
+            ("definitely_not_a_company_zz",),
+        ).fetchone()[0]
+        filed = conn.execute(
+            "SELECT COUNT(*) FROM raw_datapoints "
+            "WHERE company_id = ? AND source = 'nse_filing'",
+            ("definitely_not_a_company_zz",),
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    assert live == 1, f"the live feed row did not reach the store: {live}"
+    assert filed == 0, (
+        f"a company with no cached filing gained {filed} filing rows. The join invents rows."
+    )
+
 
 def _has_the_tables(db: Path) -> bool:
     """Whether `db` is a real store and not an empty file.
