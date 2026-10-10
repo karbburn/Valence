@@ -54,6 +54,36 @@ WITHDRAWN_LABELS: FrozenSet[str] = frozenset({
     "Equity attributable to owners of the Company",
     "Deferred tax liabilities (net)",
     "Current tax liabilities (net)",
+    # TCS consolidated face (p.11), same two-figures-one-key shape as the
+    # Employee benefit obligations withdrawal, measured caption by caption:
+    # "Loans" prints 775 non-current against 1,659 current, "Other assets"
+    # 2,605 against 16,533, "Other financial assets" 2,944 against 1,833,
+    # "Other financial liabilities" 588 against 11,194 -- no key exists for
+    # any of them, and one key would hold whichever half parsed last.
+    # "Income tax liabilities (net)" (14,751 / 12,715, current only) shares
+    # the fate of "Current tax liabilities (net)" above: no tax-liability
+    # key exists, and a liability parked in an asset key inverts the
+    # statement. "Unearned and deferred revenue" prints 647 non-current
+    # against 4,487 current; the key is a current-liabilities line the
+    # half guard does not claim, so the tie would publish the non-current
+    # 647 as current. All six stay out; the current halves they shadow are
+    # not recoverable without half-specific keys that do not exist.
+    "Loans",
+    "Other assets",
+    "Other financial assets",
+    "Other financial liabilities",
+    "Income tax liabilities (net)",
+    "Unearned and deferred revenue",
+    # Two more the reported boost would otherwise promote wrongly, found by
+    # measuring every multi-candidate cell before landing the rule. "Cash flow
+    # hedge reserves" is a component the registry parked on the
+    # other_reserves total (6 publishing as 86,045 at FY24); "Administrative
+    # expenses" is the admin half of a selling-and-admin key whose selling
+    # half the filing never prints, and the derivation below refuses to build
+    # the combined total from one half. Both keep today's published figures;
+    # the filed parts stay out rather than publishing as wholes they are not.
+    "Cash flow hedge reserves",
+    "Administrative expenses",
     # A second family: captions the FILER prints, read from the statement pages
     # themselves, where either no canonical key exists or the label cannot pick
     # one. Withdrawn rather than left unmapped because an unmapped caption reads
@@ -101,13 +131,22 @@ WITHDRAWN_LABELS: FrozenSet[str] = frozenset({
     # different amounts (3,524 non-current against 117 current at FY26), and both
     # rows arrive tagged [noncurrent], so one key would hold two figures for one
     # period and the winner would be row order -- the ambiguity `bs_half` exists
-    # to answer, which a label mapping cannot. "Share premium" is a component of
-    # reserves, and the only reserve key already carries Screener's "Reserves"
-    # aggregate, so filing the component beside the aggregate is the same shape
-    # that put a whole equity stack under one line. "Right-of-use assets" has no
-    # key at all.
+    # to answer, which a label mapping cannot. "Share premium" and "Other
+    # components of equity" are the two sibling lines the filing prints between
+    # retained earnings and the attributable total (p.100, y=46 and y=50), and
+    # measured against the reserves key they score exactly what the key's own
+    # "Other reserves" caption scores (reported + regulatory + positive, no
+    # section string in an NSE source_location, neither a primary label), so the
+    # tie would break by archive order -- and the caption printed highest on the
+    # page would publish, replacing the line the key is named for with a
+    # component of it. The filer's own caption keeps the key; the two beside it
+    # stay out, and the gap against the filed total (8,370 at FY26: these two,
+    # the capital redemption reserve shadowed in the same tie, and the hedge)
+    # is a recorded shortfall rather than an aggregate restated as a part.
+    # "Right-of-use assets" has no key at all.
     "Right-of-use assets",
     "Share premium",
+    "Other components of equity",
     "Employee benefit obligations",
     # Third family: captions the engine does reach, at the wrong destination.
     # Each is a real printed line whose only suggestion states something false
@@ -200,7 +239,10 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Selling and admin": ("canonical.is.selling_admin_exp", "is"),
     "Selling and marketing": ("canonical.is.sales_marketing", "is"),
     "General and administrative": ("canonical.is.general_admin", "is"),
-    "Administrative expenses": ("canonical.is.selling_admin_exp", "is"),
+    # NOT "Administrative expenses": the filing prints no selling line beside
+    # it, and the derivation just below refuses to build the combined total
+    # from one half -- publishing the admin half under a selling-and-admin
+    # label states a number the filer never reported. Withdrawn below.
     "Employee Cost": ("canonical.is.employee_cost", "is"),
     "Other Mfr. Exp": ("canonical.is.other_mfr_exp", "is"),
     "Power and Fuel": ("canonical.is.power_fuel", "is"),
@@ -238,6 +280,10 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
 
     # --- Balance Sheet (Assets) ---
     "Net Block": ("canonical.bs.ppe", "bs"),
+    # TCS prints the words, not the block label: "Property, plant and equipment"
+    # 11,032 / 10,978 on its consolidated face (p.11; p.20 is the standalone
+    # face and is not read). Same line the key is named for.
+    "Property, plant and equipment": ("canonical.bs.ppe", "bs"),
     # Gross asset base and accumulated depreciation. Both are needed to measure the
     # depreciation rate the steady-state capex target is built on; see
     # backend/forecast/assumptions.py.
@@ -246,9 +292,19 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Capital Work in Progress": ("canonical.bs.cwip", "bs"),
     "Goodwill": ("canonical.bs.goodwill", "bs"),
     "Intangible assets": ("canonical.bs.intangible_assets", "bs"),
+    # TCS splits Goodwill / Other intangible assets (176 / 940); the
+    # ex-goodwill bucket is what this key holds.
+    "Other intangible assets": ("canonical.bs.intangible_assets", "bs"),
     "Non-current investments": ("canonical.bs.non_current_investments", "bs"),
     "Deferred income tax assets": ("canonical.bs.deferred_tax_assets", "bs"),
+    # TCS words it "Deferred tax assets (net)" (4,465 / 3,578, non-current
+    # only): same line, shorter caption.
+    "Deferred tax assets (net)": ("canonical.bs.deferred_tax_assets", "bs"),
     "Income tax assets": ("canonical.bs.income_tax_assets", "bs"),
+    # TCS prints it in both halves (1,439 non-current / 1,259 current at FY26);
+    # `_key_for_half` routes the current rows to current_income_tax_assets,
+    # the same split that resolved Infosys' two-sided caption.
+    "Income tax assets (net)": ("canonical.bs.income_tax_assets", "bs"),
     "Other non-current assets": ("canonical.bs.other_non_current_assets", "bs"),
     "Total non-current assets": ("canonical.bs.total_non_current_assets", "bs"),
     "Current investments": ("canonical.bs.current_investments", "bs"),
@@ -287,6 +343,10 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Trade receivables": ("canonical.bs.trade_receivables", "bs"),
     "Trade receivables and unbilled revenue": ("canonical.bs.trade_receivables", "bs"),
     "Unbilled revenue": ("canonical.bs.unbilled_revenue", "bs"),
+    # TCS prints the bare word in both halves (114 non-current / 10,084
+    # current at FY26). The half guard declines the non-current row for lack
+    # of a key, so the current figure publishes and nothing is misfiled.
+    "Unbilled": ("canonical.bs.unbilled_revenue", "bs"),
     "Inventory": ("canonical.bs.inventory", "bs"),
     "Cash & Bank": ("canonical.bs.cash_and_bank", "bs"),
     "Cash and cash equivalents": ("canonical.bs.cash_and_bank", "bs"),
@@ -317,6 +377,11 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     # A filer whose own balance sheet prints a line captioned "Other Assets" is a
     # different thing, and reaches the same key through that filer's own caption
     # list rather than through this aggregator.
+    #
+    # NOT "Cash flow hedge reserves": a component parked on a total key. The
+    # reported boost would otherwise publish the hedge component (6 at FY24)
+    # as total other reserves (86,045). Withdrawn below; the aggregate the
+    # screener prints keeps publishing as today.
     "Current income tax assets": ("canonical.bs.current_income_tax_assets", "bs"),
     "Current derivative financial assets": ("canonical.bs.derivative_financial_assets_current", "bs"),
     # The filer's own caption. Infosys prints "Derivative financial instruments" on
@@ -328,14 +393,19 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Total assets": ("canonical.bs.total_assets", "bs"),
     "Total Assets": ("canonical.bs.total_assets", "bs"),
     "Total_Asset": ("canonical.bs.total_assets", "bs"),
+    # TCS prints the subtotal in full capitals (182,372 = total equity and
+    # liabilities to the rupee, verified against the same page).
+    "TOTAL ASSETS": ("canonical.bs.total_assets", "bs"),
 
     # --- Balance Sheet (Liabilities & Equity) ---
     "Equity Share Capital": ("canonical.bs.equity_capital", "bs"),
+    # TCS prints "Share capital" 362 both years on its consolidated face; the
+    # registry comment above foresaw exactly this caption beside Other equity.
+    "Share capital": ("canonical.bs.equity_capital", "bs"),
     "Retained earnings": ("canonical.bs.retained_earnings", "bs"),
     "Reserves": ("canonical.bs.other_reserves", "bs"),
     "Other reserves": ("canonical.bs.other_reserves", "bs"),
     "Capital redemption reserve": ("canonical.bs.other_reserves", "bs"),
-    "Cash flow hedge reserves": ("canonical.bs.other_reserves", "bs"),
     "Total equity": ("canonical.bs.total_equity", "bs"),
     "Borrowings": ("canonical.bs.borrowings", "bs"),
     "Short term borrowings": ("canonical.bs.short_term_borrowings", "bs"),
@@ -355,6 +425,9 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Lease liabilities": ("canonical.bs.lease_liabilities", "bs"),
     "Other current liabilities": ("canonical.bs.other_current_liabilities", "bs"),
     "Other Liabilities": ("canonical.bs.other_current_liabilities", "bs"),
+    # TCS prints it lowercase, current half only (6,866 / 7,188): one figure,
+    # so the case variant is safe where the two-figure captions below are not.
+    "Other liabilities": ("canonical.bs.other_current_liabilities", "bs"),
     "Other non-current liabilities": ("canonical.bs.other_non_current_liabilities", "bs"),
     "Other liabilities and provisions": ("canonical.bs.other_non_current_liabilities", "bs"),
     "Provision for post sale client support and other provisions": ("canonical.bs.provisions", "bs"),
@@ -373,6 +446,8 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Total liabilities and equity": ("canonical.bs.total_liabilities_and_equity", "bs"),
     "Total Liabilities & Equity": ("canonical.bs.total_liabilities_and_equity", "bs"),
     "Total_Liab": ("canonical.bs.total_liabilities", "bs"),
+    # TCS prints it in full capitals; same verified footing as TOTAL ASSETS.
+    "TOTAL EQUITY AND LIABILITIES": ("canonical.bs.total_liabilities_and_equity", "bs"),
 
     # --- Cash Flow Statement ---
     "Cash from Operating Activity": ("canonical.cf.operating_activities", "cf"),

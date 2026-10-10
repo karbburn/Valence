@@ -24,21 +24,25 @@ names:
   sections already sum to the bottom line without it, so it publishes as a
   memo outside them and the reconciliation check absorbs it.
 
-- Thirty have none. The engine rates the first twenty-two low confidence
+- Thirty-three have none. The engine rates the first twenty-three low confidence
   (0.2, no key): their section totals are already mapped, and the balance-sheet
   cases cannot pick a key without replacing an aggregate with a component or
   putting two figures of one period under one identity. The next five the engine
   does suggest, at destinations that state something false: a pre-tax subtotal
   competing with the section total, a liability in an asset key, a deduction on
   the receipt line it adjusts, an ex-minority subtotal beside its own total, and
-  a share-count note fragment on the liabilities-and-equity total. The last
+  a share-count note fragment on the liabilities-and-equity total. The next
   three the registry mapped itself, and each is a case where the cash flow
   statement's last-row rule lets page order publish a figure the filing does
   not support: the contingent line, beside the acquisition line it settles,
   overwrites the filing's (637) with its own (13); and the escrow pair, where
   deposits (1,815) and redemptions 1,815 net to zero for FY26 but the
   redemption prints last, so one side of a pair published as the year's line.
-  Withdrawn is the recorded state for all thirty: no canonical datapoint, not
+  The last two the reported-status rule would otherwise promote wrongly,
+  found by measuring every multi-candidate cell before landing it: a hedge
+  reserve component that would publish as total other reserves, and an
+  administrative-expenses half whose selling half the filing never prints.
+  Withdrawn is the recorded state for all thirty-three: no canonical datapoint, not
   counted as an unmapped gap, and a row in the review queue either way.
 """
 from __future__ import annotations
@@ -161,6 +165,7 @@ WITHDRAWN_FIGURES = [
     ),
     ("Right-of-use assets", "BALANCE SHEET", 6177.0),
     ("Share premium", "BALANCE SHEET", 1839.0),
+    ("Other components of equity", "BALANCE SHEET", 6331.0),
     ("Employee benefit obligations", "BALANCE SHEET", 3524.0),
     # The wrong-destination family: each the engine's own suggestion, refused.
     ("Cash generated from operations", "CASH FLOW", 44472.0),
@@ -192,6 +197,18 @@ WITHDRAWN_FIGURES = [
         "Redemption of escrow and other deposits pertaining to Buyback",
         "CASH FLOW",
         1815.0,
+    ),
+    # The reported-status rule would promote either of these wrongly: a
+    # component onto a total key, and a half onto a combined key.
+    (
+        "Cash flow hedge reserves",
+        "BALANCE SHEET",
+        4824.0,
+    ),
+    (
+        "Administrative expenses",
+        "PROFIT & LOSS",
+        8584.0,
     ),
 ]
 
@@ -258,7 +275,7 @@ class TestTheCaptionsWithoutAHomeAreRecorded:
             "%r is not in WITHDRAWN_LABELS, so it reads as an unmapped accident "
             "rather than a recorded decision" % missing
         )
-        assert len(WITHDRAWN_FIGURES) == 30, (
+        assert len(WITHDRAWN_FIGURES) == 33, (
             "the family changed size (%d); add or remove the caption itself, not "
             "silently the count" % len(WITHDRAWN_FIGURES)
         )
