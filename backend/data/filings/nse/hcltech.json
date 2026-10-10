@@ -1,13 +1,13 @@
 {
   "symbol": "HCLTECH",
-  "url": "https://nsearchives.nseindia.com/corporate/HCLTECH_13072026174902_IFRS_Financials.pdf",
-  "announced_text": "13-Jul-2026 17:49:49",
-  "announced_stamp": "13072026174949",
-  "pages": 45,
+  "url": "https://nsearchives.nseindia.com/corporate/HCLTECH_21042026183508_FinancialResults.pdf",
+  "announced_text": "21-Apr-2026 18:35:26",
+  "announced_stamp": "21042026183526",
+  "pages": 29,
   "balance_sheet_pages": [
-    5
+    4
   ],
-  "bytes": 625552,
-  "tried": 4,
-  "label": "HCL Technologies Limited has informed the Exchange about Consolidated Financial Statements"
+  "bytes": 2990105,
+  "tried": 1,
+  "label": "HCL Technologies Limited has informed the Exchange that Board of Directors at its meeting "
 }

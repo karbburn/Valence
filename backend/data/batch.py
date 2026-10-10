@@ -210,13 +210,15 @@ def ensure_company_ingested(
     The India pipeline runs only further down this function, so the shortcut
     returned before it and the statements were never read.
 
-    Measured, on a copy of the store, same filings, one flag apart:
+    Measured, on a copy of the store, one flag apart. The hcltech row was
+    re-measured after its audited Ind-AS face replaced the superseded IFRS
+    attachment in the cache; the other rows stand as first measured:
 
         company              force    nse_filing rows
         tcs_tcs              False            0
         tcs_tcs              True           185
         hcltech_hcltech      False            0
-        hcltech_hcltech      True            46
+        hcltech_hcltech      True            98
         infy_infy            False          260
         infy_infy            True           426
 

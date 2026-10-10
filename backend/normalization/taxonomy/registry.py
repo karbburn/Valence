@@ -225,6 +225,73 @@ WITHDRAWN_LABELS: FrozenSet[str] = frozenset({
     # this corrects a standing figure. Printed by Infosys only.
     "Escrow and other deposits pertaining to Buyback",
     "Redemption of escrow and other deposits pertaining to Buyback",
+    # HCLTech's audited Ind-AS face (printed page 4), each refused on what that
+    # page prints. The captions keep the filer's own numbering, because the
+    # letters are load-bearing: the face prints "(c) Provisions" in the
+    # non-current block and "(d ) Provisions" in the current one, and one
+    # stripped to bare words would be a single caption with two figures.
+    #
+    # "(c) Right-of-use assets" (3,592 / 3,016): no key exists for a
+    # right-of-use asset while every neighbour on that line has one (PP&E,
+    # goodwill, intangibles), so parking it in PP&E would state a leased asset
+    # as an owned one.
+    "(c) Right-of-use assets",
+    # "(f) Intangible assets under development" (82): the same block prints
+    # "(e) Other intangible assets" onto the intangibles key beside it, and a
+    # second caption on one key leaves whichever the reader kept -- the face
+    # names these two lines itself.
+    "(f) Intangible assets under development",
+    # "(iii) Loans" (50 / 586) and "(v) Loans" (1,017 / 976): loan RECEIVABLES
+    # on the assets side, and the only loan key is borrowings, which is money
+    # the company owes. An asset parked there inverts the statement.
+    "(iii) Loans",
+    "(v) Loans",
+    # The face's four "Others" catch-alls -- "(iv)" at 3,585 non-current assets
+    # and 9,228 current liabilities, "(vi)" at 1,626 current assets, "(iii)"
+    # at 1,401 non-current liabilities: a remainder bucket with no line it
+    # belongs to. There is no key for a filer's own catch-all, and choosing one
+    # would name money the filing leaves unnamed.
+    "(iv) Others",
+    "(vi) Others",
+    "(iii) Others",
+    # "(iv) Other bank balances" (15,160 / 13,044): deposits, neither cash nor
+    # prepayments. On the cash key they would overstate liquid cash by the
+    # whole deposit book, so the line goes empty and the shortfall is visible
+    # in the reconciliation instead of hiding inside it.
+    "(iv) Other bank balances",
+    # "(b) Other equity" (74,622 / 69,112): the same decision as this caption's
+    # bare form above -- a component with no component key, and `other_reserves`
+    # holds the narrower "Other reserves" where another filer prints it. The
+    # face's own "TOTAL EQUITY" (75,197 / 69,673) is mapped, so the block still
+    # foots to what the filing totals.
+    "(b) Other equity",
+    # "(i) Borrowings" (37 non-current / 122 current at FY26) and "(ii) Lease
+    # liabilities" (3,180 / 1,876) print once in each half under one caption.
+    # Borrowings would need the current row routed to the short-term line and
+    # cannot be: the page tags both rows the same, so which figure reached the
+    # non-current key would be row order. The lease lines are keyed by lease
+    # TYPE (operating and finance) and this caption names no type. The
+    # lease-borrowings precedent above (TCS) withdraws both for the same
+    # reason: one key would hold whichever half parsed last.
+    "(i) Borrowings",
+    "(ii) Lease liabilities",
+    # "(b) Contract liabilities" (1,162 non-current / 5,053 current): no key,
+    # and both print under this one caption -- the unearned-revenue key is a
+    # current line, so the non-current figure could not reach it honestly and
+    # the current one would publish beside a caption the filing does not use.
+    "(b) Contract liabilities",
+    # "(c) Provisions" (2,001 / 1,920) prints in the NON-current block, and the
+    # only provisions key is the current-liabilities line. The face prints
+    # "(d ) Provisions" (1,664 / 1,487) in the current block and that caption
+    # is mapped; both on one key would collide on every period.
+    "(c) Provisions",
+    # The two tax-liability captions, refused for the same reason as their bare
+    # forms above: no liability key exists, and a liability parked in an asset
+    # key inverts the statement. Printed here as "(d) Deferred tax liabilities
+    # (net)" (1,381 / 1,615) and "(e) Current tax liabilities (net)"
+    # (3,862 / 2,815).
+    "(d) Deferred tax liabilities (net)",
+    "(e) Current tax liabilities (net)",
 })
 
 # Mapping entry type: (canonical_key, statement)
@@ -448,6 +515,55 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Total_Liab": ("canonical.bs.total_liabilities", "bs"),
     # TCS prints it in full capitals; same verified footing as TOTAL ASSETS.
     "TOTAL EQUITY AND LIABILITIES": ("canonical.bs.total_liabilities_and_equity", "bs"),
+
+    # --- Balance Sheet, HCLTech audited Ind-AS face (printed page 4) ---
+    #
+    # The filer's own captions, prefix and all: Ind AS letters each component
+    # ("(a) Property, plant and equipment"), and stripping the letters would
+    # fuse captions this page prints as different lines. Every caption on this
+    # page that is refused is in WITHDRAWN_LABELS above with its reason.
+    #
+    # Non-current assets.
+    "(a) Property, plant and equipment": ("canonical.bs.ppe", "bs"),
+    "(b) Capital work in progress": ("canonical.bs.cwip", "bs"),
+    "(d) Goodwill": ("canonical.bs.goodwill", "bs"),
+    "(e) Other intangible assets": ("canonical.bs.intangible_assets", "bs"),
+    # Printed in BOTH halves: 130 non-current and 6,960 current at FY26. The
+    # registry gives the non-current key, which is where the non-current row
+    # belongs, and `_key_for_half` routes the current row to
+    # `current_investments` -- the two lines the filing's own half structure
+    # separates.
+    "(i) Investments": ("canonical.bs.non_current_investments", "bs"),
+    # Printed only under non-current assets (601 / 1,022). The half guard
+    # declines it for the same reason it declines TCS's non-current "Unbilled":
+    # the unbilled key is a current-asset line and this figure is not current.
+    # A recorded shortfall, not a mapping error.
+    "(ii) Trade receivables -unbilled": ("canonical.bs.unbilled_revenue", "bs"),
+    "(h) Deferred tax assets (net)": ("canonical.bs.deferred_tax_assets", "bs"),
+    # The face's table font breaks the ToUnicode map on three captions: the
+    # hyphenated "non-current" extracts as "non..:urrent" and "Non-controlling"
+    # as "Non..:ontrolling", so those are the strings the reader receives.
+    # The figures beside them read clean (total non-current assets 45,716,
+    # footing the page), and mapping the extracted string is the only way the
+    # printed lines reach their keys -- a prettier caption would never match.
+    "(i) Other non..:urrent assets": ("canonical.bs.other_non_current_assets", "bs"),
+    "Total non..:urrent assets": ("canonical.bs.total_non_current_assets", "bs"),
+    "Non..:ontrolling interest": ("canonical.bs.minority_interest", "bs"),
+    # Current assets.
+    "(a) Inventories": ("canonical.bs.inventory", "bs"),
+    "(iii) Cash and cash equivalents": ("canonical.bs.cash_and_bank", "bs"),
+    "(c) Current tax assets (net)": ("canonical.bs.current_income_tax_assets", "bs"),
+    "(d ) Other current assets": ("canonical.bs.prepayments_other_current_assets", "bs"),
+    # Equity and liabilities.
+    "(a ) Equity share capital": ("canonical.bs.equity_capital", "bs"),
+    "TOTAL EQUITY": ("canonical.bs.total_equity", "bs"),
+    "TOTAL LIABILITIES": ("canonical.bs.total_liabilities", "bs"),
+    "(e ) Other non-current liabilities": ("canonical.bs.other_non_current_liabilities", "bs"),
+    "(c) Other current liabilities": ("canonical.bs.other_current_liabilities", "bs"),
+    # The current block's provisions (1,664 / 1,487). Its non-current twin
+    # "(c) Provisions" is withdrawn above because the only provisions key is
+    # this block's line.
+    "(d ) Provisions": ("canonical.bs.provisions", "bs"),
 
     # --- Cash Flow Statement ---
     "Cash from Operating Activity": ("canonical.cf.operating_activities", "cf"),

@@ -54,7 +54,18 @@ def cached_pairs() -> dict:
     is one skip rather than a per-test guess. The first version guarded on the presence of
     the JSON alone, which is present in CI while a PDF may not be, so two tests failed there
     instead of skipping.
+
+    A company may hold MORE THAN ONE attachment, and the pair chosen is the one whose
+    recorded pages carry a balance sheet -- the same content test the fetcher acquired it
+    with. HCLTech holds two since its migration: the superseded IFRS document, which stays
+    in the cache as a fixture for the units and boundary tests, and the audited Ind-AS
+    face whose metadata the cache now records. Taking the alphabetically first PDF would
+    pick the superseded one and read its non-statement page as the balance sheet.
     """
+    import pdfplumber
+
+    from backend.data.ingestion.nse_filings import looks_like_balance_sheet
+
     out = {}
     for meta in REAL:
         try:
@@ -62,11 +73,21 @@ def cached_pairs() -> dict:
         except Exception:
             continue
         symbol = str(payload.get("symbol") or "").strip().lower()
-        if not symbol:
+        pages = payload.get("balance_sheet_pages") or []
+        if not symbol or not pages:
             continue
-        pdfs = sorted(meta.parent.glob(f"{meta.stem}-*.pdf"))
-        if pdfs:
-            out[symbol] = (pdfs[0], payload)
+        for pdf in sorted(meta.parent.glob(f"{meta.stem}-*.pdf")):
+            try:
+                with pdfplumber.open(pdf) as doc:
+                    located = all(
+                        looks_like_balance_sheet(doc.pages[int(p) - 1].extract_text() or "")
+                        for p in pages
+                    )
+            except Exception:
+                continue
+            if located:
+                out[symbol] = (pdf, payload)
+                break
     return out
 
 
@@ -109,15 +130,37 @@ def test_a_cached_document_is_discoverable_from_its_company_id():
         except pytest.skip.Exception:
             continue
         found = _cached_nse_pdfs(cid)
-        assert len(found) == 1, (
-            f"{cid}: found {len(found)} cached attachments, expected 1. The fetcher's "
-            f"output is invisible to ingestion, which is the defect this file exists to "
-            f"close."
+        assert found, (
+            f"{cid}: found 0 cached attachments, so the fetcher's output is invisible to "
+            f"ingestion, which is the defect this file exists to close."
         )
-        pdf_path, meta = found[0]
-        assert pdf_path.exists()
-        assert meta.get("balance_sheet_pages"), (
+        assert all(pdf.exists() for pdf, _m in found), (
+            f"{cid}: metadata names a document that is not on disk"
+        )
+        assert found[0][1].get("balance_sheet_pages"), (
             f"{cid}: the metadata records no balance-sheet page, so there is nothing to parse"
+        )
+        # A company may hold more than one attachment (HCLTech keeps its superseded IFRS
+        # document in the cache as a parser fixture beside its audited Ind-AS face). What
+        # must always hold is that SOME attachment actually carries the recorded page.
+        import pdfplumber
+
+        from backend.data.ingestion.nse_filings import looks_like_balance_sheet
+
+        located_any = False
+        for pdf_path, meta in found:
+            try:
+                with pdfplumber.open(pdf_path) as doc:
+                    if all(
+                        looks_like_balance_sheet(doc.pages[int(p) - 1].extract_text() or "")
+                        for p in (meta.get("balance_sheet_pages") or [])
+                    ):
+                        located_any = True
+            except Exception:
+                continue
+        assert located_any, (
+            f"{cid}: no attachment carries the recorded balance-sheet pages, so the link "
+            f"between company and document is metadata without a document"
         )
         checked += 1
     if not checked:
@@ -164,16 +207,23 @@ def test_the_section_comes_from_the_document_not_the_caller():
     for cid in ("tcs_tcs", "hcltech_hcltech"):
         if cid.split("_")[0].lower() not in cached_pairs():
             continue
+        # The union across attachments is what counts. HCLTech's superseded IFRS
+        # document shares the cache directory and the stem glob, and the recorded
+        # page of the live metadata is not a statement in it: the parse raises
+        # inside `_filing_datapoints_from_cached_pdf`, which logs the refusal and
+        # returns nothing. An attachment contributing zero rows is the honest
+        # outcome for a document whose statement the record no longer points at.
+        all_dps = []
         for _pdf, meta in _cached_nse_pdfs(cid):
-            dps = _filing_datapoints_from_cached_pdf(_pdf, meta, cid)
-            assert dps, f"{cid}: the located balance sheet produced no rows"
-            sections = {d.section for d in dps}
-            assert sections == {"BALANCE SHEET"}, (
-                f"{cid}: rows carry {sections}. Every page reached here was located by "
-                f"matching the balance sheet's own subtotal caption, so any other section "
-                f"is the caller speaking rather than the document."
-            )
-            checked += 1
+            all_dps.extend(_filing_datapoints_from_cached_pdf(_pdf, meta, cid))
+        assert all_dps, f"{cid}: the located balance sheet produced no rows"
+        sections = {d.section for d in all_dps}
+        assert sections == {"BALANCE SHEET"}, (
+            f"{cid}: rows carry {sections}. Every page reached here was located by "
+            f"matching the balance sheet's own subtotal caption, so any other section "
+            f"is the caller speaking rather than the document."
+        )
+        checked += 1
     if not checked:
         pytest.skip("no cached NSE document in this checkout")
 

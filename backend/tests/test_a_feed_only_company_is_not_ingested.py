@@ -5,13 +5,15 @@ company can hold rows from `screener` and `yfinance_live` and have no filing row
 such a company that shortcut returned before the India pipeline -- the only code that reads the
 audited statements -- so the filings were never parsed.
 
-Measured on a copy of the store, same committed filings, one flag apart:
+Measured on a copy of the store, one flag apart. The hcltech row was re-measured
+after its audited Ind-AS face replaced the superseded IFRS attachment in the cache;
+the other rows stand as first measured:
 
     company              force    nse_filing rows
     tcs_tcs              False            0
     tcs_tcs              True           185
     hcltech_hcltech      False            0
-    hcltech_hcltech      True            46
+    hcltech_hcltech      True            98
     infy_infy            False          260
     infy_infy            True           426
 
@@ -140,10 +142,11 @@ def test_a_feed_only_company_runs_its_ingest_without_being_forced(
 
     That scope is deliberate, and it was forced by a real consequence. Now that the parser reads
     units from the page instead of asserting INR crores, normalization REFUSES a company whose
-    filing declares a different currency than its feed -- HCLTech, whose statements say "millions of
-    USD" -- and refuses TCS, whose rupee glyph does not survive text extraction so its filing states
-    a scale and no currency. Both refusals are correct, and both mean the CANONICAL layer ends up
-    holding fewer rows than before.
+    filing declares a different currency than its feed: TCS, whose rupee glyph does not survive
+    text extraction, so its filing states a scale and no currency. The same guard refused HCLTech
+    while the cache held its IFRS document ("millions of USD"); its audited Ind-AS face replaced
+    that document and states INR crores, so the refusal lifts for it and the canonical layer now
+    holds its filing rows.
 
     An earlier version of this test asserted filing rows were present in the store afterwards. It
     began failing for that reason while saying nothing about the shortcut it was written for. So it

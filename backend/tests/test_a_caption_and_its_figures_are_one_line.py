@@ -295,6 +295,92 @@ def test_a_date_header_is_never_bridged_even_when_only_one_side_has_caption_text
     )
 
 
+def test_two_figure_bands_of_one_line_reach_the_caption_behind_them():
+    """The equity-share-capital shape on HCLTech's audited Ind-AS face, fed directly.
+
+    One printed line arrives as three buckets there: the FY25 column's "543", the
+    FY26 column's "543", and the caption "(a ) Equity share capital". The
+    one-sided caption rule rejoins the caption to the nearest figure bucket and
+    leaves the other column's figure two buckets back, so one period's share
+    capital never reaches its caption. Two buckets that carry nothing but
+    figures belong to the same printed line when their bands cover each other
+    almost entirely -- and to two printed lines when they do not.
+    """
+    boundary = 330.0
+    split = [
+        (471.6, _words([(536.0, "543")], 471.6)),
+        (471.9, _words([(473.0, "543")], 471.9)),
+        (472.3, _words([(54.0, "(a"), (78.0, ")"), (90.0, "Equity")], 472.3)),
+    ]
+    merged = _merge_split_buckets(split, boundary)
+    assert len(merged) == 1, (
+        f"the three bands of one printed line stayed apart: {merged}"
+    )
+    texts = [w["text"] for w in merged[0][1]]
+    assert texts.count("543") == 2, (
+        f"a column's share-capital figure was lost in the merge: {texts}"
+    )
+
+
+def test_a_caption_word_split_onto_its_own_bucket_rejoins_the_line():
+    """HCLTech prints "Equity attributable to owners of the Company" with the word
+    "of" on its own baseline (490.604 against the line's 490.839).
+
+    Both sides of that split carry caption text, so the one-sided rule refuses
+    it and the withdrawn caption WITHDRAWN_LABELS keys on never arrives whole:
+    "Equity attributable to owners the Company" would neither match the
+    withdrawal nor map to anything honest. The second bucket's figures give the
+    rule something to weigh against the near-total overlap.
+    """
+    boundary = 330.0
+    split = [
+        (490.6, _words([(196.0, "of")], 490.6)),
+        (
+            490.8,
+            _words(
+                [
+                    (108.0, "Equity"),
+                    (160.0, "attributable"),
+                    (466.0, "75,165"),
+                    (530.0, "69,655"),
+                ],
+                490.8,
+            ),
+        ),
+    ]
+    merged = _merge_split_buckets(split, boundary)
+    assert len(merged) == 1, (
+        f"the split word stayed apart from its line: {merged}"
+    )
+    texts = [w["text"] for w in merged[0][1]]
+    assert "of" in texts and "75,165" in texts, (
+        f"the merged bucket lost a side: {texts}"
+    )
+
+
+def test_a_stack_of_captioned_lines_is_not_welded_into_one_row():
+    """The false positive that sets the near-total threshold, fed directly.
+
+    HCLTech's share-capital block stacks captioned lines about 5.9pt apart whose
+    word bands overlap only ~1.1pt, while a caption and its figures on ONE line
+    overlap across the whole shorter band. The synthetic bands below are 9pt
+    tall (the helper's fixed height; the filing's are ~7), so the same refusal
+    reads as a 1.5pt overlap against an 8pt requirement -- the same ratio as the
+    filing's 1.06 against 5.96. Welding these would publish two printed lines as
+    one caption with whichever figure parsed last.
+    """
+    boundary = 330.0
+    stacked = [
+        (431.15, _words([(90.0, "Share"), (150.0, "capital"), (210.0, "note")], 431.15)),
+        (438.65, _words([(90.0, "Other"), (150.0, "share"), (349.0, "73")], 438.65)),
+    ]
+    merged = _merge_split_buckets(stacked, boundary)
+    assert len(merged) == 2, (
+        "two stacked captioned lines were welded into one row, which is the share-block "
+        f"regression the near-total threshold exists to refuse: {merged}"
+    )
+
+
 def test_two_columns_cannot_be_mistaken_for_quarterly_and_annual_pairs():
     """`annual_only` used to keep the rightmost half of the year headers unconditionally.
 

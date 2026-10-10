@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from backend.data.pipeline import DB_PATH
@@ -10,6 +11,8 @@ from backend.normalization.taxonomy.registry import (
     get_canonical_mapping,
 )
 from backend.validation.accounting_checks import CURRENT_ASSET_LINES
+
+logger = logging.getLogger(__name__)
 
 # The balance-sheet keys `current_assets_reconcile` treats as current. Imported
 # rather than restated, so the two lists cannot drift apart -- the reconciliation
@@ -65,11 +68,21 @@ def _key_for_half(canonical_key: str, bs_half: str | None) -> str:
     current key. The non-current half keeps the existing key, which is where it
     already went and where `total_non_current_assets` can find it.
 
-    Narrow on purpose: only this pair, because only this pair is observed to be
-    printed on both sides. Generalising it would invent a naming convention.
+    Narrow on purpose: one pair per reading where the caption's own words do not
+    name the half, because each addition must be an observed pair rather than a
+    naming convention guessed from key names. HCLTech's audited balance sheet is
+    the second observation -- it prints "(i) Investments" in the non-current half
+    (130 at FY26) and again in the current half (6,960 at FY26), one caption
+    reaching `non_current_investments` for both, so without this route the
+    current figure would publish as non-current investments and the
+    reconciliation would count 6,960 of liquid assets as permanently parked.
+    `current_investments` is the line that already exists for exactly this
+    figure, so the route does not invent it.
     """
     if bs_half == "current" and canonical_key == "canonical.bs.income_tax_assets":
         return "canonical.bs.current_income_tax_assets"
+    if bs_half == "current" and canonical_key == "canonical.bs.non_current_investments":
+        return "canonical.bs.current_investments"
     return canonical_key
 
 
@@ -145,6 +158,92 @@ def _statement_agrees(section: str | None, statement: str | None) -> bool:
     return LONG_TO_CODE.get(left, left) == right
 
 
+def _source_page(d: RawDatapoint) -> str | None:
+    """The printed page a filing row came from, or None for rows that have none.
+
+    Filing provenance reads "<file> p.<n> y=<coord> ...", and the coordinate is what
+    makes two rows comparable as printings of the same page. Screener and feed rows
+    carry a cell reference instead, so they never count: a third-party estimate
+    beside a filing figure is a second SOURCE, not a second printing, and refusing
+    the pair would withhold the filing's own reading.
+    """
+    head, sep, _tail = (d.source_location or "").partition(" y=")
+    return head if sep else None
+
+
+def _refuse_same_page_twins(
+    staged: list[tuple[CanonicalDatapoint, RawDatapoint]],
+    queued_for_review: set[tuple[str, str]],
+    use_confidence_engine: bool,
+    db_path: str | Path,
+) -> list[CanonicalDatapoint]:
+    """Two figures for one key, one period, one page, one half: publish neither.
+
+    A balance sheet may print the same caption in both halves of one face, and the
+    half tag separates those (HCLTech's "(i) Investments" is 130 non-current and
+    6,960 current at FY26, and each routes to its own line). It may also print the
+    same caption twice under the SAME half, where the tag cannot tell them apart and
+    neither can the key: HCLTech's audited face prints "Billed" twice as a current
+    caption, 23,585 under trade receivables and 3,726 under trade payables, both
+    reaching `trade_receivables`. One of those is the filing's receivables figure
+    and the other is its payables, and a reader would be shown whichever the row
+    order happened to put last.
+
+    Refusing both is the only honest reading the engine has. The parser cannot drop
+    them, because the identical construction with half tags (Infosys' "Unbilled
+    revenue", TCS's "Loans") must keep both rows, and the registry cannot split
+    them, because "Billed" is one caption and the registry maps captions. The
+    refusal is scoped to one page and one half precisely so those keep publishing:
+    a same-key pair from different pages or different halves is a second reading,
+    which the selector already ranks rather than guesses.
+    """
+    groups: dict[tuple[str, str, str], list[int]] = {}
+    for i, (c_dp, _d) in enumerate(staged):
+        groups.setdefault(
+            (c_dp.company_id, c_dp.canonical_key, c_dp.period_label), []
+        ).append(i)
+
+    doomed: set[int] = set()
+    for idxs in groups.values():
+        if len(idxs) < 2:
+            continue
+        printings: dict[tuple[str, str | None], list[int]] = {}
+        for i in idxs:
+            page = _source_page(staged[i][1])
+            if page is None:
+                continue
+            printings.setdefault((page, staged[i][1].bs_half), []).append(i)
+        for bucket in printings.values():
+            if len({staged[i][1].value for i in bucket}) <= 1:
+                continue
+            for i in bucket:
+                if i in doomed:
+                    continue
+                doomed.add(i)
+                d = staged[i][1]
+                if use_confidence_engine:
+                    key = (d.company_id, d.metric_raw)
+                    if key not in queued_for_review:
+                        route_to_review_queue(
+                            d.company_id,
+                            d.metric_raw,
+                            suggest_canonical_mapping(d.metric_raw),
+                            db_path=db_path,
+                        )
+                        queued_for_review.add(key)
+    if doomed:
+        captions = sorted(
+            {staged[i][1].metric_raw for i in doomed}
+        )
+        logger.warning(
+            "%d row(s) refused as same-page same-half conflicts on one key and "
+            "period, so neither printing publishes: %s",
+            len(doomed),
+            captions,
+        )
+    return [c_dp for i, (c_dp, _d) in enumerate(staged) if i not in doomed]
+
+
 def map_raw_datapoints(
     raw_datapoints: list[RawDatapoint],
     include_superseded: bool = False,
@@ -166,7 +265,7 @@ def map_raw_datapoints(
     Returns:
         (canonical_datapoints, taxonomy_mappings, unmapped_raw_labels)
     """
-    canonical_datapoints: list[CanonicalDatapoint] = []
+    staged: list[tuple[CanonicalDatapoint, RawDatapoint]] = []
     taxonomy_mappings_dict: dict[tuple[str, str], TaxonomyMapping] = {}
     unmapped_labels: set[str] = set()
     queued_for_review: set[tuple[str, str]] = set()
@@ -325,7 +424,7 @@ def map_raw_datapoints(
             source_datapoint_ids=[d.id],
             derivation_rule=None,
         )
-        canonical_datapoints.append(c_dp)
+        staged.append((c_dp, d))
 
         # Build Taxonomy Mapping Record (deduped by (company_id, metric_raw))
         map_key = (d.company_id, d.metric_raw)
@@ -340,4 +439,7 @@ def map_raw_datapoints(
             )
             taxonomy_mappings_dict[map_key] = tax_map
 
+    canonical_datapoints = _refuse_same_page_twins(
+        staged, queued_for_review, use_confidence_engine, db_path
+    )
     return canonical_datapoints, list(taxonomy_mappings_dict.values()), sorted(unmapped_labels)

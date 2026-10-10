@@ -41,6 +41,20 @@ _ANCHOR_PROXIMITY = 40.0
 # `_merge_split_buckets` requires.
 _MIN_LINE_OVERLAP = 0.5
 
+# How much of the shorter band must overlap before two buckets that BOTH carry a
+# caption, or BOTH carry only figures, may be called one printed line.
+#
+# The one-sided-caption rule keeps the measured 0.5pt floor: 71 of 71 split pairs
+# clear it and the four signature-block pairs never satisfy the caption condition.
+# The two split shapes that rule cannot see need a stricter number, because the
+# false positive is a different animal: a share-capital block stacks captioned
+# lines 5.9pt apart, so their bands overlap 1.06pt, while one printed line sliced
+# across buckets overlaps its whole band (measured on HCLTech printed 4: the
+# orphaned "of" overlaps 7.005 of 7.005, the split share-capital figures 6.700 of
+# 6.700, the split "73"/"66" figures 6.450 of 6.700). One point of slack keeps
+# every measured split and rejects the weld with a 5pt margin on both sides.
+_SAME_LINE_SLACK = 1.0
+
 # A bare fiscal year, which is what a statement's date header is made of. Used to refuse to
 # bridge that row, since the page title above it satisfies every other merge condition.
 _YEAR_HEADER = re.compile(r"^20\d\d$")
@@ -112,6 +126,12 @@ _IDENTIFIER_CAPTION = re.compile(r"\d{3,}$")
 _UNIT_DECLARATIONS: tuple[tuple[re.Pattern[str], str, str], ...] = (
     (re.compile(r"in\s+(?:₹|rs\.?|inr|usd|\$)\s*crores?\b", re.I), "INR", "crores"),
     (re.compile(r"\(\s*(?:₹|rs\.?|inr)?\s*crores?\s*\)", re.I), "", "crores"),
+    # HCLTech's audited Ind-AS balance sheet declares "(~ in crores)": the rupee
+    # glyph extracts as "~", so the parenthesised form above finds no currency
+    # and the pattern below finds none either. The parens are the declaration --
+    # a bare "in crores" outside them is prose about units, not a statement of
+    # this page's units, and stays refused.
+    (re.compile(r"\([^)]{0,30}\bin\s+crores?\b[^)]{0,30}\)", re.I), "", "crores"),
     (re.compile(r"in\s+(?:₹|rs\.?|inr|usd|\$)\s*lakhs?\b", re.I), "INR", "crores"),
     (re.compile(r"in\s+millions?\s+of\s+(usd|inr|rs\.?)\b", re.I), "", "millions"),
     (re.compile(r"in\s+(usd|inr|rs\.?)\s+millions?\b", re.I), "", "millions"),
@@ -409,6 +429,33 @@ def _merge_split_buckets(buckets: list[tuple[float, list[dict]]], boundary: floa
     Overlap rather than a gap because a printed line is a physical band. Two words are on the
     same line when their boxes share vertical space, whatever distance pdfplumber happens to
     report between their `top` values.
+
+    **A second split shape exists, measured on HCLTech's audited Ind-AS balance sheet
+    (printed page 4), and it is invisible to the one-sided-caption rule.** Three buckets
+    carry one printed line there:
+
+        top=471.6   543                 <- figure bucket (FY25 column)
+        top=471.9   543                 <- figure bucket (FY26 column)
+        top=472.3   (a ) Equity share capital    <- caption bucket
+
+    The rule above rejoins caption to figures, so the last two buckets become one row --
+    but the first sits two buckets back, its only neighbour is another figure-only
+    bucket, and `prev_has_caption != this_has_caption` is false for both, so the FY25
+    share capital never reaches its caption. The same shape loses "73" off
+    "(e ) Other non-current liabilities", and a caption word that lands in its own
+    bucket ("of" in "Equity attributable to owners of the Company", baseline
+    490.604 against the line's 490.839) leaves both sides captioned, which the
+    one-sided rule also refuses.
+
+    So there are now two rules where there was one. Exactly one side owning the caption
+    keeps the measured 0.5pt floor; the two new shapes -- both sides captioned with
+    differing figure sets, and neither side captioned at all -- require the overlap to
+    cover the whole shorter band (`_SAME_LINE_SLACK`), because the false positive for
+    them is a share-capital block stacking captioned lines 5.9pt apart whose bands
+    overlap only 1.06pt, while every measured same-line slice overlaps 6.2pt or more.
+    Two caption-only buckets still never merge: that is the audit report's signature
+    block, whose four overlapping pairs were measured as false positives before any
+    figure condition existed.
     """
     merged: list[tuple[float, list[dict]]] = []
     for key, ws in buckets:
@@ -421,6 +468,11 @@ def _merge_split_buckets(buckets: list[tuple[float, list[dict]]], boundary: floa
             overlap = min(prev_bottom, this_bottom) - max(prev_top, this_top)
             prev_has_caption = any(w["x0"] < boundary for w in prev_ws)
             this_has_caption = any(w["x0"] < boundary for w in ws)
+            prev_has_figures = any(w["x0"] >= boundary for w in prev_ws)
+            this_has_figures = any(w["x0"] >= boundary for w in ws)
+            prev_height = prev_bottom - prev_top
+            this_height = this_bottom - this_top
+            near_total = overlap > min(prev_height, this_height) - _SAME_LINE_SLACK
             # Never bridge a year header. The page title sits directly above the date header and
             # carries caption text while the header does not, so the two conditions above are
             # satisfied and it merges -- which is the failure this whole function exists to
@@ -439,10 +491,14 @@ def _merge_split_buckets(buckets: list[tuple[float, list[dict]]], boundary: floa
                 _YEAR_HEADER.search(w["text"]) or _MONTH.match(w["text"].strip(",."))
                 for w in ws
             )
-            if (
-                overlap > _MIN_LINE_OVERLAP
-                and prev_has_caption != this_has_caption
-                and not touches_year
+            if overlap > _MIN_LINE_OVERLAP and not touches_year and (
+                prev_has_caption != this_has_caption
+                or (
+                    prev_has_caption == this_has_caption
+                    and prev_has_figures != this_has_figures
+                    and near_total
+                )
+                or (not (prev_has_caption or this_has_caption) and near_total)
             ):
                 merged[-1] = (prev_key, prev_ws + ws)
                 continue
@@ -545,7 +601,41 @@ def _rows(page, boundary: float = LABEL_X_MAX) -> list[tuple[str, list[tuple[flo
     return out
 
 
+_GROUPED_FIGURE = re.compile(r"\d{1,3}(?:,\d+)+$")
+
+
+def _grouping_is_readable(bare: str) -> bool:
+    """True when a comma-grouped figure parses in either convention a filing uses.
+
+    Western grouping puts three digits behind every comma (281,139); Indian
+    grouping puts three behind the first comma and two behind the rest
+    (2,81,139). A token matching neither groups no number a reader could
+    verify: HCLTech's audited balance sheet prints its FY25 current-liabilities
+    subtotal as "28,1139", whose components sum to 28,039 and whose own
+    printed total (7,832 + 28,039 = 35,871) confirms the intent. Read as
+    281,139 it would publish a reported figure eleven times its own arithmetic.
+    """
+    parts = bare.split(",")
+    if not all(parts):
+        return False
+    if len(parts[0]) > 3:
+        return False
+    if all(len(p) == 3 for p in parts[1:]):
+        return True
+    return (
+        len(parts) >= 3
+        and len(parts[1]) == 2
+        and all(len(p) == 3 for p in parts[2:])
+    )
+
+
 def _num(token: str) -> float | None:
+    bare = token.strip().strip("()")
+    if "," in bare and _GROUPED_FIGURE.match(bare) and not _grouping_is_readable(bare):
+        # A figure whose grouping no convention can read is a recorded unknown,
+        # not a number to guess at. The row keeps its other column, so the
+        # shortfall lands where a missing subtotal belongs: visible.
+        return None
     s = token.replace(",", "").replace("(", "-").replace(")", "")
     try:
         return float(s)

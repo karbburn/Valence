@@ -32,11 +32,15 @@ from backend.data.parsers.pdf_tables import declared_units, parse_predicted_stat
 
 INFOSYS = Path("backend/data/filings/infosys-fy26-q4-outcome.pdf")
 HCLTECH = Path("backend/data/filings/nse/hcltech-ifrs-2026-07.pdf")
+HCLTECH_INDAS = Path("backend/data/filings/nse/hcltech-indas-2026-04.pdf")
 TCS = Path("backend/data/filings/nse/tcs-outcome-2026-04.pdf")
 
 needs_hcl = pytest.mark.skipif(not HCLTECH.exists(), reason="no HCLTech filing committed")
 needs_infy = pytest.mark.skipif(not INFOSYS.exists(), reason="no Infosys filing committed")
 needs_tcs = pytest.mark.skipif(not TCS.exists(), reason="no TCS filing committed")
+needs_indas = pytest.mark.skipif(
+    not HCLTECH_INDAS.exists(), reason="no audited Ind-AS filing committed"
+)
 
 
 class TestWhatThePageDeclares:
@@ -272,3 +276,80 @@ class TestTheTcsCroreBannerResolvesToInr:
             "the INR fill is no longer gated on the NSE source, so it answers "
             "for every source and the never-assume rule is dead"
         )
+
+
+class TestTheParenthesisedScaleDeclaration:
+    """HCLTech's audited Ind-AS face prints "(~ in crores)" in its header.
+
+    The rupee glyph extracts as "~", so neither the symbol pattern nor the bare
+    "( crore)" pattern finds anything. The parenthesised form is the
+    declaration the page makes about its own scale, so a paren containing "in
+    crores" reads the scale -- and only the scale, unless a currency token is
+    printed inside the same paren.
+    """
+
+    def test_a_parenthesised_scale_with_no_readable_currency_stays_half_read(self):
+        currency, units = declared_units(
+            "HCL Technologies Limited Consolidated Balance Sheet (~ in crores) "
+            "As at March 31, 2026 ASSETS"
+        )
+        assert (currency, units) == ("", "crores"), (
+            "the page declares its scale inside parentheses and no readable currency; "
+            f"got {(currency, units)!r}"
+        )
+
+    def test_a_currency_printed_inside_the_parentheses_is_read_from_it(self):
+        currency, units = declared_units("Particulars (Rs in crores) Note 2026 2025")
+        assert (currency, units) == ("INR", "crores"), (
+            "a currency token inside the same paren is printed evidence, not a default"
+        )
+
+    def test_a_bare_scale_outside_parentheses_is_not_a_declaration(self):
+        """The paren IS the declaration; a sentence about units is prose.
+
+        Accounting-policy paragraphs say "presented in crores" about notes while
+        the statement beside them may be in a different scale, so a bare phrase
+        keeps answering nothing.
+        """
+        currency, units = declared_units(
+            "The figures in the schedule below are presented in crores and are unaudited."
+        )
+        assert (currency, units) == ("", ""), (
+            f"bare prose named a scale and it was taken as a declaration: {(currency, units)!r}"
+        )
+
+
+@needs_indas
+class TestTheAuditedIndasFaceReadsAsTheRupeesItDeclares:
+    """The end-to-end claim on the document that replaced the IFRS attachment.
+
+    The whole reason the header reader exists is that this company's cache once
+    held a document whose figures were NOT rupees. The audited Ind-AS face
+    prints "(~ in crores)", its rows reach normalization as INR crores, and the
+    units validator accepts the company. A single row carrying another scale
+    would refuse the whole normalize, so the whole page must agree.
+    """
+
+    def _dps(self):
+        return parse_predicted_statement_page(
+            str(HCLTECH_INDAS), 3, "BALANCE SHEET", "nse_filing", annual_only=False,
+            company_id="hcltech_hcltech",
+        )
+
+    def test_every_row_carries_the_declared_scale(self):
+        dps = self._dps()
+        assert len(dps) == 98, (
+            f"the audited face yields 98 rows; a different count means the parse changed "
+            f"underneath the migration. Got {len(dps)}."
+        )
+        pairs = {(d.currency, d.units) for d in dps}
+        assert pairs == {("INR", "crores")}, (
+            f"expected INR crores throughout, got {pairs}"
+        )
+
+    def test_the_resolved_units_reach_the_provenance(self):
+        dps = self._dps()
+        for d in dps[:6]:
+            assert "INR/crores" in d.source_location, (
+                f"provenance does not say where the units came from: {d.source_location!r}"
+            )
