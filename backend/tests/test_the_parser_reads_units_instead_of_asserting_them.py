@@ -209,3 +209,66 @@ class TestTheIndianFilingsStillReadCorrectly:
         assert dps
         pairs = {(d.currency, d.units) for d in dps}
         assert pairs == {("INR", "crores")}, f"expected INR crores throughout, got {pairs}"
+
+
+@needs_tcs
+class TestTheTcsCroreBannerResolvesToInr:
+    """TCS prints "( crore)" with the rupee glyph unextractable.
+
+    `declared_units` rightly leaves that undetermined -- it cannot see a
+    currency token. But the caller knows the source is an NSE filing, and an
+    NSE filing denominated in crores is rupees by construction, so the rows
+    arrive as INR crores instead of dying in the currency validator. Any
+    other source keeps the empty string; HCLTech's USD rows are untouched
+    because their currency is present, not empty.
+    """
+
+    def _dps(self):
+        return parse_predicted_statement_page(
+            str(TCS), 10, "BALANCE SHEET", "nse_filing", annual_only=False,
+            company_id="tcs_tcs",
+        )
+
+    def test_tcs_rows_carry_inr_crores(self):
+        dps = self._dps()
+        assert dps, "the page must still parse, or this test proves nothing"
+        pairs = {(d.currency, d.units) for d in dps}
+        assert pairs == {("INR", "crores")}, f"expected INR crores throughout, got {pairs}"
+
+    def test_the_figures_are_untouched_by_the_fill(self):
+        """The fill relabels rows. A number that moved would be a different
+        change wearing this one's message."""
+        dps = [
+            (d.period_label, d.value) for d in self._dps()
+            if d.metric_raw == "Property, plant and equipment"
+        ]
+        assert ("FY26", 11032.0) in dps, (
+            "consolidated PP&E prints 11,032 for FY26; a different figure means "
+            f"the fill disturbed the values. Got {dps}"
+        )
+
+    def test_the_provenance_names_the_resolved_units(self):
+        dps = self._dps()
+        assert dps
+        for d in dps[:6]:
+            assert "INR/crores" in d.source_location, (
+                f"provenance does not say where the units came from: {d.source_location!r}"
+            )
+
+    def test_the_fill_is_gated_on_the_nse_source(self):
+        """The never-assume rule stands everywhere else: only an NSE filing's
+        crore scale resolves to INR, so assert the gate rather than trusting
+        the two tests above to cover it."""
+        import inspect
+        import re
+
+        from backend.data.parsers import pdf_tables
+
+        src = inspect.getsource(pdf_tables.parse_predicted_statement_page)
+        m = re.search(r'page_currency = "INR"\n', src)
+        assert m, "the INR fill is gone; TCS rows go back to dying in validation"
+        guard = src[max(0, m.start() - 400):m.start()]
+        assert 'source == "nse_filing"' in guard, (
+            "the INR fill is no longer gated on the NSE source, so it answers "
+            "for every source and the never-assume rule is dead"
+        )

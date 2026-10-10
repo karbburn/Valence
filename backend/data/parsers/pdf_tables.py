@@ -656,6 +656,19 @@ def parse_predicted_statement_page(
             )
             page_currency, page_units = declared_units(header_text)
 
+        # A scale of crores with no readable currency, on an NSE filing, is
+        # INR. The crore exists only in the Indian numbering system, and NSE
+        # filings report in rupees by construction: TCS prints "( crore)"
+        # with the rupee glyph unextractable, so the scale is read and the
+        # currency is genuinely absent from anything this can see. Resolving
+        # the denomination's home currency is reading, not assuming -- but
+        # only with the source in hand, which is why this lives here where
+        # `source` is known and not in `declared_units`, whose TCS test pins
+        # that an undetermined currency stays empty. Any other source keeps
+        # the empty string and stays refused downstream.
+        if not page_currency and page_units == "crores" and source == "nse_filing":
+            page_currency = "INR"
+
         dps: list[RawDatapoint] = []
         seen: set[tuple[str, str, float]] = set()
         # Which (caption, period) has already been claimed, and by WHICH printed column.
