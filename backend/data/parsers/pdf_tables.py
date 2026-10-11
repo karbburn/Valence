@@ -352,8 +352,26 @@ def _year_anchors(page, boundary: float = LABEL_X_MAX) -> list[tuple[float, int]
 # later row overwrites the earlier and a reader is shown the non-current figure as
 # if it were the current one. The header is printed by the filer, so this is the
 # statement answering the question rather than the parser guessing from position.
-_CURRENT_HEADER = re.compile(r"^\s*current assets\s*$", re.I)
-_NONCURRENT_HEADER = re.compile(r"^\s*non[\s-]*current assets\s*$", re.I)
+# A filer may number its blocks before the words ("(1) Non-current assets", "(2)
+# Current assets"), and then the bare-word pattern reads both as ordinary captions: every
+# row on the page arrives with no half, `_key_for_half` never routes, and a caption the
+# filer placed in one half publishes under the other half's key. ONGC's audited
+# consolidated face prints exactly that, and the dry run duly published its 38,765
+# deferred-tax LIABILITY as `deferred_tax_assets` while the true 7,081 asset was refused
+# beside its twin. The enumerator is allowed, and only an enumerator: a numbered or
+# parenthesised prefix up to six characters, which is what a filer's own block numbering
+# looks like. Measured across every committed statement page, the caption-to-half
+# mapping is unchanged by this -- Infosys, HCLTech, Reliance and TCS all print the bare
+# words.
+#
+# The LIABILITY side is deliberately NOT added here. There is no `total_current_assets`
+# routing to make correct, and a liability half would split twins that share one
+# canonical key -- Reliance prints "Lease Liabilities" at 17,142 non-current and 4,903
+# current -- out of the bucket that currently refuses BOTH printings, letting one of
+# them publish silently. Refusing both is the honest outcome for one key.
+_ENUMERATED_BLOCK = r"^\s*(?:\([^)]{1,6}\)\s*)?"
+_CURRENT_HEADER = re.compile(_ENUMERATED_BLOCK + r"current assets\s*$", re.I)
+_NONCURRENT_HEADER = re.compile(_ENUMERATED_BLOCK + r"non[\s-]*current assets\s*$", re.I)
 
 
 def _balance_sheet_half(label: str) -> str | None:

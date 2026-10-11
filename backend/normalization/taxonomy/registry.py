@@ -340,6 +340,68 @@ WITHDRAWN_LABELS: FrozenSet[str] = frozenset({
     # face prints completed intangibles onto the intangibles key beside it,
     # and a second caption on one key leaves whichever parsed last.
     "Other lnlangible Assels Under Development",
+    # --- ONGC audited consolidated face (printed p.35 + p.36) ---
+    #
+    # The two tax LIABILITIES, in the HCL and Reliance decision's spelling: the
+    # engine sends each to a tax ASSET key, which inverts the statement by the
+    # full figure and refuses the true asset beside it in the same bucket.
+    # Printed as "(c) Deferred Tax liabilities (net)" (38,765 / 40,655) and
+    # "(d) Current Tax Liabilities (net)" (642 / 639).
+    "(c) Deferred Tax liabilities (net)",
+    "(d) Current Tax Liabilities (net)",
+    # The property, plant and equipment block. ONGC prints no PPE total, only
+    # the components of it: "(a) Tangible" 157,405, "(b) Intangible" 329 and
+    # "(ii) Other property, plant and equipment" 134,068, which together carry
+    # the 291,802 the face's own non-current subtotal contains. Publishing any
+    # one of them as `ppe` states a component as the whole -- the "(ii)" line
+    # alone understates the true figure by more than half -- so all three stay
+    # out and the line remains feed-sourced.
+    "(a) Tangible",
+    "(b) Intangible",
+    "(ii) Other property, plant and equipment",
+    # The capital-work-in-progress block, same shape: components and no subtotal
+    # (exploratory wells 19,586, development wells 4,047, oil and gas facilities
+    # 39,524, acquisition cost 21,635, intangible oil and gas assets in progress
+    # 5,696, "(ii) Others" 22,084). No key holds a component of a total the
+    # filer never prints.
+    "(i) Exploratory wells in progress",
+    "a) Development wells in progress",
+    "b) Oil and gas facilities in progress",
+    "c) Acquisition Cost",
+    "(ii) Others",
+    "(iii) Intangible Oil and Gas Assets in progress",
+    # "(vii) Others" (14,957 / 9,868) is the current financial-assets remainder.
+    "(vii) Others",
+    # "(iii) Right of Use Assets" (34,181 / 30,245): the statement contract has
+    # no right-of-use ASSET key -- only the three lease-liability ones -- so the
+    # asset stays out while its liability side is refused as a twin.
+    "(iii) Right of Use Assets",
+    # "(c) Investment Property" (7.87 / 7.70): no key exists.
+    "(c) Investment Property",
+    # The site-restoration deposits, printed once per half (30,849 non-current,
+    # 36 current at FY26), and the held-for-sale pair ("Assets classified as held
+    # for sale" 13 / 208 with its directly-associated liabilities 93): no key
+    # exists for any of them, and the held-for-sale figures are exactly what
+    # bridges the two halves to the 758,729 / 791,905 the face prints as total
+    # assets, so they are recorded rather than quietly folded into another line.
+    "(iv) Deposit under site restoration fund",
+    "(vi) Deposit under site restoration fund",
+    "Assets classified as held for sale",
+    "Liabilities directly associated with assets classified as held for sale",
+    # "(ii) Trade receivables" (21,243 / 22,015) is the NON-CURRENT receivable:
+    # the face prints no trade-receivable caption in its current block at all.
+    # Publishing it as `trade_receivables` would count a permanently parked
+    # figure as liquid, which is the exact under-count `current_assets_reconcile`
+    # exists to surface.
+    "(ii) Trade receivables",
+    # The two micro-enterprise trade-payable splits (1,380 and 37,601 at FY25)
+    # with no total printed beside them: one key cannot hold the split, and
+    # whichever half published would be a partial payable.
+    "- to micro and small enterprises",
+    "- to other than micro and small enterprises",
+    # "(i) Other Investments" (33,717 / 34,224): the non-current block prints no
+    # subtotal and its equity-method sibling above takes the one key.
+    "(i) Other Investments",
 })
 
 # Mapping entry type: (canonical_key, statement)
@@ -656,6 +718,44 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "Lease Liabilities": ("canonical.bs.lease_liabilities", "bs"),
     "Trade Payables": ("canonical.bs.trade_payables", "bs"),
     "Trade Receivables": ("canonical.bs.trade_receivables", "bs"),
+    # --- Balance Sheet, ONGC audited consolidated face (printed p.35 + p.36) ---
+    #
+    # ONGC numbers every block ("(1) Non-current assets", "(2) Current assets"), which
+    # the half reader now tolerates, so the rows carry their half and the half-routed
+    # keys resolve by position rather than by a static entry's guess. What is pinned
+    # statically here is what the ENGINE gets wrong on this face, decided against the
+    # figures the filing prints.
+    #
+    # The two tax lines are the same class as Reliance's: the engine put a 38,765
+    # deferred-tax LIABILITY on `deferred_tax_assets` and a 642 current tax LIABILITY on
+    # `current_income_tax_assets`, inverting the statement and refusing the true 7,081
+    # and 2.81 assets beside them. Both liabilities are withdrawn above; the two assets
+    # take the keys below.
+    "(i) Deferred tax assets (net)": ("canonical.bs.deferred_tax_assets", "bs"),
+    "(c) Current Tax Assets (net)": ("canonical.bs.current_income_tax_assets", "bs"),
+    # "(j) Non-current tax assets (net)" (14,674 / 15,563) is income tax, not deferred
+    # tax: the engine suggested the deferred-tax key at medium confidence, which is what
+    # put it in the same refusal bucket as the true deferred-tax asset beside it. The
+    # non-current income-tax key exists and is what this line is.
+    "(j) Non-current tax assets (net)": ("canonical.bs.income_tax_assets", "bs"),
+    "(a) Equity share capital": ("canonical.bs.equity_capital", "bs"),
+    # "(g) Investments in Joint Ventures and Associates" (58,647 / 63,753) is the
+    # non-current investments line. Its non-current sibling "(i) Other Investments"
+    # (33,717 / 34,224) is withdrawn above: one key cannot hold both and the face prints
+    # no subtotal for the block.
+    "(g) Investments in Joint Ventures and Associates": ("canonical.bs.non_current_investments", "bs"),
+    # "(ii) Lease Liabilities" prints in both halves (9,877 non-current, 24,384
+    # current) under one caption with no half-specific keys to split it to, so the twin
+    # gate refuses both printings. The entry records the caption's key so a future split
+    # has a decision to attach to.
+    "(ii) Lease Liabilities": ("canonical.bs.lease_liabilities", "bs"),
+    "(b) Provisions": ("canonical.bs.provisions", "bs"),
+    "(d) Goodwill (including Goodwill on Consolidation)": ("canonical.bs.goodwill", "bs"),
+    "(b) Other current liabilities": ("canonical.bs.other_current_liabilities", "bs"),
+    "(d) Other non-current liabilities": ("canonical.bs.other_non_current_liabilities", "bs"),
+    "(k) Other non-current assets": ("canonical.bs.other_non_current_assets", "bs"),
+    "(d) Other current assets": ("canonical.bs.prepayments_other_current_assets", "bs"),
+    "Total equity and liabilities": ("canonical.bs.total_liabilities_and_equity", "bs"),
 
     # --- Cash Flow Statement ---
     "Cash from Operating Activity": ("canonical.cf.operating_activities", "cf"),
