@@ -77,7 +77,7 @@ one that misses a real disagreement.
 
 On current `main`: **tie-out 0 untied figures, 10 of 11 US filers audited clean**
 (the eleventh is TSMC, disclosed rather than counted), **QA 0 regressions across 23
-models**, **1089 backend tests and 94 frontend tests**, and Infosys'
+models**, **1142 backend tests and 94 frontend tests**, and Infosys'
 current-asset reconciliation landing exactly on the filed subtotal.
 
 ---
