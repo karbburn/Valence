@@ -298,6 +298,15 @@ def _caption_boundary(words, page_height: float) -> float:
     return leftmost - _NOTE_MARGIN
 
 
+# How close two bare years must sit to be one header's pair rather than a title's
+# stray year plus a header. Measured on the installed filings: Bharti's p.3 prints
+# its two years 0.3pt apart (extraction jitter on one printed line), Reliance's p.16
+# prints them 36.5pt apart (a two-line header band), and L&T's statement title sits
+# 41.6pt above its header band -- so the tolerance must reach 36.5 and stop short of
+# 41.6, and 40 does both.
+_BARE_YEAR_BAND = 40.0
+
+
 def _year_anchors(page, boundary: float = LABEL_X_MAX) -> list[tuple[float, int]]:
     """All fiscal-year value columns: [(x, year)] sorted by x."""
     words = page.extract_words()
@@ -306,6 +315,7 @@ def _year_anchors(page, boundary: float = LABEL_X_MAX) -> list[tuple[float, int]
         by_top.setdefault(round(w["top"], 1), []).append((w["x0"], w["text"]))
     anchors: list[tuple[float, int]] = []
     dated: list[tuple[float, int]] = []
+    bare_years: list[tuple[float, float, int]] = []
     for key in sorted(by_top):
         ws = sorted(by_top[key], key=lambda t: t[0])
         for x, t in ws:
@@ -323,9 +333,35 @@ def _year_anchors(page, boundary: float = LABEL_X_MAX) -> list[tuple[float, int]
             # sits left of the boundary, is still not an anchor.
             stamp = re.fullmatch(r"\d{1,2}[./-]\d{1,2}[./-](20\d\d)", t)
             if bare:
-                anchors.append((x, int(bare.group(0))))
+                bare_years.append((key, x, int(bare.group(0))))
             elif stamp:
                 dated.append((x, int(stamp.group(1))))
+    # A bare year anchors only inside a BAND of bare years (_BARE_YEAR_BAND, measured
+    # above), because that is the shape a column header has: years print together and
+    # a title's year stands alone. Measured on L&T's FY26 integrated report, printed
+    # p.617: the statement title "Consolidated Balance Sheet as at March 31, 2026"
+    # ends at x=334, four points right of the page boundary (330), so its lone "2026"
+    # anchored while the real header stamps sit 41.6pt below at x=397 and x=493. The
+    # note column at x=333..336 then claimed FY26 from the title's anchor and the
+    # page published note references as figures -- "Property, plant and equipment"
+    # carries note 2, so FY26 read 2.0 against a printed 15,663.02 -- while the true
+    # figures collided with the header anchor and dropped (21 rows on p.617, 12 on
+    # p.618), and the stray anchor dragged the figure window's left edge (first
+    # anchor - 50) to 284, inside the note column itself. With the title's year
+    # refused, the anchors are the header pair, the window opens at 347, and the note
+    # column falls outside it as a note reference should. A band qualifies only at
+    # two or more years, so a page whose header states just one year still raises
+    # rather than reading prose into a column; every installed statement that read
+    # before prints its years in a pair.
+    bands: list[tuple[float, list[tuple[float, int]]]] = []
+    for top, x, year in sorted(bare_years):
+        if bands and top - bands[-1][0] <= _BARE_YEAR_BAND:
+            bands[-1][1].append((x, year))
+        else:
+            bands.append((top, [(x, year)]))
+    for _band_top, band in bands:
+        if len(band) >= 2:
+            anchors.extend(band)
     # A date-shaped header derives its window from a PAIR of dates: each date labels
     # its own column, and the two together bound the columns between them. One
     # readable date beside a damaged one ("31.03.202.3", a digit gone missing) yields
