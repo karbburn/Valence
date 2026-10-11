@@ -538,6 +538,63 @@ WITHDRAWN_LABELS: FrozenSet[str] = frozenset({
     # declines; the withdrawal makes the refusal structural, the way Wipro's
     # truncated fragment was withdrawn so its printed TOTAL EQUITY publishes.
     "Equity attributable to the equity shareholders of the parent company",
+    # --- Bharti Airtel audited consolidated face (printed p.3) ---
+    #
+    # This page's extraction carries glyph damage in the captions and, in one
+    # block, in the values: the FY26 column between "-na.d'e recei:Vabl'es"
+    # and the non-current subtotal yields five tokens for six caption slots,
+    # so captions from "-Loans" down pair one cell late against the true
+    # figures. The page's own subtotals prove it: the non-current assets
+    # subtotal 4,619,362 closes exactly over the clean lines plus 191,413 --
+    # the single mangled token where the two tax assets print. Each withdrawal
+    # below is a caption whose cells cannot be trusted, or whose key the
+    # engine gives to a line that is not what it names.
+    #
+    # "-Other ffinancral' assets" (non-current other financial assets) reads
+    # FY25=37,471 correctly and FY26=35,700, a figure the subtotal
+    # arithmetic assigns to "-Loans"; the true FY26 value for this line is
+    # 20,181, which the engine hands to "Income taoc assets" instead. One
+    # wrong period poisons the caption, so both are forfeited.
+    "-Other ffinancral' assets",
+    # "-other financial: assets" (current other financial assets, 267,662 /
+    # 244,264) is sent to intangible_assets at medium confidence, where it
+    # would publish as intangibles while the printed "Other intangible
+    # assets" (1,332,569 / 1,252,604, statically mapped) sits refused in the
+    # same no-half bucket beside two more engine suggestions of the same
+    # kind. Other financial assets are not intangibles; withdrawn so the
+    # completed intangibles take their key alone.
+    "-other financial: assets",
+    # "Income taoc assets (net}" pairs OFA's 20,181 as its FY26 cell (the
+    # same one-cell shift); the printed FY26 income-tax asset is part of the
+    # mangled 191,413 that also holds deferred tax assets, and the split is
+    # not recoverable from this extraction. FY25=24,978 is correct and is
+    # forfeited with the caption: one true and one false period under one
+    # key is worse than a recorded shortfall.
+    "Income taoc assets (net}",
+    # "other current assets" prints 125,718 for FY26 -- the current-assets
+    # subtotal 902,154 closes exactly with it (6,009 + 137,006 + 5,040 +
+    # 79,776 + 137,222 + 166,546 + 244,264 + 125,718 + 573) -- but the
+    # extraction reads 1,125,718, a spurious leading digit, and the caption
+    # maps at HIGH confidence, so the nine-times-overstated figure would
+    # publish. FY25=144,608 is correct and forfeited with it.
+    "other current assets",
+    # "-Other financial liabilities" (current, 408,659 / 333,024) is a
+    # distinct printed line the engine sends to other_current_liabilities,
+    # where the exact-name static line "Other current liabilities"
+    # (77,341 / 77,522) already sits: one key, two lines, and the twin gate
+    # refuses both. The caption that names what the key is keeps it; the
+    # damaged sibling withdraws so it publishes. The non-current sibling
+    # "-other financial lfabilities" (26,320 / 38,642) has no key at all
+    # and stays queued unmapped.
+    "-Other financial liabilities",
+    # "Equity attributable to owners of the parent" (1,490,566 / 1,136,719)
+    # is the parent-only rupee subtotal, and the engine sends it to
+    # share_count at medium confidence -- the same suggestion that put
+    # rupees in a share-count key on TCS's face, where the guard declines
+    # it and the withdrawal made the refusal structural. Same caption
+    # class, same treatment: the printed total equity beside it
+    # (1,959,634 / 1,534,677) holds the whole figure.
+    "Equity attributable to owners of the parent",
 })
 
 # Mapping entry type: (canonical_key, statement)
@@ -947,6 +1004,36 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     # lettering. Its under-development sibling is withdrawn above so the pair
     # cannot refuse each other on the one key.
     "(d) Other intangible assets": ("canonical.bs.intangible_assets", "bs"),
+
+    # --- Balance Sheet, Bharti Airtel audited consolidated face (printed p.3) ---
+    #
+    # Captions whose extraction is damaged but whose FIGURES are witnessed
+    # against the page's own subtotals, so each entry pins the line the page
+    # prints rather than the glyphs the engine reads.
+    #
+    # "Other mon-cwrrent assets" (FY26=124,770): the non-current assets
+    # subtotal 4,619,362 closes exactly over the clean lines plus this
+    # figure plus the 191,413 mangled tax-assets token, so the value is the
+    # printed one even though the caption is not. FY25 ("H6,6,38") did not
+    # extract and is forfeited. The engine sends the damaged caption to
+    # intangible_assets at medium confidence; the key here is the line it
+    # names, and it clears the intangibles bucket the withdrawals above
+    # emptied.
+    "Other mon-cwrrent assets": ("canonical.bs.other_non_current_assets", "bs"),
+    # "Total rrabi6ties" (3,561,882 / 3,608,927): the engine has no stem to
+    # match on the damaged glyphs (0.2), and the figures foot exactly as the
+    # page's own liability subtotals -- 1,816,825 + 1,745,057 at FY26,
+    # 1,804,525 + 1,804,402 at FY25. Same line every face prints.
+    "Total rrabi6ties": ("canonical.bs.total_liabilities", "bs"),
+    # "-Iiavestments" is the CURRENT investments line (137,006 / 16,532;
+    # the "I" for "l" is the damage), and the non-current sibling extracts
+    # clean as "-Investments" (11,385 / 5,435) and reaches
+    # non_current_investments through the engine. Routed to the current key
+    # directly, the way Wipro's "lnvcstmcnts" was: the FY25 row carries no
+    # half claim, and routing it through the non-current key would put
+    # 16,532 beside the clean 5,435 in one no-half bucket and refuse both
+    # investments lines.
+    "-Iiavestments": ("canonical.bs.current_investments", "bs"),
 
     # --- Cash Flow Statement ---
     "Cash from Operating Activity": ("canonical.cf.operating_activities", "cf"),

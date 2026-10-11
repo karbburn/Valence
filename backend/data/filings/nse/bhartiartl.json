@@ -1,0 +1,19 @@
+{
+  "symbol": "BHARTIARTL",
+  "url": "https://nsearchives.nseindia.com/corporate/20260513_BHARTIARTL_13052026163920_FR_Final.pdf",
+  "announced_text": "13-May-2026 16:39:20",
+  "announced_stamp": "13052026163920",
+  "pages": 89,
+  "balance_sheet_pages": [
+    3
+  ],
+  "declared_units": {
+    "3": [
+      "INR",
+      "millions"
+    ]
+  },
+  "bytes": 14898925,
+  "tried": 1,
+  "label": "Financial results for the year ended March 31, 2026"
+}
