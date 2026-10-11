@@ -282,6 +282,25 @@ def acquire_filing_async(company_id: str) -> bool:
     return True
 
 
+def _declared_units_for(meta: dict, printed: int) -> tuple[str, str] | None:
+    """The units an operator recorded for one printed page, when the page states none.
+
+    Tata Steel's audited consolidated face prints a bare "Crore" in the banner slot:
+    no parentheses, no currency token, no preposition. Unlike HCLTech's "(~ in
+    crores)" and Reliance's "in crore)" there is no declaration residue to match a
+    pattern against, so the fact is recorded beside the recorded page numbers and read
+    back only when the page itself declared nothing. A page that speaks for itself is
+    never overridden.
+    """
+    recorded = (meta.get("declared_units") or {}).get(str(int(printed)))
+    if not recorded:
+        return None
+    currency, units = recorded[0], recorded[1]
+    if not (currency or units):
+        return None
+    return currency, units
+
+
 def _filing_datapoints_from_cached_pdf(
     pdf_path: Path, meta: dict, company_id: str
 ) -> list[RawDatapoint]:
@@ -338,6 +357,7 @@ def _filing_datapoints_from_cached_pdf(
                 "nse_filing",
                 annual_only=False,
                 company_id=company_id,
+                declared_units_override=_declared_units_for(meta, printed),
             )
         except Exception as exc:  # noqa: BLE001
             # One unreadable page must not cost the others, and the reason must be

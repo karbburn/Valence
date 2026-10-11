@@ -305,11 +305,36 @@ def _year_anchors(page, boundary: float = LABEL_X_MAX) -> list[tuple[float, int]
     for w in words:
         by_top.setdefault(round(w["top"], 1), []).append((w["x0"], w["text"]))
     anchors: list[tuple[float, int]] = []
+    dated: list[tuple[float, int]] = []
     for key in sorted(by_top):
         ws = sorted(by_top[key], key=lambda t: t[0])
         for x, t in ws:
-            if x >= boundary and re.fullmatch(r"20\d\d", t):
-                anchors.append((x, int(t)))
+            if x < boundary:
+                continue
+            bare = re.fullmatch(r"20\d\d", t)
+            # A filer that prints its column header as one dotted date token
+            # ("31.03.2026" beside "31.03.2025") states the same thing a bare year
+            # does, and is if anything the stronger signal: a bare "2026" can be
+            # prose, a dotted date cannot. Tata Steel's audited consolidated face
+            # prints exactly two of them, both in the header band and both inside the
+            # value columns, and the page reads nothing at all without this -- the
+            # bare-year path finds no anchor and the page raises. Read under the same
+            # x >= boundary condition as a bare year, so the title's own "2026", which
+            # sits left of the boundary, is still not an anchor.
+            stamp = re.fullmatch(r"\d{1,2}[./-]\d{1,2}[./-](20\d\d)", t)
+            if bare:
+                anchors.append((x, int(bare.group(0))))
+            elif stamp:
+                dated.append((x, int(stamp.group(1))))
+    # A date-shaped header derives its window from a PAIR of dates: each date labels
+    # its own column, and the two together bound the columns between them. One
+    # readable date beside a damaged one ("31.03.202.3", a digit gone missing) yields
+    # a single anchor, and a window built from one anchor takes whichever column
+    # falls inside it -- the path that made a registered-office phone number a
+    # balance-sheet line. So a lone dotted date contributes nothing and a header
+    # printing dates in pairs anchors exactly as bare years beside it would.
+    if len(dated) >= 2:
+        anchors.extend(dated)
     anchors.sort()
     if not anchors:
         raise ValueError("no fiscal-year header row found")
@@ -692,6 +717,7 @@ def parse_predicted_statement_page(
     period_end_month: int = 3,
     period_end_day: int = 31,
     header_page_index: int | None = None,
+    declared_units_override: tuple[str, str] | None = None,
 ) -> list[RawDatapoint]:
     """Parse one filing statement page into RawDatapoints for the given company.
 
@@ -710,6 +736,13 @@ def parse_predicted_statement_page(
     rather than trusted: it is accepted only when the page prints its own figures
     in the borrowed columns, so the note pages that follow a statement still
     raise instead of having prose parsed into periods.
+
+    ``declared_units_override`` carries what the page's units are when the page does
+    not say, as the operator recorded it from the filing. Tata Steel's audited
+    consolidated face prints a bare "Crore" -- no parens, no currency, no preposition --
+    so there is no declaration shape left to read and every row would arrive with an
+    empty currency and units to be refused downstream. It is consulted ONLY when the
+    page declares nothing itself, so a page's own banner always wins.
     """
     with pdfplumber.open(pdf_path) as pdf:
         page = pdf.pages[page_index]
@@ -780,6 +813,9 @@ def parse_predicted_statement_page(
                 " ".join(w["text"] for w in pdf.pages[header_page_index].extract_words()),
             )
             page_currency, page_units = declared_units(header_text)
+
+        if not (page_currency or page_units) and declared_units_override is not None:
+            page_currency, page_units = declared_units_override
 
         # A scale of crores with no readable currency, on an NSE filing, is
         # INR. The crore exists only in the Indian numbering system, and NSE

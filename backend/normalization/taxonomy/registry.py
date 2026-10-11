@@ -402,6 +402,66 @@ WITHDRAWN_LABELS: FrozenSet[str] = frozenset({
     # "(i) Other Investments" (33,717 / 34,224): the non-current block prints no
     # subtotal and its equity-method sibling above takes the one key.
     "(i) Other Investments",
+    # --- Tata Steel audited consolidated face (printed p.20) ---
+    #
+    # The face letter-spaces its headings, and the extraction keeps only part of
+    # several captions. Every refusal below is decided against the figures the
+    # page prints beside those words.
+    #
+    # The four subtotal fragments. The page prints six subtotals and the words
+    # that tell them apart were lost: bare "Sub-total" carries FOUR figures --
+    # 68,391.54 / 72,265.11 and 91,352.78 / 103,780.45 -- because the
+    # current-assets subtotal and the total-equity subtotal extract to the same
+    # two words; "Sub-total - Non-current" carries both 211,003.26 / 228,733.94
+    # (non-current assets) and 101,948.47 / 100,556.02 (non-current liabilities,
+    # printed below the asset headers so the half reads current); "Sub-total -
+    # Current" lost the word that says assets or liabilities; "Sub-total -" lost
+    # all of them. The printed figures foot -- 211,003.26 + 68,391.54 =
+    # 279,394.80 = 101,948.47 + 86,093.55 + 91,352.78 -- but a registry key is
+    # chosen from the caption, and the caption says which subtotal only where
+    # the words survived.
+    "Sub-total",
+    "Sub-total -",
+    "Sub-total - Current",
+    "Sub-total - Non-current",
+    # The equity line in this filer's lowercase extraction. The capitalised
+    # spelling is already withdrawn because the engine sends it to share_count
+    # at 0.47, an equity figure in a share-count field. This page extracts
+    # "company" lowercase, both gates match the printed string exactly, and a
+    # MEDIUM suggestion publishes -- so without this line 102,167.65 crores
+    # would arrive as a share count. No key holds equity excluding
+    # non-controlling interests, and the total_equity key would need the
+    # 103,780.45 that includes them.
+    "Equity attributable to shareholders of the company",
+    # The same family decision as HCLTech's "(f)" line: a development-stage
+    # figure (986.42 at FY26) stated as recognized intangibles, and this face
+    # prints no intangibles subtotal to check the claim against.
+    "Intangible assets under development",
+    # Enumerator-only fragments: the words are gone, and the enumerator alone
+    # is printed by every filer in every block.
+    "()",
+    "(c)",
+    "(iii)",
+    "(vi) assets",
+    # No key holds any of these lines, so each stays feed-sourced rather than
+    # borrowing a neighbour's key: the retirement-benefit pair (the asset
+    # prints in both blocks -- 12.67 / 86.38 non-current and 2.33 current --
+    # against obligations of 154.62 / 148.63, and its own enumerator is broken
+    # in the non-current printing), deferred income in its two extractions
+    # (764.91 and 30.71 / 88.09), the derivative LIABILITIES (206.38 and
+    # 391.18 / 260.7 -- the only derivative key is an asset key, and parking a
+    # liability there inverts the line the way ONGC's tax liabilities were
+    # inverted), acceptances (338.52), and the held-for-sale line with no
+    # subtotal printed (255.06, withdrawn for the same reason on ONGC's face).
+    "( Retirement benefit assets",
+    "(c) Retirement benefit assets",
+    "(c) Retirement benefit obligations",
+    "(d) Deferred income",
+    "\u00abd) Deferred income",
+    "(iii) Derivative liabilities",
+    "(iv) Derivative liabilities",
+    "Acceptances",
+    "(3) Assets held for sale",
 })
 
 # Mapping entry type: (canonical_key, statement)
@@ -756,6 +816,22 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     "(k) Other non-current assets": ("canonical.bs.other_non_current_assets", "bs"),
     "(d) Other current assets": ("canonical.bs.prepayments_other_current_assets", "bs"),
     "Total equity and liabilities": ("canonical.bs.total_liabilities_and_equity", "bs"),
+    # --- Balance Sheet, Tata Steel audited consolidated face (printed p.20) ---
+    #
+    # "TOTAL-ASSETS" is the letter-spaced "T O T A L - A S SE T S" once the
+    # spacing is gone: the words name the line and the figure closes both sides
+    # of the sheet (279,394.80 at FY25; 301,254.11 at FY26, over the 255.06
+    # held-for-sale bridge exactly as ONGC's face does). The engine reads the
+    # hyphenated form at low confidence, so without this entry the footing line
+    # would not publish at all.
+    "TOTAL-ASSETS": ("canonical.bs.total_assets", "bs"),
+    # The engine sends this home at high confidence and the footing proves it:
+    # the figure equals TOTAL-ASSETS on both periods.
+    "TOTAL - EQUITY AND LIABILITIES": ("canonical.bs.total_liabilities_and_equity", "bs"),
+    # The current tax asset printed in the current block (79.52 / 76.28), the
+    # same family as ONGC's "(c) Current Tax Assets (net)": the caption states
+    # what it is, and no sibling tax line competes for the key on this face.
+    "(d) Current tax assets": ("canonical.bs.current_income_tax_assets", "bs"),
 
     # --- Cash Flow Statement ---
     "Cash from Operating Activity": ("canonical.cf.operating_activities", "cf"),
