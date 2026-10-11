@@ -1,0 +1,24 @@
+{
+  "symbol": "LT",
+  "url": "https://nsearchives.nseindia.com/corporate/PAM_14052026185323_LTIntegratedReportFY26.pdf",
+  "announced_text": "14-May-2026 18:53:23",
+  "announced_stamp": "14052026185323",
+  "pages": 756,
+  "balance_sheet_pages": [
+    617,
+    618
+  ],
+  "declared_units": {
+    "617": [
+      "INR",
+      "crores"
+    ],
+    "618": [
+      "INR",
+      "crores"
+    ]
+  },
+  "bytes": 29793480,
+  "tried": 1,
+  "label": "Integrated Annual Report 2025-26"
+}

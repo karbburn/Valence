@@ -595,6 +595,46 @@ WITHDRAWN_LABELS: FrozenSet[str] = frozenset({
     # class, same treatment: the printed total equity beside it
     # (1,959,634 / 1,534,677) holds the whole figure.
     "Equity attributable to owners of the parent",
+    # --- Larsen & Toubro audited consolidated face (printed 617-618) ---
+    #
+    # The FY26 integrated report's balance sheet spans two printed pages, and
+    # every refusal below is decided against the figures the pages state: both
+    # halves foot exactly in both periods -- non-current assets 134,238.56,
+    # current assets 292,841.13, non-current liabilities 69,521.91, current
+    # liabilities 233,531.47, closing on a total of 452,549.88 at FY26 -- so
+    # each figure quoted here is the printed one.
+    #
+    # "Deferred tax liabilities (net) 51(d)": the filer's note reference
+    # extracts into the caption, so the clean string's earlier withdrawal
+    # misses this variant, and the engine sends the liability to
+    # deferred_tax_assets at medium confidence where the true tax assets
+    # (3,792.88 / 4,252.76, printed non-current) already sit. It would
+    # publish 410.01 / 167.11 as assets beside them. A liability is not an
+    # asset; withdrawn.
+    "Deferred tax liabilities (net) 51(d)",
+    # The three "Sub-total" captions are the page's own section totals, and
+    # the engine sends each to the detail key that its section's exact-name
+    # line already takes, at medium confidence: 233,531.47 beside "Other
+    # current liabilities" (63,326.97 / 85,861.52), 134,238.56 beside
+    # "Other non-current assets" (2,659.78 / 2,699.49), 69,521.91 beside
+    # "Other non-current liabilities" (594.74 / 36.82). One key, two lines,
+    # and the twin gate refuses both, so today all six real lines publish
+    # nothing. A sub-total is not the line it totals; withdrawn so the
+    # exact-name captions take their keys alone. "Sub-total - Current
+    # assets" reaches its own key (total_current_assets) with no rival and
+    # stays mapped.
+    "Sub-total - Current liabilities",
+    "Sub-total - Non-current assets",
+    "Sub-total - Non-current liabilities",
+    # "Due to micro enterprises and small enterprises" is one of the two
+    # parts L&T prints trade payables in (1,840.35 + 67,615.28 = 69,455.63
+    # at FY26; "Due to others" is the other part and has no key). The engine
+    # sends the slice to trade_payables at medium confidence, and the
+    # selector prefers filing rows, so the whole line would read 1,840.35
+    # -- a thirty-eight-fold understatement published under a caption that
+    # states no sum. No printed caption states the whole; withdrawn so the
+    # confirmed feed figure keeps the key and both parts stay recorded.
+    "Due to micro enterprises and small enterprises",
 })
 
 # Mapping entry type: (canonical_key, statement)
