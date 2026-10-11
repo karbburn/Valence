@@ -653,6 +653,11 @@ def _rows(page, boundary: float = LABEL_X_MAX) -> list[tuple[str, list[tuple[flo
 
 _GROUPED_FIGURE = re.compile(r"\d{1,3}(?:,\d+)+$")
 
+# The same grouping with the separator rendered as a period, or as a mix of
+# periods and commas inside one figure: 77.224 for 77,224, 1.414,077 for
+# 1,414,077. See `_num` for why it is read rather than refused.
+_DOT_GROUPED = re.compile(r"\d{1,3}(?:[.,]\d{3})+")
+
 
 def _grouping_is_readable(bare: str) -> bool:
     """True when a comma-grouped figure parses in either convention a filing uses.
@@ -691,6 +696,29 @@ def _num(token: str) -> float | None:
         # leading-dot tokens in the corpus are this document's damaged FY26 cell
         # and its already-refused sibling), so the refusal takes nothing legitimate.
         return None
+    if "." in bare and _DOT_GROUPED.fullmatch(bare):
+        # Continental grouping with a damaged separator. Wipro's audited
+        # consolidated face renders the thousands separator as a period in some
+        # cells and as a comma in others, including inside one figure: "77.224"
+        # beside "320,346", and the page's own total as "1.414,077". The digits
+        # are intact and the glyph is wrong, so reading the dot as a decimal
+        # point publishes the figure a thousand times too small wearing a parsed
+        # one -- the exact defect the leading-dot refusal above exists to stop,
+        # arriving through a different glyph run.
+        #
+        # The shape is the evidence. Indian statements print whole units and at
+        # most two decimals (the earnings-per-share rows, "2.13"), so a token of
+        # one-to-three digits followed by dot-or-comma groups of exactly three
+        # has one reading; and the page itself witnesses it, because its
+        # comma-printed totals only foot under the grouped reading (587,723 +
+        # 826,354 = 1,414,077). Requiring a dot keeps every purely comma-grouped
+        # figure on its own established path, so no committed figure changes
+        # reading. A first group of bare zero is a genuine decimal -- par values
+        # print as "0.005" -- and falls through untouched; measured across the
+        # 975 pages of the filing corpus, every first-group-zero token is one.
+        if not bare.startswith("0"):
+            grouped = float(re.sub(r"[.,]", "", bare))
+            return -grouped if token.strip().startswith("(") else grouped
     if "," in bare and _GROUPED_FIGURE.match(bare) and not _grouping_is_readable(bare):
         # A figure whose grouping no convention can read is a recorded unknown,
         # not a number to guess at. The row keeps its other column, so the

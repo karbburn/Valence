@@ -1,0 +1,19 @@
+{
+  "symbol": "WIPRO",
+  "url": "https://nsearchives.nseindia.com/corporate/Wipro_Secretarial_16042026162417_Reg33Financials.pdf",
+  "announced_text": "16-Apr-2026 16:24:17",
+  "announced_stamp": "16042026162417",
+  "pages": 37,
+  "balance_sheet_pages": [
+    21
+  ],
+  "declared_units": {
+    "21": [
+      "INR",
+      "millions"
+    ]
+  },
+  "bytes": 9550168,
+  "tried": 1,
+  "label": "Financial results for the year ended March 31, 2026"
+}

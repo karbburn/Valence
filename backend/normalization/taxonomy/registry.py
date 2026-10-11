@@ -462,6 +462,44 @@ WITHDRAWN_LABELS: FrozenSet[str] = frozenset({
     "(iv) Derivative liabilities",
     "Acceptances",
     "(3) Assets held for sale",
+    # --- Wipro audited consolidated face (printed p.21) ---
+    #
+    # The extraction keeps only the first words of several captions, and on
+    # every line below the words that said assets or liabilities are the ones
+    # that went. Each refusal is decided against the figures the page prints
+    # beside the fragment.
+    #
+    # "Non-current" carries 42,024 / 48,195: the printed "Non-current tax
+    # liabilities (net)". The engine sends the fragment to
+    # non_current_investments at medium confidence, which would publish a tax
+    # liability as an investment, and no key on this face holds non-current tax
+    # liabilities. The asset sibling survives extraction as "Non.current tax"
+    # (7,230 / 7,787) and is declined by the statement guard instead, so the
+    # fragment is the only row that would reach a wrong key.
+    "Non-current",
+    # "Other non-current" carries 12,757 / 17,877: the printed "Other
+    # non-current liabilities". The engine sends it to
+    # other_non_current_assets at medium confidence, parking a liability in the
+    # asset column. The asset line extracts as "Other non-cum:nt" (7,707 /
+    # 9,451) and is queued unmapped, so nothing here borrows its key.
+    "Other non-current",
+    # "Total current" carries 286,253 / 403,232: the printed "Total current
+    # liabilities". The engine sends it to total_current_assets at medium
+    # confidence, where it would collide with the caption that does say assets
+    # -- "Total current assets", 777,775 / 826,354, statically mapped -- and
+    # the collision refuses both rows. Withdrawing the liability fragment
+    # resolves that: the asset subtotal publishes and the liability figure
+    # stays a recorded unknown, there being no total-current-liabilities key.
+    "Total current",
+    # "Equity attributable" is the printed "Equity attributable to the equity
+    # holders of the Company": 823,641 / 880,183, the parent-only slice. The
+    # engine sends it to total_equity at medium confidence, where it collides
+    # with the printed TOTAL EQUITY (825,779 / 882,692, statically mapped),
+    # whose figure includes the non-controlling interests of 2,138 / 2,509
+    # that this line excludes by definition. No key holds equity excluding
+    # non-controlling interests, so the fragment refuses and the total
+    # publishes.
+    "Equity attributable",
 })
 
 # Mapping entry type: (canonical_key, statement)
@@ -832,6 +870,20 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     # same family as ONGC's "(c) Current Tax Assets (net)": the caption states
     # what it is, and no sibling tax line competes for the key on this face.
     "(d) Current tax assets": ("canonical.bs.current_income_tax_assets", "bs"),
+
+    # --- Balance Sheet, Wipro audited consolidated face (printed p.21) ---
+    #
+    # "lnvcstmcnts" is the printed "Investments" of the current block, carrying
+    # the same glyph damage that turns this page's thousands separators into
+    # periods: the non-current sibling extracts as the clean "Investments"
+    # (withdrawn globally against the screener aggregate), and this one sits
+    # under "Curr('nt assets" -> "Financial assets" with 411,474 / 437,680
+    # million. The block foots only with it: the parsed current assets plus
+    # the one refused cash cell sum to the printed totals exactly, 777,775 at
+    # FY25 and 826,354 at FY26. The engine has no stem to match (0.2), so
+    # without this entry the filing states its own treasury line and the model
+    # reads the aggregator instead.
+    "lnvcstmcnts": ("canonical.bs.current_investments", "bs"),
 
     # --- Cash Flow Statement ---
     "Cash from Operating Activity": ("canonical.cf.operating_activities", "cf"),

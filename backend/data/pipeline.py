@@ -301,6 +301,61 @@ def _declared_units_for(meta: dict, printed: int) -> tuple[str, str] | None:
     return currency, units
 
 
+# `value_target = value_source * _SCALE_RATIO[(currency, source, target)]`, and only for
+# ratios that are definitions of the units themselves: 1 crore = 10 million = 100,000
+# thousands of the SAME currency. Nothing here crosses a currency, because that needs a
+# rate and a date and a figure moved across currencies on an unstated rate is the defect
+# this record exists to prevent.
+_SCALE_RATIO = {
+    ("INR", "millions", "crores"): 0.1,
+    ("INR", "crores", "millions"): 10.0,
+    ("INR", "thousands", "crores"): 0.00001,
+    ("INR", "crores", "thousands"): 100000.0,
+}
+
+
+def _in_model_basis(dps: list[RawDatapoint], company_id: str) -> list[RawDatapoint]:
+    """Bring filing rows onto the basis their model declares, when only the scale differs.
+
+    Wipro's audited face prints INR in millions. The page declares nothing a pattern can
+    match, the record beside `balance_sheet_pages` carries the witnessed basis, and the
+    statement's own arithmetic confirms it: paid-up capital of 20,944 is 1,047 crore shares
+    at Rs 2, and the sheet foots in those figures (1,414,077 = 587,723 + 826,354). The
+    model for `wipro_wipro` declares crores.
+
+    The model is single-basis by design: `check_units_agree_within_a_model` fails a model
+    whose published lines disagree with its declaration, and
+    `validate_currencies_and_units` refuses a mismatched row before it reaches the store,
+    keeping zero canonicals. So a scale-only difference in the same currency is divided out
+    here, the way `us_live.py` divides dollars by 1e6 and stamps millions before its rows
+    exist. What the page declared stays recorded beside the page it was declared on; the
+    row carries the model's basis, so statements, selection and every arithmetic check
+    read one scale.
+
+    A currency difference is never converted. Those rows reach the validator unchanged,
+    which refuses them, and zero canonicals is the honest result.
+    """
+    from backend.models.spec.metadata import get_metadata_for_company
+
+    declared = get_metadata_for_company(company_id)
+    out: list[RawDatapoint] = []
+    for d in dps:
+        ratio = (
+            _SCALE_RATIO.get((d.currency, d.units, declared.units))
+            if d.currency == declared.currency
+            else None
+        )
+        out.append(
+            d.model_copy(update={
+                "value": round(d.value * ratio, 6),
+                "units": declared.units,
+            })
+            if ratio is not None
+            else d
+        )
+    return out
+
+
 def _filing_datapoints_from_cached_pdf(
     pdf_path: Path, meta: dict, company_id: str
 ) -> list[RawDatapoint]:
@@ -381,7 +436,7 @@ def _filing_datapoints_from_cached_pdf(
                 )
             page_dps = [d for d in page_dps if d.period_label in allowed]
         dps.extend(page_dps)
-    return dps
+    return _in_model_basis(dps, company_id)
 
 
 def _get_secondary_filing_datapoints(company_id: str) -> list[RawDatapoint]:
