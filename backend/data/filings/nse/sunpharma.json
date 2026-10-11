@@ -1,0 +1,19 @@
+{
+  "symbol": "SUNPHARMA",
+  "url": "https://nsearchives.nseindia.com/corporate/20260522_SUNSEC_22052026144322_BMOutcome22052026.pdf",
+  "announced_text": "22-May-2026 14:32:22",
+  "announced_stamp": "22052026144322",
+  "pages": 40,
+  "balance_sheet_pages": [
+    19
+  ],
+  "declared_units": {
+    "19": [
+      "INR",
+      "millions"
+    ]
+  },
+  "bytes": 14800017,
+  "tried": 1,
+  "label": "Financial results for the year ended March 31, 2026"
+}

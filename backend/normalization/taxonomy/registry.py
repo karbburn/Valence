@@ -500,6 +500,44 @@ WITHDRAWN_LABELS: FrozenSet[str] = frozenset({
     # non-controlling interests, so the fragment refuses and the total
     # publishes.
     "Equity attributable",
+    # --- Sun Pharmaceutical audited consolidated face (printed p.19) ---
+    #
+    # This face prints its captions in full, so every refusal below is the
+    # engine rather than the extraction: three tax liabilities whose only keys
+    # are asset keys, one intangible component whose key the completed
+    # intangibles beside it already take, and the parent-only equity whose
+    # total the sheet prints itself.
+    #
+    # "(c) Deferred tax liabilities (Net)" carries 1,924.4 / 3,780.2 from the
+    # current-liabilities block, and the engine sends it to deferred_tax_assets
+    # at medium confidence -- the same inversion ONGC's face recorded, where a
+    # 38,765 liability sat on the asset key. The true deferred-tax asset sits
+    # on this same face (44,075.5 / 40,464.6) and takes the key below.
+    "(c) Deferred tax liabilities (Net)",
+    # "(d) Current tax liabilities (Net)" (7,331.8 / 13,500.4) and "(e)
+    # Non-current tax liabilities (Net)" (87.6 / 128.9) both reach
+    # current_income_tax_assets -- the first directly, the second through
+    # income_tax_assets routed by half -- where they collide with each other
+    # and refuse both rows. Neither has a liability key, and a liability on an
+    # asset key is the inversion, so both refuse and the tax ASSET beside them
+    # takes income_tax_assets below.
+    "(d) Current tax liabilities (Net)",
+    "(e) Non-current tax liabilities (Net)",
+    # "(e) Intangible assets under development" (54,096.2 / 16,710.8) and "(d)
+    # Other intangible assets" (36,109.2 / 118,750.8) are two distinct lines
+    # under one key, and the twin gate would refuse both. Reliance's face made
+    # this exact choice: the under-development line is withdrawn there so the
+    # completed intangibles publish. One key cannot hold two figures for one
+    # period, and the completed line is the one that names what it is.
+    "(e) Intangible assets under development",
+    # "Equity attributable to the equity shareholders of the parent company"
+    # (722,180.2 / 835,700.9) is the parent-only slice, and the printed "Total
+    # equity" (724,859.5 / 838,797.4) includes the non-controlling interests
+    # of 2,679.3 / 3,096.5 -- the figure closes exactly, 835,700.9 + 3,096.5 =
+    # 838,797.4. The engine currently suggests share_count, which a guard
+    # declines; the withdrawal makes the refusal structural, the way Wipro's
+    # truncated fragment was withdrawn so its printed TOTAL EQUITY publishes.
+    "Equity attributable to the equity shareholders of the parent company",
 })
 
 # Mapping entry type: (canonical_key, statement)
@@ -884,6 +922,31 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     # without this entry the filing states its own treasury line and the model
     # reads the aggregator instead.
     "lnvcstmcnts": ("canonical.bs.current_investments", "bs"),
+
+    # --- Balance Sheet, Sun Pharmaceutical audited consolidated face (printed p.19) ---
+    #
+    # This face prints every caption in full; what is pinned here is what the
+    # ENGINE gets wrong or misses on it, decided against the figures the page
+    # prints.
+    #
+    # The two tax assets, same class as ONGC's: the engine sends "(g) Deferred
+    # tax assets (Net)" home correctly but sends "(h) Income tax assets (Net)"
+    # (4,206.7 / 6,451.3) to the deferred-tax key at medium confidence, which
+    # is what would put it in the same refusal bucket as the true deferred-tax
+    # asset beside it (44,075.5 / 40,464.6). Income tax is not deferred tax;
+    # the non-current income-tax key is what that line is, and with the
+    # liability captions withdrawn above each asset takes one key alone.
+    "(g) Deferred tax assets (Net)": ("canonical.bs.deferred_tax_assets", "bs"),
+    "(h) Income tax assets (Net)": ("canonical.bs.income_tax_assets", "bs"),
+    # "(c) Goodwill (Net)" (89,394.2 / 98,330.8): the engine has no stem to
+    # match on the parenthesised form (0.2), and the key already holds this
+    # line for every other face that prints it.
+    "(c) Goodwill (Net)": ("canonical.bs.goodwill", "bs"),
+    # "(d) Other intangible assets" (36,109.2 / 118,750.8): the completed
+    # intangibles, the same caption TCS and Reliance print under their own
+    # lettering. Its under-development sibling is withdrawn above so the pair
+    # cannot refuse each other on the one key.
+    "(d) Other intangible assets": ("canonical.bs.intangible_assets", "bs"),
 
     # --- Cash Flow Statement ---
     "Cash from Operating Activity": ("canonical.cf.operating_activities", "cf"),
