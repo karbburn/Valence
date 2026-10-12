@@ -173,15 +173,15 @@ MARKET_DEFAULTS: Dict[MarketType, Dict[str, float]] = {
 # beta vs the primary domestic index. NO PRICE — see module docstring.
 # Shares/beta move slowly; refresh via scripts/refresh_market_fallbacks.py.
 REGISTRY_FALLBACKS: Dict[str, Dict[str, float]] = {
-    "infy_infy": {"shares": 412.45, "beta": 0.79, "market": "india"},
-    "tcs_tcs": {"shares": 361.80, "beta": 0.85, "market": "india"},
-    "tatamotors_tatamotors": {"shares": 367.00, "beta": 1.15, "market": "india"},
-    "tatasteel_tatasteel": {"shares": 1248.00, "beta": 1.25, "market": "india"},
-    "ongc_ongc": {"shares": 1258.00, "beta": 0.95, "market": "india"},
+    "infy_infy": {"shares": 405.03, "beta": 0.79, "market": "india"},
+    "tcs_tcs": {"shares": 361.8, "beta": 0.85, "market": "india"},
+    "tatamotors_tatamotors": {"shares": 367.0, "beta": 1.15, "market": "india"},
+    "tatasteel_tatasteel": {"shares": 1247.43, "beta": 1.25, "market": "india"},
+    "ongc_ongc": {"shares": 1258.03, "beta": 0.95, "market": "india"},
     "aapl_us": {"shares": 14594.18, "beta": 1.05, "market": "us"},
-    "msft_us": {"shares": 7430.00, "beta": 0.90, "market": "us"},
-    "infy_us": {"shares": 4124.00, "beta": 0.85, "market": "us"},
-    "nvda_us": {"shares": 24147.00, "beta": 1.67, "market": "us"},
+    "msft_us": {"shares": 7425.55, "beta": 0.90, "market": "us"},
+    "infy_us": {"shares": 4050.34, "beta": 0.85, "market": "us"},
+    "nvda_us": {"shares": 24147.0, "beta": 1.67, "market": "us"},
     "googl_us": {"shares": 5867.16, "beta": 1.04, "market": "us"},
     "amzn_us": {"shares": 10786.31, "beta": 1.15, "market": "us"},
     "tsm_us": {"shares": 5186.47, "beta": 1.10, "market": "us"},
