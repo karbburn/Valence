@@ -165,15 +165,11 @@ class TestTheAcceptanceCannotBecomeAPermanentHole:
 class TestTheCommittedAcceptanceIsUsable:
     """The record actually shipped beside the artwork, read as the gate reads it."""
 
-    def test_it_parses_carries_a_reason_and_a_future_review_date(self):
+    def test_the_poster_is_current_so_no_nse_acceptance_is_needed(self):
         path = REPO / "frontend" / "public" / "media" / "valence-launch-acceptance.json"
-        assert path.exists(), "the acceptance record is not in the tree"
-        record = json.loads(path.read_text(encoding="utf-8"))
-        assert record.get("reason", "").strip(), "the shipped acceptance states no reason"
-        review = record.get("review_by", "")
-        assert review and review > "2026-10-06", (
-            f"the shipped acceptance is already expired ({review!r}), so the gate it "
-            f"exists to pass is failing on the day it lands"
+        assert not path.exists(), (
+            "a stale-hero acceptance record is still shipped even though the poster now "
+            "matches the live model, so it would either contradict or ignore the gate"
         )
 
     def test_the_claim_and_the_decision_are_separate_files(self, tmp_path):

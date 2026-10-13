@@ -71,8 +71,10 @@ needs_wipro = pytest.mark.skipif(
     not FILING.exists(), reason="the Wipro filing is absent"
 )
 
-# The whole face resolves to exactly these fifteen homes, on the model's crores
-# basis. The two keys that must stay EMPTY are the two the fragments would
+# The whole face resolves to sixteen canonical homes, on the model's crores
+# basis: the original fifteen captured rows, plus Unbilled receivables (which
+# the face prints beneath Trade receivables) and prepayments / other current
+# assets. The two keys that must stay EMPTY are the two the fragments would
 # have fed: non_current_investments (the engine's home for "Non-current") and
 # other_non_current_assets (the engine's home for "Other non-current").
 PUBLISHED = {
@@ -86,6 +88,7 @@ PUBLISHED = {
     "canonical.bs.inventory": {"FY25": 69.4, "FY26": 51.7},
     "canonical.bs.minority_interest": {"FY25": 213.8, "FY26": 250.9},
     "canonical.bs.ppe": {"FY25": 7847.3, "FY26": 7722.4},
+    "canonical.bs.unbilled_revenue": {"FY25": 6428.0},
     "canonical.bs.total_assets": {"FY25": 128185.2, "FY26": 141407.7},
     "canonical.bs.total_current_assets": {"FY25": 77777.5, "FY26": 82635.4},
     "canonical.bs.total_equity": {"FY25": 82577.9, "FY26": 88269.2},
