@@ -234,8 +234,8 @@ export default async function LandingPage() {
                 price, a percentage gap and a date, and those figures no longer match the
                 model. Read off the rendered card against the live model:
 
-                    poster   $228.86 market  $107.52 model  -53.0%   as of 28 Sep 2026
-                    API      $233.95 market  $156.48 model  -33.1%   at 2026-10-02
+                    poster (now current) $226.32 market  $93.96 model  -58.5%   as of 12 Oct 2026
+                    (previous stale reading when the hero was pulled: $228.86 / $107.52 / -53.0% / 28 Sep 2026)
 
                 Twenty percentage points out on the one number the card exists to show.
 
