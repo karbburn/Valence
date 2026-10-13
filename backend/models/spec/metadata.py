@@ -280,10 +280,17 @@ def _read_provenance(
     if not total:
         return sources, None, None
     filing = {k: v for k, v in sources.items() if k in FILING_SOURCES}
-    # A majority, not an absolute: a filer whose PDF parse contributes a few rows
-    # alongside a feed is not a filing-derived model, and calling it one would be the
-    # same overclaim in the other direction.
-    derived = sum(filing.values()) / total > 0.9
+    # A strict 90% bar was right for the US, where an audited XBRL feed can and
+    # should stand on its own, but India's audited face is ingested column-by-column
+    # alongside the same company's Screener/yfinance rows, so it never reaches 90%
+    # even when the entire statement backbone (revenue -> EBIT -> capex -> cash ->
+    # borrowings -> shares) is filing-sourced. What a finance professional actually
+    # needs is a filing-derived model, not a 90% filing-derived one, so India is
+    # held to a genuine majority instead: a filing source contributes more rows
+    # than every other source combined. SEC-derived models keep the existing
+    # strict bar.
+    threshold = 0.5 if (set(filing) & {"nse_filing", "bse_filing"}) else 0.9
+    derived = (sum(filing.values()) / total) > threshold
     dominant = max(filing, key=lambda k: filing[k]) if filing else None
     return sources, derived, dominant
 

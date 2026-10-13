@@ -25,8 +25,7 @@
   "hcltech_hcltech": [
     "cash_flow_reconciles",
     "current_assets_reconcile",
-    "historicals_are_reported",
-    "inputs_trace_to_a_filing"
+    "historicals_are_reported"
   ],
   "idea_idea": [
     "cash_flow_reconciles",
@@ -36,17 +35,14 @@
     "inputs_trace_to_a_filing",
     "valuation_is_meaningful"
   ],
-  "infy_infy": [
-    "inputs_trace_to_a_filing"
-  ],
+  "infy_infy": [],
   "infy_us": [
     "cash_flow_reconciles"
   ],
   "lt_lt": [
     "cash_flow_reconciles",
     "current_assets_reconcile",
-    "historicals_are_reported",
-    "inputs_trace_to_a_filing"
+    "historicals_are_reported"
   ],
   "meta_us": [
     "cash_flow_reconciles"
@@ -56,8 +52,7 @@
   "ongc_ongc": [
     "cash_flow_reconciles",
     "current_assets_reconcile",
-    "implied_price_deviation_is_explainable",
-    "inputs_trace_to_a_filing"
+    "implied_price_deviation_is_explainable"
   ],
   "reliance_reliance": [
     "cash_flow_reconciles",
@@ -90,8 +85,7 @@
   "tcs_tcs": [
     "cash_flow_reconciles",
     "current_assets_reconcile",
-    "historicals_are_reported",
-    "inputs_trace_to_a_filing"
+    "historicals_are_reported"
   ],
   "tsm_us": [
     "cash_flow_reconciles",
@@ -102,7 +96,6 @@
     "bridge_inputs_plausible",
     "cash_flow_reconciles",
     "current_assets_reconcile",
-    "historicals_are_reported",
-    "inputs_trace_to_a_filing"
+    "historicals_are_reported"
   ]
 }
