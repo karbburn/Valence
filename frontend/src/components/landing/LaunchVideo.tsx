@@ -49,11 +49,9 @@ const MEDIA_REV = '2026-10-13a'
  */
 const VIDEO_PATH = '/media/valence-launch.mp4'
 const POSTER_PATH = '/media/valence-launch-poster.jpg'
-const CAPTIONS_PATH = '/media/valence-launch.en.vtt'
 
 const VIDEO_SRC = `${VIDEO_PATH}?v=${MEDIA_REV}`
 const POSTER_SRC = `${POSTER_PATH}?v=${MEDIA_REV}`
-const CAPTIONS_SRC = `${CAPTIONS_PATH}?v=${MEDIA_REV}`
 
 /** Runtime of the cut, read from the file rather than typed in by hand. */
 const FILM_RUNTIME = '0:26'
@@ -83,27 +81,6 @@ export function LaunchVideo() {
           onPause={() => setStarted(false)}
         >
           <source src={VIDEO_SRC} type="video/mp4" />
-          {/* A caption track, default, so the browser offers captions without
-              a visitor going looking for them.
-
-              The captions are already burned into the picture, so this is not
-              what a sighted viewer reads and it is not a substitute for them. It
-              is for the two cases pixels cannot serve: a screen reader has no
-              frame to read, and a viewer who turns the sound on has no reason to
-              keep looking at the screen. Without it, turning the sound on put
-              spoken audio on with no text anywhere for anyone who needs it,
-              which is why the sound control and this track landed together.
-
-              The timings are generated from the film's own composition rather
-              than typed, so the track cannot drift away from the captions in the
-              picture when the film is re-cut. */}
-          <track
-            kind="captions"
-            src={CAPTIONS_SRC}
-            srcLang="en"
-            label="English"
-            default
-          />
           Your browser cannot play embedded video.{' '}
           <a href={VIDEO_SRC} className="text-accent underline">
             Download the clip

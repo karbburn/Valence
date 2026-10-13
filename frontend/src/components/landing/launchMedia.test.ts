@@ -62,7 +62,7 @@ function resolveUrlPath(name: string, depth = 0): string {
 
 test('every media file the component references exists', () => {
   const referenced = new Set(mediaPaths())
-  assert.ok(referenced.size >= 3, `expected video, poster and captions, got ${referenced.size}`)
+  assert.ok(referenced.size >= 2, `expected video and poster, got ${referenced.size}`)
   for (const rel of referenced) {
     const onDisk = path.join(MEDIA, path.basename(rel))
     assert.ok(
@@ -72,34 +72,6 @@ test('every media file the component references exists', () => {
   }
 })
 
-test('the caption track is not derived from the video URL', () => {
-  // The bug: `${VIDEO_SRC.replace(/\.mp4$/, '')}.en.vtt`. VIDEO_SRC ends with its
-  // cache token, so the anchored regex never matched and the src became
-  // ".../valence-launch.mp4?v=TOKEN.en.vtt?v=TOKEN", which names no file.
-  assert.ok(
-    !/VIDEO_SRC\.replace/.test(source),
-    'the caption src is derived from the video URL, which cannot work with a cache token on it',
-  )
-
-  const track = source.match(/<track[\s\S]*?\/>/)?.[0]
-  assert.ok(track, 'the video has no <track> element')
-  assert.match(track, /kind="captions"/)
-  assert.match(track, /src=\{CAPTIONS_SRC\}/)
-})
-
-test('the caption track src names a vtt file, not the video', () => {
-  const track = source.match(/<track[\s\S]*?\/>/)?.[0] ?? ''
-  const name = track.match(/src=\{([A-Z_]+)\}/)?.[1]
-  assert.ok(name, 'the track src is not a named constant')
-
-  // Resolve the URL the way the browser will, following the indirection. The src
-  // is a URL constant built from a bare path plus the cache token, so neither
-  // string on its own shows the extension, and asserting on a literal would
-  // pass for a URL that serves the wrong file.
-  const barePath = resolveUrlPath(name)
-  assert.match(barePath, /\.vtt$/, `${name} must name a .vtt file, got ${barePath}`)
-  assert.ok(!barePath.includes('.mp4'), `${name} points at the video`)
-})
 
 test('every media URL carries the cache token', () => {
   // Without a token a replaced file is served from cache at the same path, which
@@ -116,9 +88,8 @@ test('every media URL carries the cache token', () => {
   )
 })
 
-test('the video carries a caption track and a poster', () => {
+test('the video carries a poster', () => {
   assert.match(source, /poster=\{POSTER_SRC\}/)
-  assert.match(source, /<track[\s\S]*?kind="captions"/)
   assert.match(source, /preload="none"/, 'the film must not be fetched before it is asked for')
 })
 
