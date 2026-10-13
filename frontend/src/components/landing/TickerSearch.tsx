@@ -257,6 +257,10 @@ export function TickerSearch() {
           name="ticker"
           type="text"
           role="combobox"
+          autoCapitalize="none"
+          autoCorrect="off"
+          autoComplete="off"
+          spellCheck={false}
           aria-expanded={open}
           aria-describedby={errorId}
           aria-controls={listboxId}

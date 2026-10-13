@@ -168,9 +168,17 @@ export default async function LandingPage() {
 
   return (
     <div className="min-h-screen bg-canvas text-text-main font-sans flex flex-col">
+      {/* Keyboard users should not have to tab through the whole nav to reach
+          the page's primary content. The link is visually hidden until focus. */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-3 focus:py-2 focus:rounded-sm focus:bg-accent focus:text-canvas focus:text-[13px] focus:font-semibold"
+      >
+        Skip to main content
+      </a>
       <SiteNav />
 
-      <main className="flex-1">
+      <main id="main-content" className="flex-1" tabIndex={-1}>
         {/* Hero. The action is a search, so the search is the hero. Left-weighted
             text against a full-bleed media band below it. */}
         {/* Hero. Asymmetric split, which is what every serious product in this
