@@ -1,5 +1,9 @@
-export const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ?? 'https://valence.sourabhpradhan.in'
+// The canonical host for this site. Hardcoded rather than read from an env
+// variable, because a stale or mistaken deployment value (for example a Vercel
+// preview host) would otherwise leak into canonical tags, Open Graph URLs and
+// JSON-LD @ids, and tell search engines and answer engines that the site lives
+// somewhere else. Leave this as the public custom domain.
+export const SITE_URL = 'https://valence.sourabhpradhan.in'
 
 export const SITE_NAME = 'Valence'
 

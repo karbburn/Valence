@@ -80,6 +80,39 @@ export function SiteJsonLd() {
   return <JsonLd data={graph()} />
 }
 
+/** Methodology page: an Article with breadcrumbs, for citation clarity. */
+export function MethodologyJsonLd() {
+  const url = `${SITE_URL}/methodology`
+  const data = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Article',
+        '@id': `${url}#article`,
+        headline: 'Valence methodology',
+        description:
+          'How Valence builds a valuation: unlevered FCFF discounted at WACC, the enterprise-to-equity bridge, three scenarios, where the financial data comes from, and what the model cannot do.',
+        url,
+        inLanguage: 'en',
+        datePublished: '2026-09-24',
+        dateModified: '2026-10-13',
+        author: { '@id': `${SITE_URL}/#author` },
+        publisher: { '@id': `${SITE_URL}/#organization` },
+        mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+        isPartOf: { '@id': `${SITE_URL}/#website` },
+      },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: SITE_NAME, item: SITE_URL },
+          { '@type': 'ListItem', position: 2, name: 'Methodology', item: url },
+        ],
+      },
+    ],
+  }
+  return <JsonLd data={data} />
+}
+
 interface StockJsonLdProps {
   company: ResolvedSlug
   spec: ModelSpecification | null

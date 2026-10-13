@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { SITE_URL, SITE_NAME, SOCIAL, CONTACT_EMAIL, OG_IMAGE } from '@/lib/site'
 import { SiteFooter } from '@/components/SiteFooter'
 import { GitHubMark } from '@/components/GitHubMark'
+import { MethodologyJsonLd } from '@/components/JsonLd'
 import { getManifestServer } from '@/lib/serverApi'
 
 export const metadata: Metadata = {
@@ -40,6 +41,7 @@ export default async function MethodologyPage() {
 
   return (
     <div className="min-h-screen bg-canvas text-text-main font-sans flex flex-col">
+      <MethodologyJsonLd />
       <header className="border-b border-border bg-surface/95 backdrop-blur-md sticky top-0 z-40">
         <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-5 h-16 flex items-center justify-between">
           <Link
