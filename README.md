@@ -12,6 +12,19 @@ Every company has its own public URL. `valence.sourabhpradhan.in/NVDA` is a deep
 
 ---
 
+## Contents
+
+- [Key Features](#key-features)
+- [The gates](#the-gates)
+- [System Architecture](#system-architecture)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Getting Started](#getting-started)
+- [Tests](#tests)
+- [Core API Endpoints](#core-api-endpoints)
+- [Licensing & Data](#licensing--data)
+
+---
 ## Key Features
 
 - **Per-ticker deep links.** Every covered company has a canonical page at `/stock/{slug}`, with `/NVDA` as a short form that redirects to it. The model is server-rendered and revalidated hourly, so a shared link is a working link rather than an empty shell.
@@ -77,7 +90,7 @@ one that misses a real disagreement.
 
 On current `main`: **tie-out 0 untied figures, 10 of 11 US filers audited clean**
 (the eleventh is TSMC, disclosed rather than counted), **QA 0 regressions across 23
-models**, **1176 backend tests and 94 frontend tests**, and Infosys'
+models**, the backend and frontend test suites both green, and Infosys'
 current-asset reconciliation landing exactly on the filed subtotal.
 
 ---
@@ -220,7 +233,7 @@ Valence/
 │   │   ├── [ticker]/                  # Short-form redirector
 │   │   ├── methodology/page.tsx
 │   │   ├── not-found.tsx
-│   │   ├── sitemap.ts, robots.ts, manifest.ts
+│   │   ├── sitemap.ts, robots.txt/, manifest.ts
 │   │   ├── icon.png, favicon.ico, apple-icon.png
 │   ├── src/components/                # Workbench views, modals, landing blocks
 │   ├── src/lib/                       # API client, formatters, tickers, site config
@@ -286,7 +299,8 @@ VALENCE_ENABLE_NSE_ACQUISITION=
 ```env
 # frontend/.env.local
 NEXT_PUBLIC_API_URL=http://127.0.0.1:8111
-NEXT_PUBLIC_SITE_URL=http://localhost:3000
+# Optional. The canonical production host is pinned in the code; set this only
+# to override it (for example when previewing against a staging origin).
 ```
 
 `NEXT_PUBLIC_API_URL` is read at **build** time, not only at runtime. The pages
@@ -362,7 +376,7 @@ curl -o model.xlsx "http://127.0.0.1:8111/api/export/excel?company_id=nvda_us"
 python scripts/audit_loop.py
 
 # Or individually
-python -m pytest backend/tests -q                              # 1089 tests
+python -m pytest backend/tests -q                              # full backend test suite
 python -m backend.export.excel.self_check                      # 31-sheet contract + formula wiring
 python -m backend.api.self_check                               # Web API and recomputation
 cd frontend && npm test && npx tsc --noEmit && npm run lint && npm run build
