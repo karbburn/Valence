@@ -12,6 +12,7 @@ growth, DCF exit multiple, comps P/E, comps EV/EBITDA.
 
 from typing import List, Optional
 from pydantic import BaseModel, Field
+import math
 
 
 class ValuationRangeBar(BaseModel):
@@ -39,7 +40,9 @@ def _reprice_dcf(base_val, wacc_pct: float, terminal_growth_rate: Optional[float
     """Implied share price from the base FCFF stream at a perturbed WACC/TV input.
 
     Mirrors engine conventions exactly: explicit-period flows at mid-year factors,
-    terminal value discounted end-of-year-five, same net-debt bridge and share count.
+    terminal value discounted over the horizon the base TV's own discount factor
+    implies (end-of-year-five where no factor is struck), same net-debt bridge
+    and share count.
     """
     w = max(0.005, wacc_pct) / 100.0
     fcffs = [p.fcff or 0.0 for p in base_val.fcff_by_period]
@@ -61,7 +64,19 @@ def _reprice_dcf(base_val, wacc_pct: float, terminal_growth_rate: Optional[float
         reinvest = min(0.50, max(0.10, g_frac / w))
         tv_undisc = (nopat * (1.0 - reinvest)) * (1.0 + g_frac) / (w - g_frac)
 
-    pv_tv = tv_undisc / ((1.0 + w) ** len(fcffs)) if fcffs else 0.0
+    # Discount the TV over the same horizon the base DCF used. The engine's base
+    # terminal value carries a discount_factor struck over the actual valuation/
+    # terminal-period dates rather than five years, and re-pricing at five years
+    # here is what moved every bar off the base case they were supposed to surround.
+    df = getattr(tv, "discount_factor", None)
+    if df and df > 0 and 0 < w < 2:
+        try:
+            years = math.log(df) / math.log(1.0 / (1.0 + w))
+        except (ValueError, ZeroDivisionError):
+            years = float(len(fcffs))
+        pv_tv = tv_undisc / ((1.0 + w) ** years) if fcffs else 0.0
+    else:
+        pv_tv = tv_undisc / ((1.0 + w) ** len(fcffs)) if fcffs else 0.0
     equity = (sum_pv + pv_tv) - (base_val.dcf_bridge.less_net_debt or 0.0)
     shares = base_val.dcf_bridge.shares_outstanding or 1.0
     return max(0.0, equity / shares)

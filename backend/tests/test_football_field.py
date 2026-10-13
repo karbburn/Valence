@@ -49,6 +49,18 @@ def test_reprice_matches_hand_computed_bridge():
     assert price == pytest.approx(expected, rel=1e-9)
 
 
+def test_reprice_uses_the_tv_own_discount_horizon():
+    out = _base_output()
+    out.terminal_value.discount_factor = 1.0 / ((1.0 + 0.12) ** 4.0)
+    price = _reprice_dcf(out, wacc_pct=12.0, terminal_growth_rate=4.0)
+    w, g = 0.12, 0.04
+    stream = [100.0, 110.0, 120.0, 130.0, 140.0]
+    sum_pv = sum(f / ((1 + w) ** (i + 0.5)) for i, f in enumerate(stream))
+    tv = 140.0 * (1 + g) / (w - g) / ((1 + w) ** 4.0)
+    expected = (sum_pv + tv + 500.0) / 50.0
+    assert price == pytest.approx(expected, rel=1e-9)
+
+
 def test_perturbed_ranges_move_in_the_right_direction():
     out = _base_output()
     base_price = _reprice_dcf(out, 12.0, 4.0)
