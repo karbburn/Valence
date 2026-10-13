@@ -73,6 +73,10 @@ const nextConfig: NextConfig = {
             value:
               "frame-ancestors 'self' https://www.sourabhpradhan.in https://sourabhpradhan.in https://valence.sourabhpradhan.in",
           },
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=63072000; includeSubDomains',
+          },
         ],
       },
     ]
