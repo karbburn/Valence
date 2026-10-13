@@ -757,6 +757,8 @@ RAW_METRIC_MAP: Dict[str, Tuple[str, str]] = {
     # current at FY26). The half guard declines the non-current row for lack
     # of a key, so the current figure publishes and nothing is misfiled.
     "Unbilled": ("canonical.bs.unbilled_revenue", "bs"),
+    "Unbilled receivables": ("canonical.bs.unbilled_revenue", "bs"),
+    "Unbilled receivables (net)": ("canonical.bs.unbilled_revenue", "bs"),
     "Inventory": ("canonical.bs.inventory", "bs"),
     "Cash & Bank": ("canonical.bs.cash_and_bank", "bs"),
     "Cash and cash equivalents": ("canonical.bs.cash_and_bank", "bs"),
