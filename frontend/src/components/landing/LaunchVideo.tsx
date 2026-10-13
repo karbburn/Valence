@@ -35,7 +35,7 @@ import { Pause, Play, Volume2, VolumeX } from 'lucide-react'
  *
  * Set it to the date of the new cut, or any value that changes with it.
  */
-const MEDIA_REV = '2026-09-29b'
+const MEDIA_REV = '2026-10-13a'
 
 /**
  * The three media paths, built from bare names and the cache token separately.
