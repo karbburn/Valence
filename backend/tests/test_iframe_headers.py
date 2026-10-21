@@ -17,11 +17,15 @@ def test_health_passes_through_middleware():
     resp = _client().get("/api/health")
     assert resp.status_code == 200
     assert "frame-ancestors" in resp.headers.get("content-security-policy", "")
-    assert "x-frame-options" not in resp.headers
+    assert "x-frame-options" in resp.headers
+    assert "ALLOW-FROM" in resp.headers.get("x-frame-options", "").upper()
+    assert "sourabhpradhan.in" in resp.headers.get("x-frame-options", "")
 
 
 def test_model_route_passes_through_middleware():
     resp = _client().get("/api/model/infy_infy")
     assert resp.status_code == 200
     assert "frame-ancestors" in resp.headers.get("content-security-policy", "")
-    assert "x-frame-options" not in resp.headers
+    assert "x-frame-options" in resp.headers
+    assert "ALLOW-FROM" in resp.headers.get("x-frame-options", "").upper()
+    assert "sourabhpradhan.in" in resp.headers.get("x-frame-options", "")

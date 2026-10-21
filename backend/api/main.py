@@ -64,12 +64,13 @@ async def add_iframe_headers(request: Request, call_next):  # type: ignore[no-un
     response = await call_next(request)
     # CSP frame-ancestors controls who can embed this site in an <iframe>
     response.headers["Content-Security-Policy"] = f"frame-ancestors {FRAME_ANCESTORS}"
-    # Remove X-Frame-Options if any upstream/proxy set DENY/SAMEORIGIN (it would block the iframe).
-    # CSP frame-ancestors is the modern replacement and takes precedence in modern browsers,
-    # but XFO DENY still blocks in some browsers if present, so we must not send it.
+    # Legacy X-Frame-Options for older browsers: allow the portfolio origin to
+    # embed this site. Modern browsers prefer CSP frame-ancestors (above) and
+    # ignore XFO when CSP is present, so both can be sent safely.
     # NOTE: Starlette's MutableHeaders has no .pop() — use contains/del.
     if "x-frame-options" in response.headers:
         del response.headers["x-frame-options"]
+    response.headers["X-Frame-Options"] = "ALLOW-FROM https://www.sourabhpradhan.in"
     return response
 
 

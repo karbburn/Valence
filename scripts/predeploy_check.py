@@ -127,10 +127,11 @@ def check_live_server(base: str | None) -> None:
         "CSP frame-ancestors header present",
         "frame-ancestors" in headers.get("content-security-policy", ""),
     )
+    xfo = headers.get("x-frame-options", "")
     check(
         "X-Frame-Options not blocking embeds",
-        "x-frame-options" not in headers,
-        headers.get("x-frame-options", "absent"),
+        (not xfo) or ("ALLOW-FROM" in xfo.upper() and "sourabhpradhan.in" in xfo),
+        xfo or "absent",
     )
 
     status, _, body = get("/docs")
